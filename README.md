@@ -7,6 +7,7 @@
 | 文件 | 内容 |
 |---|---|
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 分阶段实现路线图 P0~P5（含每阶段验收标准与风险清单） |
+| [docs/P0-GUIDE.md](docs/P0-GUIDE.md) | P0 准备阶段逐步操作指南（下单核对、Pi 环境、打印、单腿装配与验收） |
 | [docs/BOM.md](docs/BOM.md) | 分阶段采购清单（含淘宝搜索关键词与价格区间） |
 | [docs/CLIMBING-DESIGN.md](docs/CLIMBING-DESIGN.md) | 吸附方式选型论证、力学预算、气路图、电气架构 |
 

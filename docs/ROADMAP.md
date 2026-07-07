@@ -20,6 +20,8 @@
 
 ## P0 准备（第 1~2 周）
 
+> 逐步操作指南（含命令、核对表、常见问题）：[P0-GUIDE.md](P0-GUIDE.md)
+
 - 下单**第一批**器件：单腿验证套件（见 `BOM.md` 开头"分批采购"），舵机只买 4 个（3 用 1 备）。
 - 打印：一条完整腿（`hardware/makeyourpet-hexapod/STL/` 的 coxa/femur/tibia）+ 6 件里先打 1 件 `climbing-parts/suction_foot.stl`。
 - 树莓派 Pi 5 准备：烧录 Raspberry Pi OS Lite 64-bit、开 SSH/I2C，装 `software/` 包并跑通 `sim_walk.py` 仿真与 `pytest`。

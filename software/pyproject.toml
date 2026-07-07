@@ -1,0 +1,18 @@
+[project]
+name = "hexapod"
+version = "0.1.0"
+description = "爬墙六足机器人控制（树莓派5 + Servo2040）"
+requires-python = ">=3.9"
+dependencies = ["pyserial>=3.5"]
+
+[project.optional-dependencies]
+sim = ["matplotlib", "numpy"]
+dev = ["pytest"]
+pi = ["lgpio", "smbus2"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["hexapod"]

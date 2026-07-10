@@ -86,7 +86,11 @@
    cd ~/spider/software && source .venv/bin/activate
    python -c "from hexapod.driver import Servo2040Driver; d=Servo2040Driver(); print('电压', d.read_voltage_v()); d.close()"
    ```
-   此时未接舵机电源，读数接近 0 属正常——能打印数字就说明 USB 通信链路通了。
+   此时未接舵机电源，读数取决于板子背面 "Separate USB & Ext. Power" 跳线：
+   未割断（出厂默认）读数约 5V（读到的是 USB 的 5V 供电轨）；已割断则接近 0。
+   两种情况下能打印出数字，就说明 USB 通信链路通了。
+   ⚠️ 第 5 步接 2S 电池**之前必须先割断该跳线**（接线图上标注 "CUT THIS!"），
+   否则电池的 7.4~8.4V 会经 USB 线倒灌进 Pi，可能烧毁 Pi。
 
 ## 第 5 步 · 单腿装配（舵机到货后，半天）
 

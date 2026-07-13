@@ -18,18 +18,23 @@ ctl.request_attach(0)
 while not ctl.is_attached(0):
     ctl.update(0.02)
     time.sleep(0.02)
+    print(f"[{time.time()-t0:.2f}s] 状态: {ctl.state[0].name}, 压力: {io.read_foot_kpa(0):.1f} kPa")
     if ctl.state[0] is FootState.FAULT:
         io.set_pump(False)
         io.close()
-        raise SystemExit("❌ SUCKING 超时——没吸住，请检查密封或是否按紧了！")
+        raise SystemExit("\n❌ SUCKING 超时——没吸住，请检查密封或是否按紧了！")
 
 ta = time.time() - t0
-print(f"✅ 吸附成功！确认耗时: {ta:.2f}s, 当前压力: {io.read_foot_kpa(0):.1f} kPa")
+print(f"\n✅ 达到基础阈值，吸附成功！确认耗时: {ta:.2f}s, 当前压力: {io.read_foot_kpa(0):.1f} kPa")
 
-print(">>> 保持吸附状态 3 秒钟 (此时依然通电，您可以稍微体验一下吸力)...")
-time.sleep(3)
+print("\n>>> 保持吸附状态 8 秒钟 (感受闭环控制的魔力...)")
+t_hold = time.time()
+while time.time() - t_hold < 8.0:
+    ctl.update(0.02)
+    time.sleep(0.02)
+    print(f"保压中... 当前压力: {io.read_foot_kpa(0):.1f} kPa", end='\r')
 
-print(">>> 发送释放指令 (request_release)...")
+print("\n\n>>> 发送释放指令 (request_release)...")
 t1 = time.time()
 ctl.request_release(0)
 

@@ -22,7 +22,7 @@ RELEASE_KPA = -5.0      # 高于此视为已释放
 SUCK_TIMEOUT_S = 0.8    # 抽气超时 -> FAULT
 VENT_TIME_S = 0.4       # 放气时长
 PRESS_TIME_S = 0.3      # 压紧等待（由步态层保证足端已压到位）
-PUMP_ON_KPA = -45.0     # 储气罐压力高于此启动泵
+PUMP_ON_KPA = -55.0     # 储气罐压力高于此启动泵
 PUMP_OFF_KPA = -65.0    # 低于此停泵
 
 

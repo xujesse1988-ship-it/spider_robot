@@ -45,8 +45,8 @@ PARAMS = dict(
     detent=0.7,            # 入口防脱凸点单边过盈（硅胶挤过后卡住）
     # --- 护筒（罩住金具，正面开窗）---
     fitting_w=17.0,        # 金具最宽处（六角对边，实测约 17）
-    neck_to_elbow=35.0,    # 颈部到直角宝塔弯角的垂直距离（按从颈部上端起量留余量）
-    elbow_headroom=10.0,   # 弯角以上净空
+    fitting_top=36.0,      # 波纹肩部（红色圆柱底）到金属件最高点的总高（实测）
+    headroom=3.0,          # 金属件最高点以上净空
     shell_id=22.0,         # 护筒内径（须让 fitting_w 六角带角旋转，17/cos30°≈19.6）
     shell_wall=4.0,        # 护筒壁厚
     window_w=20.0,         # 正面开口宽度（整个吸盘连金具由此滑入，气管由此伸出）
@@ -116,7 +116,7 @@ def suction_foot(p):
     block_h = z_g1 + p["neck_upper_h"] - p["slide_gap"]
     shell_ri = p["shell_id"] / 2
     shell_ro = shell_ri + p["shell_wall"]
-    z_ceil = p["neck_lower_h"] + p["neck_to_elbow"] + p["elbow_headroom"]
+    z_ceil = p["fitting_top"] + p["headroom"]
     cone_h = shell_ri - 5.0                             # 顶部 45° 收口到 Ø10，免大跨度平桥
     z_top = z_ceil + cone_h
 

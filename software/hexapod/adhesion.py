@@ -75,19 +75,54 @@ class MockVacuumIO:
 
 
 class Pi5VacuumIO:
-    """树莓派 5 实机 IO（P1 台架阶段完成）。
+    """树莓派 5 实机 IO。P1 台架:1 阀 1 泵 1 传感器;P4 扩到 6 阀 2 泵。"""
+    VALVE_PINS = [5]
+    PUMP_PIN = 20
+    VALVE_ON_LEVEL = 0     # set_valve(True)=吸盘接通真空 的 GPIO 电平,按实测为 0
+    ADS_ADDR = 0x48
+    V_DIV = 2.0            # 1:1 电阻分压
+    V_ATM = 4.486          # 第 5 步实测大气点电压
+    KPA_PER_V = 25.0       # 实测斜率
+    GPIOCHIP = 4           # 树莓派 5
 
-    接线（按 docs/CLIMBING-DESIGN.md 气路图，引脚号在此处集中定义）：
-      - 6 路阀 + 1 路泵经 8 路 MOSFET 板接 GPIO（lgpio 驱动）
-      - XGZP6847A 模拟输出接 ADS1115（I2C 0x48/0x49），转换公式见传感器手册
-    """
+    def __init__(self, n_feet=1):
+        import lgpio
+        from smbus2 import SMBus
+        self._lg, self.n = lgpio, n_feet
+        try:
+            self._h = lgpio.gpiochip_open(self.GPIOCHIP)
+        except Exception:
+            self._h = lgpio.gpiochip_open(0)
+            
+        for p in self.VALVE_PINS[:n_feet]:
+            lgpio.gpio_claim_output(self._h, p, 1 - self.VALVE_ON_LEVEL)
+        lgpio.gpio_claim_output(self._h, self.PUMP_PIN, 0)
+        self._bus = SMBus(1)
 
-    VALVE_PINS = [5, 6, 13, 16, 19, 26]   # TODO: 按实际接线修改
-    PUMP_PIN = 20                          # TODO
-    ADS1115_ADDRS = (0x48, 0x49)           # TODO
+    def set_valve(self, i, on):
+        self._lg.gpio_write(self._h, self.VALVE_PINS[i],
+                            self.VALVE_ON_LEVEL if on else 1 - self.VALVE_ON_LEVEL)
 
-    def __init__(self):
-        raise NotImplementedError("P1 台架阶段按实际接线实现（lgpio + smbus2）")
+    def set_pump(self, on):
+        self._lg.gpio_write(self._h, self.PUMP_PIN, 1 if on else 0)
+
+    def _read_v(self, ch=0):
+        import time
+        self._bus.write_i2c_block_data(self.ADS_ADDR, 0x01, [0xC3 + (ch << 4), 0x83])
+        time.sleep(0.01)
+        hi, lo = self._bus.read_i2c_block_data(self.ADS_ADDR, 0x00, 2)
+        raw = (hi << 8) | lo
+        return (raw - 65536 if raw > 32767 else raw) * 4.096 / 32768
+
+    def read_foot_kpa(self, i):
+        return self.KPA_PER_V * (self._read_v(0) * self.V_DIV - self.V_ATM)
+
+    def read_tank_kpa(self):
+        return self.read_foot_kpa(0)
+
+    def close(self):
+        self._bus.close()
+        self._lg.gpiochip_close(self._h)
 
 
 class AdhesionController:

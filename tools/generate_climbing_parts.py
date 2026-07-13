@@ -5,8 +5,12 @@
 
 生成 MakeYourPet 六足爬墙改装部件的 STL：
 
-  1. suction_foot.stl   —— 吸盘足模块：套接 9x9mm 方轴腿末端，底部安装
-                            30mm 波纹真空吸盘（M5 通孔金具 + 弯头宝塔接嘴）
+  1. suction_foot.stl   —— 吸盘足模块 v2：套接 9x9mm 方轴腿末端。底部卡槽块
+                            从侧面滑入卡住吸盘颈部（实购件为 2.5 折波纹吸盘 +
+                            直角宝塔弯头一体件，见 images/xipan.jpg；颈部轮廓
+                            自下而上 Ø17x5 圆柱 / Ø15x1.5 凹槽 / Ø17x2 圆柱，
+                            卡持总高 8.5mm）。上方 C 型护筒罩住金具，正面全高
+                            开窗供滑入及宝塔嘴出气管。
   2. component_plate.stl—— M3 网格安装板（迷你洞洞板），用于固定真空泵/
                             电磁阀/传感器等杂件
 
@@ -30,13 +34,22 @@ PARAMS = dict(
     socket_depth=25.0,     # 套接深度
     sleeve_wall=3.2,       # 套筒壁厚
     setscrew_d=2.8,        # M3 自攻顶丝底孔直径
-    # --- 吸盘足 ---
-    cup_plate_d=40.0,      # 吸盘安装盘直径（适配 30mm 波纹吸盘）
-    cup_plate_t=5.0,       # 安装盘厚度
-    cup_stud_d=5.4,        # 吸盘金具螺柱通孔（M5 金具，含间隙）
-    turret_od=24.0,        # 螺母腔外径
-    turret_id=15.0,        # 螺母腔内径（容纳 M5 螺母 + 弯头旋转）
-    turret_h=13.0,         # 螺母腔高度（侧面开窗，供拧螺母和出气管）
+    # --- 吸盘颈部卡槽（实测所购吸盘+直角宝塔一体件，images/xipan.jpg）---
+    neck_d=17.0,           # 颈部圆柱直径（红标位置，凹槽上下两段相同）
+    neck_lower_h=5.0,      # 凹槽以下圆柱高度
+    groove_d=15.0,         # 凹槽直径
+    groove_h=1.5,          # 凹槽高度
+    neck_upper_h=2.0,      # 凹槽以上小圆柱高度（其上即金具）
+    neck_gap=0.4,          # 颈孔装配间隙（加在直径上）
+    slide_gap=0.3,         # 卡槽块高度方向滑入间隙（金具底面与块顶面之间）
+    detent=0.7,            # 入口防脱凸点单边过盈（硅胶挤过后卡住）
+    # --- 护筒（罩住金具，正面开窗）---
+    fitting_w=17.0,        # 金具最宽处（六角对边，实测约 17）
+    neck_to_elbow=35.0,    # 颈部到直角宝塔弯角的垂直距离（按从颈部上端起量留余量）
+    elbow_headroom=10.0,   # 弯角以上净空
+    shell_id=22.0,         # 护筒内径（须让 fitting_w 六角带角旋转，17/cos30°≈19.6）
+    shell_wall=4.0,        # 护筒壁厚
+    window_w=20.0,         # 正面开口宽度（整个吸盘连金具由此滑入，气管由此伸出）
     # --- 安装板 ---
     plate_w=90.0,
     plate_h=70.0,
@@ -84,20 +97,57 @@ def _sleeve(p, z0):
 
 
 def suction_foot(p):
-    """吸盘足：底盘(装吸盘) -> 开窗螺母腔 -> 方轴套筒。Z=0 为吸盘安装面。"""
-    plate = _cyl(p["cup_plate_d"] / 2, p["cup_plate_t"])
-    z = p["cup_plate_t"]
-    turret = _cyl(p["turret_od"] / 2, p["turret_h"], at=(0, 0, z))
-    cavity = _cyl(p["turret_id"] / 2, p["turret_h"] - 3.0, at=(0, 0, z))
-    # 侧窗：拧 M5 螺母 + 弯头宝塔气管出口
-    window = _box(p["turret_od"], p["turret_id"] - 2, p["turret_h"] - 3.0,
-                  (p["turret_od"] / 2, 0, z + (p["turret_h"] - 3.0) / 2))
-    z_top = z + p["turret_h"]
+    """吸盘足 v2：颈部卡槽块(+X 向侧滑入) -> C 型护筒(正面开窗) -> 方轴套筒。
+
+    Z=0 为卡槽块底面（贴吸盘顶层波纹的肩部）。装配：吸盘连金具整体从 +X
+    开口水平滑入——颈部进底部卡槽、金具走护筒开窗；内环凸筋落进 Ø15 凹槽
+    锁轴向，入口两颗凸点防侧向滑出。受力：压墙经块底面传到波纹肩部；吸附
+    悬挂经凸筋上表面顶住凹槽上沿（金具六角压块顶面为第二重保险）。
+    """
+    from trimesh.creation import revolve
+
+    bore_r = (p["neck_d"] + p["neck_gap"]) / 2          # 8.7 颈孔
+    rib_r = (p["groove_d"] + p["neck_gap"]) / 2         # 7.7 凸筋
+    top_r = bore_r + 0.1                                # 上段孔加桥接下垂余量
+    z_g0 = p["neck_lower_h"]                            # 凹槽下沿
+    z_g1 = z_g0 + p["groove_h"]                         # 凹槽上沿
+    rib_top = z_g1 - 0.1                                # 凸筋顶面（承力面，留 0.1 咬合行程）
+    rib_bot = rib_top - 0.4                             # 凸筋直段下沿，其下 45° 斜面利于打印
+    block_h = z_g1 + p["neck_upper_h"] - p["slide_gap"]
+    shell_ri = p["shell_id"] / 2
+    shell_ro = shell_ri + p["shell_wall"]
+    z_ceil = p["neck_lower_h"] + p["neck_to_elbow"] + p["elbow_headroom"]
+    cone_h = shell_ri - 5.0                             # 顶部 45° 收口到 Ø10，免大跨度平桥
+    z_top = z_ceil + cone_h
+
+    body = _cyl(shell_ro, z_top)
     sleeve, sleeve_cuts, _ = _sleeve(p, z_top)
-    stud = _cyl(p["cup_stud_d"] / 2, p["cup_plate_t"] + 2, at=(0, 0, -1))
-    solid = trimesh.boolean.union([plate, turret, sleeve], engine=E)
-    return trimesh.boolean.difference(
-        [solid, stud, cavity, window] + sleeve_cuts, engine=E)
+    # 内腔+颈孔一体旋转体：颈孔(带凸筋) -> 块顶面台阶 -> 护筒内腔 -> 45° 锥顶
+    void = revolve(np.array([
+        (0.0, -0.1), (bore_r, -0.1), (bore_r, z_g0 + 0.1),
+        (rib_r, rib_bot), (rib_r, rib_top), (top_r, rib_top),
+        (top_r, block_h), (shell_ri, block_h), (shell_ri, z_ceil),
+        (5.0, z_top), (0.0, z_top)]))
+    # 侧滑通道（+X 贯通到外缘），宽度分层跟随颈部轮廓
+    reach = shell_ro + 1.0
+    ch = [
+        _box(reach, 2 * bore_r, z_g0 + 0.2, (reach / 2, 0, z_g0 / 2)),
+        _box(reach, 2 * rib_r, rib_top - z_g0 - 0.1,
+             (reach / 2, 0, (z_g0 + 0.1 + rib_top) / 2)),
+        _box(reach, 2 * top_r, block_h - rib_top + 0.1,
+             (reach / 2, 0, (rib_top + block_h + 0.1) / 2)),
+    ]
+    # 护筒正面开窗：块顶面起到内腔顶，金具滑入 + 宝塔嘴气管伸出
+    window = _box(reach, p["window_w"], z_ceil - block_h,
+                  (reach / 2, 0, (block_h + z_ceil) / 2))
+    solid = trimesh.boolean.union([body, sleeve], engine=E)
+    solid = trimesh.boolean.difference(
+        [solid, void, window] + ch + sleeve_cuts, engine=E)
+    # 入口防脱凸点：只挤压 Ø17 两段（凹槽层通道更窄，凸点不伸入）
+    bump_y = bore_r + 1.5 - p["detent"]
+    bumps = [_cyl(1.5, block_h, at=(11.0, s * bump_y, 0), sections=32)
+             for s in (1, -1)]
+    return trimesh.boolean.union([solid] + bumps, engine=E)
 
 
 def component_plate(p):

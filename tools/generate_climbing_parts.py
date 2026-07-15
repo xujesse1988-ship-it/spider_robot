@@ -5,14 +5,18 @@
 
 生成 MakeYourPet 六足爬墙改装部件的 STL：
 
-  1. suction_foot.stl   —— 吸盘足模块 v2：套接 9x9mm 方轴腿末端。底部卡槽块
-                            从侧面滑入卡住吸盘颈部（实购件为 2.5 折波纹吸盘 +
-                            直角宝塔弯头一体件，见 images/xipan.jpg；颈部轮廓
-                            自下而上 Ø17x5 圆柱 / Ø15x1.5 凹槽 / Ø17x2 圆柱，
-                            卡持总高 8.5mm）。上方 C 型护筒罩住金具，正面全高
-                            开窗供滑入及宝塔嘴出气管。
-  2. component_plate.stl—— M3 网格安装板（迷你洞洞板），用于固定真空泵/
-                            电磁阀/传感器等杂件
+  1. left-tibia-suction.stl —— 吸盘足 v3：与 left-tibia 一体化的小腿。
+       末端腔体按实购"2.5 折波纹吸盘 + 两颗六角螺母 + 直角宝塔弯头"一体件
+       （images/xipan_marked.jpeg 三视图）做全形状负模：
+       Ø27 折痕喇叭锥 → Ø15 凹槽凸筋 → Ø17 圈 → 边长7 六角袋 → 边长5
+       六角袋（锁转动）→ Ø9.6 弯头腔，顶面即金属最高点。前下方开口由
+       独立的门盖封住（胶粘），门顶以上开放，宝塔嘴可转动出管。
+       打印方向：立打（腔体朝下、tibia 朝上）——方轴轴线距 tibia 平背面
+       仅 4.5mm 而腔体半径 17mm，平躺必然穿透打印床，几何上只能立打；
+       建议 PETG、5~6 壁、45% 填充，开 brim；tibia 细节处可开支撑保险。
+  2. suction-foot-door.stl  —— 上述腔体的门盖（含前半负模 + 4 定位销），
+       外平面朝下平躺打印，无支撑。
+  3. component_plate.stl    —— M3 网格安装板，固定真空泵/电磁阀/传感器。
 
 所有关键尺寸在 PARAMS 里，按实际购买件修改后重新运行即可。
 运行:  .venv/bin/python tools/generate_climbing_parts.py
@@ -23,33 +27,43 @@
 import os
 import numpy as np
 import trimesh
-from trimesh.creation import box, cylinder
+from trimesh.creation import box, cylinder, revolve, extrude_polygon
 from trimesh.transformations import rotation_matrix
 
-OUT = os.path.join(os.path.dirname(__file__), "..", "hardware", "climbing-parts")
+HERE = os.path.dirname(__file__)
+OUT = os.path.join(HERE, "..", "hardware", "climbing-parts")
+TIBIA = os.path.join(HERE, "..", "hardware", "makeyourpet-hexapod", "STL",
+                     "left-tibia.stl")
 
 PARAMS = dict(
-    # --- 腿末端方轴（实测 MakeYourPet left-tibia.stl 末端为 9.0x9.0mm）---
-    shaft_side=9.4,        # 套孔边长（9.0 + 0.4 装配间隙）
-    socket_depth=25.0,     # 套接深度
-    sleeve_wall=3.2,       # 套筒壁厚
-    setscrew_d=2.8,        # M3 自攻顶丝底孔直径
-    # --- 吸盘颈部卡槽（实测所购吸盘+直角宝塔一体件，images/xipan.jpg）---
-    neck_d=17.0,           # 颈部圆柱直径（红标位置，凹槽上下两段相同）
-    neck_lower_h=5.0,      # 凹槽以下圆柱高度
-    groove_d=15.0,         # 凹槽直径
-    groove_h=1.5,          # 凹槽高度
-    neck_upper_h=2.0,      # 凹槽以上小圆柱高度（其上即金具）
-    neck_gap=0.4,          # 颈孔装配间隙（加在直径上）
-    slide_gap=0.3,         # 卡槽块高度方向滑入间隙（金具底面与块顶面之间）
-    detent=0.7,            # 入口防脱凸点单边过盈（硅胶挤过后卡住）
-    # --- 护筒（罩住金具，正面开窗）---
-    fitting_w=17.0,        # 金具最宽处（六角对边，实测约 17）
-    fitting_top=36.0,      # 波纹肩部（红色圆柱底）到金属件最高点的总高（实测）
-    headroom=3.0,          # 金属件最高点以上净空
-    shell_id=22.0,         # 护筒内径（须让 fitting_w 六角带角旋转，17/cos30°≈19.6）
-    shell_wall=4.0,        # 护筒壁厚
-    window_w=20.0,         # 正面开口宽度（整个吸盘连金具由此滑入，气管由此伸出）
+    # --- 吸盘+金具一体件实测（自下而上；z=0 取 Ø27 第一折痕平面）---
+    crease_d=27.0,        # 第一折痕直径（被包裹段的最大直径）
+    cone_h=10.0,          # 折痕到颈部（凹槽下沿）的喇叭段高度
+    groove_d=15.0,        # 凹槽直径
+    groove_h=1.7,         # 凹槽高度
+    ring_d=17.0,          # 凹槽上方小圆柱直径
+    ring_h=2.0,           # 凹槽上方小圆柱高度
+    nut1_side=7.0,        # 下六角螺母边长（对边 = 边长*√3 ≈ 12.12）
+    nut1_h=3.0,
+    nut2_side=5.0,        # 上六角螺母边长（对边 ≈ 8.66）
+    nut2_h=9.0,
+    elbow_d=9.0,          # 直角宝塔竖直部分外径
+    elbow_h=13.0,         # 弯头总高（金属最高点 = 38.7）
+    barb_reach=24.0,      # 宝塔嘴尖到竖直轴线的水平距离（需伸出门外）
+    hose_od=6.0,          # 软管外径
+    # --- 装配间隙 ---
+    gap_d=0.4,            # 圆截面直径间隙
+    gap_hex=0.4,          # 六角对边间隙
+    gap_z=0.3,            # 关键台阶的竖直余量
+    # --- 腔体外壳 / 门 ---
+    wall=3.2,             # 最小壁厚
+    door_h=29.5,          # 门盖高度（其上开放，供滑入和宝塔嘴转动出管）
+    peg_d=2.9,            # 门定位销直径（孔 +0.8）
+    # --- 与 tibia 的结合（left-tibia.stl 实测）---
+    shaft_cx=1.3,         # 方轴轴心 x
+    shaft_cy=-4.5,        # 方轴轴心 y（tibia 平背面为 y=0）
+    tibia_keep_z=-58.0,   # tibia 保留 z >= 此值（其下方轴丢弃，残段埋入颈柱）
+    crease_z=-100.0,      # 折痕平面在 tibia 坐标系的 z（决定腿长）
     # --- 安装板 ---
     plate_w=90.0,
     plate_h=70.0,
@@ -80,74 +94,119 @@ def _box(ex, ey, ez, at=(0, 0, 0)):
     return b
 
 
-def _sleeve(p, z0):
-    """通用方轴套筒：外壁 z0..z0+depth+floor，套孔从顶部开口向下 depth。"""
-    side = p["shaft_side"] + 2 * p["sleeve_wall"]
-    h = p["socket_depth"] + 3.0  # 3mm 底
-    zc = z0 + h / 2
-    body = _box(side, side, h, (0, 0, zc))
-    hole = _box(p["shaft_side"], p["shaft_side"], p["socket_depth"] + 0.2,
-                (0, 0, z0 + 3.0 + p["socket_depth"] / 2 + 0.1))
-    # 两个顶丝孔（穿透 -Y 侧壁）
-    screws = [
-        _cyl(p["setscrew_d"] / 2, side, at=(0, -side, z0 + 3 + p["socket_depth"] * f), axis="y")
-        for f in (0.35, 0.8)
-    ]
-    return body, [hole] + screws, z0 + h
+def _hex_pocket(side, gap, z0, z1, at):
+    """六角袋：对边 = side*√3 + gap，平面法向 ±X（横滑入时两壁夹持对边）。"""
+    af = side * np.sqrt(3.0) + gap
+    r = af / np.sqrt(3.0)          # 六边形外接圆半径
+    h = cylinder(radius=r, height=z1 - z0, sections=6)
+    h.apply_transform(rotation_matrix(np.pi / 6, [0, 0, 1]))  # 平边法向转到 ±X
+    h.apply_translation([at[0], at[1], (z0 + z1) / 2])
+    return h
 
 
-def suction_foot(p):
-    """吸盘足 v2：颈部卡槽块(+X 向侧滑入) -> C 型护筒(正面开窗) -> 方轴套筒。
+def _cavity_parts(p, ax, ay, z0):
+    """吸盘+金具的全形状负模（含底部导入倒角），返回待减去的实体列表。
 
-    Z=0 为卡槽块底面（贴吸盘顶层波纹的肩部）。装配：吸盘连金具整体从 +X
-    开口水平滑入——颈部进底部卡槽、金具走护筒开窗；内环凸筋落进 Ø15 凹槽
-    锁轴向，入口两颗凸点防侧向滑出。受力：压墙经块底面传到波纹肩部；吸附
-    悬挂经凸筋上表面顶住凹槽上沿（金具六角压块顶面为第二重保险）。
+    z 相对折痕平面 z0 向上：
+      0..cone_h        喇叭锥 Ø(crease+0.6) -> Ø(neck+gap)
+      ..+groove_h      Ø15 凸筋（下侧 45° 便于立打，上平面承拉力）
+      ..+ring_h        Ø17 圈
+      ..+nut1_h        六角袋 1
+      ..+nut2_h        六角袋 2
+      ..+elbow_h       弯头圆腔，顶面即金属最高点(+gap_z)
     """
-    from trimesh.creation import revolve
+    g = p["gap_d"]
+    cone_r0 = (p["crease_d"] + 0.6) / 2                 # 13.8
+    neck_r = (p["ring_d"] + g) / 2                      # 8.7
+    rib_r = (p["groove_d"] + g) / 2                     # 7.7
+    ring_r = neck_r + 0.1                               # 8.8 上段孔
+    zg0 = p["cone_h"]                                   # 凹槽下沿 10
+    zg1 = zg0 + p["groove_h"]                           # 凹槽上沿 11.7
+    rib_top = zg1 - 0.15                                # 凸筋顶面，留咬合行程
+    z_ring = zg1 + p["ring_h"]                          # 13.7
+    z_n1 = z_ring + p["nut1_h"]                         # 16.7
+    z_n2 = z_n1 + p["nut2_h"]                           # 25.7
+    z_top = z_n2 + p["elbow_h"] + p["gap_z"]            # 39.0 腔顶
+    # 旋转体：导入倒角 + 锥 + 凸筋 + Ø17 圈（六角袋以上另做棱柱）
+    prof = np.array([
+        (0.0, -0.01),
+        (cone_r0 + 1.4, -0.01),                          # 底缘导入
+        (cone_r0, 1.2),
+        (neck_r + 0.2, zg0 - 0.75),                      # 锥体到颈部
+        (rib_r, zg0 + 0.45),                             # 凸筋下 45° 斜面（立打免支撑）
+        (rib_r, rib_top),
+        (ring_r, rib_top),                               # 凸筋顶平面（承力）
+        (ring_r, z_ring + p["gap_z"]),
+        (0.0, z_ring + p["gap_z"]),
+    ])
+    rev = revolve(prof)
+    rev.apply_translation([ax, ay, z0])
+    hex1 = _hex_pocket(p["nut1_side"], p["gap_hex"],
+                       z0 + z_ring - 0.1, z0 + z_n1 + p["gap_z"], (ax, ay))
+    hex2 = _hex_pocket(p["nut2_side"], p["gap_hex"],
+                       z0 + z_n1 - 0.1, z0 + z_n2 + p["gap_z"], (ax, ay))
+    elbow = _cyl((p["elbow_d"] + 0.6) / 2, z_top - (z_n2 - 0.1),
+                 at=(ax, ay, z0 + z_n2 - 0.1))
+    return [rev, hex1, hex2, elbow], z_top
 
-    bore_r = (p["neck_d"] + p["neck_gap"]) / 2          # 8.7 颈孔
-    rib_r = (p["groove_d"] + p["neck_gap"]) / 2         # 7.7 凸筋
-    top_r = bore_r + 0.1                                # 上段孔加桥接下垂余量
-    z_g0 = p["neck_lower_h"]                            # 凹槽下沿
-    z_g1 = z_g0 + p["groove_h"]                         # 凹槽上沿
-    rib_top = z_g1 - 0.1                                # 凸筋顶面（承力面，留 0.1 咬合行程）
-    rib_bot = rib_top - 0.4                             # 凸筋直段下沿，其下 45° 斜面利于打印
-    block_h = z_g1 + p["neck_upper_h"] - p["slide_gap"]
-    shell_ri = p["shell_id"] / 2
-    shell_ro = shell_ri + p["shell_wall"]
-    z_ceil = p["fitting_top"] + p["headroom"]
-    cone_h = shell_ri - 5.0                             # 顶部 45° 收口到 Ø10，免大跨度平桥
-    z_top = z_ceil + cone_h
 
-    body = _cyl(shell_ro, z_top)
-    sleeve, sleeve_cuts, _ = _sleeve(p, z_top)
-    # 内腔+颈孔一体旋转体：颈孔(带凸筋) -> 块顶面台阶 -> 护筒内腔 -> 45° 锥顶
-    void = revolve(np.array([
-        (0.0, -0.1), (bore_r, -0.1), (bore_r, z_g0 + 0.1),
-        (rib_r, rib_bot), (rib_r, rib_top), (top_r, rib_top),
-        (top_r, block_h), (shell_ri, block_h), (shell_ri, z_ceil),
-        (5.0, z_top), (0.0, z_top)]))
-    # 侧滑通道（+X 贯通到外缘），宽度分层跟随颈部轮廓
-    reach = shell_ro + 1.0
-    ch = [
-        _box(reach, 2 * bore_r, z_g0 + 0.2, (reach / 2, 0, z_g0 / 2)),
-        _box(reach, 2 * rib_r, rib_top - z_g0 - 0.1,
-             (reach / 2, 0, (z_g0 + 0.1 + rib_top) / 2)),
-        _box(reach, 2 * top_r, block_h - rib_top + 0.1,
-             (reach / 2, 0, (rib_top + block_h + 0.1) / 2)),
-    ]
-    # 护筒正面开窗：块顶面起到内腔顶，金具滑入 + 宝塔嘴气管伸出
-    window = _box(reach, p["window_w"], z_ceil - block_h,
-                  (reach / 2, 0, (block_h + z_ceil) / 2))
-    solid = trimesh.boolean.union([body, sleeve], engine=E)
-    solid = trimesh.boolean.difference(
-        [solid, void, window] + ch + sleeve_cuts, engine=E)
-    # 入口防脱凸点：只挤压 Ø17 两段（凹槽层通道更窄，凸点不伸入）
-    bump_y = bore_r + 1.5 - p["detent"]
-    bumps = [_cyl(1.5, block_h, at=(11.0, s * bump_y, 0), sections=32)
-             for s in (1, -1)]
-    return trimesh.boolean.union([solid] + bumps, engine=E)
+def _peg_spots(p, ax):
+    """门定位销的 (x, z_rel) 位置：避开锥腔，落在实心壁上。"""
+    return [(ax - 13.5, 10.0), (ax + 13.5, 10.0),
+            (ax - 13.5, 24.0), (ax + 13.5, 24.0)]
+
+
+def tibia_suction(p):
+    """吸盘足 v3 主体：腔体外壳(前下开口) + 45°斜顶 + 颈柱 + tibia 本体。"""
+    ax, ay, z0 = p["shaft_cx"], p["shaft_cy"], p["crease_z"]
+    w = p["wall"]
+    cuts, z_top = _cavity_parts(p, ax, ay, z0)          # z_top = 腔顶(相对折痕)
+    r_out = (p["crease_d"] + 0.6) / 2 + w               # 17.0 外壳半宽
+    # 外壳箱体（z: 折痕..腔顶）
+    box0 = _box(2 * r_out, 2 * r_out, z_top,
+                (ax, ay, z0 + z_top / 2))
+    # 顶部：后半平板(y>=轴面) + 前半 45° 斜顶（立打免支撑），共 8mm
+    cap_h = 8.0
+    cap = _box(2 * r_out, r_out, cap_h,
+               (ax, ay + r_out / 2, z0 + z_top + cap_h / 2))
+    from shapely.geometry import Polygon
+    tri = Polygon([(ay, z_top), (ay, z_top + cap_h), (ay - 8.0, z_top + cap_h)])
+    wedge = extrude_polygon(tri, 2 * r_out)
+    # extrude_polygon 生成 (多边形xy, 挤出z)；映射 多边形x->y, 多边形y->z, 挤出->x
+    m = np.eye(4)
+    m[:3, :3] = np.array([[0., 0., 1.], [1., 0., 0.], [0., 1., 0.]])
+    wedge.apply_transform(m)
+    wedge.apply_translation([ax - r_out, 0, z0])
+    # 颈柱：包住 tibia 方轴残段与加强筋根部（x -4..18, y -12.5..2）
+    collar = _box(22.0, 14.5, 11.0,
+                  (ax + 5.7, -12.5 + 14.5 / 2, z0 + z_top + cap_h + 5.5))
+    # tibia 本体（丢弃 tibia_keep_z 以下的方轴）
+    tib = trimesh.load(TIBIA)
+    keep = _box(200, 200, 200, (0, 0, p["tibia_keep_z"] + 100))
+    tib = trimesh.boolean.intersection([tib, keep], engine=E)
+    solid = trimesh.boolean.union([box0, cap, wedge, collar, tib], engine=E)
+    # 前下开口（门所在区域 + 其上宝塔嘴转动空间）：整个 y < ay 前半清空
+    front = _box(2 * r_out + 2, r_out + 2, z_top + 0.001,
+                 (ax, ay - (r_out + 2) / 2, z0 + (z_top + 0.001) / 2 - 0.001))
+    # 门定位销孔（沿 +Y 钻入门贴合面）
+    holes = [_cyl((p["peg_d"] + 0.8) / 2, 4.0,
+                  at=(x, ay - 0.5, z0 + z), axis="y", sections=24)
+             for x, z in _peg_spots(p, ax)]
+    return trimesh.boolean.difference([solid, front] + cuts + holes, engine=E)
+
+
+def suction_door(p):
+    """门盖：前半负模 + 底缘导入 + 4 定位销；外平面(y=-r_out)朝下平躺打印。"""
+    ax, ay, z0 = p["shaft_cx"], p["shaft_cy"], p["crease_z"]
+    r_out = (p["crease_d"] + 0.6) / 2 + p["wall"]
+    cuts, _ = _cavity_parts(p, ax, ay, z0)
+    blk = _box(2 * r_out, r_out, p["door_h"],
+               (ax, ay - r_out / 2, z0 + p["door_h"] / 2))
+    door = trimesh.boolean.difference([blk] + cuts, engine=E)
+    pegs = [_cyl(p["peg_d"] / 2, 4.6, at=(x, ay - 2.0, z0 + z),
+                 axis="y", sections=24)
+            for x, z in _peg_spots(p, ax)]
+    return trimesh.boolean.union([door] + pegs, engine=E)
 
 
 def component_plate(p):
@@ -168,7 +227,8 @@ def component_plate(p):
 def main():
     os.makedirs(OUT, exist_ok=True)
     parts = {
-        "suction_foot": suction_foot,
+        "left-tibia-suction": tibia_suction,
+        "suction-foot-door": suction_door,
         "component_plate": component_plate,
     }
     for name, fn in parts.items():
@@ -176,7 +236,7 @@ def main():
         path = os.path.join(OUT, f"{name}.stl")
         m.export(path)
         ext = np.round(m.bounding_box.extents, 1)
-        print(f"{name:18s} watertight={m.is_watertight}  "
+        print(f"{name:20s} watertight={m.is_watertight}  "
               f"尺寸 {ext[0]}x{ext[1]}x{ext[2]}mm  体积 {m.volume/1000:.1f}cm3  -> {path}")
 
 

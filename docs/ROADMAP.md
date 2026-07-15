@@ -23,7 +23,7 @@
 > 逐步操作指南（含命令、核对表、常见问题）：[P0-GUIDE.md](P0-GUIDE.md)
 
 - 下单**第一批**器件：单腿验证套件（见 `BOM.md` 开头"分批采购"），舵机只买 4 个（3 用 1 备）。
-- 打印：一条完整腿（`hardware/makeyourpet-hexapod/STL/` 的 coxa/femur/tibia）+ 6 件里先打 1 件 `climbing-parts/suction_foot.stl`。
+- 打印：一条完整腿——coxa/femur 用 `hardware/makeyourpet-hexapod/STL/`，tibia 用 `climbing-parts/left-tibia-suction.stl`（吸盘足一体化小腿）+ 1 件 `suction-foot-door.stl`。
 - 树莓派 Pi 5 准备：烧录 Raspberry Pi OS Lite 64-bit、开 SSH/I2C，装 `software/` 包并跑通 `sim_walk.py` 仿真与 `pytest`。
 - 验收标准：一条腿 3 个舵机装配完成，Pi 经 Servo2040 能摆动它；Pi 上仿真与测试全绿。
 
@@ -40,7 +40,7 @@
   3. 释放时间：阀放气 → 吸盘可无阻力拿开（目标 <0.5s）
 - 破坏性测试：单只 30mm 吸盘垂直挂重、剪切挂重各多少 kg 才脱落（理论法向 ~35N@-50kPa，剪切约打 5 折）。
 - **斜角吸附测试**（活动度分析的关键输入，见 `CLIMBING-DESIGN.md` §6）：吸盘轴相对墙面法线倾 5°/10°/15°/20° 时的密封成功率与拉脱力。实测容差 ≥15° 则爬墙步幅可用 40mm；只有 10° 则收紧到 ~25mm。
-- 装上 `suction_foot.stl` 打印件重复上述测试（验证打印件气密性和强度）。
+- 吸盘装进 `left-tibia-suction.stl` 腔体并粘上门盖后重复上述测试（验证打印件夹持刚性和强度）。
 - **验收标准：单吸盘足在竖直玻璃上挂 3kg 配重保持 10 分钟；一个"吸-确认-放"循环 <2s。**
 
 ## P2 单腿爬墙试验（第 5~9 周）——决策门

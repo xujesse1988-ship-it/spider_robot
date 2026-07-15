@@ -73,5 +73,5 @@
 
 1. **舵机别买杂牌最低价**——爬墙时舵机堵转是常态，齿轮打齿=整机掉落。35kg 档买 ZOSKAY/DSservo 等有口碑的店。
 2. **电磁阀必须常闭型**（断电时吸盘保持真空），买之前问清楚。
-3. 吸盘选**带直角宝塔弯头的一体件**（已购：2.5 折波纹吸盘，颈部 Ø17×5 + Ø15×1.5 凹槽 + Ø17×2，见 `images/xipan.jpg`），`suction_foot.stl` v2 的侧滑卡槽按此颈部轮廓设计；换不同规格需改 `tools/generate_climbing_parts.py` 的 `PARAMS` 重新生成。
+3. 吸盘选**带直角宝塔弯头的一体件**（已购：2.5 折波纹吸盘，第一折痕 Ø27、凹槽 Ø15×1.7、双六角螺母边长 7/5、弯头高 13、宝塔嘴伸出 24、软管外径 6，见 `images/xipan_marked.jpeg` 三视图）；`left-tibia-suction.stl` 的腔体按此全形状负模设计，换不同规格需改 `tools/generate_climbing_parts.py` 的 `PARAMS` 重新生成。
 4. Servo2040 海淘周期长，可先用舵机测试仪调装配，控制板后到。

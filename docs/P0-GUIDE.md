@@ -65,16 +65,19 @@
 |---|---|---|
 | `left-coxa2.stl` | 1 | 同名多版本取编号最大（coxa2 > coxa） |
 | `left-femur.stl` | 1 | — |
-| `left-tibia.stl` | 1 | 末端 9×9mm 方轴，配吸盘足 |
-| `tip.stl` | 1 | 普通足尖（P0 摆动测试用） |
+| `hardware/climbing-parts/left-tibia-suction.stl` | 1 | 吸盘足一体化小腿（替代 left-tibia.stl，末端腔体直接卡吸盘） |
+| `tip.stl` | 1 | 普通足尖（P0 摆动测试用，可套在旧 left-tibia 上） |
 | `calibration-arm.stl` + `calibration-ruler.stl` | 各1 | 官方舵机标定工具，P1 标定 ±45° 脉宽要用 |
-| `hardware/climbing-parts/suction_foot.stl` | 1 | 先打 1 件验证与方轴的配合公差 |
+| `hardware/climbing-parts/suction-foot-door.stl` | 1 | 吸盘腔门盖（吸盘放入后 502 粘死） |
 
-参数：PLA，4 壁、40% 填充、0.2mm 层高；`suction_foot.stl` 吸盘安装面朝下、无支撑。
-腿部件的摆放方向和是否加支撑，跟着官方视频走（YouTube 频道 **MakeYourPet**，
-装腿是第 1 集）；装配小件（limiter、servo-back-hole2 等）按视频里单腿所需补打。
-打完先干配一次：tibia 方轴插入 `suction_foot` 套孔应能滑入、顶丝拧紧后无晃动，
-过紧/过松就改 `tools/generate_climbing_parts.py` 的 `shaft_side`（±0.2mm）重打。
+参数：coxa/femur 用 PLA、4 壁、40% 填充、0.2mm 层高；`left-tibia-suction.stl`
+建议 PETG、5~6 壁、45% 填充，**立打**（吸盘腔朝下）+ brim ≥8mm，tibia 细节可开支撑；
+`suction-foot-door.stl` 外平面朝下、无支撑。腿部件的摆放方向和是否加支撑，跟着官方
+视频走（YouTube 频道 **MakeYourPet**，装腿是第 1 集）；装配小件（limiter、
+servo-back-hole2 等）按视频里单腿所需补打。
+打完先干配一次：吸盘连金具从正面推入腔体，凸筋应"咔"进 Ø15 凹槽、两颗螺母落进
+六角袋不能转动，盖上门无明显旷量；过紧/过松改 `tools/generate_climbing_parts.py`
+的 `gap_d`/`gap_hex`（±0.2mm）重打。确认无误后再上 502 粘门。
 
 ## 第 4 步 · Servo2040 刷固件（到货当天，5 分钟）
 
@@ -140,7 +143,7 @@ EOF
 - [ ] Servo2040 刷好固件，Pi 能读电压
 - [ ] 电源跳线已割断（只插 USB 读电压接近 0），电池极性经万用表确认
 - [ ] 单腿三关节按指令平滑摆动，无抖动、无异响、结构无松动
-- [ ] `suction_foot.stl` 与 tibia 方轴配合到位，顶丝锁紧
+- [ ] 吸盘+金具推入 `left-tibia-suction.stl` 腔体到位，螺母入六角袋不转动，门盖干配无旷量
 - [ ] 整腿称重记录（写进 `docs/weight-log.md`，预算参考：单腿含舵机 ~230g）
 
 全部勾选 → 进入 P1（吸附台架验证）。
@@ -156,7 +159,7 @@ EOF
 | 舵机抖动/嗡嗡响 | 2S 电压低于 6.8V 先充电；信号线与电源线分开走；单条腿负载下抖动属异常，换备用舵机排查 |
 | 回中后舵盘角度装不准 | 舵盘花键有齿距，装最接近的一格，残差以后用 `config.py` 的 `attach_deg` 修 |
 | Pi 频繁重启/降频 | `get_throttled` 非 0：换 5V/5A 供电，别用电脑 USB 口带 Pi |
-| suction_foot 套不进方轴 | 打印件 XY 公差偏紧：`shaft_side` 改 9.6 重打，或用锉刀修孔 |
+| 吸盘推不进腔体/螺母卡不进六角袋 | 打印件 XY 公差偏紧：`gap_d`/`gap_hex` 加 0.2 重打，或用锉刀修；过松晃动则减 0.2 |
 
 ## 安全
 

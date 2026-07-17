@@ -47,13 +47,13 @@ FEMUR_ATTACH = 35.0
 TIBIA_ATTACH = 68.0
 
 
-def _leg(name, mx, my, ang, ch, touch):
+def _leg(name, mx, my, ang, ch, touch, coxa_cal=None, femur_cal=None, tibia_cal=None):
     c, f, t = ch
     return LegConfig(
         name=name, mount_x=mx, mount_y=my, mount_angle_deg=ang,
-        coxa=ServoCal(channel=c, attach_deg=COXA_ATTACH),
-        femur=ServoCal(channel=f, attach_deg=FEMUR_ATTACH),
-        tibia=ServoCal(channel=t, attach_deg=TIBIA_ATTACH),
+        coxa=coxa_cal or ServoCal(channel=c, attach_deg=COXA_ATTACH),
+        femur=femur_cal or ServoCal(channel=f, attach_deg=FEMUR_ATTACH),
+        tibia=tibia_cal or ServoCal(channel=t, attach_deg=TIBIA_ATTACH),
         touch_idx=touch,
     )
 
@@ -61,7 +61,10 @@ def _leg(name, mx, my, ang, ch, touch):
 # 髋关节布局：L1_TO_R1=126, L1_TO_L3=167, L2_TO_R2=163；角部腿倾角 55°
 # 舵机通道映射与足底开关索引来自官方配置（TS_L1=P23 ... TS_R3=P18）
 DEFAULT_LEGS = (
-    _leg("L1",  83.5,  63.0,  55.0, (15, 16, 17), 23),
+    _leg("L1",  83.5,  63.0,  55.0, (15, 16, 17), 23,
+         coxa_cal=ServoCal(channel=15, attach_deg=COXA_ATTACH, us_m45=1980.0, us_p45=1040.0),
+         femur_cal=ServoCal(channel=16, attach_deg=FEMUR_ATTACH, us_m45=1980.0, us_p45=1040.0),
+         tibia_cal=ServoCal(channel=17, attach_deg=TIBIA_ATTACH, us_m45=1040.0, us_p45=1980.0)),
     _leg("L2",   0.0,  81.5,  90.0, (9, 10, 11), 21),
     _leg("L3", -83.5,  63.0, 125.0, (3, 4, 5), 19),
     _leg("R1",  83.5, -63.0, -55.0, (12, 13, 14), 22),

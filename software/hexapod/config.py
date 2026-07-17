@@ -64,7 +64,8 @@ DEFAULT_LEGS = (
     _leg("L1",  83.5,  63.0,  55.0, (15, 16, 17), 23,
          coxa_cal=ServoCal(channel=15, attach_deg=COXA_ATTACH, us_m45=1980.0, us_p45=1040.0),
          femur_cal=ServoCal(channel=16, attach_deg=FEMUR_ATTACH, us_m45=1980.0, us_p45=1040.0),
-         tibia_cal=ServoCal(channel=17, attach_deg=TIBIA_ATTACH, us_m45=1040.0, us_p45=1980.0)),
+         # tibia 2026-07-17 三边实测 θ_center=86.4°(FK80/KP120/FP140)，k 基准=180-86.4
+         tibia_cal=ServoCal(channel=17, attach_deg=93.6, us_m45=1040.0, us_p45=1980.0)),
     _leg("L2",   0.0,  81.5,  90.0, (9, 10, 11), 21),
     _leg("L3", -83.5,  63.0, 125.0, (3, 4, 5), 19),
     _leg("R1",  83.5, -63.0, -55.0, (12, 13, 14), 22),
@@ -80,7 +81,7 @@ class RobotConfig:
     # 连杆长度 mm（官方 COXA_LEN/FEMUR_LEN/TIBIA_LEN）
     coxa_len: float = 43.0
     femur_len: float = 80.0
-    tibia_len: float = 134.0    # 换吸盘足模块后重新量测（约 +45mm）
+    tibia_len: float = 120.0    # L1 实测 K→吸盘唇口圆心(自由态)；官方原版腿=134
     # 站立姿态
     stand_height: float = 90.0  # 髋轴平面离地高度
     foot_reach: float = 130.0   # 足端到髋轴的水平距离（沿腿中性方向）

@@ -7,9 +7,10 @@
      身体俯仰（绕后髋抬头）能改善多少
 
 模型（前腿竖直平面 2D，忽略 coxa 偏摆，保守）：
-  髋 = 原点；coxa 43mm 水平 + femur 80 + tibia 134
+  髋 = 原点；coxa 43mm 水平 + femur 80 + tibia 120（L1 实测，唇口自由态口径）
   关节电气行程（舵机 ±90° × 安装偏角）:
-    femur α ∈ [-55°, +125°]，膝内角 θ ∈ [22°, 180°]（k=180-θ ∈ [0°,158°]）
+    femur α ∈ [-55°, +125°]（attach 35 未实测，沿用官方值）
+    膝内角 θ ∈ [0°, 176.4°]（L1 实测 attach k=93.6 → k∈[3.6°,183.6°] → θ=180-k，θ≤0 无物理意义）
   吸盘轴 = tibia 末段方向 a_t = α + θ - 180°
 运行:  .venv/bin/python tools/workspace_analysis.py
 """
@@ -20,8 +21,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "software"))
 from hexapod.config import DEFAULT_CONFIG as CFG
 from hexapod.kinematics import leg_ik, WorkspaceError
 
-ALPHA_LIM = (-55.0, 125.0)   # femur 电气行程（含 35° 安装偏角）
-THETA_LIM = (22.0, 180.0)    # 膝内角（含 68° 安装偏角；>180°=反关节，不用）
+ALPHA_LIM = (-55.0, 125.0)   # femur 电气行程（attach 35 未实测，沿用官方值）
+THETA_LIM = (0.0, 176.4)     # 膝内角（L1 实测 attach k=93.6：θ∈(-3.6,176.4)，下限取 0）
 H_HIP = 90.0                 # 站立时髋轴离地高度 mm
 BODY_LEN = 167.0             # 前后髋距（官方 L1_TO_L3）
 

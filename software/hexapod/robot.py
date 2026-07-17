@@ -60,7 +60,8 @@ class Hexapod:
             leg = self.cfg.leg(name)
             arr[leg.coxa.channel] = leg.coxa.joint_deg_to_us(math.degrees(g))
             arr[leg.femur.channel] = leg.femur.joint_deg_to_us(math.degrees(a))
-            # 膝关节变量取弯曲角 k = 180 - theta（伸直=0），与 TIBIA_ATTACH_ANGLE 同基准
+            # 膝关节变量取弯曲角 k = 180 - theta（伸直=0）；tibia 的 attach_deg 必须存 k 基准值
+            # （实测腿 = 180 - θ_center，见 docs/LEG-GEOMETRY-OPEN.md §2.11；官方 68 的基准存疑 §2.9）
             arr[leg.tibia.channel] = leg.tibia.joint_deg_to_us(180.0 - math.degrees(th))
         assert None not in arr, "6 条腿必须全部给目标"
         return arr

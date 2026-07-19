@@ -1,0 +1,199 @@
+<title>P2 · FKP 三角与玻璃相对位置</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 8px 4px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { font-size: 13px; color: var(--muted); padding: 8px 10px 10px; }
+  figcaption b { color: var(--ink); }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+
+  .sv-glass { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .sv-tri   { fill: var(--accent-soft); stroke: none; }
+  .sv-fk    { stroke: var(--ink); stroke-width: 2.6; stroke-linecap: round; }
+  .sv-kp    { stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; }
+  .sv-kpx   { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 5 5; opacity: .75; }
+  .sv-fp    { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 7 5; }
+  .sv-axis  { stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 11 4 2 4; fill: none; }
+  .sv-cupax { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 11 4 2 4; fill: none; }
+  .sv-plane { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 6; fill: none; }
+  .sv-arc   { stroke: var(--ink); stroke-width: 1.6; fill: none; }
+  .sv-delta { stroke: var(--warn); stroke-width: 2; fill: none; }
+  .sv-dim   { stroke: var(--muted); stroke-width: 1.1; fill: none; }
+  .sv-fold  { stroke: var(--part-stroke); stroke-width: 1.6; fill: none; }
+  .sv-lip   { stroke: var(--part-stroke); stroke-width: 5; stroke-linecap: round; }
+  .sv-dot   { fill: var(--accent); stroke: var(--panel); stroke-width: 2.5; }
+  .sv-ghost { fill: var(--panel); stroke: var(--warn); stroke-width: 2; }
+  .mk-m { fill: var(--muted); } .mk-a { fill: var(--accent); }
+  text { font-family: inherit; fill: var(--ink); font-size: 13px; }
+  text.mu { fill: var(--muted); font-size: 11.5px; }
+  text.ac { fill: var(--accent); } text.wa { fill: var(--warn); font-size: 11.5px; }
+  text.pt { font-weight: 600; }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">P2 · 单腿爬墙台架</p>
+    <h1>三角形 FKP 与玻璃的相对位置</h1>
+    <p class="sub">两图同比例。姿态由 <code>leg_ik</code> 按 2026-07-19 校准后的 <code>config.py</code> 算出；FP 边可直接卷尺验证。</p>
+  </header>
+
+  <div class="pair">
+
+  <figure>
+    <svg viewBox="0 0 480 524" role="img" aria-label="抬离位：FKP 三角，唇口离玻璃 20mm">
+      <defs>
+        <marker id="a1m" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto-start-reverse"><path class="mk-m" d="M0,0 L8,3 L0,6 z"/></marker>
+        <marker id="a1a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path class="mk-a" d="M0,0 L8,3 L0,6 z"/></marker>
+      </defs>
+
+      <!-- 玻璃 / 髋面 / coxa 轴 -->
+      <rect class="sv-glass" x="328" y="22" width="8" height="478"/>
+      <text class="mu" transform="rotate(90 346 66)" x="346" y="66">玻璃（z = −90）</text>
+      <line class="sv-plane" x1="130" y1="22" x2="130" y2="500"/>
+      <text class="mu" x="130" y="516" text-anchor="middle">壳安装面（髋面）</text>
+      <line class="sv-axis" x1="100" y1="60" x2="345" y2="60"/>
+      <text class="mu" x="208" y="52">coxa 轴（⊥玻璃）</text>
+
+      <!-- H=90 尺寸 -->
+      <path class="sv-dim" d="M130,29 V43 M328,29 V43"/>
+      <line class="sv-dim" x1="130" y1="36" x2="328" y2="36" marker-start="url(#a1m)" marker-end="url(#a1m)"/>
+      <text class="mu" x="229" y="30" text-anchor="middle">H = 90</text>
+
+      <!-- 三角形 FKP -->
+      <polygon class="sv-tri" points="130,154.6 49.3,311 284,431.8"/>
+      <line class="sv-fp" x1="130" y1="154.6" x2="284" y2="431.8"/>
+      <line class="sv-fk" x1="130" y1="154.6" x2="49.3" y2="311"/>
+      <line class="sv-kp" x1="49.3" y1="311" x2="284" y2="431.8"/>
+      <line class="sv-kpx" x1="284" y1="431.8" x2="328.5" y2="454.7"/>
+
+      <!-- 膝角 θ -->
+      <path class="sv-arc" d="M61.2,287.9 A26,26 0 0 1 72.4,322.9"/>
+      <text class="pt" x="84" y="302">θ = 89.9°</text>
+
+      <!-- 吸盘轴 + δ -->
+      <line class="sv-cupax" x1="254.1" y1="429.4" x2="328" y2="435.3" marker-end="url(#a1a)"/>
+      <text class="ac mu" x="248" y="416" text-anchor="end">吸盘轴（偏法线 4.5°）</text>
+      <path class="sv-delta" d="M321.9,434.8 A38,38 0 0 1 317.8,449.2"/>
+      <text class="wa" x="306" y="467" text-anchor="middle">δ = 22.7°</text>
+
+      <!-- 波纹与唇口（自由态） -->
+      <path class="sv-fold" d="M262,421.5 a10,10 0 0 1 0,20.6 M274,420.5 a11,11 0 0 1 0,22.6"/>
+      <line class="sv-lip" x1="286.6" y1="398.9" x2="281.4" y2="464.7"/>
+
+      <!-- 20mm 间隙 -->
+      <path class="sv-dim" d="M284,480 V494 M328,480 V494"/>
+      <line class="sv-dim" x1="284" y1="487" x2="328" y2="487" marker-start="url(#a1m)" marker-end="url(#a1m)"/>
+      <text class="mu" x="306" y="506" text-anchor="middle">20mm</text>
+
+      <!-- 边长与顶点 -->
+      <text class="mu" x="80" y="230" text-anchor="end">80</text>
+      <text class="mu" x="160" y="360" text-anchor="middle">120</text>
+      <text class="mu" x="198" y="288" text-anchor="end">FP ≈ 144</text>
+      <circle class="sv-dot" cx="130" cy="60" r="4.5"/><text class="pt" x="122" y="54" text-anchor="end">C（髋）</text>
+      <circle class="sv-dot" cx="130" cy="154.6" r="4.5"/><text class="pt" x="141" y="153">F</text>
+      <circle class="sv-dot" cx="49.3" cy="311" r="4.5"/><text class="pt" x="40" y="308" text-anchor="end">K</text>
+      <circle class="sv-dot" cx="284" cy="431.8" r="4.5"/><text class="pt" x="276" y="394" text-anchor="end">P</text>
+    </svg>
+    <figcaption><b>图一 · 抬离位（初始，z = −70）</b>：唇口离玻璃 20mm，吸盘轴偏法线 4.5°，膝角 89.9°，FP ≈ 144mm。</figcaption>
+  </figure>
+
+  <figure>
+    <svg viewBox="0 0 480 524" role="img" aria-label="压紧位：FKP 三角，吸盘轴垂直玻璃，目标点越过玻璃 15mm">
+      <defs>
+        <marker id="a2m" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto-start-reverse"><path class="mk-m" d="M0,0 L8,3 L0,6 z"/></marker>
+        <marker id="a2a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path class="mk-a" d="M0,0 L8,3 L0,6 z"/></marker>
+      </defs>
+
+      <rect class="sv-glass" x="328" y="22" width="8" height="478"/>
+      <text class="mu" transform="rotate(90 346 66)" x="346" y="66">玻璃（z = −90）</text>
+      <line class="sv-plane" x1="130" y1="22" x2="130" y2="500"/>
+      <text class="mu" x="130" y="516" text-anchor="middle">壳安装面（髋面）</text>
+      <line class="sv-axis" x1="100" y1="60" x2="345" y2="60"/>
+      <text class="mu" x="208" y="52">coxa 轴（⊥玻璃）</text>
+
+      <path class="sv-dim" d="M130,29 V43 M328,29 V43"/>
+      <line class="sv-dim" x1="130" y1="36" x2="328" y2="36" marker-start="url(#a2m)" marker-end="url(#a2m)"/>
+      <text class="mu" x="229" y="30" text-anchor="middle">H = 90</text>
+
+      <!-- 三角形 FKP（P 为运动学目标点，越过玻璃 15mm） -->
+      <polygon class="sv-tri" points="130,154.6 117.5,330.2 361,431.8"/>
+      <line class="sv-fp" x1="130" y1="154.6" x2="361" y2="431.8"/>
+      <line class="sv-fk" x1="130" y1="154.6" x2="117.5" y2="330.2"/>
+      <line class="sv-kp" x1="117.5" y1="330.2" x2="361" y2="431.8"/>
+
+      <path class="sv-arc" d="M119.3,304.3 A26,26 0 0 1 141.5,340.2"/>
+      <text class="pt" x="150" y="310">θ = 108.5°</text>
+
+      <!-- 吸盘轴 ⊥ 玻璃 + δ -->
+      <line class="sv-cupax" x1="296" y1="431.8" x2="383" y2="431.8" marker-end="url(#a2a)"/>
+      <text class="ac mu" x="292" y="400" text-anchor="end">吸盘轴 ⊥ 玻璃</text>
+      <path class="sv-delta" d="M358,431.8 A30,30 0 0 1 355.7,443.4"/>
+      <text class="wa" x="415" y="452" text-anchor="middle">δ = 22.7°</text>
+
+      <!-- 压缩波纹与唇口（贴玻璃） -->
+      <path class="sv-fold" d="M315,414 a19,19 0 0 1 0,36 M321,410 a22,22 0 0 1 0,44"/>
+      <line class="sv-lip" x1="328" y1="398.8" x2="328" y2="464.8"/>
+
+      <!-- 预压 15mm -->
+      <path class="sv-dim" d="M328,480 V494 M361,480 V494"/>
+      <line class="sv-dim" x1="328" y1="487" x2="361" y2="487" marker-start="url(#a2m)" marker-end="url(#a2m)"/>
+      <text class="mu" x="345" y="506" text-anchor="middle">预压 15</text>
+
+      <text class="mu" x="114" y="242" text-anchor="end">80</text>
+      <text class="mu" x="233" y="370" text-anchor="middle">120</text>
+      <text class="ac" x="237" y="286" text-anchor="end" font-weight="600">FP ≈ 164 ✓</text>
+      <circle class="sv-dot" cx="130" cy="60" r="4.5"/><text class="pt" x="122" y="54" text-anchor="end">C（髋）</text>
+      <circle class="sv-dot" cx="130" cy="154.6" r="4.5"/><text class="pt" x="141" y="153">F</text>
+      <circle class="sv-dot" cx="117.5" cy="330.2" r="4.5"/><text class="pt" x="108" y="327" text-anchor="end">K</text>
+      <circle class="sv-ghost" cx="361" cy="431.8" r="4.5"/><text class="pt wa" x="369" y="428">P</text>
+    </svg>
+    <figcaption><b>图二 · 压紧位（吸住，z = −105）</b>：吸盘轴 ⊥ 玻璃（偏 0.05°），膝角 108.5°，FP ≈ 164mm——2026-07-19 实测正是 164 ✓。目标点 P 越过玻璃 15mm。</figcaption>
+  </figure>
+
+  </div>
+
+  <div class="note">
+    <b>看图要点</b>　C = coxa 轴（髋）· F = femur 轴 · K = 膝轴 · P = 吸盘唇口圆心（自由态）。
+    FK = 80、KP = 120 是常量，<b>FP 随膝角变化</b>——卷尺量 FP 即可反解 θ，这就是三边法标定的原理。
+    蓝实线 K→P 是模型虚拟线，与真实<b>吸盘轴</b>（蓝点划线）恒差 <b class="d">δ = 22.7°</b>：图一里吸盘轴偏法线 4.5°，到图二正好转到垂直。
+    从图一到图二：膝张开 18.6°、足端沿玻璃法线推进 35mm，<b>C 与 F 全程不动</b>（这就是"垂直踩向玻璃"的机制——姿态由三角形自己保证，不靠对位）。
+    图二中 P 是运动学目标点，越过玻璃的 15mm 就是波纹吸盘的压缩量（预压 13.5 + 预载 1.5）。
+  </div>
+</main>

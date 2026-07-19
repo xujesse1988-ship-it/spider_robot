@@ -11,12 +11,13 @@
        Ø27 折痕座圈 + 45° 肩面 → Ø17 主孔 → Ø15 凹槽凸筋 → Ø17 圈 →
        边长7.3 六角袋 → 边长6 六角袋（锁转动）→ Ø9.6 弯头腔，顶面即金属
        最高点。舵盘螺丝孔扩为 M3 自攻（Ø2.8）。前下方开口由
-       独立的门盖封住（胶粘），门顶以上开放，宝塔嘴可转动出管。
+       独立的门盖封住（2×M5 螺丝锁紧，可拆换吸盘；定位销对位），
+       门顶以上开放，宝塔嘴可转动出管。
        打印方向：立打（腔体朝下、tibia 朝上）——方轴轴线距 tibia 平背面
        仅 4.5mm 而腔体半径 17mm，平躺必然穿透打印床，几何上只能立打；
        建议 PETG、5~6 壁、45% 填充，开 brim；tibia 细节处可开支撑保险。
-  2. suction-foot-door.stl  —— 上述腔体的门盖（含前半负模 + 4 定位销），
-       外平面朝下平躺打印，无支撑。
+  2. suction-foot-door.stl  —— 上述腔体的门盖（含前半负模 + 4 定位销 +
+       2 个 M5 沉头过孔），外平面朝下平躺打印，无支撑。
   3. component_plate.stl    —— M3 网格安装板，固定真空泵/电磁阀/传感器。
 
 所有关键尺寸在 PARAMS 里，按实际购买件修改后重新运行即可。
@@ -61,6 +62,13 @@ PARAMS = dict(
     wall=3.2,             # 最小壁厚
     door_h=29.5,          # 门盖高度（其上开放，供滑入和宝塔嘴转动出管）
     peg_d=2.9,            # 门定位销直径（孔 +0.8）
+    # --- 门 M5 固定螺丝（两侧各一，沿 y 穿门入体，门可拆）---
+    bolt_dx=10.5,         # 孔心相对腔体轴线的 x 偏移（±；避开六角袋与外壁）
+    bolt_z=19.0,          # 孔心 z（相对折痕面；腔体最窄段，避开定位销）
+    bolt_clear_d=5.5,     # 门板过孔
+    bolt_pilot_d=4.5,     # 体侧自攻底孔（M5 咬入 PETG，建议 M5×20~25）
+    bolt_head_d=9.0,      # 门外面沉头孔（M5 杯头 Ø8.5）
+    bolt_head_h=5.5,      # 沉头孔深（杯头高 5，沉入 0.5）
     # --- 与 tibia 的结合（left-tibia.stl 实测）---
     shaft_cx=1.3,         # 方轴轴心 x
     shaft_cy=-4.5,        # 方轴轴心 y（tibia 平背面为 y=0）
@@ -170,6 +178,11 @@ def _peg_spots(p, ax):
             (ax - 13.5, 24.0), (ax + 13.5, 24.0)]
 
 
+def _bolt_spots(p, ax):
+    """门 M5 螺丝的 (x, z_rel) 孔心：两侧各一，落在六角袋旁的实心壁上。"""
+    return [(ax - p["bolt_dx"], p["bolt_z"]), (ax + p["bolt_dx"], p["bolt_z"])]
+
+
 def tibia_suction(p):
     """吸盘足 v3 主体：腔体外壳(前下开口) + 45°斜顶 + 颈柱 + tibia 本体。"""
     ax, ay, z0 = p["shaft_cx"], p["shaft_cy"], p["crease_z"]
@@ -211,18 +224,30 @@ def tibia_suction(p):
     horn = [_cyl(p["horn_hole_d"] / 2, 15.0, at=(x, -14.0, z), axis="y",
                  sections=24)
             for x, z in HORN_HOLES]
-    return trimesh.boolean.difference([solid, front] + cuts + holes + horn,
-                                      engine=E)
+    # 门 M5 螺丝的体侧自攻底孔（沿 +Y 从贴合面钻入，盲孔，不穿背面）
+    pilots = [_cyl(p["bolt_pilot_d"] / 2, 15.0, at=(x, ay - 1.0, z0 + z),
+                   axis="y", sections=32)
+              for x, z in _bolt_spots(p, ax)]
+    return trimesh.boolean.difference(
+        [solid, front] + cuts + holes + horn + pilots, engine=E)
 
 
 def suction_door(p):
-    """门盖：前半负模 + 底缘导入 + 4 定位销；外平面(y=-r_out)朝下平躺打印。"""
+    """门盖：前半负模 + 底缘导入 + 4 定位销 + 2 个 M5 沉头过孔；
+    外平面(y=-r_out)朝下平躺打印。"""
     ax, ay, z0 = p["shaft_cx"], p["shaft_cy"], p["crease_z"]
     r_out = (p["crease_d"] + 0.6) / 2 + p["wall"]
     cuts, _ = _cavity_parts(p, ax, ay, z0)
     blk = _box(2 * r_out, r_out, p["door_h"],
                (ax, ay - r_out / 2, z0 + p["door_h"] / 2))
-    door = trimesh.boolean.difference([blk] + cuts, engine=E)
+    # M5 过孔 + 外面沉头孔（与主体的自攻底孔同轴）
+    bolts = []
+    for x, z in _bolt_spots(p, ax):
+        bolts.append(_cyl(p["bolt_clear_d"] / 2, r_out + 2,
+                          at=(x, ay - r_out - 1, z0 + z), axis="y", sections=32))
+        bolts.append(_cyl(p["bolt_head_d"] / 2, p["bolt_head_h"] + 1,
+                          at=(x, ay - r_out - 1, z0 + z), axis="y", sections=32))
+    door = trimesh.boolean.difference([blk] + cuts + bolts, engine=E)
     pegs = [_cyl(p["peg_d"] / 2, 4.6, at=(x, ay - 2.0, z0 + z),
                  axis="y", sections=24)
             for x, z in _peg_spots(p, ax)]

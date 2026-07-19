@@ -8,9 +8,9 @@
   1. left-tibia-suction.stl —— 吸盘足 v3：与 left-tibia 一体化的小腿。
        末端腔体按实购"2.5 折波纹吸盘 + 两颗六角螺母 + 直角宝塔弯头"一体件
        （images/xipan_marked.jpeg 三视图）做全形状负模：
-       Ø27 折痕座圈 + 5° 肩面 → Ø17 主孔 → Ø15 凹槽凸筋 → Ø17 圈 →
-       边长7 六角袋 → 边长5 六角袋（锁转动）→ Ø9.6 弯头腔，顶面即金属
-       最高点。前下方开口由
+       Ø27 折痕座圈 + 45° 肩面 → Ø17 主孔 → Ø15 凹槽凸筋 → Ø17 圈 →
+       边长7.3 六角袋 → 边长6 六角袋（锁转动）→ Ø9.6 弯头腔，顶面即金属
+       最高点。舵盘螺丝孔扩为 M3 自攻（Ø2.8）。前下方开口由
        独立的门盖封住（胶粘），门顶以上开放，宝塔嘴可转动出管。
        打印方向：立打（腔体朝下、tibia 朝上）——方轴轴线距 tibia 平背面
        仅 4.5mm 而腔体半径 17mm，平躺必然穿透打印床，几何上只能立打；
@@ -39,15 +39,15 @@ TIBIA = os.path.join(HERE, "..", "hardware", "makeyourpet-hexapod", "STL",
 PARAMS = dict(
     # --- 吸盘+金具一体件实测（自下而上；z=0 取 Ø27 第一折痕平面）---
     crease_d=27.0,        # 第一折痕直径（被包裹段的最大直径）
-    shoulder_deg=5.0,     # 折痕肩部母线与底面夹角（很平缓，见 images/xipan_neicao.jpg）
-    neck_h=10.0,          # 折痕到凹槽下沿总高（≈5° 小圆台 0.44 + Ø17 圆柱 9.56）
+    shoulder_deg=45.0,    # 折痕肩部母线与底面夹角（2026-07 新吸盘件，原为 5°）
+    neck_h=10.0,          # 折痕到凹槽下沿总高（45° 圆台 5.0 + Ø17 圆柱 5.0）
     groove_d=15.0,        # 凹槽直径
     groove_h=1.7,         # 凹槽高度
     ring_d=17.0,          # 凹槽上方小圆柱直径
     ring_h=2.0,           # 凹槽上方小圆柱高度
-    nut1_side=7.0,        # 下六角螺母边长（对边 = 边长*√3 ≈ 12.12）
+    nut1_side=7.3,        # 下六角螺母边长（对边 = 边长*√3 ≈ 12.64）
     nut1_h=3.0,
-    nut2_side=5.0,        # 上六角螺母边长（对边 ≈ 8.66）
+    nut2_side=6.0,        # 上六角螺母边长（对边 ≈ 10.39）
     nut2_h=9.0,
     elbow_d=9.0,          # 直角宝塔竖直部分外径
     elbow_h=13.0,         # 弯头总高（金属最高点 = 38.7）
@@ -64,6 +64,7 @@ PARAMS = dict(
     # --- 与 tibia 的结合（left-tibia.stl 实测）---
     shaft_cx=1.3,         # 方轴轴心 x
     shaft_cy=-4.5,        # 方轴轴心 y（tibia 平背面为 y=0）
+    horn_hole_d=2.8,      # 舵盘螺丝孔：M3 自攻（原 M1.6/Ø1.69；要 M3 过孔改 3.2）
     tibia_keep_z=-58.0,   # tibia 保留 z >= 此值（其下方轴丢弃，残段埋入颈柱）
     crease_z=-100.0,      # 折痕平面在 tibia 坐标系的 z（决定腿长）
     # --- 安装板 ---
@@ -75,6 +76,9 @@ PARAMS = dict(
 )
 
 E = "manifold"  # 布尔引擎
+
+# left-tibia.stl 实测 4 个舵盘螺丝孔位 (x, z)，节圆 Ø49，孔轴沿 y
+HORN_HOLES = [(28.51, -29.82), (36.17, -36.22), (59.37, 6.98), (67.02, 0.53)]
 
 
 def _cyl(r, h, at=(0, 0, 0), axis="z", sections=64):
@@ -110,10 +114,10 @@ def _cavity_parts(p, ax, ay, z0):
     """吸盘+金具的全形状负模（含底部导入倒角），返回待减去的实体列表。
 
     z 相对折痕平面 z0 向上：
-      0..~0.9          Ø(crease+0.6) 浅座圈（容纳折痕圈）
-      ..~1.4           5° 肩部让位面（留 0.5 间隙；立打为 5mm 环形桥接，
-                       微塌无害——下方是软硅胶肩，塌一点反而贴合更紧）
-      ..neck_h         Ø17 主孔（真正的侧向夹持段，约 7.9mm 高）
+      0..~0.95         Ø(crease+0.6) 浅座圈（容纳折痕圈）
+      ..~6.05          45° 肩部让位面（留 ~0.5 间隙；45° 锥面立打自承，
+                       无需桥接）
+      ..neck_h         Ø17 主孔（真正的侧向夹持段，约 3.2mm 高）
       ..+groove_h      Ø15 凸筋（下侧斜面便于立打，上平面承拉力）
       ..+ring_h        Ø17 圈
       ..+nut1_h        六角袋 1
@@ -125,22 +129,23 @@ def _cavity_parts(p, ax, ay, z0):
     neck_r = (p["ring_d"] + g) / 2                      # 8.7
     rib_r = (p["groove_d"] + g) / 2                     # 7.7
     ring_r = neck_r + 0.1                               # 8.8 上段孔
-    rise = (seat_r - neck_r) * np.tan(np.radians(p["shoulder_deg"]))  # 肩部升高
-    lip_h = rise + 0.5                                  # 座圈竖直段（肩高+间隙）
+    rise = (seat_r - neck_r) * np.tan(np.radians(p["shoulder_deg"]))  # 肩部升高 5.1
+    lip_h = 0.95                                        # 座圈竖直段（导入斜面 0.45 + 直壁 0.5）
     zg0 = p["neck_h"]                                   # 凹槽下沿 10
+    assert lip_h + rise <= zg0 - 0.75, "肩部锥面顶进凹槽段：检查 shoulder_deg/neck_h"
     zg1 = zg0 + p["groove_h"]                           # 凹槽上沿 11.7
     rib_top = zg1 - 0.15                                # 凸筋顶面，留咬合行程
     z_ring = zg1 + p["ring_h"]                          # 13.7
     z_n1 = z_ring + p["nut1_h"]                         # 16.7
     z_n2 = z_n1 + p["nut2_h"]                           # 25.7
     z_top = z_n2 + p["elbow_h"] + p["gap_z"]            # 39.0 腔顶
-    # 旋转体：座圈 + 5° 肩面 + Ø17 主孔 + 凸筋 + Ø17 圈（六角袋以上另做棱柱）
+    # 旋转体：座圈 + 45° 肩面 + Ø17 主孔 + 凸筋 + Ø17 圈（六角袋以上另做棱柱）
     prof = np.array([
         (0.0, -0.01),
         (seat_r + 0.4, -0.01),                           # 底缘导入
         (seat_r, lip_h - 0.5),
         (seat_r, lip_h),                                 # Ø27.6 座圈
-        (neck_r, lip_h + rise),                          # 5° 肩部让位面
+        (neck_r, lip_h + rise),                          # 45° 肩部让位面
         (neck_r, zg0 - 0.75),                            # Ø17.4 主孔
         (rib_r, zg0 + 0.45),                             # 凸筋下斜面（立打免支撑）
         (rib_r, rib_top),
@@ -201,7 +206,13 @@ def tibia_suction(p):
     holes = [_cyl((p["peg_d"] + 0.8) / 2, 4.0,
                   at=(x, ay - 0.5, z0 + z), axis="y", sections=24)
              for x, z in _peg_spots(p, ax)]
-    return trimesh.boolean.difference([solid, front] + cuts + holes, engine=E)
+    # 舵盘螺丝孔扩为 M3 自攻（原 Ø1.69 只够 M1.6）；沿 y 通钻，
+    # 出口侧原有的 Ø3.0 让位段不受影响
+    horn = [_cyl(p["horn_hole_d"] / 2, 15.0, at=(x, -14.0, z), axis="y",
+                 sections=24)
+            for x, z in HORN_HOLES]
+    return trimesh.boolean.difference([solid, front] + cuts + holes + horn,
+                                      engine=E)
 
 
 def suction_door(p):

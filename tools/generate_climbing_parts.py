@@ -28,6 +28,13 @@
        打印方向：面板朝下平躺，无支撑（法兰下缘 14mm 短桥）；
        PETG、4 壁、40% 填充。⚠ 打印前实测 D（coxa 法兰面→femur 轴）
        与 femur 壳尾距，偏差 >3mm 改 ped_depth / ped_y_foot。
+  5. carriage-pedestal.stl  —— 滑车一体件：上件与滑车板合并，直接锁
+       三节滑轨内节（内节即滑车；images/huagui.jpg 孔簇 = M5 圆孔基准
+       + 竖/横两 M4 槽吸公差）。螺丝从滑轨侧穿入，拧进板前面（腔底）
+       的六角螺母袋；上下带配重绑扎 M5 网格与 Ø8.5 锁销耳 ×2。
+       塔体几何与 4 完全一致。打印：板背朝下平躺，腔顶（面板背面）
+       需在腔内开支撑。⚠ car_cc1/car_cc2 孔心距是按报的孔间空距
+       （5/9mm）折算的 9.5/16——打印前必须卡尺实测孔心距复核。
 
   试验版 *-exp.stl：在折痕面以下加 Ø33×7.2 触地环（前半在门上）——
   吸盘真空压缩后打印件圈直接触到墙/地，硬限位分担腿部载荷。
@@ -116,6 +123,21 @@ PARAMS = dict(
     ped_slot_len=16.0,     # M4 长槽长（径向可调 ±5.5）
     ped_rib_t=4.0,         # 三角肋厚
     ped_rib_h=14.0,        # 三角肋高（法兰面以上）
+    # --- 滑车一体件（支座+滑车板合并，直接锁三节滑轨内节；images/huagui.jpg）---
+    car_slab_t=8.0,        # 板厚
+    car_slab_w=80.0,       # 板宽（x）
+    car_slab_y0=-50.0,     # 板下缘（足侧）
+    car_slab_y1=72.0,      # 板上缘
+    car_pad_w=22.0,        # 背面凸台宽（只贴滑轨内节面，避开旁边台阶）
+    car_pad_t=2.0,
+    car_m5_y=-4.0,         # M5 基准孔 y（簇居中于塔区即可）
+    car_cc1=9.5,           # ⚠ M5→M4(竖槽) 孔心距——按空距5mm折算，打印前卡尺实测！
+    car_cc2=16.0,          # ⚠ M4(竖槽)→M4(横槽) 孔心距——按空距9mm折算，实测！
+    car_m5_d=5.4,          # M5 过孔
+    car_m4_d=4.6,          # M4 过孔
+    car_nut5_af=8.0,       # M5 螺母对边（袋 +0.3，深 4.4）
+    car_nut4_af=7.0,       # M4 螺母对边（袋 +0.3，深 3.6）
+    car_grid_d=5.2,        # 配重绑扎 M5 网格孔
 )
 
 E = "manifold"  # 布尔引擎
@@ -360,6 +382,77 @@ def coxa_pedestal(p):
                                       engine=E)
 
 
+def carriage_pedestal(p):
+    """P2 台架滑车一体件：滑车板 + coxa 支座合并，直接锁三节滑轨内节。
+
+    三节滑轨的内节本身就是滑车，本件用其孔簇（M5 圆孔定位基准 +
+    竖槽 M4 吸横向公差 + 横槽 M4 吸纵向公差）固定：螺丝从滑轨侧穿入，
+    拧进埋在板前面（腔底）的六角螺母袋。坐标同 coxa_pedestal：
+    z=0 为板前面（腔底），+z 指玻璃；y 沿滑轨（+y 上/远足侧）；
+    滑轨贴合面 z = -(car_slab_t + car_pad_t)。
+    上下留配重绑扎网格；塔体（面板/侧墙/顶墙/让位口）与 coxa_pedestal 一致。
+    打印：板背朝下平躺，腔顶（面板）需在腔内开支撑；螺母袋朝上无支撑。
+    """
+    t, w, zw = p["ped_panel_t"], p["ped_wall"], p["ped_depth"]
+    y0, y1 = p["ped_y_foot"], p["ped_y_far"]
+    hw = p["ped_panel_w"] / 2
+    yc = (y0 + y1) / 2
+    st, sw = p["car_slab_t"], p["car_slab_w"]
+    sy0, sy1 = p["car_slab_y0"], p["car_slab_y1"]
+    syc = (sy0 + sy1) / 2
+
+    # 塔体（同 coxa_pedestal）
+    panel = _box(2 * hw, y1 - y0, t, (0, yc, zw + t / 2))
+    walls = [_box(w, y1 - y0, zw, (s * (hw - w / 2), yc, zw / 2)) for s in (-1, 1)]
+    topw = _box(2 * hw - 2 * w, w, zw, (0, y1 - w / 2, zw / 2))
+    # 板 + 背面凸台 + 锁销耳（Ø8.5 竖孔 ×2，+x 侧）
+    slab = _box(sw, sy1 - sy0, st, (0, syc, -st / 2))
+    pad = _box(p["car_pad_w"], sy1 - sy0, p["car_pad_t"],
+               (0, syc, -st - p["car_pad_t"] / 2))
+    lugs = [_box(14, 12, 10, (sw / 2 + 7, ly, -3)) for ly in (-36.0, 58.0)]
+    # 侧墙→板 三角肋（避开长槽的约束已不存在，仍避开网格）
+    from shapely.geometry import Polygon
+    m = np.eye(4)
+    m[:3, :3] = np.array([[1., 0., 0.], [0., 0., 1.], [0., 1., 0.]])
+    ribs = []
+    for s in (-1, 1):
+        tri = Polygon([(s * hw, 0.0), (s * (hw + 10), 0.0), (s * hw, 14.0)])
+        for ry in (-16.0, 14.5, 37.0):
+            rib = extrude_polygon(tri, p["ped_rib_t"])
+            rib.apply_transform(m)
+            rib.apply_translation([0, ry - p["ped_rib_t"] / 2, 0])
+            ribs.append(rib)
+    solid = trimesh.boolean.union(
+        [panel, topw, slab, pad, *walls, *lugs, *ribs], engine=E)
+
+    # 减去：舵机开孔、法兰底孔、顶墙让位口（同支座）
+    cut = _box(p["ped_cut_w"], p["ped_cut_len"], t + 2,
+               (0, p["ped_cut_y0"] + p["ped_cut_len"] / 2, zw + t / 2))
+    pilots = [_cyl(p["ped_pilot_d"] / 2, t + 2, at=(sx * 5.0, py, zw - 1),
+                   sections=24)
+              for py in (-14.75, 34.75) for sx in (-1, 1)]
+    notch = _box(28.0, w + 1.0, 8.0, (0, y1 - w / 2, zw - 3.0))
+    # 滑轨孔簇：M5 + M4 + M4（沿 y 一列，x=0），前面配六角螺母袋
+    yy = [p["car_m5_y"], p["car_m5_y"] + p["car_cc1"],
+          p["car_m5_y"] + p["car_cc1"] + p["car_cc2"]]
+    dd = [p["car_m5_d"], p["car_m4_d"], p["car_m4_d"]]
+    af = [p["car_nut5_af"], p["car_nut4_af"], p["car_nut4_af"]]
+    dp = [4.4, 3.6, 3.6]
+    rail = []
+    for y_, d_, af_, dp_ in zip(yy, dd, af, dp):
+        rail.append(_cyl(d_ / 2, st + p["car_pad_t"] + 1.2,
+                         at=(0, y_, -st - p["car_pad_t"] - 1), sections=32))
+        rail.append(_hex_pocket(af_ / np.sqrt(3.0), 0.3, -dp_, 0.1, (0, y_)))
+    # 配重网格 + 锁销孔
+    grid = [_cyl(p["car_grid_d"] / 2, st + p["car_pad_t"] + 2,
+                 at=(gx, gy, -st - p["car_pad_t"] - 1), sections=24)
+            for gy in (-32.0, -44.0, 50.0, 62.0) for gx in (-20.0, 0.0, 20.0)]
+    pins = [_cyl(8.5 / 2, 14, at=(sw / 2 + 7, ly - 7, -3), axis="y", sections=32)
+            for ly in (-36.0, 58.0)]
+    return trimesh.boolean.difference(
+        [solid, cut, notch] + pilots + rail + grid + pins, engine=E)
+
+
 def component_plate(p):
     """M3 网格安装板。"""
     plate = _box(p["plate_w"], p["plate_h"], p["plate_t"], (0, 0, p["plate_t"] / 2))
@@ -385,6 +478,7 @@ def main():
         "suction-foot-door-exp": (suction_door, exp),
         "component_plate": (component_plate, PARAMS),
         "coxa-pedestal": (coxa_pedestal, PARAMS),
+        "carriage-pedestal": (carriage_pedestal, PARAMS),
     }
     for name, (fn, p) in parts.items():
         m = fn(p)

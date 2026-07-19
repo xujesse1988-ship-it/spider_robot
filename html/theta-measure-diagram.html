@@ -1,0 +1,460 @@
+<title>单腿标定测量参考图</title>
+<style>
+  :root {
+    --bg: #F3F5F7;
+    --panel: #FFFFFF;
+    --ink: #1E2A36;
+    --muted: #5C6C7A;
+    --line: #D5DDE4;
+    --accent: #0E7AC4;
+    --accent-soft: rgba(14, 122, 196, 0.10);
+    --warn: #B5452F;
+    --warn-soft: rgba(181, 69, 47, 0.08);
+    --part: #C7D1DA;
+    --part-stroke: #8FA0AE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C;
+      --panel: #171F27;
+      --ink: #E3EAF1;
+      --muted: #8C9BAA;
+      --line: #2A3541;
+      --accent: #53A8E4;
+      --accent-soft: rgba(83, 168, 228, 0.14);
+      --warn: #E0785C;
+      --warn-soft: rgba(224, 120, 92, 0.10);
+      --part: #2C3844;
+      --part-stroke: #55667A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C;
+    --panel: #171F27;
+    --ink: #E3EAF1;
+    --muted: #8C9BAA;
+    --line: #2A3541;
+    --accent: #53A8E4;
+    --accent-soft: rgba(83, 168, 228, 0.14);
+    --warn: #E0785C;
+    --warn-soft: rgba(224, 120, 92, 0.10);
+    --part: #2C3844;
+    --part-stroke: #55667A;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7;
+    --panel: #FFFFFF;
+    --ink: #1E2A36;
+    --muted: #5C6C7A;
+    --line: #D5DDE4;
+    --accent: #0E7AC4;
+    --accent-soft: rgba(14, 122, 196, 0.10);
+    --warn: #B5452F;
+    --warn-soft: rgba(181, 69, 47, 0.08);
+    --part: #C7D1DA;
+    --part-stroke: #8FA0AE;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+    margin: 0;
+    padding: 32px 20px 56px;
+  }
+  main { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+  .eyebrow {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 6px;
+  }
+  h1 { font-size: 26px; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0; font-size: 14.5px; }
+
+  h2 { font-size: 16px; margin: 0 0 12px; letter-spacing: 0.02em; }
+  h2 .no { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 6px; }
+
+  figure {
+    margin: 0; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 18px 12px 8px; overflow-x: auto;
+  }
+  figure svg { display: block; width: 100%; max-width: 660px; height: auto; margin: 0 auto; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 560px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-size: 13.5px;
+  }
+  .card b.pt {
+    display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center;
+    background: var(--accent-soft); color: var(--accent); border-radius: 50%;
+    font-size: 14px; margin-bottom: 6px;
+  }
+  .card p { margin: 0; color: var(--muted); }
+  .card p strong { color: var(--ink); font-weight: 600; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px;
+  }
+  ol.steps { margin: 0; padding-left: 22px; font-size: 14px; }
+  ol.steps li { margin-bottom: 8px; }
+  ol.steps li:last-child { margin-bottom: 0; }
+
+  code, .formula {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  code {
+    background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px;
+  }
+  .formula {
+    display: block; text-align: center; font-size: 15px; margin: 14px 0 4px;
+    padding: 12px; background: var(--accent-soft); border-radius: 8px; color: var(--ink);
+  }
+
+  ul.donts { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+  ul.donts li { padding-left: 26px; position: relative; margin-bottom: 8px; }
+  ul.donts li:last-child { margin-bottom: 0; }
+  ul.donts li::before { content: "✗"; position: absolute; left: 4px; color: var(--warn); font-weight: 700; }
+
+  .fix-banner {
+    border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 8px;
+    padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px;
+  }
+  .fix-banner b { color: var(--warn); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12.5px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; }
+  tr:last-child td { border-bottom: none; }
+  td .big { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ok  { color: var(--accent); }
+  .bad { color: var(--warn); }
+
+  .note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+
+  /* SVG roles */
+  .sv-femur   { stroke: var(--part-stroke); stroke-width: 12; stroke-linecap: round; }
+  .sv-part    { fill: var(--part); fill-opacity: 0.55; stroke: var(--part-stroke); stroke-width: 1.6; stroke-linejoin: round; }
+  .sv-horn    { fill: none; stroke: var(--part-stroke); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.75; }
+  .sv-screw   { fill: var(--part-stroke); }
+  .sv-kp      { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 9 6; fill: none; }
+  .sv-fp      { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 4 6; fill: none; }
+  .sv-axis    { stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 11 4 2 4; fill: none; opacity: 0.85; }
+  .sv-theta   { stroke: var(--accent); stroke-width: 3; fill: none; }
+  .sv-delta   { stroke: var(--warn); stroke-width: 2; fill: none; }
+  .sv-dot     { fill: var(--accent); stroke: var(--panel); stroke-width: 2.5; }
+  .sv-fold    { stroke: var(--part-stroke); stroke-width: 1.2; opacity: 0.8; }
+  .sv-lip     { stroke: var(--part-stroke); stroke-width: 5; stroke-linecap: round; }
+  .sv-table    { stroke: var(--ink); stroke-width: 2.5; }
+  .sv-tablebody{ fill: var(--part); fill-opacity: 0.35; stroke: var(--part-stroke); stroke-width: 1; }
+  .sv-coxa     { stroke: var(--part-stroke); stroke-width: 8; stroke-linecap: round; }
+  .sv-dim      { stroke: var(--muted); stroke-width: 1.2; }
+  .sv-ext      { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 5 5; opacity: 0.8; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-dim   { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-pt    { font-size: 15px; font-weight: 700; fill: var(--accent); }
+  .t-theta { font-size: 26px; font-weight: 700; fill: var(--accent); }
+  .t-sub   { font-size: 12px; fill: var(--accent); }
+  .t-dist  { font-size: 12px; fill: var(--muted); }
+  .t-seg   { font-size: 12px; fill: var(--muted); }
+  .t-warn  { font-size: 11px; fill: var(--warn); }
+  .t-foot  { font-size: 10.5px; fill: var(--muted); }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">Spider · 单腿标定 · LEG-GEOMETRY-OPEN §4.5 / §4.6</p>
+    <h1>单腿标定：θ / α / γ 量哪个角、怎么量</h1>
+    <p class="sub">三个关节角量的都是<strong>虚拟连线</strong>对参考系（另一连线 / 重力 / 机身）的夹角，不是零件实体边。θ 已完成（86.4° 已入 config）；剩 femur 的 α 和 coxa 的 γ（§04、§05）。</p>
+  </header>
+
+  <figure>
+    <svg viewBox="0 0 620 510" role="img" aria-label="腿部侧视示意图：θ 为 K 点处 K→F 与 K→P 两条虚线的夹角">
+      <!-- tibia 实体（7 字形板 + 方轴 + 吸盘腔） -->
+      <polygon class="sv-part" points="207.7,52.4 322.3,105.2 240.7,282.5 407.2,359.0 418.9,333.5 462.4,353.6 419.8,446.3 376.0,426.2 389.5,397.1 108.7,268.0"/>
+      <!-- 波纹管 + 唇口 -->
+      <polygon class="sv-part" points="460,359.3 539.8,395.9 502,477.5 422.2,440.9"/>
+      <line class="sv-fold" x1="484" y1="377" x2="451.6" y2="447.8"/>
+      <line class="sv-fold" x1="510.4" y1="389" x2="478" y2="459.8"/>
+      <line class="sv-lip" x1="539.8" y1="395.9" x2="502" y2="477.5"/>
+      <!-- 方轴轴线（延长后恰好穿过 P） -->
+      <line class="sv-axis" x1="231.1" y1="303.5" x2="548.1" y2="449.2"/>
+      <!-- femur 连杆 -->
+      <line class="sv-femur" x1="40" y1="290" x2="236.5" y2="152.3"/>
+      <!-- 舵盘节圆与螺丝 -->
+      <circle class="sv-horn" cx="236.5" cy="152.3" r="73.5"/>
+      <circle class="sv-screw" cx="307.5" cy="171.3" r="3.5"/>
+      <circle class="sv-screw" cx="217.5" cy="223.3" r="3.5"/>
+      <circle class="sv-screw" cx="165.5" cy="133.3" r="3.5"/>
+      <circle class="sv-screw" cx="255.5" cy="81.3" r="3.5"/>
+      <circle class="sv-horn" cx="40" cy="290" r="18"/>
+      <!-- 待测虚线 -->
+      <line class="sv-fp" x1="40" y1="290" x2="520.9" y2="436.7"/>
+      <line class="sv-kp" x1="236.5" y1="152.3" x2="520.9" y2="436.7"/>
+      <!-- θ 圆弧（K→F 与 K→P 之间） -->
+      <path class="sv-theta" d="M 191.5 183.9 A 55 55 0 0 0 275.4 191.2"/>
+      <!-- δ 圆弧（方轴方向 与 K→P 之间，在 P 处） -->
+      <path class="sv-delta" d="M 478.5 394.3 A 60 60 0 0 0 466.4 411.6"/>
+      <!-- 三个点 -->
+      <circle class="sv-dot" cx="40" cy="290" r="6"/>
+      <circle class="sv-dot" cx="236.5" cy="152.3" r="6"/>
+      <circle class="sv-dot" cx="520.9" cy="436.7" r="6"/>
+      <!-- 文字 -->
+      <text class="t-pt" x="24" y="276">F</text>
+      <text class="t-pt" x="249" y="141">K</text>
+      <text class="t-pt" x="536" y="453">P</text>
+      <text class="t-theta" x="215" y="238" text-anchor="middle">θ</text>
+      <text class="t-sub" x="215" y="257" text-anchor="middle">量这个角</text>
+      <text class="t-warn" x="452" y="392" text-anchor="end">δ ≈ 20°（方轴 ≠ KP）</text>
+      <text class="t-dist" x="130" y="207" text-anchor="middle" transform="rotate(-35 130 207)">femur：FK ≈ 80 ①</text>
+      <text class="t-dist" x="378" y="281" text-anchor="middle" transform="rotate(45 378 281)">KP = tibia_len ②</text>
+      <text class="t-dist" x="255" y="385" text-anchor="middle" transform="rotate(17 255 385)">FP ③</text>
+      <text class="t-seg" x="182" y="103">A 段（舵盘安装板）</text>
+      <text class="t-seg" x="330" y="345" text-anchor="middle" transform="rotate(25 330 345)">B 段（方轴 → 吸盘）</text>
+      <text class="t-foot" x="14" y="502">示意姿态：θ 按约 100° 画，与实际中位角无关；轮廓按 STL 比例，P 位置取 §4.1 的假设（方轴轴线 × TIBIA_LEN 134）。</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card"><b class="pt">F</b>
+      <p><strong>femur 舵盘中心螺丝</strong>（髋俯仰轴）。femur 舵机输出轴上那颗中心螺丝的圆心。</p>
+    </div>
+    <div class="card"><b class="pt">K</b>
+      <p><strong>tibia 舵盘中心螺丝</strong>（膝轴）。§3.4 已确认舵盘中心 = 膝轴。</p>
+    </div>
+    <div class="card"><b class="pt">P</b>
+      <p><strong>吸盘唇口圆心</strong>（自由态、不通真空）。KP 的实测值同时就是这个口径下的 tibia_len。</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">01</span>θ 量法：三边定角，不碰量角器 ✅ 已完成</h2>
+    <ol class="steps">
+      <li>跑 <code>software/scripts/servo_calib_helper.py</code>，敲 <code>17 1510</code>（L1 tibia 到标定中心；脚本启动默认打 1500，必须手动改到 1510）。</li>
+      <li>通道 15/16（coxa、femur）摆到方便下卡尺的位置即可——F、K 都在 femur 刚体上，θ 只由膝舵机决定。全程保持使能，不许手掰。</li>
+      <li>量三条<strong>点到点直线距离</strong>：① FK（应 ≈80mm，当自检）② KP ③ FP。螺丝中心对中心，多测两次取平均。</li>
+    </ol>
+    <span class="formula">θ = arccos( (FK² + KP² − FP²) / (2 · FK · KP) )</span>
+    <p class="note">误差参考：边长差 1mm ≈ 角度差 1°。判 44° 基准问题绰绰有余；要填 config（±1~2°）就用卡尺仔细量。</p>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">02</span>不要这样量</h2>
+    <ul class="donts">
+      <li>量角器贴 A 段或 B 段的任何实体边——θ 是虚拟线 K→P 相对 K→F 的夹角，零件上很可能不存在平行于 K→P 的面（§4.2）。</li>
+      <li>把「A 段与 femur 成一条直线」当作 θ=180° 的参考位——那个姿态的 θ 实际是 180°−δ′（δ′ = A 段方向与 K→P 的固定夹角）。</li>
+      <li>拿方轴 / 方盒側面当基准面——方轴方向与 K→P 差约 20°（图中 δ，§4.1）。</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">03</span>量完怎么判读 ✅ 结果：θ=86.4°</h2>
+    <p class="note" style="margin: 0 0 12px">2026-07-17 实测 FK=80 / KP=120 / FP=140 → θ=86.4°，两头都不沾（安装时未对官方位），
+    基准问题判不动、也不再关键。已按 k 基准落地：<code>attach_deg=93.6</code>、<code>tibia_len=120</code>。以下判读表留档。</p>
+    <div class="fix-banner"><b>⚠️ 修正</b>：此前对话里下面两行写反了，以本表为准。依据：<code>joint_deg_to_us</code> 在 joint=attach 时输出中位；robot.py 给 tibia 传的是 k=180−θ，attach=68 ⇒ <strong>现代码认为中位（1510µs）时 θ=112°</strong>。</div>
+    <table>
+      <tr><th>实测 θ（中位时）</th><th>结论</th></tr>
+      <tr>
+        <td><span class="big">≈ 68°</span><br>膝折得较狠</td>
+        <td>官方 68 是 <strong>θ 基准</strong> → 现代码恒偏 <span class="bad"><strong>44°</strong></span>（§2.9 成立，要修）</td>
+      </tr>
+      <tr>
+        <td><span class="big">≈ 112°</span><br>腿较舒展</td>
+        <td>官方 68 是 k 基准 → <span class="ok"><strong>现代码没错</strong></span>（§2.9 推翻）</td>
+      </tr>
+    </table>
+    <p class="note">无论哪种结果，实测值直接可用：robot.py 改传 θ 本身 → <code>attach_deg := θ实测</code>；保持传 k → <code>attach_deg := 180 − θ实测</code>。两条路二选一，别混用。</p>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">04</span>femur：α_center 高差法 ✅ 结果：49.7°</h2>
+    <p class="note" style="margin: 0 0 12px">2026-07-17 实测 Δh = h_K − h_F = 61mm → α_center = arcsin(61/80) = <strong>49.7°</strong>，
+    正落在官方 35° + 一个花键齿 14.4° = 49.4° 上（差 0.3°），已入 config。摆位图与方法留档。</p>
+    <p style="font-size: 14px; margin: 0 0 4px">先对齐术语（图中标注）：</p>
+    <ul class="donts" style="margin-bottom: 14px">
+      <li style="padding-left: 4px"><span style="color: var(--accent); font-weight: 700">L1</span> = 整条左前腿（coxa + femur + tibia-suction 一体件），L=左、1=前，通道 15/16/17。不是一个点。</li>
+      <li style="padding-left: 4px"><span style="color: var(--accent); font-weight: 700">髋</span> = 腿根的两个轴：<strong>C</strong>（coxa 轴，竖直，管水平摆）+ <strong>F</strong>（femur 轴，水平，管抬升）。「膝在髋上方 / 吸盘在髋下方」里的髋指 <strong>F</strong>。</li>
+      <li style="padding-left: 4px"><span style="color: var(--accent); font-weight: 700">膝盖</span> = <strong>K</strong>（tibia 舵盘中心螺丝）；<span style="color: var(--accent); font-weight: 700">吸盘圆心</span> = <strong>P</strong>。与 θ 三边法用的是同样的点。</li>
+    </ul>
+    <figure style="border: none; padding: 6px 0 0">
+      <svg viewBox="0 0 710 435" role="img" aria-label="femur 测量摆位：机身放平在桌上，L1 悬出桌沿，量桌面到 F 和 K 的高度差">
+        <!-- 桌面与桌体 -->
+        <rect class="sv-tablebody" x="30" y="280" width="482" height="22"/>
+        <line class="sv-table" x1="30" y1="280" x2="512" y2="280"/>
+        <line class="sv-ext" x1="512" y1="280" x2="690" y2="280"/>
+        <!-- 机身 -->
+        <rect class="sv-part" x="50" y="187.6" width="264" height="92.4" rx="6"/>
+        <!-- C 轴（竖直点划线）与 coxa 舵盘中心螺丝（朝上） -->
+        <line class="sv-axis" x1="248" y1="172" x2="248" y2="296"/>
+        <circle class="sv-screw" cx="248" cy="187.6" r="3.5"/>
+        <!-- coxa 链节 C→F -->
+        <line class="sv-coxa" x1="248" y1="214" x2="342.6" y2="214"/>
+        <!-- tibia 一体件（悬出桌沿，最低点低于桌面） -->
+        <polygon class="sv-part" points="480.1,37.1 555.1,91.2 471.3,207.2 580.0,285.7 591.9,269.2 620.5,289.9 576.7,350.4 548.1,329.9 561.9,310.8 378.2,177.9"/>
+        <polygon class="sv-part" points="617.8,293.4 644.0,312.1 605.3,365.8 579.1,347.1"/>
+        <line class="sv-fold" x1="624.0" y1="303.3" x2="590.5" y2="349.5"/>
+        <line class="sv-fold" x1="632.6" y1="309.7" x2="599.1" y2="355.9"/>
+        <line class="sv-lip" x1="644.0" y1="312.1" x2="605.3" y2="365.8"/>
+        <!-- femur 连杆 F→K -->
+        <line class="sv-femur" x1="342.6" y1="214" x2="486.7" y2="113"/>
+        <!-- α：过 F 的水平参考线 + 圆弧 -->
+        <line class="sv-ext" x1="342.6" y1="214" x2="672" y2="214"/>
+        <path class="sv-theta" d="M 382.6 214 A 40 40 0 0 0 375.4 191.0"/>
+        <!-- 高度尺寸线 h_F / h_K -->
+        <line class="sv-dim" x1="360" y1="280" x2="360" y2="214"/>
+        <line class="sv-dim" x1="354" y1="214" x2="366" y2="214"/>
+        <line class="sv-ext" x1="486.7" y1="113" x2="460" y2="113"/>
+        <line class="sv-dim" x1="460" y1="280" x2="460" y2="113"/>
+        <line class="sv-dim" x1="454" y1="113" x2="466" y2="113"/>
+        <!-- 吸盘低于 F ≈57mm -->
+        <line class="sv-ext" x1="630" y1="339" x2="672" y2="339"/>
+        <line class="sv-dim" x1="665" y1="214" x2="665" y2="339"/>
+        <line class="sv-dim" x1="659" y1="339" x2="671" y2="339"/>
+        <!-- 三个点 -->
+        <circle class="sv-dot" cx="342.6" cy="214" r="6"/>
+        <circle class="sv-dot" cx="486.7" cy="113" r="6"/>
+        <circle class="sv-dot" cx="624.6" cy="339" r="5"/>
+        <line class="sv-dim" x1="592" y1="380" x2="618" y2="344"/>
+        <!-- 文字 -->
+        <text class="t-seg" x="70" y="272">桌面</text>
+        <text class="t-seg" x="120" y="240">腿根放平（现阶段＝coxa 舵机壳）</text>
+        <text class="t-seg" x="248" y="166" text-anchor="middle">C（coxa 轴）</text>
+        <text class="t-seg" x="295" y="204" text-anchor="middle">coxa</text>
+        <text class="t-pt" x="333" y="205" text-anchor="end">F（髋）</text>
+        <text class="t-pt" x="486.7" y="96" text-anchor="middle">K（膝）</text>
+        <text class="t-pt" x="590" y="396" text-anchor="middle">P（吸盘唇口圆心）</text>
+        <text class="t-seg" x="414" y="156" text-anchor="middle" transform="rotate(-35 414 156)">femur</text>
+        <text class="t-seg" x="540" y="272" text-anchor="middle" transform="rotate(36 540 272)">tibia-suction</text>
+        <text class="t-theta" x="398" y="207" style="font-size: 18px">α</text>
+        <text class="t-dim" x="368" y="252">h_F</text>
+        <text class="t-dim" x="452" y="262" text-anchor="end">h_K</text>
+        <text class="t-dim" x="678" y="278" text-anchor="middle" transform="rotate(90 678 278)">≈57mm</text>
+        <text class="t-seg" x="520" y="310">桌沿</text>
+        <text class="t-foot" x="16" y="428">femur 回中示意（α 按官方 35° 画）：K 比 F 高 80·sinα ≈ 46mm；吸盘圆心比 F 低 ≈ 57mm，已低于桌面 → L1 悬出桌沿，但 F、K 仍留在桌面上方以便量高。F 离桌高取决于底盘，图中取 30mm 示意。</text>
+      </svg>
+    </figure>
+    <span class="formula">α_center = arcsin( (h_K − h_F) / 80 )　　（K 高为正；80 = 实测 FK）</span>
+    <ol class="steps" style="margin-top: 12px">
+      <li>机身放平（手机水平仪 ≤0.3°），L1 悬出桌沿但让 <strong>F、K 都还在桌面上方</strong>（如图，只有吸盘出檐）。敲 <code>16 1510</code>，全程使能。</li>
+      <li>量桌面 → F 螺丝顶、桌面 → K 螺丝顶。同型号螺丝，头半径在差值里抵消。精度：±0.5mm → ±0.6°。</li>
+      <li>交叉验证：femur 有验证过与 F→K 精确平行的长直边（§2.5），水平仪先在机身归零再贴边读数，应与高差法一致（1° 内）。</li>
+      <li>填法：<code>femur attach_deg := α_center</code>，robot.py 直接传 α，<strong>无基准换算</strong>。期望值 35 ± n·14.4°。</li>
+    </ol>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">05</span>coxa：γ_center 俯视投点法 ⏸ 已决定推迟到 P3</h2>
+    <p class="note" style="margin: 0 0 8px"><strong>2026-07-17 决定：推迟到 P3 装机身时测。</strong>P0 无机身，γ 的 0 点（中性方向 55°）物理上不存在；
+    P1/P2 单腿台架不依赖 γ 绝对值（压力闭环，偏差只是横移 ~2.3mm/°）；P3 届时直接用文末「复核版」基线法（不依赖口袋对准假设，更硬）。
+    下面的舵机壳基准法留档备用——如果 P2 期间发现横向瞄不准，可以随时用它先量个临时值。</p>
+    <figure style="border: none; padding: 6px 0 0">
+      <svg viewBox="0 0 700 330" role="img" aria-label="coxa 无机身测量：舵机壳压在方格纸上，沿壳长边描基准线，吸盘圆心投两点定腿方向线">
+        <defs>
+          <pattern id="gp2" width="22" height="22" patternUnits="userSpaceOnUse">
+            <path d="M 22 0 H 0 V 22" fill="none" style="stroke: var(--line); stroke-width: 1"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="700" height="330" fill="url(#gp2)" opacity="0.55"/>
+        <!-- coxa 舵机壳（俯视，输出轴偏向右端） -->
+        <rect class="sv-part" x="80" y="150" width="86" height="32" rx="3"/>
+        <circle class="sv-horn" cx="146" cy="166" r="12"/>
+        <!-- 壳轴线（基准 0°） -->
+        <line class="sv-axis" x1="40" y1="166" x2="660" y2="166"/>
+        <!-- 沿壳长边描的铅笔线 -->
+        <line x1="60" y1="182" x2="300" y2="182" style="stroke: var(--ink); stroke-width: 1.5"/>
+        <!-- 腿方向线：过 P1、P2（γ 夸大成 -15°） -->
+        <line class="sv-kp" x1="146" y1="166" x2="648" y2="31.3"/>
+        <!-- γ 弧 -->
+        <path class="sv-theta" d="M 256 166 A 110 110 0 0 0 252.3 137.5"/>
+        <!-- C 与投点 -->
+        <circle class="sv-dot" cx="146" cy="166" r="5"/>
+        <circle cx="397" cy="98.7" r="5" style="fill: var(--panel); stroke: var(--accent); stroke-width: 2"/>
+        <circle cx="397" cy="98.7" r="1.6" style="fill: var(--accent)"/>
+        <circle cx="561" cy="54.6" r="5" style="fill: var(--panel); stroke: var(--accent); stroke-width: 2"/>
+        <circle cx="561" cy="54.6" r="1.6" style="fill: var(--accent)"/>
+        <!-- 文字 -->
+        <text class="t-seg" x="123" y="138" text-anchor="middle">coxa 舵机壳（夹紧/压重固定）</text>
+        <text class="t-pt" x="146" y="205" text-anchor="middle">C</text>
+        <line class="sv-dim" x1="146" y1="194" x2="146" y2="174"/>
+        <text class="t-seg" x="560" y="156" text-anchor="middle">壳轴线（基准 0°，指向输出轴端）</text>
+        <text class="t-seg" x="310" y="198">沿壳长边描线（∥ 壳轴线，即基准线）</text>
+        <text class="t-pt" x="397" y="84" text-anchor="middle">P₁</text>
+        <text class="t-pt" x="561" y="40" text-anchor="middle">P₂</text>
+        <text class="t-theta" x="272" y="150" style="font-size: 18px">γ</text>
+        <text class="t-seg" x="150" y="232">P₁、P₂ = 两个伸展度下吸盘圆心的垂直投点（coxa 保持 1510）</text>
+        <text class="t-seg" x="30" y="262">方格纸（全程不动）</text>
+        <text class="t-foot" x="16" y="296">俯视示意：γ 画成约 −15° 便于看清，期望 −8 ± n·14.4°（逆时针为正）。前提：机身口袋按设计把壳轴线对准腿中性方向 55°——装上机身后用下图基线法复核。</text>
+        <text class="t-foot" x="16" y="312">舵机壳必须夹紧或压重：腿是悬臂，会把没固定的壳拉歪；壳底面平贴桌面（保证 coxa 轴竖直，femur 量高差时同理）。</text>
+      </svg>
+    </figure>
+    <p class="note" style="margin: 14px 0 8px"><strong>装上机身后的复核版（留档）</strong>——用 L1↔R1 舵盘螺丝投点连线当基准，不依赖"口袋对准 55°"的假设。现在没有机身，暂时用不了：</p>
+    <figure style="border: none; padding: 6px 0 0">
+      <svg viewBox="0 0 700 520" role="img" aria-label="coxa 俯视测量（装机身后复核版）：机身压在方格纸上，吸盘圆心投两点定腿方向线，与机身基准线求夹角">
+        <defs>
+          <pattern id="gp" width="22" height="22" patternUnits="userSpaceOnUse">
+            <path d="M 22 0 H 0 V 22" fill="none" style="stroke: var(--line); stroke-width: 1"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="700" height="520" fill="url(#gp)" opacity="0.55"/>
+        <!-- 机身（俯视六边形）与六个髋位 -->
+        <polygon class="sv-part" points="364,183 476,183 543.2,330 476,477 364,477 296.8,330"/>
+        <circle class="sv-screw" cx="305.9" cy="330" r="3"/>
+        <circle class="sv-screw" cx="534.1" cy="330" r="3"/>
+        <circle class="sv-screw" cx="331.8" cy="446.9" r="3"/>
+        <circle class="sv-screw" cx="508.2" cy="446.9" r="3"/>
+        <!-- 基线：C_L1 → C_R1 的投点连线（体坐标 Y 向） -->
+        <line class="sv-fp" x1="310" y1="213.1" x2="585" y2="213.1"/>
+        <!-- 中性方向 55°（config mount_angle） -->
+        <line class="sv-ext" x1="331.8" y1="213.1" x2="159.8" y2="92.6"/>
+        <!-- 腿方向线：过 P1、P2 -->
+        <line class="sv-kp" x1="331.8" y1="213.1" x2="156" y2="25"/>
+        <!-- ∠(基线→腿线) = 145°+γ -->
+        <path class="sv-delta" d="M 376.8 213.1 A 45 45 0 0 0 301.1 180.2"/>
+        <!-- γ：中性方向 → 腿线 -->
+        <path class="sv-theta" d="M 233.5 144.3 A 120 120 0 0 1 250.0 125.3"/>
+        <!-- C 点与 P 投点 -->
+        <circle class="sv-dot" cx="331.8" cy="213.1" r="6"/>
+        <circle class="sv-dot" cx="508.2" cy="213.1" r="6"/>
+        <circle cx="226.8" cy="100.5" r="5" style="fill: var(--panel); stroke: var(--accent); stroke-width: 2"/>
+        <circle cx="226.8" cy="100.5" r="1.6" style="fill: var(--accent)"/>
+        <circle cx="179.1" cy="49.3" r="5" style="fill: var(--panel); stroke: var(--accent); stroke-width: 2"/>
+        <circle cx="179.1" cy="49.3" r="1.6" style="fill: var(--accent)"/>
+        <!-- 坐标示意 -->
+        <line class="sv-dim" x1="640" y1="95" x2="640" y2="55"/>
+        <polygon points="640,48 636,58 644,58" style="fill: var(--muted)"/>
+        <line class="sv-dim" x1="665" y1="110" x2="625" y2="110"/>
+        <polygon points="618,110 628,106 628,114" style="fill: var(--muted)"/>
+        <!-- 文字 -->
+        <text class="t-seg" x="420" y="334" text-anchor="middle">机身（俯视）</text>
+        <text class="t-pt" x="331.8" y="238" text-anchor="middle">C_L1</text>
+        <text class="t-pt" x="508.2" y="238" text-anchor="middle">C_R1</text>
+        <text class="t-seg" x="585" y="205" text-anchor="end">基线（投点连线 = 体 Y 向）</text>
+        <text class="t-seg" x="46" y="74">中性方向 55°</text>
+        <text class="t-pt" x="240" y="92">P₁</text>
+        <text class="t-pt" x="192" y="40">P₂</text>
+        <text class="t-seg" x="40" y="140">P₁、P₂ = 两个伸展度下</text>
+        <text class="t-seg" x="40" y="158">吸盘圆心的垂直投点</text>
+        <line class="sv-dim" x1="196" y1="146" x2="221" y2="106"/>
+        <text class="t-seg" x="212" y="205">腿方向线</text>
+        <line class="sv-dim" x1="288" y1="200" x2="316" y2="185"/>
+        <text class="t-theta" x="243" y="118" style="font-size: 18px">γ</text>
+        <text class="t-warn" x="366" y="152">∠ = 145° + γ</text>
+        <text class="t-dim" x="640" y="45" text-anchor="middle">+X 车头</text>
+        <text class="t-dim" x="622" y="124" text-anchor="end">+Y 左</text>
+        <text class="t-seg" x="30" y="500">方格纸（压在机身下，全程不动）</text>
+        <text class="t-foot" x="16" y="514">俯视示意：γ 画成约 −12° 便于看清，实际期望 −8 ± n·14.4°。γ = 腿线方位 − 55°；用 L1→R1 基线则 γ = ∠(基线→腿线，逆时针) − 145°。逆时针为正。</text>
+      </svg>
+    </figure>
+    <ol class="steps">
+      <li>coxa 舵机壳底面平贴桌面并<strong>夹紧或压重</strong>（腿是悬臂，会拉歪没固定的壳），壳下压方格纸。敲 <code>15 1510</code>。</li>
+      <li><strong>基准线</strong>：沿壳的长边贴纸描一条直线——平行于壳轴线，就是 γ 的 0° 参考；正方向取指向输出轴那端。</li>
+      <li><strong>腿方向线</strong>：coxa 不动，femur/tibia 摆两个不同伸展度，各用直角尺把吸盘唇口圆心竖直投到纸上标点，两点连线（取点纪律同 θ/femur）。</li>
+      <li>纸上取远点读坐标算 atan2 求两线夹角（别用小量角器）：<code>γ_center = 腿线相对壳轴线的角</code>，俯视逆时针为正。期望值 −8 ± n·14.4°。填 <code>coxa attach_deg := γ_center</code>。</li>
+      <li><strong>前提与复核</strong>：此法假设机身口袋把壳轴线对准中性方向 55°（官方设计意图）。装上机身后用上面『复核版』的基线法复核；不急的话也可以整体推迟到装机身时再测——单腿台架（P1/P2）用不到 γ。三个 attach 齐后做 FK 抽查（发关节角、量足端 vs <code>leg_fk</code>，&lt;5mm 通过）。</li>
+    </ol>
+  </section>
+</main>

@@ -1,0 +1,193 @@
+<title>P2 单腿爬墙台架几何图</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 10px 6px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+
+  .sv-part { fill: var(--part); fill-opacity: .55; stroke: var(--part-stroke); stroke-width: 1.5; stroke-linejoin: round; }
+  .sv-solid { fill: var(--part); fill-opacity: .85; stroke: var(--part-stroke); stroke-width: 1.2; }
+  .sv-glass { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .sv-femur { stroke: var(--part-stroke); stroke-width: 11; stroke-linecap: round; }
+  .sv-link  { stroke: var(--part-stroke); stroke-width: 9; stroke-linecap: round; }
+  .sv-axis  { stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 11 4 2 4; fill: none; }
+  .sv-cupax { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 11 4 2 4; fill: none; }
+  .sv-plane { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 6; fill: none; }
+  .sv-kp    { stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: 8 6; fill: none; }
+  .sv-delta { stroke: var(--warn); stroke-width: 2.2; fill: none; }
+  .sv-dim   { stroke: var(--muted); stroke-width: 1.1; fill: none; }
+  .sv-fold  { stroke: var(--part-stroke); stroke-width: 1.1; opacity: .85; }
+  .sv-lip   { stroke: var(--part-stroke); stroke-width: 5; stroke-linecap: round; }
+  .sv-dot   { fill: var(--accent); stroke: var(--panel); stroke-width: 2.5; }
+  .sv-warnfill { fill: var(--warn); fill-opacity: .55; stroke: var(--warn); stroke-width: 1; }
+  .sv-cush  { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1; stroke-dasharray: 3 3; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-pt   { font-size: 14px; font-weight: 700; fill: var(--accent); }
+  .t-seg  { font-size: 11.5px; fill: var(--muted); }
+  .t-dim  { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-warn { font-size: 12px; font-weight: 700; fill: var(--warn); }
+  .t-acc  { font-size: 11.5px; fill: var(--accent); }
+  .t-h    { font-size: 13.5px; font-weight: 700; }
+  .t-b    { font-size: 12px; fill: var(--ink); }
+  .t-bm   { font-size: 11.5px; fill: var(--muted); }
+  .t-foot { font-size: 10.5px; fill: var(--muted); }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">Spider · P2 单腿爬墙 · P2-GUIDE 第 2~4 步</p>
+    <h1>P2 台架几何图（侧视，按 mm 比例）</h1>
+    <p class="sub">姿态 = 触壁位（z=−90，自由吸盘刚碰玻璃）。蓝色虚线是模型的 K→P 虚拟线，
+    真实吸盘轴沿方轴方向、与它恒差 δ=22.7°——台架所有数字都按"吸盘轴⊥玻璃"求解。</p>
+  </header>
+
+  <figure>
+    <svg viewBox="0 0 660 600" role="img" aria-label="P2 台架侧视图：立柱滑轨滑车、coxa 舵机水平指向玻璃、腿下伸吸盘触壁">
+      <!-- 玻璃与衬板 -->
+      <rect class="sv-glass" x="363" y="36.5" width="10.2" height="501.5"/>
+      <rect class="sv-solid" x="373.2" y="36.5" width="13.6" height="501.5"/>
+      <!-- 立柱 / 底座 / 地面 -->
+      <rect class="sv-solid" x="65.5" y="19.5" width="23.8" height="535.5"/>
+      <rect class="sv-solid" x="48.5" y="555" width="136" height="17"/>
+      <line class="sv-dim" x1="20" y1="572" x2="420" y2="572"/>
+      <!-- 滑轨 / 滑车板 / 锁销 / 配重 -->
+      <rect class="sv-part" x="89.3" y="36.5" width="13.6" height="493"/>
+      <rect class="sv-part" x="102.9" y="70.5" width="30.6" height="195.5"/>
+      <rect class="sv-warnfill" x="82.5" y="82.4" width="30.6" height="10.2"/>
+      <rect class="sv-solid" x="133.5" y="215" width="42.5" height="23.8"/>
+      <rect class="sv-solid" x="133.5" y="242.2" width="42.5" height="23.8"/>
+      <!-- 缓冲垫 -->
+      <rect class="sv-cush" x="102.9" y="529.5" width="56.1" height="22.1"/>
+      <!-- coxa 舵机壳（输出轴水平指向玻璃） -->
+      <rect class="sv-part" x="133.5" y="109.6" width="73.1" height="40.8"/>
+      <!-- 虚拟机身平面（壳安装面） -->
+      <line class="sv-plane" x1="210" y1="28" x2="210" y2="470"/>
+      <!-- coxa 轴 -->
+      <line class="sv-axis" x1="125" y1="130" x2="359.6" y2="130"/>
+      <!-- 90mm 尺寸 -->
+      <line class="sv-dim" x1="210" y1="70.5" x2="363" y2="70.5"/>
+      <line class="sv-dim" x1="210" y1="65" x2="210" y2="76"/>
+      <line class="sv-dim" x1="363" y1="65" x2="363" y2="76"/>
+      <!-- FOOT_X 尺寸 -->
+      <line class="sv-dim" x1="244" y1="130" x2="244" y2="417.3"/>
+      <line class="sv-plane" x1="363" y1="417.3" x2="244" y2="417.3"/>
+      <line class="sv-dim" x1="238" y1="130" x2="250" y2="130"/>
+      <line class="sv-dim" x1="238" y1="417.3" x2="250" y2="417.3"/>
+      <!-- 腿：coxa 链节 C→F、femur F→K -->
+      <line class="sv-link" x1="210" y1="130" x2="210" y2="203.1"/>
+      <line class="sv-femur" x1="210" y1="203.1" x2="176.3" y2="334.9"/>
+      <!-- tibia-suction 刚体（STL 侧影） -->
+      <polygon class="sv-part" points="138.8,289.6 210.2,291.0 208.0,401.5 311.7,403.4 312.0,387.6 339.2,388.1 338.2,445.9 311.0,445.4 311.3,427.2 161.0,424.3"/>
+      <!-- 波纹吸盘（自由态，唇口贴玻璃） -->
+      <polygon class="sv-part" points="339.2,391.5 363,391.8 363,442.8 338.2,442.5"/>
+      <line class="sv-fold" x1="347" y1="393.5" x2="346.6" y2="441"/>
+      <line class="sv-fold" x1="355" y1="394" x2="354.6" y2="441.5"/>
+      <line class="sv-lip" x1="363" y1="392" x2="363" y2="442.6"/>
+      <!-- K→P 虚拟线 与 吸盘轴 -->
+      <line class="sv-kp" x1="176.3" y1="334.9" x2="363" y2="417.3"/>
+      <line class="sv-cupax" x1="303.5" y1="416.8" x2="383.4" y2="416.8"/>
+      <path class="sv-delta" d="M 277.5 379.6 A 93.5 93.5 0 0 0 269.5 415.6"/>
+      <!-- 解锁下滑箭头 -->
+      <line class="sv-dim" x1="118" y1="272" x2="118" y2="298"/>
+      <polygon points="118,306 113.5,297 122.5,297" style="fill: var(--muted)"/>
+      <!-- 关节点 -->
+      <circle class="sv-dot" cx="210" cy="130" r="6"/>
+      <circle class="sv-dot" cx="210" cy="203.1" r="6"/>
+      <circle class="sv-dot" cx="176.3" cy="334.9" r="6"/>
+      <circle class="sv-dot" cx="363" cy="417.3" r="5"/>
+      <!-- 文字：部件 -->
+      <text class="t-seg" x="369" y="60" transform="rotate(90 369 60)">玻璃（酒精擦净）</text>
+      <text class="t-seg" x="381" y="60" transform="rotate(90 381 60)">衬板</text>
+      <text class="t-seg" x="77" y="260" transform="rotate(90 77 260)">立柱</text>
+      <text class="t-seg" x="96" y="300" transform="rotate(90 96 300)">滑轨</text>
+      <text class="t-seg" x="118" y="150" transform="rotate(90 118 150)">滑车板</text>
+      <text class="t-seg" x="97" y="77" text-anchor="middle">锁销</text>
+      <text class="t-seg" x="155" y="210" text-anchor="middle">配重</text>
+      <text class="t-seg" x="170" y="103" text-anchor="middle">coxa 舵机（轴⊥玻璃）</text>
+      <text class="t-seg" x="131" y="545" text-anchor="middle">缓冲垫</text>
+      <text class="t-seg" x="124" y="296">解锁 → 滑车下滑（承力）</text>
+      <text class="t-seg" x="214" y="486">虚拟机身平面</text>
+      <text class="t-seg" x="214" y="502">（壳安装面）</text>
+      <!-- 文字：几何 -->
+      <text class="t-dim" x="286" y="63" text-anchor="middle">H = 90mm（长槽 ±20 可调）</text>
+      <text class="t-dim" x="252" y="270" transform="rotate(90 252 270)">FOOT_X = 169</text>
+      <text class="t-pt" x="216" y="124">C（髋）</text>
+      <text class="t-pt" x="222" y="208">F</text>
+      <text class="t-pt" x="166" y="330" text-anchor="end">K（膝）</text>
+      <text class="t-pt" x="358" y="460" text-anchor="end">P（唇口）</text>
+      <text class="t-seg" x="188" y="270" text-anchor="end">femur</text>
+      <text class="t-seg" x="278" y="416" text-anchor="middle">tibia-suction</text>
+      <text class="t-acc" x="268" y="366" text-anchor="middle" transform="rotate(23.8 268 366)">K→P（模型虚拟线 l3=120）</text>
+      <text class="t-acc" x="300" y="437" text-anchor="end">吸盘轴 ⊥ 玻璃</text>
+      <line class="sv-dim" x1="305" y1="432" x2="330" y2="419"/>
+      <text class="t-warn" x="258" y="396" text-anchor="end">δ=22.7°</text>
+      <!-- 右栏注释 -->
+      <text class="t-h" x="398" y="84">关键几何</text>
+      <text class="t-b" x="398" y="108">髋平面—玻璃 H = 90mm</text>
+      <text class="t-b" x="398" y="128">FOOT_X = 169：压紧时吸盘轴⊥玻璃</text>
+      <text class="t-b" x="398" y="148">压紧深度 15 = 预压 13.5 + 预载 1.5</text>
+      <text class="t-b" x="398" y="168">全循环吸盘轴偏法线 ≤4.5°（容差 15°）</text>
+      <text class="t-h" x="398" y="204">循环 z 相位（图示 = 触壁）</text>
+      <text class="t-b" x="398" y="228">抬离 z=−70：唇口离玻璃 20mm</text>
+      <text class="t-b" x="398" y="248">触壁 z=−90：自由吸盘刚碰玻璃</text>
+      <text class="t-b" x="398" y="268">压紧 z=−105：波纹压实 + 预载</text>
+      <text class="t-h" x="398" y="304" style="fill: var(--warn)">δ = 22.7° 是什么</text>
+      <text class="t-b" x="398" y="328">膝轴 K 偏离方轴 46.5mm，模型虚拟线</text>
+      <text class="t-b" x="398" y="348">K→P 与真实吸盘轴恒差 22.7°。</text>
+      <text class="t-b" x="398" y="368">按 K→P⊥玻璃求解（旧值 122）会让吸盘</text>
+      <text class="t-b" x="398" y="388">以 22.5° 斜角怼玻璃 → 吸不住。</text>
+      <text class="t-b" x="398" y="408">正解：a_t=−67.3° → FOOT_X=169。</text>
+      <text class="t-bm" x="398" y="444">舵机行程占用（压紧位）：</text>
+      <text class="t-bm" x="398" y="460">α −45.6°、k −22.1°，余量 ≥44°</text>
+      <text class="t-bm" x="398" y="492">锁销解锁后滑车+配重 1.5kg 全部</text>
+      <text class="t-bm" x="398" y="508">挂在吸附的腿上 = 整机单腿真实工况</text>
+      <text class="t-foot" x="16" y="592">侧视示意，按 mm 比例（1.7px/mm）；姿态 = 触壁位。tibia 轮廓为 STL 投影，吸盘画自由态；压紧位时波纹压实、刚体再进约 1mm 预载。</text>
+    </svg>
+  </figure>
+
+  <div class="note">
+    <b class="d">本图附带一次重要修正（2026-07-18）</b>：此前所有分析把模型的 K→P 方向
+    (<code>a_t</code>) 当吸盘轴用——但膝轴 K 不在方轴上，两者恒差 <b class="d">δ=22.7°</b>
+    （<code>LEG-GEOMETRY-OPEN.md</code> §2.13，是 §3.1 旧错误的下游）。
+    地面站姿旁证号取对了：官方站姿下吸盘轴离垂直仅 9.7°，近乎平贴地面。
+    连带修正：<code>single_leg_wall.py</code> FOOT_X 122→169；CLIMBING-DESIGN §6
+    墙面支撑相 reach 130→170；地-墙过渡可落足带反而更宽。搭台步骤见
+    <code>docs/P2-GUIDE.md</code> 第 2~3 步。
+  </div>
+</main>

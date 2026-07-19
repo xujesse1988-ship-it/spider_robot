@@ -20,6 +20,11 @@
        2 个 M5 沉头过孔），外平面朝下平躺打印，无支撑。
   3. component_plate.stl    —— M3 网格安装板，固定真空泵/电磁阀/传感器。
 
+  试验版 *-exp.stl：在折痕面以下加 Ø33×7.2 触地环（前半在门上）——
+  吸盘真空压缩后打印件圈直接触到墙/地，硬限位分担腿部载荷。
+  环段外廓局部加宽为 38×38 围裙保 2.5 壁；因此试验版门盖外平面
+  不再是整平面，须立打（底环面朝下），原版门仍平躺打印。
+
 所有关键尺寸在 PARAMS 里，按实际购买件修改后重新运行即可。
 运行:  .venv/bin/python tools/generate_climbing_parts.py
 输出:  hardware/climbing-parts/*.stl
@@ -69,6 +74,9 @@ PARAMS = dict(
     bolt_pilot_d=4.5,     # 体侧自攻底孔（M5 咬入 PETG，建议 M5×20~25）
     bolt_head_d=9.0,      # 门外面沉头孔（M5 杯头 Ø8.5）
     bolt_head_h=5.5,      # 沉头孔深（杯头高 5，沉入 0.5）
+    # --- 试验版触地环（*-exp.stl；pocket_h=0 时不生成）---
+    pocket_d=33.0,        # 折痕面以下空槽直径（容纳真空态压缩摊开的唇边）
+    pocket_h=0.0,         # 空槽高度；试验版在 main() 里覆写为 7.2
     # --- 与 tibia 的结合（left-tibia.stl 实测）---
     shaft_cx=1.3,         # 方轴轴心 x
     shaft_cy=-4.5,        # 方轴轴心 y（tibia 平背面为 y=0）
@@ -169,7 +177,11 @@ def _cavity_parts(p, ax, ay, z0):
                        z0 + z_n1 - 0.1, z0 + z_n2 + p["gap_z"], (ax, ay))
     elbow = _cyl((p["elbow_d"] + 0.6) / 2, z_top - (z_n2 - 0.1),
                  at=(ax, ay, z0 + z_n2 - 0.1))
-    return [rev, hex1, hex2, elbow], z_top
+    cuts = [rev, hex1, hex2, elbow]
+    if p["pocket_h"] > 0:  # 试验版触地环：折痕面以下的 Ø29 空槽
+        cuts.append(_cyl(p["pocket_d"] / 2, p["pocket_h"] + 0.15,
+                         at=(ax, ay, z0 - p["pocket_h"] - 0.05)))
+    return cuts, z_top
 
 
 def _peg_spots(p, ax):
@@ -189,9 +201,14 @@ def tibia_suction(p):
     w = p["wall"]
     cuts, z_top = _cavity_parts(p, ax, ay, z0)          # z_top = 腔顶(相对折痕)
     r_out = (p["crease_d"] + 0.6) / 2 + w               # 17.0 外壳半宽
-    # 外壳箱体（z: 折痕..腔顶）
-    box0 = _box(2 * r_out, 2 * r_out, z_top,
-                (ax, ay, z0 + z_top / 2))
+    ph = p["pocket_h"]                                  # 触地环高（0=无）
+    # 外壳箱体（z: 折痕-ph..腔顶）
+    box0 = _box(2 * r_out, 2 * r_out, z_top + ph,
+                (ax, ay, z0 + (z_top - ph) / 2))
+    if ph > 0:  # 触地环围裙后半（Ø33 槽外保 2.5 壁；前半在门上）
+        sw = p["pocket_d"] + 5.0
+        skirt = _box(sw, sw / 2, ph, (ax, ay + sw / 4, z0 - ph / 2))
+        box0 = trimesh.boolean.union([box0, skirt], engine=E)
     # 顶部：后半平板(y>=轴面) + 前半 45° 斜顶（立打免支撑），共 8mm
     cap_h = 8.0
     cap = _box(2 * r_out, r_out, cap_h,
@@ -213,8 +230,8 @@ def tibia_suction(p):
     tib = trimesh.boolean.intersection([tib, keep], engine=E)
     solid = trimesh.boolean.union([box0, cap, wedge, collar, tib], engine=E)
     # 前下开口（门所在区域 + 其上宝塔嘴转动空间）：整个 y < ay 前半清空
-    front = _box(2 * r_out + 2, r_out + 2, z_top + 0.001,
-                 (ax, ay - (r_out + 2) / 2, z0 + (z_top + 0.001) / 2 - 0.001))
+    front = _box(2 * r_out + 2, r_out + 2, z_top + ph + 0.001,
+                 (ax, ay - (r_out + 2) / 2, z0 + (z_top - ph - 0.001) / 2))
     # 门定位销孔（沿 +Y 钻入门贴合面）
     holes = [_cyl((p["peg_d"] + 0.8) / 2, 4.0,
                   at=(x, ay - 0.5, z0 + z), axis="y", sections=24)
@@ -234,12 +251,18 @@ def tibia_suction(p):
 
 def suction_door(p):
     """门盖：前半负模 + 底缘导入 + 4 定位销 + 2 个 M5 沉头过孔；
-    外平面(y=-r_out)朝下平躺打印。"""
+    外平面(y=-r_out)朝下平躺打印。
+    试验版（pocket_h>0）含触地环前半围裙，外面不平，须立打（环面朝下）。"""
     ax, ay, z0 = p["shaft_cx"], p["shaft_cy"], p["crease_z"]
     r_out = (p["crease_d"] + 0.6) / 2 + p["wall"]
     cuts, _ = _cavity_parts(p, ax, ay, z0)
-    blk = _box(2 * r_out, r_out, p["door_h"],
-               (ax, ay - r_out / 2, z0 + p["door_h"] / 2))
+    ph = p["pocket_h"]                                  # 触地环前半随门加长
+    blk = _box(2 * r_out, r_out, p["door_h"] + ph,
+               (ax, ay - r_out / 2, z0 + (p["door_h"] - ph) / 2))
+    if ph > 0:  # 触地环围裙前半
+        sw = p["pocket_d"] + 5.0
+        skirt = _box(sw, sw / 2, ph, (ax, ay - sw / 4, z0 - ph / 2))
+        blk = trimesh.boolean.union([blk, skirt], engine=E)
     # M5 过孔 + 外面沉头孔（与主体的自攻底孔同轴）
     bolts = []
     for x, z in _bolt_spots(p, ax):
@@ -271,13 +294,16 @@ def component_plate(p):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
+    exp = dict(PARAMS, pocket_h=7.2)   # 试验版：真空态触地环
     parts = {
-        "left-tibia-suction": tibia_suction,
-        "suction-foot-door": suction_door,
-        "component_plate": component_plate,
+        "left-tibia-suction": (tibia_suction, PARAMS),
+        "suction-foot-door": (suction_door, PARAMS),
+        "left-tibia-suction-exp": (tibia_suction, exp),
+        "suction-foot-door-exp": (suction_door, exp),
+        "component_plate": (component_plate, PARAMS),
     }
-    for name, fn in parts.items():
-        m = fn(PARAMS)
+    for name, (fn, p) in parts.items():
+        m = fn(p)
         path = os.path.join(OUT, f"{name}.stl")
         m.export(path)
         ext = np.round(m.bounding_box.extents, 1)

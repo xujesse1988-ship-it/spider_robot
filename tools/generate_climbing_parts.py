@@ -19,6 +19,15 @@
   2. suction-foot-door.stl  —— 上述腔体的门盖（含前半负模 + 4 定位销 +
        2 个 M5 沉头过孔），外平面朝下平躺打印，无支撑。
   3. component_plate.stl    —— M3 网格安装板，固定真空泵/电磁阀/传感器。
+  4. coxa-pedestal.stl      —— P2 台架 coxa 面板式支座（html/coxa-pedestal-mount.html）：
+       面板开 40.7×20.6 孔，舵机从腔内插入、法兰 4×M3 自攻锁面板背面，
+       轴穿面板⊥玻璃（面板前面=壳安装面，H=90 由此量）。立柱腔深 45
+       按回中膝包络（61 − D实测22 + 余量）留，装台后跑回中安全；
+       面板足侧收短到轴下 22，femur 舵机尾部从缘外通过。两侧底法兰
+       4×M4 长槽锁滑车板（径向可调 ±5.5），45° 三角肋自撑。
+       打印方向：面板朝下平躺，无支撑（法兰下缘 14mm 短桥）；
+       PETG、4 壁、40% 填充。⚠ 打印前实测 D（coxa 法兰面→femur 轴）
+       与 femur 壳尾距，偏差 >3mm 改 ped_depth / ped_y_foot。
 
   试验版 *-exp.stl：在折痕面以下加 Ø33×7.2 触地环（前半在门上）——
   吸盘真空压缩后打印件圈直接触到墙/地，硬限位分担腿部载荷。
@@ -89,6 +98,24 @@ PARAMS = dict(
     plate_t=3.0,
     plate_grid=10.0,
     plate_hole_d=3.2,
+    # --- coxa 面板式支座（P2 台架；坐标：z=0 贴滑车板，+z 指玻璃，
+    #     y=0 过 coxa 轴，-y 足侧，x 横向对称）---
+    ped_depth=45.0,        # 立柱净深 = 回中膝包络 61 - D实测22 + 余量12 - 面板6
+    ped_panel_t=6.0,       # 面板厚
+    ped_wall=4.5,          # 侧墙/顶墙厚
+    ped_panel_w=56.0,      # 面板宽（x）
+    ped_y_foot=-22.0,      # 面板足侧边缘（轴下）——收短让 femur 舵机尾部
+    ped_y_far=40.0,        # 面板远足侧边缘（轴上，壳体长轴朝这边）
+    ped_cut_w=20.6,        # 舵机开孔宽（DS3235 壳 20.2 + 隙）
+    ped_cut_len=40.7,      # 舵机开孔长（壳 40.5 + 隙）
+    ped_cut_y0=-10.35,     # 开孔足侧边（轴心距壳端 ~10）
+    ped_pilot_d=2.8,       # 舵机法兰 M3 自攻底孔（孔距 49.5 × 10）
+    ped_flange_w=14.0,     # 侧底法兰宽（x 向外伸）
+    ped_flange_t=6.0,      # 底法兰厚
+    ped_slot_w=5.0,        # M4 长槽宽
+    ped_slot_len=16.0,     # M4 长槽长（径向可调 ±5.5）
+    ped_rib_t=4.0,         # 三角肋厚
+    ped_rib_h=14.0,        # 三角肋高（法兰面以上）
 )
 
 E = "manifold"  # 布尔引擎
@@ -277,6 +304,62 @@ def suction_door(p):
     return trimesh.boolean.union([door] + pegs, engine=E)
 
 
+def coxa_pedestal(p):
+    """P2 台架 coxa 支座：面板 + 双侧墙 + 顶墙 + 双底法兰 + 三角肋。
+
+    面板前面 z = ped_depth + ped_panel_t（=51，即"壳安装面"）；舵机从腔内
+    （z=0 敞开侧）插入，顶段穿面板孔，法兰贴面板背面用 4×M3 自攻锁定。
+    顶墙内侧在法兰位置开让位口（法兰长 54.5 > 顶墙内净空）。
+    """
+    t, w, zw = p["ped_panel_t"], p["ped_wall"], p["ped_depth"]
+    y0, y1 = p["ped_y_foot"], p["ped_y_far"]
+    hw = p["ped_panel_w"] / 2
+    fx1 = hw + p["ped_flange_w"]
+    ft, rh, rt = p["ped_flange_t"], p["ped_rib_h"], p["ped_rib_t"]
+    yc = (y0 + y1) / 2
+
+    panel = _box(2 * hw, y1 - y0, t, (0, yc, zw + t / 2))
+    walls = [_box(w, y1 - y0, zw, (s * (hw - w / 2), yc, zw / 2)) for s in (-1, 1)]
+    topw = _box(2 * hw - 2 * w, w, zw, (0, y1 - w / 2, zw / 2))
+    flanges = [_box(p["ped_flange_w"], y1 - y0, ft,
+                    (s * (hw + fx1) / 2, yc, ft / 2)) for s in (-1, 1)]
+    # 三角肋（每侧 3 条，避开长槽）：(x,z) 三角形沿 y 挤出
+    from shapely.geometry import Polygon
+    m = np.eye(4)
+    m[:3, :3] = np.array([[1., 0., 0.], [0., 0., 1.], [0., 1., 0.]])
+    ribs = []
+    for s in (-1, 1):
+        tri = Polygon([(s * hw, ft), (s * fx1, ft), (s * hw, ft + rh)])
+        for ry in (-16.0, 14.5, 37.0):
+            rib = extrude_polygon(tri, rt)
+            rib.apply_transform(m)
+            rib.apply_translation([0, ry - rt / 2, 0])
+            ribs.append(rib)
+    solid = trimesh.boolean.union([panel, topw, *walls, *flanges, *ribs], engine=E)
+
+    # 减去：舵机开孔、法兰 M3 底孔、顶墙让位口、4 条 M4 长槽
+    cut = _box(p["ped_cut_w"], p["ped_cut_len"], t + 2,
+               (0, p["ped_cut_y0"] + p["ped_cut_len"] / 2, zw + t / 2))
+    pilots = [_cyl(p["ped_pilot_d"] / 2, t + 2, at=(sx * 5.0, py, zw - 1),
+                   sections=24)
+              for py in (-14.75, 34.75) for sx in (-1, 1)]
+    notch = _box(28.0, w + 1.0, 8.0, (0, y1 - w / 2, zw - 3.0))  # 法兰/批头让位
+    slots = []
+    for sx in (-1, 1):
+        for sy in (3.0, 26.0):
+            sl = [_box(p["ped_slot_w"], p["ped_slot_len"] - p["ped_slot_w"],
+                       ft + 2, (sx * 35.0, sy, ft / 2)),
+                  _cyl(p["ped_slot_w"] / 2, ft + 2,
+                       at=(sx * 35.0, sy - (p["ped_slot_len"] - p["ped_slot_w"]) / 2, -1),
+                       sections=24),
+                  _cyl(p["ped_slot_w"] / 2, ft + 2,
+                       at=(sx * 35.0, sy + (p["ped_slot_len"] - p["ped_slot_w"]) / 2, -1),
+                       sections=24)]
+            slots.extend(sl)
+    return trimesh.boolean.difference([solid, cut, notch] + pilots + slots,
+                                      engine=E)
+
+
 def component_plate(p):
     """M3 网格安装板。"""
     plate = _box(p["plate_w"], p["plate_h"], p["plate_t"], (0, 0, p["plate_t"] / 2))
@@ -301,6 +384,7 @@ def main():
         "left-tibia-suction-exp": (tibia_suction, exp),
         "suction-foot-door-exp": (suction_door, exp),
         "component_plate": (component_plate, PARAMS),
+        "coxa-pedestal": (coxa_pedestal, PARAMS),
     }
     for name, (fn, p) in parts.items():
         m = fn(p)

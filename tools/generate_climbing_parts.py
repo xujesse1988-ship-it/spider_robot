@@ -21,13 +21,13 @@
   3. component_plate.stl    —— M3 网格安装板，固定真空泵/电磁阀/传感器。
   4. coxa-pedestal.stl      —— P2 台架 coxa 面板式支座（html/coxa-pedestal-mount.html）：
        面板开 40.7×20.6 孔，舵机从腔内插入、法兰 4×M3 自攻锁面板背面，
-       轴穿面板⊥玻璃（面板前面=壳安装面，H=90 由此量）。立柱腔深 45
-       按回中膝包络（61 − D实测22 + 余量）留，装台后跑回中安全；
-       面板足侧收短到轴下 22，femur 舵机尾部从缘外通过。两侧底法兰
-       4×M4 长槽锁滑车板（径向可调 ±5.5），45° 三角肋自撑。
-       打印方向：面板朝下平躺，无支撑（法兰下缘 14mm 短桥）；
-       PETG、4 壁、40% 填充。⚠ 打印前实测 D（coxa 法兰面→femur 轴）
-       与 femur 壳尾距，偏差 >3mm 改 ped_depth / ped_y_foot。
+       轴穿面板⊥玻璃（面板前面=壳安装面，H=90 由此量）。立柱腔深 38
+       = coxa 壳体 27 + 走线 11（2026-07-19 实测 X1=-10：femur 轴几乎贴
+       面板平面，膝向后包络在径向 84+ 越过板缘，与腔深无关，回中安全）；
+       面板/侧墙足侧收短到 18（femur 组件距轴实测 X3=23，留 5mm；
+       法兰孔边距薄由背面凸台补强）。两侧底法兰 4×M4 长槽锁滑车板
+       （径向可调 ±5.5），45° 三角肋自撑。打印：面板朝下平躺，无支撑
+       （法兰下缘 14mm 短桥）；PETG、4 壁、40% 填充。
   5. carriage-pedestal.stl  —— 滑车一体件：上件与滑车板合并，直接锁
        三节滑轨内节（内节即滑车；images/huagui.jpg 孔簇 = M5 圆孔基准
        + 竖/横两 M4 槽吸公差）。螺丝从滑轨侧穿入，拧进板前面（腔底）
@@ -107,11 +107,15 @@ PARAMS = dict(
     plate_hole_d=3.2,
     # --- coxa 面板式支座（P2 台架；坐标：z=0 贴滑车板，+z 指玻璃，
     #     y=0 过 coxa 轴，-y 足侧，x 横向对称）---
-    ped_depth=45.0,        # 立柱净深 = 回中膝包络 61 - D实测22 + 余量12 - 面板6
+    ped_depth=38.0,        # 立柱净深 = coxa 壳体（法兰下 27）+ 走线 11。
+                           # 膝包络与腔深无关：实测 X1=-10（femur 轴在壳顶面后
+                           # 10mm），膝向后摆时在径向 84+ 处越过板下缘（50），
+                           # 连回中姿态都够不到板（2026-07-19 实测推翻早期估计）
     ped_panel_t=6.0,       # 面板厚
     ped_wall=4.5,          # 侧墙/顶墙厚
     ped_panel_w=56.0,      # 面板宽（x）
-    ped_y_foot=-22.0,      # 面板足侧边缘（轴下）——收短让 femur 舵机尾部
+    ped_y_foot=-18.0,      # 面板/侧墙足侧边缘——femur 组件距轴实测 X3=23，留 5；
+                           # 法兰孔(-14.75)边距薄，背面凸台补强
     ped_y_far=40.0,        # 面板远足侧边缘（轴上，壳体长轴朝这边）
     ped_cut_w=20.6,        # 舵机开孔宽（DS3235 壳 20.2 + 隙）
     ped_cut_len=40.7,      # 舵机开孔长（壳 40.5 + 隙）
@@ -131,8 +135,8 @@ PARAMS = dict(
     car_pad_w=22.0,        # 背面凸台宽（只贴滑轨内节面，避开旁边台阶）
     car_pad_t=2.0,
     car_m5_y=-4.0,         # M5 基准孔 y（簇居中于塔区即可）
-    car_cc1=9.5,           # ⚠ M5→M4(竖槽) 孔心距——按空距5mm折算，打印前卡尺实测！
-    car_cc2=16.0,          # ⚠ M4(竖槽)→M4(横槽) 孔心距——按空距9mm折算，实测！
+    car_cc1=10.0,          # M5→M4(竖槽) 孔心距（2026-07-19 卡尺实测）
+    car_cc2=13.0,          # M4(竖槽)→M4(横槽) 孔心距（同上实测）
     car_m5_d=5.4,          # M5 过孔
     car_m4_d=4.6,          # M4 过孔
     car_nut5_af=8.0,       # M5 螺母对边（袋 +0.3，深 4.4）
@@ -343,6 +347,9 @@ def coxa_pedestal(p):
     panel = _box(2 * hw, y1 - y0, t, (0, yc, zw + t / 2))
     walls = [_box(w, y1 - y0, zw, (s * (hw - w / 2), yc, zw / 2)) for s in (-1, 1)]
     topw = _box(2 * hw - 2 * w, w, zw, (0, y1 - w / 2, zw / 2))
+    # 足侧法兰螺丝边距薄（孔 -14.75 vs 边 -18），背面凸台加厚补强
+    bosses = [_cyl(3.5, 6.0, at=(sx * 5.0, -14.75, zw - 6), sections=24)
+              for sx in (-1, 1)]
     flanges = [_box(p["ped_flange_w"], y1 - y0, ft,
                     (s * (hw + fx1) / 2, yc, ft / 2)) for s in (-1, 1)]
     # 三角肋（每侧 3 条，避开长槽）：(x,z) 三角形沿 y 挤出
@@ -357,12 +364,13 @@ def coxa_pedestal(p):
             rib.apply_transform(m)
             rib.apply_translation([0, ry - rt / 2, 0])
             ribs.append(rib)
-    solid = trimesh.boolean.union([panel, topw, *walls, *flanges, *ribs], engine=E)
+    solid = trimesh.boolean.union(
+        [panel, topw, *walls, *flanges, *ribs, *bosses], engine=E)
 
-    # 减去：舵机开孔、法兰 M3 底孔、顶墙让位口、4 条 M4 长槽
+    # 减去：舵机开孔、法兰 M3 底孔（穿凸台加深）、顶墙让位口、4 条 M4 长槽
     cut = _box(p["ped_cut_w"], p["ped_cut_len"], t + 2,
                (0, p["ped_cut_y0"] + p["ped_cut_len"] / 2, zw + t / 2))
-    pilots = [_cyl(p["ped_pilot_d"] / 2, t + 2, at=(sx * 5.0, py, zw - 1),
+    pilots = [_cyl(p["ped_pilot_d"] / 2, t + 8, at=(sx * 5.0, py, zw - 7),
                    sections=24)
               for py in (-14.75, 34.75) for sx in (-1, 1)]
     notch = _box(28.0, w + 1.0, 8.0, (0, y1 - w / 2, zw - 3.0))  # 法兰/批头让位
@@ -422,13 +430,15 @@ def carriage_pedestal(p):
             rib.apply_transform(m)
             rib.apply_translation([0, ry - p["ped_rib_t"] / 2, 0])
             ribs.append(rib)
+    bosses = [_cyl(3.5, 6.0, at=(sx * 5.0, -14.75, zw - 6), sections=24)
+              for sx in (-1, 1)]
     solid = trimesh.boolean.union(
-        [panel, topw, slab, pad, *walls, *lugs, *ribs], engine=E)
+        [panel, topw, slab, pad, *walls, *lugs, *ribs, *bosses], engine=E)
 
-    # 减去：舵机开孔、法兰底孔、顶墙让位口（同支座）
+    # 减去：舵机开孔、法兰底孔（穿凸台加深）、顶墙让位口（同支座）
     cut = _box(p["ped_cut_w"], p["ped_cut_len"], t + 2,
                (0, p["ped_cut_y0"] + p["ped_cut_len"] / 2, zw + t / 2))
-    pilots = [_cyl(p["ped_pilot_d"] / 2, t + 2, at=(sx * 5.0, py, zw - 1),
+    pilots = [_cyl(p["ped_pilot_d"] / 2, t + 8, at=(sx * 5.0, py, zw - 7),
                    sections=24)
               for py in (-14.75, 34.75) for sx in (-1, 1)]
     notch = _box(28.0, w + 1.0, 8.0, (0, y1 - w / 2, zw - 3.0))

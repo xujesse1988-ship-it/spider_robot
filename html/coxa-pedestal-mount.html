@@ -1,0 +1,230 @@
+<title>P2 · coxa 面板式支座（带立柱）</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 8px 4px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { font-size: 13px; color: var(--muted); padding: 8px 10px 10px; }
+  figcaption b { color: var(--ink); }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  .note ol { margin: 6px 0 0; padding-left: 22px; }
+  .note li { margin: 3px 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+
+  .sv-glass { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .sv-plate { fill: var(--part); fill-opacity: .8; stroke: var(--part-stroke); stroke-width: 1.3; }
+  .sv-mount { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
+  .sv-servo { fill: var(--part-stroke); fill-opacity: .85; stroke: var(--part-stroke); stroke-width: 1; }
+  .sv-white { fill: var(--panel); stroke: var(--part-stroke); stroke-width: 1.5; stroke-linejoin: round; }
+  .sv-ghost { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.3; stroke-dasharray: 5 4; }
+  .sv-axis  { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 11 4 2 4; fill: none; }
+  .sv-dim   { stroke: var(--muted); stroke-width: 1.1; fill: none; }
+  .sv-hid   { stroke: var(--part-stroke); stroke-width: 1.1; stroke-dasharray: 5 4; fill: none; }
+  .sv-arc   { stroke: var(--warn); stroke-width: 1.6; stroke-dasharray: 6 5; fill: none; }
+  .sv-leg   { stroke: var(--part-stroke); stroke-width: 6; stroke-linecap: round; opacity: .55; }
+  .sv-slot  { fill: var(--panel); stroke: var(--muted); stroke-width: 1.1; }
+  .mk-m { fill: var(--muted); } .mk-w { fill: var(--warn); }
+  text { font-family: inherit; fill: var(--ink); font-size: 12.5px; }
+  text.mu { fill: var(--muted); font-size: 11.5px; }
+  text.ac { fill: var(--accent); font-weight: 600; }
+  text.wa { fill: var(--warn); font-size: 11.5px; }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">P2 · 单腿爬墙台架 · 结构件</p>
+    <h1>coxa 面板式支座（带立柱）</h1>
+    <p class="sub">把六足机身板上的"coxa 面板安装"搬到滑车板上：立柱撑出空腔，壳体和膝盖的向后包络全部藏进腔内。蓝色 = 打印件（一体）。</p>
+  </header>
+
+  <div class="pair">
+
+  <figure>
+    <svg viewBox="0 0 480 520" role="img" aria-label="侧视剖面：滑轨、滑车板、支座空腔、coxa 舵机、腿部包络与玻璃">
+      <defs>
+        <marker id="p1m" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto-start-reverse"><path class="mk-m" d="M0,0 L8,3 L0,6 z"/></marker>
+        <marker id="p1w" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto-start-reverse"><path class="mk-w" d="M0,0 L8,3 L0,6 z"/></marker>
+      </defs>
+
+      <!-- 滑轨 / 滑车板 -->
+      <rect class="sv-hid" x="24" y="110" width="37" height="290" fill="none"/>
+      <text class="mu" transform="rotate(90 40 250)" x="40" y="250" text-anchor="middle">滑轨（板后方）</text>
+      <rect class="sv-plate" x="61" y="20" width="27" height="480"/>
+      <text class="mu" transform="rotate(90 79 452)" x="79" y="452" text-anchor="middle">滑车板</text>
+
+      <!-- 支座：顶部安装法兰 + 顶墙 + 面板（剖面） -->
+      <rect class="sv-mount" x="88" y="18" width="13" height="31"/>
+      <line class="sv-hid" x1="88" y1="33" x2="61" y2="33"/>
+      <rect class="sv-mount" x="88" y="49" width="99" height="13"/>
+      <rect class="sv-mount" x="187" y="62" width="13" height="137"/>
+      <text class="ac" x="150" y="42">支座（打印件）</text>
+      <text class="mu" x="200" y="76" >面板 t6</text>
+
+      <!-- coxa 舵机：腔内壳体 + 穿面板颈部 + 舵盘 -->
+      <rect class="sv-servo" x="127" y="84" width="60" height="88"/>
+      <rect class="sv-servo" x="187" y="84" width="29" height="88"/>
+      <path class="sv-servo" d="M181,68 h6 v16 h-6 z M181,172 h6 v16 h-6 z"/>
+      <circle class="sv-white" cx="224" cy="150" r="27"/>
+      <text class="mu" x="132" y="132">coxa 壳体</text>
+      <text class="mu" x="132" y="146">(藏腔内)</text>
+      <text class="mu" x="243" y="128">舵盘</text>
+
+      <!-- coxa 轴 -->
+      <line class="sv-axis" x1="100" y1="150" x2="420" y2="150"/>
+      <text class="mu" x="300" y="143">coxa 轴 ⊥ 玻璃</text>
+
+      <!-- 支架 + femur 舵机（尾部从面板下缘外通过） -->
+      <path class="sv-white" d="M224,168 q26,10 30,42 l-4,26 h-14 l-2,-30 q-6,-24 -18,-30 z"/>
+      <rect class="sv-servo" x="182" y="223" width="88" height="44"/>
+      <circle class="sv-white" cx="248" cy="245" r="16"/>
+      <text class="mu" x="274" y="240">femur 舵机</text>
+      <text class="wa" x="274" y="255">尾部越过面板平面</text>
+      <line class="sv-dim" x1="176" y1="198" x2="176" y2="223" marker-start="url(#p1m)" marker-end="url(#p1m)"/>
+      <text class="wa" x="168" y="215" text-anchor="end">从面板缘外过，留 ≥10</text>
+
+      <!-- 腿部示意 + 膝包络 -->
+      <line class="sv-leg" x1="248" y1="245" x2="168" y2="401"/>
+      <line class="sv-leg" x1="168" y1="401" x2="285" y2="470"/>
+      <circle class="sv-white" cx="168" cy="401" r="9"/>
+      <path class="sv-arc" d="M236,420 A176,176 0 0 1 114,358"/>
+      <circle class="sv-ghost" cx="114" cy="358" r="5"/>
+      <text class="wa" x="106" y="345" text-anchor="end">膝·回中（最深）</text>
+      <text class="mu" x="150" y="418" text-anchor="end">膝·抬离</text>
+      <text class="mu" x="244" y="435">膝·压紧</text>
+      <line class="sv-dim" x1="88" y1="380" x2="109" y2="380" marker-start="url(#p1w)" marker-end="url(#p1w)"/>
+      <text class="wa" x="98" y="372" text-anchor="middle">12</text>
+      <text class="mu" x="290" y="486">→ 足端·吸盘</text>
+
+      <!-- 玻璃 -->
+      <rect class="sv-glass" x="398" y="22" width="8" height="478"/>
+      <text class="mu" transform="rotate(90 416 66)" x="416" y="66">玻璃</text>
+
+      <!-- 尺寸 -->
+      <path class="sv-dim" d="M200,90 V104 M398,90 V104"/>
+      <line class="sv-dim" x1="200" y1="97" x2="398" y2="97" marker-start="url(#p1m)" marker-end="url(#p1m)"/>
+      <text class="mu" x="299" y="90" text-anchor="middle">H = 90（面板前面 = 壳安装面）</text>
+      <path class="sv-dim" d="M200,204 V218 M248,204 V218"/>
+      <line class="sv-dim" x1="200" y1="211" x2="248" y2="211" marker-start="url(#p1m)" marker-end="url(#p1m)"/>
+      <text class="mu" x="224" y="200" text-anchor="middle">D≈22 实测</text>
+      <path class="sv-dim" d="M88,496 V510 M200,496 V510"/>
+      <line class="sv-dim" x1="88" y1="503" x2="200" y2="503" marker-start="url(#p1m)" marker-end="url(#p1m)"/>
+      <text class="mu" x="144" y="496" text-anchor="middle">腔深 51 = 立柱 45 + 面板 6</text>
+      <text class="mu" x="144" y="480" text-anchor="middle">底面开放·走线 ↓</text>
+    </svg>
+    <figcaption><b>图A · 侧视剖面（腿平面）</b>：coxa 壳体全部藏进空腔，轴穿面板指向玻璃。膝的向后包络（红虚弧）最深处是回中姿态，距滑车板仍留 12mm——装台后跑回中也不会撞。</figcaption>
+  </figure>
+
+  <figure>
+    <svg viewBox="0 0 480 520" role="img" aria-label="正视图：面板开孔、法兰螺丝、侧墙、底法兰长槽、femur 尾部通道">
+      <defs>
+        <marker id="p2m" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto-start-reverse"><path class="mk-m" d="M0,0 L8,3 L0,6 z"/></marker>
+        <marker id="p2w" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto-start-reverse"><path class="mk-w" d="M0,0 L8,3 L0,6 z"/></marker>
+      </defs>
+
+      <!-- 底法兰（贴滑车板，最后方） -->
+      <path class="sv-mount" d="M122,18 h176 v31 h-176 z" fill-opacity=".4"/>
+      <path class="sv-mount" d="M122,49 h20 v150 h-20 z M278,49 h20 v150 h-20 z" fill-opacity=".4"/>
+      <rect class="sv-slot" x="127" y="90" width="9" height="35" rx="4.5"/>
+      <rect class="sv-slot" x="127" y="140" width="9" height="35" rx="4.5"/>
+      <rect class="sv-slot" x="284" y="90" width="9" height="35" rx="4.5"/>
+      <rect class="sv-slot" x="284" y="140" width="9" height="35" rx="4.5"/>
+      <text class="mu" x="210" y="40" text-anchor="middle">底法兰（贴滑车板，M4×4）</text>
+      <text class="mu" x="118" y="112" text-anchor="end">竖长槽</text>
+      <text class="mu" x="118" y="126" text-anchor="end">高度微调</text>
+
+      <!-- 侧墙轮廓（虚线，位于面板后方） -->
+      <line class="sv-hid" x1="142" y1="49" x2="142" y2="199"/>
+      <line class="sv-hid" x1="278" y1="49" x2="278" y2="199"/>
+      <path class="sv-hid" d="M142,62 l10,14 M278,62 l-10,14"/>
+      <text class="mu" x="306" y="70">侧墙 + 三角肋</text>
+
+      <!-- 面板 -->
+      <rect class="sv-mount" x="148" y="62" width="124" height="137"/>
+      <!-- 舵机开孔 40.7 × 20.6 -->
+      <rect class="sv-slot" x="187" y="84" width="46" height="89"/>
+      <text class="mu" x="210" y="120" text-anchor="middle">开孔</text>
+      <text class="mu" x="210" y="135" text-anchor="middle">40.7×20.6</text>
+      <!-- 法兰螺丝孔 ×4（间距 49.5 × 10） -->
+      <circle class="sv-slot" cx="199" cy="73.7" r="3.5"/>
+      <circle class="sv-slot" cx="221" cy="73.7" r="3.5"/>
+      <circle class="sv-slot" cx="199" cy="182.6" r="3.5"/>
+      <circle class="sv-slot" cx="221" cy="182.6" r="3.5"/>
+      <text class="mu" x="240" y="187">M3×4 热熔螺母</text>
+      <!-- 轴心 + 舵盘投影 -->
+      <circle class="sv-hid" cx="210" cy="150" r="27"/>
+      <circle class="sv-servo" cx="210" cy="150" r="4"/>
+      <text class="mu" x="243" y="158">轴心（舵盘在前方）</text>
+
+      <!-- femur 尾部通道（面板下缘外） -->
+      <rect class="sv-ghost" x="188" y="222.6" width="44" height="44"/>
+      <text class="wa" x="240" y="242">femur 舵机尾部</text>
+      <text class="wa" x="240" y="257">（在面板平面后 ~8mm）</text>
+      <line class="sv-dim" x1="176" y1="199" x2="176" y2="222.6" marker-start="url(#p2w)" marker-end="url(#p2w)"/>
+      <text class="wa" x="168" y="215" text-anchor="end">≥10</text>
+      <text class="mu" x="210" y="290" text-anchor="middle">↓ 足端方向（腿、膝在面板缘外摆动）</text>
+
+      <!-- 关键尺寸 -->
+      <path class="sv-dim" d="M148,308 V322 M272,308 V322"/>
+      <line class="sv-dim" x1="148" y1="315" x2="272" y2="315" marker-start="url(#p2m)" marker-end="url(#p2m)"/>
+      <text class="mu" x="210" y="308" text-anchor="middle">面板宽 56</text>
+      <path class="sv-dim" d="M310,62 h14 M310,199 h14"/>
+      <line class="sv-dim" x1="317" y1="62" x2="317" y2="199" marker-start="url(#p2m)" marker-end="url(#p2m)"/>
+      <text class="mu" x="326" y="134">高 62：轴上方 40 / 下方 22（收短让 femur 尾）</text>
+
+      <!-- 壳体朝向说明 -->
+      <line class="sv-dim" x1="210" y1="88" x2="210" y2="70" marker-end="url(#p2m)"/>
+      <text class="mu" x="330" y="90">壳体长轴朝"远足侧"（上）</text>
+      <text class="mu" x="330" y="105">——照片里本来的方向</text>
+    </svg>
+    <figcaption><b>图B · 正视（从玻璃方向看）</b>：面板式安装 = 板上开壳体矩形孔，舵机从腔内插入，法兰 4×M3 锁在面板背面。面板足侧只到轴下 22mm 就收边，femur 舵机尾部从缘外通过。</figcaption>
+  </figure>
+
+  </div>
+
+  <div class="note">
+    <b>设计要点</b>
+    <ol>
+      <li><b>面板 = 原"壳安装面"</b>：H=90 从面板前面量到玻璃，第 2 步几何自检（压紧过盈 15mm）照旧。</li>
+      <li><b>壳体朝远足侧</b>装（长轴背离足端，即照片中的自然方向），面板足侧收短到轴下 22mm——femur 舵机尾部（越过面板平面约 8mm）从面板下缘外通过，互不相干。</li>
+      <li><b>腔深 51mm 的依据</b>：回中姿态膝后伸 61mm，减去面板到 femur 轴的距离 D≈22，再留 12mm 余量。这样<b>装台状态跑回中/标定脚本也安全</b>。壳体（法兰下 27mm）藏在腔内，后方剩 ~18mm 走线，底面开放出线。</li>
+      <li><b class="d">打印前先实测两个数</b>：① D＝coxa 法兰面到 femur 轴的距离；② femur 壳尾部到 coxa 法兰面的距离。和图中估值差 3mm 以上就相应改腔深/面板下缘。</li>
+      <li><b>刚性</b>：壁厚 ≥4mm、填充 ≥40%、侧墙与顶墙交角加三角肋。压紧反力几十牛全走这个悬臂——装好后按 P2-GUIDE 第 2 步做"手推晃动 &lt;1mm"验收。</li>
+      <li><b>调节分工</b>：底法兰竖长槽管高度（径向）微调；H（90mm）粗调在玻璃立柱侧、细调靠第 2 步自检回改。</li>
+    </ol>
+  </div>
+</main>

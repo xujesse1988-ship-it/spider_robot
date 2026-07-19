@@ -11,7 +11,9 @@
   关节电气行程（舵机 ±90° × 安装偏角）:
     femur α ∈ [-40.3°, +139.7°]（L1 实测 attach α=49.7°）
     膝内角 θ ∈ [0°, 176.4°]（L1 实测 attach k=93.6 → k∈[3.6°,183.6°] → θ=180-k，θ≤0 无物理意义）
-  吸盘轴 = tibia 末段方向 a_t = α + θ - 180°
+  ⚠ 吸盘轴 ≠ K→P 连线：物理吸盘轴沿方轴方向 = a_t + CUP_DELTA（δ=-22.7°，
+    K 在 (47.8,-14.6) 而方轴在 x=1.3 的固定几何差，LEG-GEOMETRY-OPEN §2.13）
+  a_t = α + θ - 180°（K→P 连线方向）
 运行:  .venv/bin/python tools/workspace_analysis.py
 """
 import math
@@ -23,6 +25,7 @@ from hexapod.kinematics import leg_ik, WorkspaceError
 
 ALPHA_LIM = (-40.3, 139.7)   # femur 电气行程（L1 实测 attach α=49.7 ± 90）
 THETA_LIM = (0.0, 176.4)     # 膝内角（L1 实测 attach k=93.6：θ∈(-3.6,176.4)，下限取 0）
+CUP_DELTA = -22.7            # 物理吸盘轴 = a_t + CUP_DELTA（§2.13，勿再用 a_t 当吸盘轴）
 H_HIP = 90.0                 # 站立时髋轴离地高度 mm
 BODY_LEN = 167.0             # 前后髋距（官方 L1_TO_L3）
 
@@ -49,16 +52,17 @@ print("A. 墙面行走：支撑相内吸盘轴线偏离墙面法线的角度")
 print("   （足端在腿平面 (reach±步幅/2, -身高)；理想=0°，波纹吸盘容差≈15°）")
 print("=" * 72)
 for h in (70, 90):
-    for step in (0, 30, 40, 60):
-        angs = []
-        for dx in (-step / 2, 0, step / 2):
-            r = ik2d(CFG.foot_reach + dx, -h)
-            if r:
-                angs.append(abs(r[2] + 90.0))  # 距竖直(-90°=垂直入墙)的偏角
-        if len(angs) == 3:
-            print(f"  身高{h}mm 步幅{step:2d}mm: 偏角 {min(angs):4.1f}°~{max(angs):4.1f}°")
-        else:
-            print(f"  身高{h}mm 步幅{step:2d}mm: 超出行程!")
+    for reach in (130, 170):
+        for step in (0, 30, 40, 60):
+            angs = []
+            for dx in (-step / 2, 0, step / 2):
+                r = ik2d(reach + dx, -h)
+                if r:
+                    angs.append(abs(r[2] + CUP_DELTA + 90.0))  # 物理吸盘轴距墙面法线
+            if len(angs) == 3:
+                print(f"  身高{h}mm reach{reach}mm 步幅{step:2d}mm: 偏角 {min(angs):4.1f}°~{max(angs):4.1f}°")
+            else:
+                print(f"  身高{h}mm reach{reach}mm 步幅{step:2d}mm: 超出行程!")
 
 print()
 print("=" * 72)
@@ -82,7 +86,7 @@ for tol in (15.0, 20.0):
                 if r is None:
                     continue
                 a, th, a_t = r
-                if abs(a_t + phi) > tol:        # 世界系吸盘轴偏离水平
+                if abs(a_t + CUP_DELTA + phi) > tol:  # 世界系物理吸盘轴偏离水平
                     continue
                 kx, kz = knee_xz(a)             # 膝在世界系的水平位置
                 if cphi * kx - sphi * kz > D - 10:

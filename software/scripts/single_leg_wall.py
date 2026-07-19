@@ -2,8 +2,10 @@
 """P2 单腿爬墙循环：伸腿 -> 压紧 -> 抽气 -> 压力确认 -> 承力 -> 放气 -> 抬腿。
 
 台架几何（见 docs/P2-GUIDE.md 第 2 步）：coxa 轴垂直玻璃，髋平面距玻璃 90mm；
-足端 x=122 固定，z 只在法线方向进退（-70 抬离 / -90 触壁 / -105 压紧）。
+足端 x=169 固定，z 只在法线方向进退（-70 抬离 / -90 触壁 / -105 压紧）。
 压紧深度 15mm = 预压行程 13.5（LEG-GEOMETRY-OPEN §4.4 实测）+ 1.5 预载。
+⚠ 物理吸盘轴 = a_t - 22.7°（不是 K→P 方向，§2.13）；x=169 是"压紧时吸盘轴⊥玻璃"
+的解（a_t=-67.3°），全循环吸盘轴偏法线 ≤4.5°。
 
 用法:
   python single_leg_wall.py --mock --cycles 3            # 无硬件干跑
@@ -28,7 +30,7 @@ from hexapod.driver import Servo2040Driver, MockDriver
 from hexapod.adhesion import AdhesionController, FootState, MockVacuumIO
 
 LEG = CFG.leg("L1")
-FOOT_X = 122.0          # 足端径向位置：压紧时吸盘轴⊥玻璃（偏 0.2°）
+FOOT_X = 169.0          # 足端径向位置：压紧时物理吸盘轴⊥玻璃（a_t=-67.3°+δ，偏 0.1°）
 Z_LIFT = -70.0          # 抬离（唇口离玻璃 20mm）
 Z_CONTACT = -90.0       # 唇口刚触玻璃（= 髋平面距玻璃 H_WALL）
 Z_PRESS = -105.0        # 压紧（预压 13.5 + 预载 1.5）

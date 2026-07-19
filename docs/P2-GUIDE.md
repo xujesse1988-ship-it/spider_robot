@@ -10,8 +10,9 @@
 
 前置状态核对（都是 P0/P1 已完成项，缺一个先回去补）：
 
-- [ ] L1 腿 ±45° 脉宽 + `attach_deg` 实测值已入 `config.py`（tibia 93.6 / femur 49.7，
-      见 `LEG-GEOMETRY-OPEN.md` §2.11/§2.12；coxa 用官方 -8 即可，本台架不敏感，见第 2 步）
+- [ ] L1 腿 ±45° 脉宽 + `attach_deg` 实测值已入 `config.py`（tibia 89.3——新吸盘件
+      2026-07-19 复测，方向亦对调；femur 49.7，见 `LEG-GEOMETRY-OPEN.md` §2.11/§2.12；
+      coxa 用官方 -8 即可，本台架不敏感，见第 2 步。⚠ 换结构件/重装舵盘后标定作废重做）
 - [ ] `Pi5VacuumIO` 实装且 P1 三条曲线达标（<1s 到 -40kPa；60s 泄漏不过 -20；释放 <0.5s）
 - [ ] 吸盘已装进 `left-tibia-suction.stl` 腔体、门盖已粘，整足挂重复测通过（P1 第 9 步）
 

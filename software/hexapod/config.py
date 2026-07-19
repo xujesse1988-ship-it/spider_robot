@@ -65,9 +65,9 @@ DEFAULT_LEGS = (
          coxa_cal=ServoCal(channel=15, attach_deg=COXA_ATTACH, us_m45=1980.0, us_p45=1040.0),
          # femur 2026-07-17 高差法实测 Δh=61/FK=80 → α_center=49.7°（=官方35+一齿14.4，吻合）
          femur_cal=ServoCal(channel=16, attach_deg=49.7, us_m45=1980.0, us_p45=1040.0),
-         # tibia 2026-07-17 三边实测 θ_center=86.4°(FK80/KP120/FP140)，k 基准=180-86.4
-         # 2026-07-19 换新吸盘件后实测方向反转（发 k=71.5 膝收拢、FP=116），对调 ±45 脉宽
-         tibia_cal=ServoCal(channel=17, attach_deg=93.6, us_m45=1980.0, us_p45=1040.0)),
+         # tibia 2026-07-19 新吸盘件三边复测：回中 FP=145 → θ_center=90.7°，k 零位=89.3
+         # （旧件 07-17 为 93.6；同日实测新件方向反转——发 k=71.5 膝收拢——已对调 ±45 脉宽）
+         tibia_cal=ServoCal(channel=17, attach_deg=89.3, us_m45=1980.0, us_p45=1040.0)),
     _leg("L2",   0.0,  81.5,  90.0, (9, 10, 11), 21),
     _leg("L3", -83.5,  63.0, 125.0, (3, 4, 5), 19),
     _leg("R1",  83.5, -63.0, -55.0, (12, 13, 14), 22),

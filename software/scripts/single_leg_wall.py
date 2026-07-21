@@ -90,6 +90,7 @@ class Rig:
             self.tick(1.0 / MOVE_HZ)
 
     def tick(self, dt):
+        """跑一步状态机+采样，返回本步读到的足压 kPa（供保持期复用，避免重复读传感器）。"""
         self.ctl.update(dt)
         kpa = round(self.io.read_foot_kpa(0), 2)
         self.log.writerow([round(time.time() - self.t0, 2), self.cycle, self.phase,
@@ -99,6 +100,7 @@ class Rig:
             self.print_accum = 0.0
             print(f"  [{time.time() - self.t0:5.1f}s] 循环{self.cycle} {self.phase:<10} 气压 {kpa:7.2f} kPa")
         time.sleep(dt if isinstance(self.drv, Servo2040Driver) else 0)
+        return kpa
 
     def wait(self, seconds, phase=None):
         if phase:
@@ -140,19 +142,31 @@ class Rig:
         t_attach = time.time() - t0
         self.io.pump(False)
 
-        worst = -999.0                           # 保持期最差(最接近0)压力；泵按压力补抽
+        # 保持期最差(最接近0)压力；泵按压力补抽。
+        # worst/补抽都用「中值滤波后」的压力，单样本传感器毛刺(P1 单传感器读数飘)不算数；
+        # 入 hold 头 0.5s 稳定期(泵刚停、压力未定)不计入 worst。tick 读一次同时供 CSV/worst/补抽。
+        worst = -999.0
+        med = []                                 # 最近 3 次读数，取中位数抗毛刺
+        n_samples = max(1, int(hold_s / 0.05))
+        skip = min(int(0.5 / 0.05), n_samples - 1)   # 稳定期跳过的样本数（并保证 worst 至少更新一次）
         t_end = time.time() + hold_s
         self.phase = "hold"
-        n_mock = int(hold_s / 0.05)
+        n_mock = n_samples
+        i = 0
         while (time.time() < t_end) if isinstance(self.drv, Servo2040Driver) else n_mock > 0:
             n_mock -= 1
-            kpa = self.io.read_foot_kpa(0)
-            worst = max(worst, kpa)
-            if kpa > PUMP_TOPUP_KPA:
+            kpa = self.tick(0.05)
+            med.append(kpa)
+            if len(med) > 3:
+                med.pop(0)
+            kpa_f = sorted(med)[len(med) // 2]   # 中值滤波
+            if i >= skip:
+                worst = max(worst, kpa_f)
+            if kpa_f > PUMP_TOPUP_KPA:
                 self.io.pump(True)
-            elif kpa < PUMP_STOP_KPA:
+            elif kpa_f < PUMP_STOP_KPA:
                 self.io.pump(False)
-            self.tick(0.05)
+            i += 1
         self.io.pump(False)
 
         self.ctl.request_release(0)

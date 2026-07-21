@@ -75,6 +75,7 @@ class Rig:
         self.t0 = time.time()
         self.cycle = 0
         self.phase = "init"
+        self.print_accum = 0.0   # 距上次打印气压累计的时间，每满 1s 打印一次
 
     def send(self, target, dur):
         """当前脉宽 -> 目标脉宽 线性插值，期间持续跑状态机与采样。"""
@@ -90,9 +91,13 @@ class Rig:
 
     def tick(self, dt):
         self.ctl.update(dt)
+        kpa = round(self.io.read_foot_kpa(0), 2)
         self.log.writerow([round(time.time() - self.t0, 2), self.cycle, self.phase,
-                           round(self.io.read_foot_kpa(0), 2),
-                           round(self.drv.read_current_a(), 2)])
+                           kpa, round(self.drv.read_current_a(), 2)])
+        self.print_accum += dt                   # 每秒打印一次气压（累计仿真/真机时间，mock 也生效）
+        if self.print_accum >= 1.0:
+            self.print_accum = 0.0
+            print(f"  [{time.time() - self.t0:5.1f}s] 循环{self.cycle} {self.phase:<10} 气压 {kpa:7.2f} kPa")
         time.sleep(dt if isinstance(self.drv, Servo2040Driver) else 0)
 
     def wait(self, seconds, phase=None):

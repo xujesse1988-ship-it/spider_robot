@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>整机器件连接示意图（电气+气路）</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+      --pwr: #E0A64F; --air: #4BC2A0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+    --pwr: #E0A64F; --air: #4BC2A0;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 17px; margin: 4px 0 -12px; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 10px 6px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  .note ul { margin: 8px 0 2px; padding-left: 20px; }
+  .note li { margin: 3px 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+  table.vtab { border-collapse: collapse; margin: 10px 0 12px; }
+  .vtab th, .vtab td { border: 1px solid var(--line); padding: 4px 12px; font-size: 12.5px; text-align: left; }
+  .vtab th { background: var(--accent-soft); font-weight: 700; }
+
+  /* 连接图元素 */
+  .sv-box   { fill: var(--part); fill-opacity: .35; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-boxa  { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .sv-boxoff{ fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 5 4; }
+  .sv-warnbox { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.2; }
+  .sv-glass { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .sv-part  { fill: var(--part); fill-opacity: .55; stroke: var(--part-stroke); stroke-width: 1.5; stroke-linejoin: round; }
+  .sv-solid { fill: var(--part); fill-opacity: .85; stroke: var(--part-stroke); stroke-width: 1.2; }
+  .sv-fold  { stroke: var(--part-stroke); stroke-width: 1.1; opacity: .85; fill: none; }
+  .sv-lip   { stroke: var(--part-stroke); stroke-width: 5; stroke-linecap: round; }
+  .w-pwr  { stroke: var(--pwr); stroke-width: 3; fill: none; }
+  .w-sig  { stroke: var(--accent); stroke-width: 1.8; stroke-dasharray: 7 4; fill: none; }
+  .w-off  { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 4 4; fill: none; opacity: .85; }
+  .w-air  { stroke: var(--air); stroke-width: 3; fill: none; }
+  .w-air2 { stroke: var(--air); stroke-width: 1.6; fill: none; opacity: .5; }
+  .w-airt { stroke: var(--air); stroke-width: 1.6; stroke-dasharray: 2 3; fill: none; }
+  .nd  { fill: var(--pwr); }
+  .nda { fill: var(--air); }
+  .cv  { fill: var(--air); fill-opacity: .25; stroke: var(--air); stroke-width: 1.5; }
+  .cvb { stroke: var(--air); stroke-width: 2.5; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-bx  { font-size: 12.5px; font-weight: 700; text-anchor: middle; }
+  .t-bxm { font-size: 12.5px; font-weight: 700; text-anchor: middle; fill: var(--muted); }
+  .t-bs  { font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+  .t-seg { font-size: 11.5px; fill: var(--muted); }
+  .t-dim { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-warn{ font-size: 12px; font-weight: 700; fill: var(--warn); }
+  .t-acc { font-size: 11.5px; fill: var(--accent); }
+  .t-air { font-size: 11.5px; fill: var(--air); }
+  .t-b   { font-size: 12px; fill: var(--ink); }
+  .t-bm  { font-size: 11.5px; fill: var(--muted); }
+  .t-foot{ font-size: 10.5px; fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Spider · P4 整机 · 电气 + 气路连接拓扑</p>
+    <h1>整机器件连接示意图（电气 + 气路）</h1>
+    <p class="sub">这是 <b>P4 整机目标态</b>的连接拓扑。图 1 电气：2S 电池经 XT60 总开关分三路
+    （舵机 7.4V 直供 / Pi 独立 5V / 气动 12V），控制信号走 USB·GPIO·I2C；
+    图 2 气路：双泵 + 储气罐 + 1 进 6 出歧管构成真空母线，6 条完全相同的支路到各足吸盘。</p>
+  </header>
+
+  <h2>图 1 · 电气连接</h2>
+  <figure>
+    <svg viewBox="0 0 780 620" role="img" aria-label="电气连接图：电池分三路供舵机、Pi、气动 12V 件，信号线走 USB、GPIO、I2C">
+      <defs>
+        <marker id="mp" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
+        </marker>
+        <marker id="ms" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+        <marker id="mo" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+
+      <!-- 电源总线：电池 → 三路 -->
+      <line class="w-pwr" x1="142" y1="302" x2="170" y2="302"/>
+      <line class="w-pwr" x1="170" y1="96"  x2="170" y2="464"/>
+      <line class="w-pwr" x1="170" y1="96"  x2="206" y2="96"  marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="170" y1="272" x2="206" y2="272" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="170" y1="464" x2="206" y2="464" marker-end="url(#mp)"/>
+      <circle class="nd" cx="170" cy="96"  r="3.5"/>
+      <circle class="nd" cx="170" cy="272" r="3.5"/>
+      <circle class="nd" cx="170" cy="302" r="3.5"/>
+      <circle class="nd" cx="170" cy="464" r="3.5"/>
+      <text class="t-dim" x="188" y="88"  text-anchor="middle">7.4V</text>
+      <text class="t-dim" x="188" y="264" text-anchor="middle">7.4V</text>
+      <text class="t-dim" x="188" y="456" text-anchor="middle">7.4V</text>
+
+      <!-- 路 a：继电器 → Servo2040 电源轨 → 18 舵机 -->
+      <line class="w-pwr" x1="306" y1="84"  x2="336" y2="84"  marker-end="url(#mp)"/>
+      <line class="w-sig" x1="340" y1="108" x2="310" y2="108" marker-end="url(#ms)"/>
+      <line class="w-pwr" x1="470" y1="80"  x2="556" y2="80"  marker-end="url(#mp)"/>
+      <line class="w-sig" x1="470" y1="112" x2="556" y2="112" marker-end="url(#ms)"/>
+      <rect class="sv-box" x="210" y="70" width="96" height="52" rx="6"/>
+      <rect class="sv-box" x="340" y="58" width="130" height="74" rx="6"/>
+      <rect class="sv-box" x="560" y="46" width="176" height="96" rx="6"/>
+      <text class="t-bx" x="258" y="92">继电器 ×1</text>
+      <text class="t-bs" x="258" y="109">舵机电源总闸</text>
+      <text class="t-bx" x="405" y="82">Servo2040 ×1</text>
+      <text class="t-bs" x="405" y="99">chica 固件</text>
+      <text class="t-bs" x="405" y="116">舵机电源轨 7.4V</text>
+      <text class="t-bx" x="648" y="74">DS3235 35kg 舵机 ×18</text>
+      <text class="t-bs" x="648" y="93">6 腿 × coxa / femur / tibia</text>
+      <text class="t-bs" x="648" y="110">7.4V 直供</text>
+      <text class="t-acc" x="323" y="140" text-anchor="middle">A0 / GPIO26</text>
+      <text class="t-dim" x="513" y="72"  text-anchor="middle">7.4V 直供</text>
+      <text class="t-acc" x="513" y="128" text-anchor="middle">PWM ×18</text>
+
+      <!-- 足底开关（路线 B，暂不装） -->
+      <rect class="sv-boxoff" x="185" y="158" width="120" height="48" rx="6"/>
+      <line class="w-off" x1="305" y1="172" x2="368" y2="134" marker-end="url(#mo)"/>
+      <text class="t-bxm" x="245" y="179">足底开关 ×6</text>
+      <text class="t-bs" x="245" y="196">KW10 微动 · 传感器口</text>
+      <text class="t-bm" x="185" y="224">路线 B 暂不装——</text>
+      <text class="t-bm" x="185" y="239">P4 触地检测走压力传感器</text>
+
+      <!-- 路 b：5V 降压 → Pi 5（独立供电） -->
+      <line class="w-pwr" x1="306" y1="272" x2="336" y2="272" marker-end="url(#mp)"/>
+      <rect class="sv-box" x="210" y="246" width="96" height="52" rx="6"/>
+      <rect class="sv-boxa" x="340" y="236" width="130" height="72" rx="6"/>
+      <text class="t-bx" x="258" y="268">5V/5A DC-DC</text>
+      <text class="t-bs" x="258" y="285">降压模块 ×1</text>
+      <text class="t-bx" x="405" y="260">树莓派 Pi 5 ×1</text>
+      <text class="t-bs" x="405" y="277">4GB + 主动散热</text>
+      <text class="t-bs" x="405" y="294">步态 + 吸附控制</text>
+      <text class="t-dim" x="321" y="264" text-anchor="middle">5V</text>
+      <rect class="sv-warnbox" x="176" y="318" width="246" height="26" rx="6"/>
+      <text class="t-warn" x="299" y="335" text-anchor="middle">⚠ Pi 独立供电，绝不与舵机共轨</text>
+
+      <!-- 电池 -->
+      <rect class="sv-boxa" x="24" y="270" width="118" height="64" rx="6"/>
+      <text class="t-bx" x="83" y="292">2S 7.4V 锂电 ×1</text>
+      <text class="t-bs" x="83" y="309">5000~6200mAh</text>
+      <text class="t-bs" x="83" y="324">XT60 总开关</text>
+
+      <!-- 信号：USB / I2C / GPIO / 模拟 -->
+      <line class="w-sig" x1="405" y1="236" x2="405" y2="138" marker-end="url(#ms)"/>
+      <text class="t-acc" x="413" y="188">USB</text>
+      <line class="w-sig" x1="470" y1="258" x2="556" y2="258" marker-end="url(#ms)"/>
+      <text class="t-acc" x="513" y="250" text-anchor="middle">I2C</text>
+      <line class="w-sig" x1="430" y1="308" x2="430" y2="426" marker-end="url(#ms)"/>
+      <text class="t-acc" x="438" y="400">GPIO ×8</text>
+      <line class="w-sig" x1="648" y1="334" x2="648" y2="308" marker-end="url(#ms)"/>
+      <text class="t-acc" x="656" y="324">模拟 ×7</text>
+
+      <!-- ADC 与压力传感器 -->
+      <rect class="sv-box" x="560" y="240" width="176" height="64" rx="6"/>
+      <text class="t-bx" x="648" y="263">ADS1115 ×2</text>
+      <text class="t-bs" x="648" y="281">地址 0x48 / 0x49</text>
+      <text class="t-bs" x="648" y="296">共 8 通道</text>
+      <rect class="sv-box" x="560" y="334" width="176" height="62" rx="6"/>
+      <text class="t-bx" x="648" y="357">XGZP6847A ×7</text>
+      <text class="t-bs" x="648" y="375">0~−100kPa 模拟输出</text>
+      <text class="t-bs" x="648" y="391">罐 ×1 + 每足 ×1</text>
+
+      <!-- 路 c：升压 → MOSFET → 阀 + 泵 -->
+      <line class="w-pwr" x1="306" y1="464" x2="336" y2="464" marker-end="url(#mp)"/>
+      <polyline class="w-pwr" points="470,448 515,448 515,430 556,430" marker-end="url(#mp)"/>
+      <polyline class="w-pwr" points="470,480 515,480 515,498 556,498" marker-end="url(#mp)"/>
+      <rect class="sv-box" x="210" y="436" width="96" height="56" rx="6"/>
+      <rect class="sv-box" x="340" y="430" width="130" height="68" rx="6"/>
+      <rect class="sv-box" x="560" y="404" width="176" height="52" rx="6"/>
+      <rect class="sv-box" x="560" y="472" width="176" height="52" rx="6"/>
+      <text class="t-bx" x="258" y="459">XL6009 ×2</text>
+      <text class="t-bs" x="258" y="477">升压 7.4→12V</text>
+      <text class="t-bx" x="405" y="453">8 路 MOSFET 板 ×1</text>
+      <text class="t-bs" x="405" y="471">12V 低边开关</text>
+      <text class="t-bs" x="405" y="487">6 阀 + 2 泵正好 8 路</text>
+      <text class="t-bx" x="648" y="426">电磁阀 ×6</text>
+      <text class="t-bs" x="648" y="444">二位三通常闭 0520B 12V</text>
+      <text class="t-bx" x="648" y="494">真空泵 ×2</text>
+      <text class="t-bs" x="648" y="512">555 双头隔膜泵 12V</text>
+      <text class="t-dim" x="321" y="456" text-anchor="middle">12V</text>
+
+      <!-- 图例 -->
+      <line class="w-pwr" x1="24" y1="566" x2="64" y2="566" marker-end="url(#mp)"/>
+      <text class="t-bm" x="72" y="570">电源线（实线，标电压）</text>
+      <line class="w-sig" x1="250" y1="566" x2="290" y2="566" marker-end="url(#ms)"/>
+      <text class="t-bm" x="298" y="570">控制 / 信号线（虚线）</text>
+      <line class="w-off" x1="490" y1="566" x2="530" y2="566" marker-end="url(#mo)"/>
+      <text class="t-bm" x="538" y="570">路线 B 暂不装（灰虚线）</text>
+      <text class="t-foot" x="16" y="600">拓扑示意，不按比例；箭头 = 供电 / 信号方向。ADS1115、XGZP6847A 的 3.3V/5V 逻辑供电取自 Pi，图中从略。继电器断开 = 舵机整轨断电，Pi 与 Servo2040 逻辑侧仍在线。</text>
+    </svg>
+  </figure>
+
+  <h2>图 2 · 气路（真空母线拓扑）</h2>
+  <figure>
+    <svg viewBox="0 0 780 620" role="img" aria-label="气路图：双泵经单向阀接储气罐，罐经歧管分 6 路，每路电磁阀、足压三通、硅胶管到波纹吸盘">
+      <defs>
+        <marker id="ma" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--air)"/>
+        </marker>
+      </defs>
+
+      <!-- 真空发生链（气流方向：歧管→罐→泵→大气） -->
+      <line class="w-air" x1="600" y1="110" x2="444" y2="110" marker-end="url(#ma)"/>
+      <line class="w-air" x1="300" y1="110" x2="260" y2="110"/>
+      <polyline class="w-air" points="256,110 224,110 224,77 164,77" marker-end="url(#ma)"/>
+      <polyline class="w-air" points="256,110 224,110 224,143 164,143" marker-end="url(#ma)"/>
+      <circle class="nda" cx="256" cy="110" r="3.5"/>
+      <line class="w-air" x1="40" y1="77"  x2="18" y2="77"  marker-end="url(#ma)"/>
+      <line class="w-air" x1="40" y1="143" x2="18" y2="143" marker-end="url(#ma)"/>
+      <text class="t-bm" x="12" y="110" text-anchor="middle" transform="rotate(-90 12 110)">排大气</text>
+
+      <!-- 单向阀符号（通向 = 罐→泵，尖头指向泵） -->
+      <polygon class="cv" points="204,69 204,85 190,77"/>
+      <line class="cvb" x1="190" y1="69" x2="190" y2="85"/>
+      <polygon class="cv" points="204,135 204,151 190,143"/>
+      <line class="cvb" x1="190" y1="135" x2="190" y2="151"/>
+      <text class="t-b" x="197" y="190" text-anchor="middle">4mm 单向阀 ×2</text>
+      <text class="t-bm" x="197" y="206" text-anchor="middle">只许 罐→泵 方向，防停机倒漏</text>
+
+      <!-- 泵 / 罐 / 歧管 -->
+      <text class="t-bm" x="100" y="44" text-anchor="middle">双泵并联（一主一备）</text>
+      <rect class="sv-box" x="40" y="52" width="120" height="50" rx="6"/>
+      <rect class="sv-box" x="40" y="118" width="120" height="50" rx="6"/>
+      <text class="t-bx" x="100" y="73">真空泵 1</text>
+      <text class="t-bs" x="100" y="90">555 双头 12V</text>
+      <text class="t-bx" x="100" y="139">真空泵 2</text>
+      <text class="t-bs" x="100" y="156">555 双头 12V</text>
+      <rect class="sv-box" x="300" y="72" width="140" height="76" rx="14"/>
+      <text class="t-bx" x="370" y="97">储气罐 ×1</text>
+      <text class="t-bs" x="370" y="115">汽车真空罐 250~500mL</text>
+      <text class="t-bs" x="370" y="132">“真空电池”</text>
+      <rect class="sv-box" x="600" y="56" width="140" height="108" rx="6"/>
+      <text class="t-bx" x="670" y="92">真空歧管 ×1</text>
+      <text class="t-bs" x="670" y="110">1 进 6 出</text>
+      <text class="t-bs" x="670" y="128">全链路 4mm 宝塔</text>
+
+      <!-- 罐压传感器（三通接罐出口管） -->
+      <circle class="nda" cx="510" cy="110" r="3.5"/>
+      <line class="w-airt" x1="510" y1="110" x2="510" y2="152"/>
+      <rect class="sv-box" x="430" y="156" width="160" height="50" rx="6"/>
+      <text class="t-bx" x="510" y="177">罐压 XGZP6847A ×1</text>
+      <text class="t-bs" x="510" y="194">经三通接罐出口管</text>
+
+      <!-- 支路 1（详细）：吸盘 → 硅胶管(服务环) → 足压三通 → 阀 → 歧管 -->
+      <line class="w-air" x1="612" y1="240" x2="612" y2="168" marker-end="url(#ma)"/>
+      <line class="w-air" x1="404" y1="274" x2="466" y2="274" marker-end="url(#ma)"/>
+      <line class="w-air" x1="100" y1="274" x2="396" y2="274"/>
+      <polygon points="206,274 196,269 196,279" style="fill: var(--air)"/>
+      <circle class="w-air" cx="282" cy="274" r="22"/>
+      <text class="t-air" x="282" y="240" text-anchor="middle">coxa 服务环（松弛圈）</text>
+      <text class="t-bm" x="180" y="258" text-anchor="middle">4×6 硅胶管沿腿走</text>
+
+      <rect class="sv-box" x="470" y="240" width="150" height="68" rx="6"/>
+      <text class="t-bx" x="545" y="264">电磁阀 1 · 0520B</text>
+      <text class="t-bs" x="545" y="282">二位三通 · 12V 常闭</text>
+      <text class="t-bs" x="545" y="298">断电 = 吸盘↔母线</text>
+      <line class="w-airt" x1="580" y1="308" x2="580" y2="336"/>
+      <polygon points="580,344 575,334 585,334" style="fill: var(--air); opacity:.7"/>
+      <text class="t-bm" x="580" y="358" text-anchor="middle">排气口</text>
+      <text class="t-bm" x="580" y="373" text-anchor="middle">通电=吸盘放大气</text>
+
+      <circle class="nda" cx="400" cy="274" r="3.5"/>
+      <line class="w-airt" x1="400" y1="274" x2="400" y2="318"/>
+      <rect class="sv-box" x="320" y="322" width="160" height="52" rx="6"/>
+      <text class="t-bx" x="400" y="343">足压 XGZP6847A ×6</text>
+      <text class="t-bs" x="400" y="361">装阀与吸盘之间（吸盘侧）</text>
+
+      <!-- 墙面与吸盘 -->
+      <rect class="sv-glass" x="24" y="216" width="10" height="168"/>
+      <text class="t-seg" x="30" y="224" transform="rotate(90 30 224)">墙面 / 玻璃</text>
+      <line class="sv-lip" x1="35" y1="250" x2="35" y2="298"/>
+      <polygon class="sv-part" points="36,252 78,260 78,288 36,296"/>
+      <line class="sv-fold" x1="50" y1="254.5" x2="50" y2="293.5"/>
+      <line class="sv-fold" x1="64" y1="257" x2="64" y2="291"/>
+      <rect class="sv-solid" x="78" y="266" width="22" height="16"/>
+      <text class="t-seg" x="40" y="316">30mm 波纹吸盘 ×6</text>
+      <text class="t-bm" x="40" y="332">M5 金具 + 弯头宝塔</text>
+
+      <!-- 支路 2~6（简化重复） -->
+      <line class="w-air2" x1="632" y1="164" x2="632" y2="420"/>
+      <line class="w-air2" x1="656" y1="164" x2="656" y2="420"/>
+      <line class="w-air2" x1="680" y1="164" x2="680" y2="420"/>
+      <line class="w-air2" x1="704" y1="164" x2="704" y2="420"/>
+      <line class="w-air2" x1="728" y1="164" x2="728" y2="420"/>
+      <rect class="sv-boxoff" x="560" y="420" width="180" height="96" rx="8"/>
+      <text class="t-bxm" x="650" y="446">支路 2~6（同支路 1）</text>
+      <text class="t-bs" x="650" y="466">阀→足压三通→硅胶管→吸盘</text>
+      <text class="t-bs" x="650" y="486">全机合计 ×6</text>
+
+      <!-- 图例 -->
+      <line class="w-air" x1="24" y1="566" x2="64" y2="566" marker-end="url(#ma)"/>
+      <text class="t-bm" x="72" y="570">气路主线（箭头 = 抽气气流方向：吸盘→罐→泵→大气）</text>
+      <line class="w-airt" x1="430" y1="566" x2="462" y2="566"/>
+      <text class="t-bm" x="470" y="570">取压支管</text>
+      <rect class="sv-boxoff" x="560" y="558" width="16" height="16" rx="3"/>
+      <text class="t-bm" x="584" y="570">重复支路 ×5</text>
+      <text class="t-foot" x="16" y="600">拓扑示意，不按比例；全链路接头统一 4mm 宝塔 + 扎带，密封用环氧。储气罐上机前先单独抽 −70kPa 做压瘪测试。</text>
+    </svg>
+  </figure>
+
+  <div class="note">
+    <b>阀的状态语义（本项目要求的接法）</b>
+    <table class="vtab">
+      <tr><th>阀状态</th><th>气路接通</th><th>含义</th></tr>
+      <tr><td>断电（默认）</td><td>吸盘 ↔ 真空母线</td><td>抽气 / 补抽 / 保持——断电不掉落</td></tr>
+      <tr><td>通电</td><td>吸盘 → 大气（母线侧被切断）</td><td>释放该足，准备迈步</td></tr>
+    </table>
+    <b class="d">⚠ 装配前必测</b>：市售 0520B 的端口语义常与此<b class="d">相反</b>（断电 = 通排气）。
+    装配时必须逐阀在台面实测断电行为（断电时哪两个口通）；若相反，把真空接到阀的"排气口"反用。
+    断电 = 放气的接法上墙，等于断电即坠落。
+  </div>
+
+  <div class="note">
+    <b>关键规则</b>
+    <ul>
+      <li><b class="d">Pi 独立供电</b>：舵机堵转的压降绝不能重启 Pi——爬墙中重启 = 掉落。装好后 <code>vcgencmd get_throttled</code> 确认无欠压。</li>
+      <li><b>接点 = 泄漏点</b>：全链路统一 4mm 宝塔 + 扎带锁紧，密封用环氧、不用热熔。</li>
+      <li><b>单向阀</b>装在泵与储气罐之间，方向只许"罐→泵"——防泵停机后经泵膜倒漏。</li>
+      <li><b>储气罐 = 真空电池</b>：新脚秒吸、削峰、泵故障缓冲——网络容积比纯管路大 50 倍，泄漏衰减慢 50 倍。</li>
+      <li><b>步态铁律</b>：新脚压力确认 ≤ −30kPa 之前，不放开下一只脚（始终五足支撑）。</li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>

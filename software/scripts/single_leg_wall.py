@@ -37,8 +37,9 @@ Z_PRESS = -105.0        # 压紧（预压 13.5 + 预载 1.5）
 RETRY_LIFT_MM = 5.0
 MAX_RETRY = 3
 MOVE_HZ = 50.0
-PUMP_TOPUP_KPA = -50.0  # 吸附保持中压力高于此重新补抽
-PUMP_STOP_KPA = -60.0
+PUMP_TOPUP_KPA = -55.0  # 吸附保持中压力高于此重新补抽（离 ~-53 失控区留安全距离，2026-07-22 实测打嗝）
+PUMP_STOP_KPA = -65.0
+BURP_ALARM_KPA = -30.0  # hold 期压力突升过此线（=吸附确认线）→ 打嗝报警：吸附已不可信，立即上销
 
 
 class PumpOverrideIO:
@@ -153,6 +154,7 @@ class Rig:
         self.phase = "hold"
         n_mock = n_samples
         i = 0
+        alarmed = False                          # 打嗝报警只在跌回安全带后重新武装，防刷屏
         while (time.time() < t_end) if isinstance(self.drv, Servo2040Driver) else n_mock > 0:
             n_mock -= 1
             kpa = self.tick(0.05)
@@ -162,6 +164,13 @@ class Rig:
             kpa_f = sorted(med)[len(med) // 2]   # 中值滤波
             if i >= skip:
                 worst = max(worst, kpa_f)
+            if i >= skip and kpa_f > BURP_ALARM_KPA:
+                if not alarmed:
+                    alarmed = True
+                    print(f"\a\n  ⚠⚠⚠ 打嗝！hold 压力 {kpa_f:.1f} kPa 已高于吸附确认线"
+                          f" {BURP_ALARM_KPA:.0f} —— 吸附不可信，立即上销！\n\a")
+            elif kpa_f <= PUMP_TOPUP_KPA:
+                alarmed = False                  # 回到补抽线以下算真恢复，重新武装
             if kpa_f > PUMP_TOPUP_KPA:
                 self.io.pump(True)
             elif kpa_f < PUMP_STOP_KPA:

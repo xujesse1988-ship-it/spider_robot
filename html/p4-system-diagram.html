@@ -80,6 +80,7 @@
   .t-bx  { font-size: 12.5px; font-weight: 700; text-anchor: middle; }
   .t-bxm { font-size: 12.5px; font-weight: 700; text-anchor: middle; fill: var(--muted); }
   .t-bs  { font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+  .t-bsw { font-size: 10.5px; fill: var(--warn); text-anchor: middle; }
   .t-seg { font-size: 11.5px; fill: var(--muted); }
   .t-dim { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
   .t-warn{ font-size: 12px; font-weight: 700; fill: var(--warn); }
@@ -102,7 +103,7 @@
 
   <h2>图 1 · 电气连接</h2>
   <figure>
-    <svg viewBox="0 0 780 620" role="img" aria-label="电气连接图：电池分三路供舵机、Pi、气动 12V 件，信号线走 USB、GPIO、I2C">
+    <svg viewBox="0 0 780 700" role="img" aria-label="电气连接图：电池分三路供舵机、Pi、气动 12V 件，信号线走 USB、GPIO、I2C，压力传感器经分压汇接板进 ADS1115">
       <defs>
         <marker id="mp" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
           <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
@@ -183,46 +184,56 @@
       <text class="t-acc" x="513" y="250" text-anchor="middle">I2C</text>
       <line class="w-sig" x1="430" y1="308" x2="430" y2="426" marker-end="url(#ms)"/>
       <text class="t-acc" x="438" y="400">GPIO ×8</text>
-      <line class="w-sig" x1="648" y1="334" x2="648" y2="308" marker-end="url(#ms)"/>
-      <text class="t-acc" x="656" y="324">模拟 ×7</text>
+      <line class="w-sig" x1="648" y1="312" x2="648" y2="296" marker-end="url(#ms)"/>
+      <text class="t-acc" x="656" y="306">0.25~2.25V</text>
+      <line class="w-sig" x1="648" y1="414" x2="648" y2="396" marker-end="url(#ms)"/>
+      <text class="t-acc" x="656" y="407">模拟 0.5~4.5V ×7</text>
 
-      <!-- ADC 与压力传感器 -->
-      <rect class="sv-box" x="560" y="240" width="176" height="64" rx="6"/>
-      <text class="t-bx" x="648" y="263">ADS1115 ×2</text>
-      <text class="t-bs" x="648" y="281">地址 0x48 / 0x49</text>
-      <text class="t-bs" x="648" y="296">共 8 通道</text>
-      <rect class="sv-box" x="560" y="334" width="176" height="62" rx="6"/>
-      <text class="t-bx" x="648" y="357">XGZP6847A ×7</text>
-      <text class="t-bs" x="648" y="375">0~−100kPa 模拟输出</text>
-      <text class="t-bs" x="648" y="391">罐 ×1 + 每足 ×1</text>
+      <!-- ADC / 分压汇接板 / 压力传感器 -->
+      <rect class="sv-box" x="560" y="192" width="176" height="100" rx="6"/>
+      <text class="t-bx" x="648" y="214">ADS1115 ×2</text>
+      <text class="t-bs" x="648" y="231">3.3V 供电（I2C 与 Pi 直连）</text>
+      <text class="t-bs" x="648" y="247">地址 0x48 / 0x49 · 共 8 通道</text>
+      <text class="t-bsw" x="648" y="266">PGA=±4.096V（设 ±2.048 会在</text>
+      <text class="t-bsw" x="648" y="281">−10kPa~0 削顶，放气确认失效）</text>
+      <rect class="sv-box" x="560" y="312" width="176" height="80" rx="6"/>
+      <text class="t-bx" x="648" y="334">分压汇接板 ×1</text>
+      <text class="t-bs" x="648" y="352">每路 10k/10k + 100nF ×7</text>
+      <text class="t-bs" x="648" y="368">0.5~4.5V → 0.25~2.25V（对半）</text>
+      <text class="t-bs" x="648" y="384">适配 3.3V ADS1115 · ≈300Hz 低通</text>
+      <rect class="sv-box" x="560" y="414" width="176" height="80" rx="6"/>
+      <text class="t-bx" x="648" y="436">XGZP6847A ×7</text>
+      <text class="t-bs" x="648" y="453">0~−100kPa · 输出 0.5~4.5V</text>
+      <text class="t-bs" x="648" y="469">罐 ×1 + 每足 ×1</text>
+      <text class="t-bs" x="648" y="485">5V 供电（Pi 5V 轨 · 共地）</text>
 
       <!-- 路 c：升压 → MOSFET → 阀 + 泵 -->
       <line class="w-pwr" x1="306" y1="464" x2="336" y2="464" marker-end="url(#mp)"/>
-      <polyline class="w-pwr" points="470,448 515,448 515,430 556,430" marker-end="url(#mp)"/>
-      <polyline class="w-pwr" points="470,480 515,480 515,498 556,498" marker-end="url(#mp)"/>
+      <polyline class="w-pwr" points="470,448 512,448 512,534 556,534" marker-end="url(#mp)"/>
+      <polyline class="w-pwr" points="470,480 496,480 496,602 556,602" marker-end="url(#mp)"/>
       <rect class="sv-box" x="210" y="436" width="96" height="56" rx="6"/>
       <rect class="sv-box" x="340" y="430" width="130" height="68" rx="6"/>
-      <rect class="sv-box" x="560" y="404" width="176" height="52" rx="6"/>
-      <rect class="sv-box" x="560" y="472" width="176" height="52" rx="6"/>
+      <rect class="sv-box" x="560" y="508" width="176" height="52" rx="6"/>
+      <rect class="sv-box" x="560" y="576" width="176" height="52" rx="6"/>
       <text class="t-bx" x="258" y="459">XL6009 ×2</text>
       <text class="t-bs" x="258" y="477">升压 7.4→12V</text>
       <text class="t-bx" x="405" y="453">8 路 MOSFET 板 ×1</text>
       <text class="t-bs" x="405" y="471">12V 低边开关</text>
       <text class="t-bs" x="405" y="487">6 阀 + 2 泵正好 8 路</text>
-      <text class="t-bx" x="648" y="426">电磁阀 ×6</text>
-      <text class="t-bs" x="648" y="444">二位三通常闭 0520B 12V</text>
-      <text class="t-bx" x="648" y="494">真空泵 ×2</text>
-      <text class="t-bs" x="648" y="512">555 双头隔膜泵 12V</text>
+      <text class="t-bx" x="648" y="530">电磁阀 ×6</text>
+      <text class="t-bs" x="648" y="548">二位三通常闭 0520B 12V</text>
+      <text class="t-bx" x="648" y="598">真空泵 ×2</text>
+      <text class="t-bs" x="648" y="616">555 双头隔膜泵 12V</text>
       <text class="t-dim" x="321" y="456" text-anchor="middle">12V</text>
 
       <!-- 图例 -->
-      <line class="w-pwr" x1="24" y1="566" x2="64" y2="566" marker-end="url(#mp)"/>
-      <text class="t-bm" x="72" y="570">电源线（实线，标电压）</text>
-      <line class="w-sig" x1="250" y1="566" x2="290" y2="566" marker-end="url(#ms)"/>
-      <text class="t-bm" x="298" y="570">控制 / 信号线（虚线）</text>
-      <line class="w-off" x1="490" y1="566" x2="530" y2="566" marker-end="url(#mo)"/>
-      <text class="t-bm" x="538" y="570">路线 B 暂不装（灰虚线）</text>
-      <text class="t-foot" x="16" y="600">拓扑示意，不按比例；箭头 = 供电 / 信号方向。ADS1115、XGZP6847A 的 3.3V/5V 逻辑供电取自 Pi，图中从略。继电器断开 = 舵机整轨断电，Pi 与 Servo2040 逻辑侧仍在线。</text>
+      <line class="w-pwr" x1="24" y1="660" x2="64" y2="660" marker-end="url(#mp)"/>
+      <text class="t-bm" x="72" y="664">电源线（实线，标电压）</text>
+      <line class="w-sig" x1="250" y1="660" x2="290" y2="660" marker-end="url(#ms)"/>
+      <text class="t-bm" x="298" y="664">控制 / 信号线（虚线）</text>
+      <line class="w-off" x1="490" y1="660" x2="530" y2="660" marker-end="url(#mo)"/>
+      <text class="t-bm" x="538" y="664">路线 B 暂不装（灰虚线）</text>
+      <text class="t-foot" x="16" y="690">拓扑示意，不按比例；箭头 = 供电 / 信号方向。ADS1115 3.3V、XGZP6847A 5V 均取自 Pi（全系统共地），供电走线从略。继电器断开 = 舵机整轨断电，Pi 与 Servo2040 逻辑侧仍在线。</text>
     </svg>
   </figure>
 
@@ -351,6 +362,7 @@
     <ul>
       <li><b class="d">Pi 独立供电</b>：舵机堵转的压降绝不能重启 Pi——爬墙中重启 = 掉落。装好后 <code>vcgencmd get_throttled</code> 确认无欠压。</li>
       <li><b>接点 = 泄漏点</b>：全链路统一 4mm 宝塔 + 扎带锁紧，密封用环氧、不用热熔。</li>
+      <li><b class="d">P4 禁用面包板 / 杜邦插接</b>——震动 = 间歇断连 = 状态机误判；分压板洞洞板焊接 + JST / 焊线。</li>
       <li><b>单向阀</b>装在泵与储气罐之间，方向只许"罐→泵"——防泵停机后经泵膜倒漏。</li>
       <li><b>储气罐 = 真空电池</b>：新脚秒吸、削峰、泵故障缓冲——网络容积比纯管路大 50 倍，泄漏衰减慢 50 倍。</li>
       <li><b>步态铁律</b>：新脚压力确认 ≤ −30kPa 之前，不放开下一只脚（始终五足支撑）。</li>

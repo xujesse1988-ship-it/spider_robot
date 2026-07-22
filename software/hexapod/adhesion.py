@@ -108,6 +108,13 @@ class Pi5VacuumIO:
 
     def _read_v(self, ch=0):
         import time
+        # Config MSB: 0xC3 = 1100 0011
+        # [15] OS=1 (Start)
+        # [14:12] MUX=100 (AIN0-GND, modified by ch<<4)
+        # [11:9] PGA=001 (±4.096V). 必须设为4.096V，因为分压后最高2.25V。
+        # 如果设2.048V，放气确认区间(接近大气压)会被削顶(读数平移)。
+        # 此时分辨率约 0.006 kPa / LSB，完全够用。
+        # [8] MODE=1 (Single-shot)
         self._bus.write_i2c_block_data(self.ADS_ADDR, 0x01, [0xC3 + (ch << 4), 0x83])
         time.sleep(0.01)
         hi, lo = self._bus.read_i2c_block_data(self.ADS_ADDR, 0x00, 2)

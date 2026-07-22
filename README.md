@@ -8,6 +8,9 @@
 |---|---|
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 分阶段实现路线图 P0~P5（含每阶段验收标准与风险清单） |
 | [docs/P0-GUIDE.md](docs/P0-GUIDE.md) | P0 准备阶段逐步操作指南（下单核对、Pi 环境、打印、单腿装配与验收） |
+| [docs/P1-GUIDE.md](docs/P1-GUIDE.md) | P1 吸附系统台架验证指南（真空回路、三条曲线、挂重/斜角测试） |
+| [docs/P2-GUIDE.md](docs/P2-GUIDE.md) | P2 单腿爬墙决策门指南（**2026-07-22 已通过**，含验收数据） |
+| [docs/P3-GUIDE.md](docs/P3-GUIDE.md) | P3 整机装配与地面行走指南（第二批下单、打印盘点、全舵机标定） |
 | [docs/BOM.md](docs/BOM.md) | 分阶段采购清单（含淘宝搜索关键词与价格区间） |
 | [docs/CLIMBING-DESIGN.md](docs/CLIMBING-DESIGN.md) | 吸附方式选型论证、力学预算、气路图、电气架构 |
 

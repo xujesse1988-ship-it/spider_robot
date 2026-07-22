@@ -37,8 +37,8 @@ Z_PRESS = -105.0        # 压紧（预压 13.5 + 预载 1.5）
 RETRY_LIFT_MM = 5.0
 MAX_RETRY = 3
 MOVE_HZ = 50.0
-PUMP_TOPUP_KPA = -45.0  # 吸附保持中压力高于此重新补抽
-PUMP_STOP_KPA = -55.0
+PUMP_TOPUP_KPA = -50.0  # 吸附保持中压力高于此重新补抽
+PUMP_STOP_KPA = -60.0
 
 
 class PumpOverrideIO:

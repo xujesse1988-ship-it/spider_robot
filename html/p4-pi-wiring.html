@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi 5 引脚级连线图</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+      --pwr: #E0A64F; --air: #4BC2A0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+    --pwr: #E0A64F; --air: #4BC2A0;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 17px; margin: 4px 0 -12px; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 10px 6px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  .note ul { margin: 8px 0 2px; padding-left: 20px; }
+  .note li { margin: 3px 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+  table.vtab { border-collapse: collapse; margin: 10px 0 4px; }
+  .vtab th, .vtab td { border: 1px solid var(--line); padding: 4px 10px; font-size: 12.5px; text-align: left; }
+  .vtab th { background: var(--accent-soft); font-weight: 700; }
+  .st-ok { color: var(--accent); font-weight: 700; }
+  .st-tbd { color: var(--warn); font-weight: 700; }
+
+  .hdr { fill: var(--part); fill-opacity: .3; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-box  { fill: var(--part); fill-opacity: .35; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-boxa { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .pp { fill: var(--pwr); }
+  .pg { fill: var(--muted); }
+  .ps { fill: var(--accent); }
+  .pu { fill: var(--part); stroke: var(--part-stroke); stroke-width: 1; }
+  .tkp { stroke: var(--pwr); stroke-width: 2; }
+  .tkg { stroke: var(--muted); stroke-width: 2; }
+  .tks { stroke: var(--accent); stroke-width: 2; }
+  .w-sig { stroke: var(--accent); stroke-width: 1.8; stroke-dasharray: 7 4; fill: none; }
+  .w-pwr { stroke: var(--pwr); stroke-width: 3; fill: none; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-num  { font-size: 8px; font-weight: 700; text-anchor: middle; fill: var(--panel); }
+  .t-numu { font-size: 8px; font-weight: 700; text-anchor: middle; fill: var(--muted); }
+  .t-lb { font-size: 11.5px; }
+  .t-un { font-size: 9.5px; fill: var(--muted); opacity: .8; }
+  .t-bx { font-size: 12.5px; font-weight: 700; text-anchor: middle; }
+  .t-bs { font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+  .t-seg { font-size: 11.5px; fill: var(--muted); }
+  .t-warn{ font-size: 12px; font-weight: 700; fill: var(--warn); }
+  .t-acc { font-size: 11.5px; fill: var(--accent); }
+  .t-b   { font-size: 12px; fill: var(--ink); }
+  .t-bm  { font-size: 11.5px; fill: var(--muted); }
+  .t-foot{ font-size: 10.5px; fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Spider · P4 整机 · Pi 5 引脚级连线（配整机连接图 / 分压板图纸）</p>
+    <h1>Pi 5 与各组件的引脚级连线图</h1>
+    <p class="sub">系统图是拓扑级，这张落到"哪根线插哪个脚"。泵/阀的真实 GPIO 取自
+    <code>software/hexapod/adhesion.py</code>（Pi5VacuumIO，P1 已实装）：<b>阀 L1 = GPIO5、泵 A = GPIO20</b>；
+    其余 6 路 MOSFET 控制为建议分配（P4 装配时定案），已避开 I2C1 / UART / SPI0 / ID-EEPROM / PWM 音频脚。</p>
+  </header>
+
+  <h2>图 1 · Pi 5 40-pin 排针（物理引脚号，俯视）</h2>
+  <figure>
+    <svg viewBox="0 0 780 668" role="img" aria-label="Pi 5 40 针排针图：I2C 去 ADS1115，3.3V/5V/GND 去分压板 J1，8 路 GPIO 去 MOSFET 板，其余引脚淡色">
+      <text class="t-bx" x="390" y="30">Pi 5 40-pin（Pin 1 = 靠 SD 卡一角；左列奇数脚，右列偶数脚）</text>
+      <rect class="hdr" x="322" y="58" width="68" height="530" rx="8"/>
+
+      <!-- 行 1：Pin1 3.3V | Pin2 5V -->
+      <line class="tkp" x1="320" y1="78" x2="331" y2="78"/>
+      <rect class="pp" x="331" y="70" width="16" height="16" rx="2"/>
+      <text class="t-num" x="339" y="81">1</text>
+      <text class="t-lb" x="316" y="82" text-anchor="end">3.3V → 分压板 J1（ADS1115 ×2 供电）</text>
+      <line class="tkp" x1="381" y1="78" x2="392" y2="78"/>
+      <circle class="pp" cx="373" cy="78" r="8.5"/>
+      <text class="t-num" x="373" y="81">2</text>
+      <text class="t-lb" x="396" y="82">5V → 分压板 J1（XGZP6847A ×7，mA 级）</text>
+      <!-- 行 2：Pin3 SDA1 | Pin4 5V -->
+      <line class="tks" x1="320" y1="104" x2="331" y2="104"/>
+      <circle class="ps" cx="339" cy="104" r="8.5"/>
+      <text class="t-num" x="339" y="107">3</text>
+      <text class="t-lb" x="316" y="108" text-anchor="end">GPIO2 · SDA1 → ADS1115 0x48 / 0x49</text>
+      <line class="tkp" x1="381" y1="104" x2="392" y2="104"/>
+      <circle class="pp" cx="373" cy="104" r="8.5"/>
+      <text class="t-num" x="373" y="107">4</text>
+      <text class="t-lb" x="396" y="108">5V —— 供电路线 b：5V/5A 直上（<tspan fill="var(--warn)" font-weight="700">待定案</tspan>）</text>
+      <!-- 行 3：Pin5 SCL1 | Pin6 GND -->
+      <line class="tks" x1="320" y1="130" x2="331" y2="130"/>
+      <circle class="ps" cx="339" cy="130" r="8.5"/>
+      <text class="t-num" x="339" y="133">5</text>
+      <text class="t-lb" x="316" y="134" text-anchor="end">GPIO3 · SCL1 → ADS1115 0x48 / 0x49</text>
+      <line class="tkg" x1="381" y1="130" x2="392" y2="130"/>
+      <circle class="pg" cx="373" cy="130" r="8.5"/>
+      <text class="t-num" x="373" y="133">6</text>
+      <text class="t-lb" x="396" y="134">GND —— 路线 b 供电回线（<tspan fill="var(--warn)" font-weight="700">待定案</tspan>）</text>
+      <!-- 行 4 -->
+      <circle class="pu" cx="339" cy="156" r="8.5"/><text class="t-numu" x="339" y="159">7</text>
+      <text class="t-un" x="316" y="160" text-anchor="end">GPIO4</text>
+      <circle class="pu" cx="373" cy="156" r="8.5"/><text class="t-numu" x="373" y="159">8</text>
+      <text class="t-un" x="396" y="160">GPIO14 · UART TXD（避用）</text>
+      <!-- 行 5：Pin9 GND -->
+      <line class="tkg" x1="320" y1="182" x2="331" y2="182"/>
+      <circle class="pg" cx="339" cy="182" r="8.5"/>
+      <text class="t-num" x="339" y="185">9</text>
+      <text class="t-lb" x="316" y="186" text-anchor="end">GND → 分压板 J1</text>
+      <circle class="pu" cx="373" cy="182" r="8.5"/><text class="t-numu" x="373" y="185">10</text>
+      <text class="t-un" x="396" y="186">GPIO15 · UART RXD（避用）</text>
+      <!-- 行 6 -->
+      <circle class="pu" cx="339" cy="208" r="8.5"/><text class="t-numu" x="339" y="211">11</text>
+      <text class="t-un" x="316" y="212" text-anchor="end">GPIO17（空闲，留扩展）</text>
+      <circle class="pu" cx="373" cy="208" r="8.5"/><text class="t-numu" x="373" y="211">12</text>
+      <text class="t-un" x="396" y="212">GPIO18 · PWM 音频（避用）</text>
+      <!-- 行 7 -->
+      <circle class="pu" cx="339" cy="234" r="8.5"/><text class="t-numu" x="339" y="237">13</text>
+      <text class="t-un" x="316" y="238" text-anchor="end">GPIO27</text>
+      <circle class="pu" cx="373" cy="234" r="8.5"/><text class="t-numu" x="373" y="237">14</text>
+      <text class="t-un" x="396" y="238">GND</text>
+      <!-- 行 8 -->
+      <circle class="pu" cx="339" cy="260" r="8.5"/><text class="t-numu" x="339" y="263">15</text>
+      <text class="t-un" x="316" y="264" text-anchor="end">GPIO22</text>
+      <circle class="pu" cx="373" cy="260" r="8.5"/><text class="t-numu" x="373" y="263">16</text>
+      <text class="t-un" x="396" y="264">GPIO23</text>
+      <!-- 行 9 -->
+      <circle class="pu" cx="339" cy="286" r="8.5"/><text class="t-numu" x="339" y="289">17</text>
+      <text class="t-un" x="316" y="290" text-anchor="end">3.3V</text>
+      <circle class="pu" cx="373" cy="286" r="8.5"/><text class="t-numu" x="373" y="289">18</text>
+      <text class="t-un" x="396" y="290">GPIO24</text>
+      <!-- 行 10 -->
+      <circle class="pu" cx="339" cy="312" r="8.5"/><text class="t-numu" x="339" y="315">19</text>
+      <text class="t-un" x="316" y="316" text-anchor="end">GPIO10 · SPI0 MOSI（避用）</text>
+      <circle class="pu" cx="373" cy="312" r="8.5"/><text class="t-numu" x="373" y="315">20</text>
+      <text class="t-un" x="396" y="316">GND</text>
+      <!-- 行 11 -->
+      <circle class="pu" cx="339" cy="338" r="8.5"/><text class="t-numu" x="339" y="341">21</text>
+      <text class="t-un" x="316" y="342" text-anchor="end">GPIO9 · SPI0 MISO（避用）</text>
+      <circle class="pu" cx="373" cy="338" r="8.5"/><text class="t-numu" x="373" y="341">22</text>
+      <text class="t-un" x="396" y="342">GPIO25</text>
+      <!-- 行 12 -->
+      <circle class="pu" cx="339" cy="364" r="8.5"/><text class="t-numu" x="339" y="367">23</text>
+      <text class="t-un" x="316" y="368" text-anchor="end">GPIO11 · SPI0 SCLK（避用）</text>
+      <circle class="pu" cx="373" cy="364" r="8.5"/><text class="t-numu" x="373" y="367">24</text>
+      <text class="t-un" x="396" y="368">GPIO8 · SPI0 CE0（避用）</text>
+      <!-- 行 13 -->
+      <circle class="pu" cx="339" cy="390" r="8.5"/><text class="t-numu" x="339" y="393">25</text>
+      <text class="t-un" x="316" y="394" text-anchor="end">GND</text>
+      <circle class="pu" cx="373" cy="390" r="8.5"/><text class="t-numu" x="373" y="393">26</text>
+      <text class="t-un" x="396" y="394">GPIO7 · SPI0 CE1（避用）</text>
+      <!-- 行 14 -->
+      <circle class="pu" cx="339" cy="416" r="8.5"/><text class="t-numu" x="339" y="419">27</text>
+      <text class="t-un" x="316" y="420" text-anchor="end">GPIO0 · ID_SD（禁用）</text>
+      <circle class="pu" cx="373" cy="416" r="8.5"/><text class="t-numu" x="373" y="419">28</text>
+      <text class="t-un" x="396" y="420">GPIO1 · ID_SC（禁用）</text>
+      <!-- 行 15：Pin29 GPIO5 阀L1 -->
+      <line class="tks" x1="320" y1="442" x2="331" y2="442"/>
+      <circle class="ps" cx="339" cy="442" r="8.5"/>
+      <text class="t-num" x="339" y="445">29</text>
+      <text class="t-lb" x="316" y="446" text-anchor="end">GPIO5 → 阀 L1（IN1）· <tspan fill="var(--accent)" font-weight="700">P1 已实装</tspan></text>
+      <circle class="pu" cx="373" cy="442" r="8.5"/><text class="t-numu" x="373" y="445">30</text>
+      <text class="t-un" x="396" y="446">GND</text>
+      <!-- 行 16：Pin31 GPIO6 阀L2 -->
+      <line class="tks" x1="320" y1="468" x2="331" y2="468"/>
+      <circle class="ps" cx="339" cy="468" r="8.5"/>
+      <text class="t-num" x="339" y="471">31</text>
+      <text class="t-lb" x="316" y="472" text-anchor="end">GPIO6 → 阀 L2（IN2）· <tspan fill="var(--warn)" font-weight="700">建议</tspan></text>
+      <circle class="pu" cx="373" cy="468" r="8.5"/><text class="t-numu" x="373" y="471">32</text>
+      <text class="t-un" x="396" y="472">GPIO12</text>
+      <!-- 行 17：Pin33 GPIO13 阀L3 | Pin34 GND -->
+      <line class="tks" x1="320" y1="494" x2="331" y2="494"/>
+      <circle class="ps" cx="339" cy="494" r="8.5"/>
+      <text class="t-num" x="339" y="497">33</text>
+      <text class="t-lb" x="316" y="498" text-anchor="end">GPIO13 → 阀 L3（IN3）· <tspan fill="var(--warn)" font-weight="700">建议</tspan></text>
+      <line class="tkg" x1="381" y1="494" x2="392" y2="494"/>
+      <circle class="pg" cx="373" cy="494" r="8.5"/>
+      <text class="t-num" x="373" y="497">34</text>
+      <text class="t-lb" x="396" y="498">GND → MOSFET 板信号地（单点共地）</text>
+      <!-- 行 18：Pin35 GPIO19 阀R2 | Pin36 GPIO16 阀R1 -->
+      <line class="tks" x1="320" y1="520" x2="331" y2="520"/>
+      <circle class="ps" cx="339" cy="520" r="8.5"/>
+      <text class="t-num" x="339" y="523">35</text>
+      <text class="t-lb" x="316" y="524" text-anchor="end">GPIO19 → 阀 R2（IN5）· <tspan fill="var(--warn)" font-weight="700">建议</tspan></text>
+      <line class="tks" x1="381" y1="520" x2="392" y2="520"/>
+      <circle class="ps" cx="373" cy="520" r="8.5"/>
+      <text class="t-num" x="373" y="523">36</text>
+      <text class="t-lb" x="396" y="524">GPIO16 → 阀 R1（IN4）· <tspan fill="var(--warn)" font-weight="700">建议</tspan></text>
+      <!-- 行 19：Pin37 GPIO26 泵B | Pin38 GPIO20 泵A -->
+      <line class="tks" x1="320" y1="546" x2="331" y2="546"/>
+      <circle class="ps" cx="339" cy="546" r="8.5"/>
+      <text class="t-num" x="339" y="549">37</text>
+      <text class="t-lb" x="316" y="550" text-anchor="end">GPIO26 → 泵 B（IN8）· <tspan fill="var(--warn)" font-weight="700">建议</tspan></text>
+      <line class="tks" x1="381" y1="546" x2="392" y2="546"/>
+      <circle class="ps" cx="373" cy="546" r="8.5"/>
+      <text class="t-num" x="373" y="549">38</text>
+      <text class="t-lb" x="396" y="550">GPIO20 → 泵 A（IN7）· <tspan fill="var(--accent)" font-weight="700">P1 已实装</tspan></text>
+      <!-- 行 20：Pin39 GND | Pin40 GPIO21 阀R3 -->
+      <line class="tkg" x1="320" y1="572" x2="331" y2="572"/>
+      <circle class="pg" cx="339" cy="572" r="8.5"/>
+      <text class="t-num" x="339" y="575">39</text>
+      <text class="t-lb" x="316" y="576" text-anchor="end">GND → MOSFET 板信号地</text>
+      <line class="tks" x1="381" y1="572" x2="392" y2="572"/>
+      <circle class="ps" cx="373" cy="572" r="8.5"/>
+      <text class="t-num" x="373" y="575">40</text>
+      <text class="t-lb" x="396" y="576">GPIO21 → 阀 R3（IN6）· <tspan fill="var(--warn)" font-weight="700">建议</tspan></text>
+
+      <!-- 图例 -->
+      <circle class="pp" cx="30" cy="612" r="7"/><text class="t-bm" x="42" y="616">电源（3.3V / 5V）</text>
+      <circle class="ps" cx="160" cy="612" r="7"/><text class="t-bm" x="172" y="616">信号（I2C / MOSFET 控制）</text>
+      <circle class="pg" cx="340" cy="612" r="7"/><text class="t-bm" x="352" y="616">地</text>
+      <circle class="pu" cx="400" cy="612" r="7"/><text class="t-bm" x="412" y="616">未用（淡色）</text>
+      <text class="t-bm" x="510" y="616"><tspan fill="var(--accent)" font-weight="700">P1 已实装</tspan> ｜ <tspan fill="var(--warn)" font-weight="700">建议，P4 定案</tspan></text>
+      <text class="t-foot" x="16" y="644">泵/阀真实脚位取自 software/hexapod/adhesion.py（Pi5VacuumIO：VALVE_PINS=[5]、PUMP_PIN=20，lgpio gpiochip4）；其余 6 路为建议分配，避开 I2C1(2/3)、UART(14/15)、SPI0(7~11)、ID-EEPROM(0/1)、PWM 音频(12/18)。</text>
+      <text class="t-foot" x="16" y="660">⚠ 阀控电平按 P1 实测 VALVE_ON_LEVEL=0（GPIO 低电平 = 吸盘接真空）——P4 每路装好后逐路实测再写映射，别照抄。8 路控制脚集中在 Pin 29~40 一端，便于压接成一束排线。</text>
+    </svg>
+  </figure>
+
+  <h2>图 2 · USB 与 Pi 供电</h2>
+  <figure>
+    <svg viewBox="0 0 780 300" role="img" aria-label="USB 连接 Servo2040 与 Pi 供电两条路线：USB-C 或 header 直上，两案并列待定">
+      <defs>
+        <marker id="ap" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
+        </marker>
+        <marker id="as" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+      <rect class="sv-boxa" x="40" y="56" width="180" height="88" rx="6"/>
+      <text class="t-bx" x="130" y="84">树莓派 Pi 5</text>
+      <text class="t-bs" x="130" y="102">USB-A → Servo2040</text>
+      <text class="t-bs" x="130" y="118">USB-C / header 受电（见下）</text>
+      <line class="w-sig" x1="220" y1="88" x2="326" y2="88" marker-end="url(#as)"/>
+      <text class="t-acc" x="273" y="80" text-anchor="middle">USB 线</text>
+      <text class="t-bm" x="273" y="104" text-anchor="middle">/dev/ttyACM0</text>
+      <rect class="sv-box" x="330" y="56" width="190" height="88" rx="6"/>
+      <text class="t-bx" x="425" y="80">Servo2040 · chica 固件</text>
+      <text class="t-bs" x="425" y="98">舵机轨 7.4V = 电池 + 继电器</text>
+      <text class="t-bs" x="425" y="114">（RELAY 指令驱动其 GPIO26）</text>
+      <text class="t-bm" x="540" y="70">与 Pi 只共 USB 地——舵机电源</text>
+      <text class="t-bm" x="540" y="86">与 Pi 无任何电气共享</text>
+      <text class="t-bm" x="540" y="110">足底开关 ×6 → Servo2040 传感器口</text>
+      <text class="t-bm" x="540" y="126">TS1~6（索引 18~23），不占 Pi 引脚</text>
+      <text class="t-bm" x="540" y="142">（路线 B 暂不装）</text>
+
+      <rect class="sv-box" x="40" y="196" width="180" height="64" rx="6"/>
+      <text class="t-bx" x="130" y="220">2S 电池 → 5V/5A DC-DC</text>
+      <text class="t-bs" x="130" y="240">（XT60 总开关之后）</text>
+      <line class="w-pwr" x1="85" y1="196" x2="85" y2="148" marker-end="url(#ap)"/>
+      <text class="t-bm" x="52" y="170">a) USB-C</text>
+      <line class="w-pwr" x1="175" y1="196" x2="175" y2="148" marker-end="url(#ap)"/>
+      <text class="t-bm" x="183" y="170">b) Pin 2/4 + GND(6)</text>
+      <text class="t-b" x="340" y="190">a) USB-C 口：接线最简；Pi 5 对非 PD 电源默认限流，</text>
+      <text class="t-b" x="356" y="206">上电必查 <tspan font-weight="700">vcgencmd get_throttled = 0x0</tspan></text>
+      <text class="t-b" x="340" y="230">b) 5V 直上 header Pin 2/4 + GND(Pin 6)：绕过 PD 协商；</text>
+      <text class="t-b" x="356" y="246">降压模块必须真 5A、线短且粗（压降 = 重启风险）</text>
+      <text class="t-warn" x="340" y="274">两案并列，P4 装配时实测定案（代码与 BOM 均未锁定接入口）</text>
+    </svg>
+  </figure>
+
+  <div class="note">
+    <b>连线速查表</b>（照表接线；IN1~IN8 = 8 路 MOSFET 板控制脚位）
+    <table class="vtab">
+      <tr><th>物理脚</th><th>BCM</th><th>网络名</th><th>去向</th><th>状态</th><th>建议线色</th></tr>
+      <tr><td>1</td><td>—</td><td>3.3V</td><td>分压板 J1（ADS1115 ×2 供电）</td><td>固定</td><td>橙</td></tr>
+      <tr><td>2</td><td>—</td><td>5V</td><td>分压板 J1（XGZP6847A ×7）</td><td>固定</td><td>红</td></tr>
+      <tr><td>3</td><td>GPIO2</td><td>SDA1</td><td>ADS1115 ×2（0x48/0x49）</td><td>固定</td><td>蓝</td></tr>
+      <tr><td>5</td><td>GPIO3</td><td>SCL1</td><td>ADS1115 ×2（0x48/0x49）</td><td>固定</td><td>黄</td></tr>
+      <tr><td>9</td><td>—</td><td>GND</td><td>分压板 J1</td><td>固定</td><td>黑</td></tr>
+      <tr><td>4 + 6</td><td>—</td><td>5V + GND</td><td>供电路线 b：5V/5A 直上（配对粗线）</td><td><span class="st-tbd">待定案</span></td><td>红/黑（18AWG+）</td></tr>
+      <tr><td>29</td><td>GPIO5</td><td>—</td><td>MOSFET IN1 · 阀 L1</td><td><span class="st-ok">P1 已实装</span></td><td>绿</td></tr>
+      <tr><td>31</td><td>GPIO6</td><td>—</td><td>MOSFET IN2 · 阀 L2</td><td><span class="st-tbd">建议</span></td><td>绿</td></tr>
+      <tr><td>33</td><td>GPIO13</td><td>—</td><td>MOSFET IN3 · 阀 L3</td><td><span class="st-tbd">建议</span></td><td>绿</td></tr>
+      <tr><td>36</td><td>GPIO16</td><td>—</td><td>MOSFET IN4 · 阀 R1</td><td><span class="st-tbd">建议</span></td><td>白</td></tr>
+      <tr><td>35</td><td>GPIO19</td><td>—</td><td>MOSFET IN5 · 阀 R2</td><td><span class="st-tbd">建议</span></td><td>白</td></tr>
+      <tr><td>40</td><td>GPIO21</td><td>—</td><td>MOSFET IN6 · 阀 R3</td><td><span class="st-tbd">建议</span></td><td>白</td></tr>
+      <tr><td>38</td><td>GPIO20</td><td>—</td><td>MOSFET IN7 · 泵 A</td><td><span class="st-ok">P1 已实装</span></td><td>紫</td></tr>
+      <tr><td>37</td><td>GPIO26</td><td>—</td><td>MOSFET IN8 · 泵 B</td><td><span class="st-tbd">建议</span></td><td>紫</td></tr>
+      <tr><td>34</td><td>—</td><td>GND</td><td>MOSFET 板信号地（单点共地）</td><td>固定</td><td>黑</td></tr>
+      <tr><td>39</td><td>—</td><td>GND</td><td>MOSFET 板信号地（同点并线）</td><td>固定</td><td>黑</td></tr>
+    </table>
+    USB：Pi USB-A → Servo2040（<code>/dev/ttyACM0</code>，chica 固件），舵机供电不经 Pi。
+  </div>
+
+  <div class="note">
+    <b>规则</b>
+    <ul>
+      <li><b>单点共地</b>：12V / 舵机功率地与 Pi 信号地只在 MOSFET 板汇接一次，别处不再相连——成环 = 地环流搅乱 ADS 读数。</li>
+      <li><b>上电顺序</b>：先只给 Pi 上电 → <code>vcgencmd get_throttled</code> 必须 0x0 → 再合舵机继电器与 12V 轨；改线后重查。</li>
+      <li><b class="d">P4 禁面包板 / 杜邦</b>：header 出线用带壳压接排线或焊接 + 热缩；MOSFET 控制线与 12V 功率线分开走束。</li>
+      <li><b>阀控电平</b>：<code>adhesion.py</code> 实测 <code>VALVE_ON_LEVEL=0</code>（低电平 = 吸盘接真空）——P4 六路阀逐路实测后再写映射。</li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>

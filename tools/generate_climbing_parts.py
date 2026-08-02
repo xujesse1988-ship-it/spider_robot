@@ -16,10 +16,13 @@
        打印方向：立打（腔体朝下、tibia 朝上）——方轴轴线距 tibia 平背面
        仅 4.5mm 而腔体半径 17mm，平躺必然穿透打印床，几何上只能立打；
        建议 PETG、5~6 壁、45% 填充，开 brim；tibia 细节处可开支撑保险。
-  2. suction-foot-door.stl  —— 上述腔体的门盖（含前半负模 + 4 定位销 +
+  2. right-tibia-suction.stl —— 上述左腿定版沿 XZ 平面镜像的右腿版；
+       镜像方式与 MakeYourPet 官方 left/right-tibia 完全一致，配同一款
+       suction-foot-door.stl。
+  3. suction-foot-door.stl  —— 上述腔体的门盖（含前半负模 + 4 定位销 +
        2 个 M5 沉头过孔），外平面朝下平躺打印，无支撑。
-  3. component_plate.stl    —— M3 网格安装板，固定真空泵/电磁阀/传感器。
-  4. coxa-pedestal.stl      —— P2 台架 coxa 面板式支座（html/coxa-pedestal-mount.html）：
+  4. component_plate.stl    —— M3 网格安装板，固定真空泵/电磁阀/传感器。
+  5. coxa-pedestal.stl      —— P2 台架 coxa 面板式支座（html/coxa-pedestal-mount.html）：
        面板开 40.7×20.6 孔，舵机从腔内插入、法兰 4×M3 自攻锁面板背面，
        轴穿面板⊥玻璃（面板前面=壳安装面，H=90 由此量）。立柱腔深 38
        = coxa 壳体 27 + 走线 11（2026-07-19 实测 X1=-10：femur 轴几乎贴
@@ -28,11 +31,11 @@
        法兰孔边距薄由背面凸台补强）。两侧底法兰 4×M4 长槽锁滑车板
        （径向可调 ±5.5），45° 三角肋自撑。打印：面板朝下平躺，无支撑
        （法兰下缘 14mm 短桥）；PETG、4 壁、40% 填充。
-  5. carriage-pedestal.stl  —— 滑车一体件：上件与滑车板合并，直接锁
+  6. carriage-pedestal.stl  —— 滑车一体件：上件与滑车板合并，直接锁
        三节滑轨内节（内节即滑车；images/huagui.jpg 孔簇 = M5 圆孔基准
        + 竖/横两 M4 槽吸公差）。螺丝从滑轨侧穿入，拧进板前面（腔底）
        的六角螺母袋；上下带配重绑扎 M5 网格与 Ø8.5 锁销耳 ×2。
-       塔体几何与 4 完全一致。打印：板背朝下平躺，腔顶（面板背面）
+       塔体几何与 5 完全一致。打印：板背朝下平躺，腔顶（面板背面）
        需在腔内开支撑。⚠ car_cc1/car_cc2 孔心距是按报的孔间空距
        （5/9mm）折算的 9.5/16——打印前必须卡尺实测孔心距复核。
 
@@ -302,6 +305,15 @@ def tibia_suction(p):
         [solid, front] + cuts + holes + horn + pilots, engine=E)
 
 
+def right_tibia_suction(p):
+    """右腿吸盘小腿：沿 XZ 平面镜像定版左腿（与官方左右 tibia 一致）。"""
+    right = tibia_suction(p)
+    mirror_y = np.eye(4)
+    mirror_y[1, 1] = -1.0
+    right.apply_transform(mirror_y)
+    return right
+
+
 def suction_door(p):
     """门盖：前半负模 + 底缘导入 + 4 定位销 + 2 个 M5 沉头过孔；
     外平面(y=-r_out)朝下平躺打印。
@@ -483,6 +495,7 @@ def main():
     exp = dict(PARAMS, pocket_h=7.2)   # 试验版：真空态触地环
     parts = {
         "left-tibia-suction": (tibia_suction, PARAMS),
+        "right-tibia-suction": (right_tibia_suction, PARAMS),
         "suction-foot-door": (suction_door, PARAMS),
         "left-tibia-suction-exp": (tibia_suction, exp),
         "suction-foot-door-exp": (suction_door, exp),

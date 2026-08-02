@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>气路电气组件连接图</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+      --pwr: #E0A64F; --air: #4BC2A0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+    --pwr: #E0A64F; --air: #4BC2A0;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 17px; margin: 4px 0 -12px; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 10px 6px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  .note ul, .note ol { margin: 8px 0 2px; padding-left: 20px; }
+  .note li { margin: 3px 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+  table.vtab { border-collapse: collapse; margin: 10px 0 4px; }
+  .vtab th, .vtab td { border: 1px solid var(--line); padding: 4px 10px; font-size: 12.5px; text-align: left; }
+  .vtab th { background: var(--accent-soft); font-weight: 700; }
+  .st-ok { color: var(--accent); font-weight: 700; }
+  .st-tbd { color: var(--warn); font-weight: 700; }
+
+  /* 图元素 */
+  .sv-box   { fill: var(--part); fill-opacity: .35; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-boxa  { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .sv-boxoff{ fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 5 4; }
+  .sv-warnbox { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.2; }
+  .brd  { fill: var(--part); fill-opacity: .18; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .blk  { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .mos  { fill: var(--part); fill-opacity: .85; stroke: var(--part-stroke); stroke-width: 1.2; }
+  .rb   { fill: var(--part); fill-opacity: .95; stroke: var(--part-stroke); stroke-width: 1.2; }
+  .m3   { fill: var(--bg); stroke: var(--part-stroke); stroke-width: 1.6; }
+  .scr  { fill: none; stroke: var(--part-stroke); stroke-width: 1.4; }
+  .w-pwr  { stroke: var(--pwr); stroke-width: 3; fill: none; }
+  .w-pwr2 { stroke: var(--pwr); stroke-width: 2; fill: none; }
+  .w-sig  { stroke: var(--accent); stroke-width: 1.8; stroke-dasharray: 7 4; fill: none; }
+  .w-gnd  { stroke: var(--muted); stroke-width: 3; fill: none; }
+  .w-gnd2 { stroke: var(--muted); stroke-width: 1.8; fill: none; }
+  .w-off  { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 4 4; fill: none; opacity: .85; }
+  .sch  { stroke: var(--ink); stroke-width: 1.6; fill: none; opacity: .8; }
+  .nd   { fill: var(--pwr); }
+  .ndg  { fill: var(--muted); }
+  .nds  { fill: var(--accent); }
+  .lbl  { paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-bx  { font-size: 12.5px; font-weight: 700; text-anchor: middle; }
+  .t-bxm { font-size: 12.5px; font-weight: 700; text-anchor: middle; fill: var(--muted); }
+  .t-bs  { font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+  .t-bsw { font-size: 10.5px; fill: var(--warn); text-anchor: middle; }
+  .t-bsa { font-size: 10.5px; fill: var(--accent); text-anchor: middle; }
+  .t-pin { font-size: 8.5px; fill: var(--muted); }
+  .t-pinw{ font-size: 8.5px; fill: var(--warn); }
+  .t-seg { font-size: 11.5px; fill: var(--muted); }
+  .t-dim { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-warn{ font-size: 12px; font-weight: 700; fill: var(--warn); }
+  .t-acc { font-size: 11.5px; fill: var(--accent); }
+  .t-pw  { font-size: 11.5px; fill: var(--pwr); }
+  .t-b   { font-size: 12px; fill: var(--ink); }
+  .t-bm  { font-size: 11.5px; fill: var(--muted); }
+  .t-foot{ font-size: 10.5px; fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Spider · P4 整机 · 气路子系统电气接线（配整机连接图 / Pi 引脚图 / 分压板图纸）</p>
+    <h1>气路部分电气组件连接图</h1>
+    <p class="sub">只画<b>为气路服务的那套电</b>：升压 → MOSFET → 6 阀 + 2 泵的 12V 功率链、Pi 的 8 路控制链、
+    7 路压力传感的 5V 采样链。舵机 / Servo2040 / 继电器不属于气路，见
+    <code>html/p4-system-diagram.html</code>。本图落到<b>端子级</b>——哪根线拧进哪个螺丝端子，端子名逐字取自
+    <code>images/YYNMOS-8_back.jpg</code> 的背面丝印。两处与既有文档的差异是有意的设计决定，
+    见图 1 的<b>双轨供电</b>与图 3 的<b>泵「+」不经板 DC+、OUT7+/OUT8+ 空置</b>。</p>
+  </header>
+
+  <h2>图 1 · 气路电气总接线图（端子级）</h2>
+  <figure>
+    <svg viewBox="0 0 780 682" role="img" aria-label="气路电气总接线图：2S 电池经总开关保险分两路 XL6009 升压，阀轨进 MOSFET 板 DC+ 并供 6 只电磁阀，泵轨直供 2 只真空泵，Pi 经 10 芯排线控制 IN1+ 到 IN8+">
+      <defs>
+        <marker id="mp" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
+        </marker>
+        <marker id="ms" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <!-- Pi 5 与控制排线 -->
+      <rect class="sv-boxa" x="16" y="36" width="150" height="66" rx="6"/>
+      <text class="t-bx" x="91" y="60">树莓派 Pi 5</text>
+      <text class="t-bs" x="91" y="78">GPIO ×8（3.3V 逻辑）</text>
+      <text class="t-bs" x="91" y="95">脚位见 p4-pi-wiring.html</text>
+      <polyline class="w-sig" points="166,69 290,69 290,230 392,230" marker-end="url(#ms)"/>
+      <text class="t-acc" x="228" y="62" text-anchor="middle">10 芯控制排线</text>
+      <text class="t-bm" x="298" y="118">GPIO ×8 → IN1+ ~ IN8+</text>
+      <text class="t-bm" x="298" y="135">IN1− ~ IN8− 并联 → GND ×2</text>
+
+      <!-- 电池 · 总开关 · 保险 -->
+      <rect class="sv-boxa" x="16" y="312" width="118" height="64" rx="6"/>
+      <text class="t-bx" x="75" y="336">2S 7.4V 锂电</text>
+      <text class="t-bs" x="75" y="354">XT60 · 5~6.2Ah</text>
+      <text class="t-bs" x="75" y="370">腹面 battery-bar</text>
+      <line class="w-pwr" x1="134" y1="344" x2="150" y2="344"/>
+      <circle class="nd" cx="154" cy="344" r="3"/>
+      <line class="w-pwr2" x1="156" y1="343" x2="175" y2="332"/>
+      <circle class="nd" cx="179" cy="344" r="3"/>
+      <line class="w-pwr" x1="182" y1="344" x2="196" y2="344"/>
+      <rect class="sv-box" x="196" y="336" width="32" height="16" rx="3"/>
+      <line class="w-pwr" x1="228" y1="344" x2="250" y2="344"/>
+      <text class="t-bm" x="158" y="370" text-anchor="middle">总开关</text>
+      <text class="t-bm" x="224" y="370" text-anchor="middle">5A 保险（建议）</text>
+
+      <!-- 7.4V 母线 -->
+      <line class="w-pwr" x1="250" y1="202" x2="250" y2="344"/>
+      <circle class="nd" cx="250" cy="202" r="3.5"/>
+      <circle class="nd" cx="250" cy="286" r="3.5"/>
+      <circle class="nd" cx="250" cy="344" r="3.5"/>
+      <text class="t-dim" x="256" y="322">7.4V</text>
+
+      <!-- XL6009 ×2 双轨 -->
+      <line class="w-pwr" x1="250" y1="202" x2="264" y2="202" marker-end="url(#mp)"/>
+      <rect class="sv-box" x="268" y="170" width="110" height="64" rx="6"/>
+      <text class="t-bx" x="323" y="192">XL6009 #2</text>
+      <text class="t-bs" x="323" y="209">7.4→12V · 阀轨</text>
+      <text class="t-bs" x="323" y="226">空载调 12.0V</text>
+      <line class="w-pwr" x1="250" y1="286" x2="264" y2="286" marker-end="url(#mp)"/>
+      <rect class="sv-box" x="268" y="254" width="110" height="64" rx="6"/>
+      <text class="t-bx" x="323" y="276">XL6009 #1</text>
+      <text class="t-bs" x="323" y="293">7.4→12V · 泵轨</text>
+      <text class="t-bs" x="323" y="310">独立轨隔泵浪涌</text>
+
+      <!-- 阀轨 12V-V：进板 DC+，阀「+」由板内 OUTn+ 母线供给 -->
+      <polyline class="w-pwr" points="378,202 386,202 386,168 392,168" marker-end="url(#mp)"/>
+      <text class="t-pw" x="590" y="124" text-anchor="middle">阀「+」由板内 DC+ → OUTn+ 母线供给，不另拉线</text>
+      <text class="t-dim" x="382" y="160" text-anchor="end">12V-V → DC+</text>
+
+      <!-- 泵轨 12V-P：下行绕过板，直供 2 泵 -->
+      <polyline class="w-pwr" points="378,286 386,286 386,540 700,540 700,494" marker-end="url(#mp)"/>
+      <text class="t-pw" x="520" y="558" text-anchor="middle">12V-P 泵轨 → 2 只泵「+」（不经板 DC+，见图 3）</text>
+
+      <!-- MOSFET 板 -->
+      <rect class="sv-box" x="396" y="150" width="170" height="330" rx="6"/>
+      <text class="t-bx" x="481" y="178">YYNMOS-8 · 8 路 MOSFET</text>
+      <text class="t-bs" x="481" y="196">12V 低边开关 · 光耦隔离</text>
+      <text class="t-bs" x="481" y="213">高电平触发（3~24V）</text>
+      <text class="t-bs" x="481" y="230">93×54mm · 4×Ø3.0 孔</text>
+      <text class="t-bs" x="481" y="247">端子丝印见图 2</text>
+      <line x1="410" y1="264" x2="552" y2="264" stroke="var(--part-stroke)" stroke-width="1" opacity=".6"/>
+      <text class="t-bs" x="481" y="284">通道 1~6 → 阀 L1 L2 L3 R1 R2 R3</text>
+      <text class="t-bs" x="481" y="301">通道 7~8 → 泵 A / 泵 B</text>
+      <text class="t-bs" x="481" y="322">DC+ 内部并到 8 个 OUTn+</text>
+      <text class="t-bsw" x="481" y="346">上电到程序接管之前</text>
+      <text class="t-bsw" x="481" y="363">IN+ 必须为低 = 阀不通电</text>
+      <text class="t-bsw" x="481" y="380">= 吸盘保压（被动安全）</text>
+      <text class="t-bsa" x="481" y="404">GPIO5/6 复位默认上拉</text>
+      <text class="t-bsa" x="481" y="421">→ 每路 IN± 之间加 10k</text>
+      <text class="t-bs" x="481" y="446">输入为光耦隔离对，</text>
+      <text class="t-bs" x="481" y="463">IN− 不等于 DC−（见图 4）</text>
+
+      <!-- 输出到负载 -->
+      <line class="w-pwr" x1="566" y1="190" x2="612" y2="190" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="212" x2="612" y2="212" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="234" x2="612" y2="234" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="256" x2="612" y2="256" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="278" x2="612" y2="278" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="300" x2="612" y2="300" marker-end="url(#mp)"/>
+      <text class="t-bm" x="589" y="164" text-anchor="middle">OUT1± ~ OUT6±</text>
+      <line class="w-pwr" x1="566" y1="410" x2="612" y2="410" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="440" x2="612" y2="440" marker-end="url(#mp)"/>
+      <text class="t-bm" x="589" y="400" text-anchor="middle">OUT7− / OUT8−</text>
+
+      <!-- 阀组 -->
+      <rect class="sv-box" x="616" y="166" width="152" height="144" rx="6"/>
+      <text class="t-bx" x="692" y="190">电磁阀 ×6</text>
+      <text class="t-bs" x="692" y="208">0520B 二位三通 12V</text>
+      <text class="t-bs" x="692" y="225">两线跨接 OUTn+ / OUTn−</text>
+      <text class="t-bsw" x="692" y="246">断电 = 吸盘接真空</text>
+      <text class="t-bsw" x="692" y="263">通电 = 吸盘放大气</text>
+      <text class="t-bs" x="692" y="285">线圈无极性 · 并 1N4007</text>
+      <text class="t-bs" x="692" y="302">L1 L2 L3 R1 R2 R3</text>
+
+      <!-- 泵组 -->
+      <rect class="sv-box" x="616" y="380" width="152" height="110" rx="6"/>
+      <text class="t-bx" x="692" y="404">真空泵 ×2</text>
+      <text class="t-bs" x="692" y="422">555 双头隔膜泵 12V</text>
+      <text class="t-bs" x="692" y="439">「+」吃泵轨，「−」进 OUTn−</text>
+      <text class="t-bsw" x="692" y="456">OUT7+ / OUT8+ 空置不接</text>
+      <text class="t-bs" x="692" y="473">并 SS34 + 100nF 吸收浪涌</text>
+
+      <!-- 图例 -->
+      <line class="w-pwr" x1="24" y1="596" x2="64" y2="596" marker-end="url(#mp)"/>
+      <text class="t-bm" x="72" y="600">功率线（实线，标电压/轨名）</text>
+      <line class="w-sig" x1="300" y1="596" x2="340" y2="596" marker-end="url(#ms)"/>
+      <text class="t-bm" x="348" y="600">控制 / 信号线（虚线）</text>
+      <text class="t-foot" x="16" y="628">端子名取自背面丝印（images/YYNMOS-8_back.jpg），物理位置见图 2；地线单独见图 4，此处从略。</text>
+      <text class="t-foot" x="16" y="646">双轨的理由：泵启停浪涌会把共轨拉跌，跌压期间阀线圈保持力下降 = 误动作；</text>
+      <text class="t-foot" x="16" y="664">且单只 XL6009（3A 档）扛不住双泵浪涌 + 阀。分轨后每轨都在舒适区，见下方电流预算表。</text>
+    </svg>
+  </figure>
+  <h2>图 2 · YYNMOS-8 端子分配与装舱朝向（俯视 = 元件面）</h2>
+  <figure>
+    <svg viewBox="0 0 780 548" role="img" aria-label="YYNMOS-8 八路 MOSFET 板俯视端子分配图：上排 16 位信号端子分 4 加 6 加 6 三块，下排 18 位功率输出端子分 6 加 6 加 6 三块，四个安装孔坐标标注">
+      <text class="t-bx" x="389" y="26">YYNMOS-8 俯视图（元件面）· 93 × 54mm · 4 × Ø3.0 安装孔</text>
+      <text class="t-bm" x="389" y="48" text-anchor="middle">端子名取自背面丝印实物照片；信号侧 16 位朝机头、正对 XL6009，功率侧 18 位朝机尾、正对阀轨</text>
+
+      <!-- 板体 -->
+      <rect class="brd" x="110" y="90" width="558" height="324" rx="6"/>
+
+      <!-- 上排端子块（信号侧 16 位） -->
+      <rect class="blk" x="122" y="90" width="122" height="48" rx="3"/>
+      <rect class="blk" x="254" y="90" width="183" height="48" rx="3"/>
+      <rect class="blk" x="446" y="90" width="183" height="48" rx="3"/>
+      <circle class="scr" cx="137" cy="114" r="9"/><circle class="scr" cx="168" cy="114" r="9"/>
+      <circle class="scr" cx="198" cy="114" r="9"/><circle class="scr" cx="229" cy="114" r="9"/>
+      <circle class="scr" cx="269" cy="114" r="9"/><circle class="scr" cx="300" cy="114" r="9"/>
+      <circle class="scr" cx="330" cy="114" r="9"/><circle class="scr" cx="361" cy="114" r="9"/>
+      <circle class="scr" cx="391" cy="114" r="9"/><circle class="scr" cx="422" cy="114" r="9"/>
+      <circle class="scr" cx="461" cy="114" r="9"/><circle class="scr" cx="492" cy="114" r="9"/>
+      <circle class="scr" cx="522" cy="114" r="9"/><circle class="scr" cx="553" cy="114" r="9"/>
+      <circle class="scr" cx="583" cy="114" r="9"/><circle class="scr" cx="614" cy="114" r="9"/>
+      <text class="t-pin lbl" x="137" y="205" transform="rotate(-90 137 205)">IN8−</text>
+      <text class="t-pin" x="168" y="205" transform="rotate(-90 168 205)">IN8+ 泵B</text>
+      <text class="t-pin" x="198" y="205" transform="rotate(-90 198 205)">IN7−</text>
+      <text class="t-pin" x="229" y="205" transform="rotate(-90 229 205)">IN7+ 泵A</text>
+      <text class="t-pin" x="269" y="205" transform="rotate(-90 269 205)">IN6−</text>
+      <text class="t-pin" x="300" y="205" transform="rotate(-90 300 205)">IN6+ 阀R3</text>
+      <text class="t-pin" x="330" y="205" transform="rotate(-90 330 205)">IN5−</text>
+      <text class="t-pin" x="361" y="205" transform="rotate(-90 361 205)">IN5+ 阀R2</text>
+      <text class="t-pin" x="391" y="205" transform="rotate(-90 391 205)">IN4−</text>
+      <text class="t-pin" x="422" y="205" transform="rotate(-90 422 205)">IN4+ 阀R1</text>
+      <text class="t-pin" x="461" y="205" transform="rotate(-90 461 205)">IN3−</text>
+      <text class="t-pin" x="492" y="205" transform="rotate(-90 492 205)">IN3+ 阀L3</text>
+      <text class="t-pin" x="522" y="205" transform="rotate(-90 522 205)">IN2−</text>
+      <text class="t-pin" x="553" y="205" transform="rotate(-90 553 205)">IN2+ 阀L2</text>
+      <text class="t-pin" x="583" y="205" transform="rotate(-90 583 205)">IN1−</text>
+      <text class="t-pin" x="614" y="205" transform="rotate(-90 614 205)">IN1+ 阀L1</text>
+
+      <!-- 板上元件：光耦 ×8、LED ×8、MOS ×8 -->
+      <rect class="mos" x="149" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="213" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="278" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="342" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="406" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="471" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="535" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="599" y="236" width="22" height="32" rx="2"/>
+      <text class="t-pin" x="676" y="256">光耦 ×8</text>
+      <circle class="nds" cx="160" cy="288" r="4"/><circle class="nds" cx="224" cy="288" r="4"/>
+      <circle class="nds" cx="289" cy="288" r="4"/><circle class="nds" cx="353" cy="288" r="4"/>
+      <circle class="nds" cx="417" cy="288" r="4"/><circle class="nds" cx="482" cy="288" r="4"/>
+      <circle class="nds" cx="546" cy="288" r="4"/><circle class="nds" cx="610" cy="288" r="4"/>
+      <text class="t-pin" x="676" y="292">状态 LED ×8</text>
+      <rect class="mos" x="144" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="208" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="273" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="337" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="401" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="466" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="530" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="594" y="310" width="32" height="46" rx="2"/>
+      <text class="t-pin" x="676" y="336">MOS ×8（TO-252）</text>
+      <text class="t-pin" x="676" y="350">散热片 = D 极</text>
+      <text class="t-pin" x="676" y="364">左 = 通道 8</text>
+
+      <!-- 下排端子块（功率 + 输出侧 18 位） -->
+      <rect class="blk" x="113" y="366" width="183" height="48" rx="3"/>
+      <rect class="blk" x="298" y="366" width="183" height="48" rx="3"/>
+      <rect class="blk" x="483" y="366" width="183" height="48" rx="3"/>
+      <circle class="scr" cx="128" cy="390" r="9"/><circle class="scr" cx="159" cy="390" r="9"/>
+      <circle class="scr" cx="189" cy="390" r="9"/><circle class="scr" cx="220" cy="390" r="9"/>
+      <circle class="scr" cx="250" cy="390" r="9"/><circle class="scr" cx="281" cy="390" r="9"/>
+      <circle class="scr" cx="313" cy="390" r="9"/><circle class="scr" cx="344" cy="390" r="9"/>
+      <circle class="scr" cx="374" cy="390" r="9"/><circle class="scr" cx="404" cy="390" r="9"/>
+      <circle class="scr" cx="435" cy="390" r="9"/><circle class="scr" cx="466" cy="390" r="9"/>
+      <circle class="scr" cx="498" cy="390" r="9"/><circle class="scr" cx="528" cy="390" r="9"/>
+      <circle class="scr" cx="559" cy="390" r="9"/><circle class="scr" cx="589" cy="390" r="9"/>
+      <circle class="scr" cx="620" cy="390" r="9"/><circle class="scr" cx="650" cy="390" r="9"/>
+      <text class="t-pin"  x="128" y="424" transform="rotate(90 128 424)">OUT8− 泵B</text>
+      <text class="t-pinw" x="159" y="424" transform="rotate(90 159 424)">OUT8+ 空置</text>
+      <text class="t-pin"  x="189" y="424" transform="rotate(90 189 424)">OUT7− 泵A</text>
+      <text class="t-pinw" x="220" y="424" transform="rotate(90 220 424)">OUT7+ 空置</text>
+      <text class="t-pin"  x="250" y="424" transform="rotate(90 250 424)">OUT6− 阀R3</text>
+      <text class="t-pin"  x="281" y="424" transform="rotate(90 281 424)">OUT6+</text>
+      <text class="t-pin"  x="313" y="424" transform="rotate(90 313 424)">OUT5− 阀R2</text>
+      <text class="t-pin"  x="344" y="424" transform="rotate(90 344 424)">OUT5+</text>
+      <text class="t-pin"  x="374" y="424" transform="rotate(90 374 424)">OUT4− 阀R1</text>
+      <text class="t-pin"  x="404" y="424" transform="rotate(90 404 424)">OUT4+</text>
+      <text class="t-pin"  x="435" y="424" transform="rotate(90 435 424)">OUT3− 阀L3</text>
+      <text class="t-pin"  x="466" y="424" transform="rotate(90 466 424)">OUT3+</text>
+      <text class="t-pin"  x="498" y="424" transform="rotate(90 498 424)">OUT2− 阀L2</text>
+      <text class="t-pin"  x="528" y="424" transform="rotate(90 528 424)">OUT2+</text>
+      <text class="t-pin"  x="559" y="424" transform="rotate(90 559 424)">OUT1− 阀L1</text>
+      <text class="t-pin"  x="589" y="424" transform="rotate(90 589 424)">OUT1+</text>
+      <text class="t-pinw" x="620" y="424" transform="rotate(90 620 424)">DC− 功率地</text>
+      <text class="t-pinw" x="650" y="424" transform="rotate(90 650 424)">DC+ 12V 入</text>
+
+      <!-- 安装孔（实测坐标，相对左下角） -->
+      <circle class="m3" cx="128" cy="234" r="8"/>
+      <circle class="m3" cx="128" cy="180" r="8"/>
+      <circle class="m3" cx="650" cy="234" r="8"/>
+      <circle class="m3" cx="650" cy="165" r="8"/>
+      <text class="t-pin" x="116" y="238" text-anchor="end">孔1 (3, 30)</text>
+      <text class="t-pin" x="116" y="176" text-anchor="end">孔3 (3, 39)</text>
+      <text class="t-pin" x="676" y="238">孔2 (90, 30)</text>
+      <text class="t-pin" x="676" y="169">孔4 (90, 41.5)</text>
+
+      <!-- 侧标 -->
+      <text class="t-b" x="100" y="118" text-anchor="end">信号侧</text>
+      <text class="t-b" x="100" y="394" text-anchor="end">功率侧</text>
+      <text class="t-bm" x="676" y="118">16 位</text>
+      <text class="t-bm" x="676" y="394">18 位</text>
+      <text class="t-bm" x="389" y="70" text-anchor="middle">↑ 机头（前）</text>
+      <text class="t-bm" x="389" y="486" text-anchor="middle">↓ 机尾（后）· 阀轨方向</text>
+
+      <text class="t-foot" x="16" y="500">端子名逐字取自背面丝印（images/YYNMOS-8_back.jpg）：信号侧 = 8 组光耦隔离的 INn+ / INn−，</text>
+      <text class="t-foot" x="16" y="516">功率侧 = DC+ / DC− 电源入 + 8 组 OUTn+ / OUTn− 输出对。孔坐标为实测值（相对左下角，mm）。</text>
+      <text class="t-foot" x="16" y="532"><tspan fill="var(--warn)" font-weight="700">左右次序是背面照片翻面推定</tspan>——量一下 DC+ 与任一 OUTn+ 是否导通即可坐实；若 DC 在另一端，本图左右镜像即可，端子名不变。</text>
+    </svg>
+  </figure>
+
+  <div class="note">
+    <b>丝印读到之后，仍要量的三处</b>（通断档，断电、板上不接任何东西，合计一分钟）
+    <ol>
+      <li><b>DC+ 与 8 个 OUTn+ 是否导通</b>。<span class="st-ok">应导通</span>——这是本板"每通道只切「−」侧"的低边开关结构，也是<b>阀两根线直接跨 OUTn+ / OUTn− 就能工作</b>（不必另拉 12V）与<b>泵必须绕开 OUTn+</b>（否则泵会被并回阀轨，分轨失效）这两条接法的前提。<b class="d">若不导通</b>，说明每通道的「+」是独立端子，那就把阀的「+」自己接到 12V-V，泵接法不变。</li>
+      <li><b>IN1− ~ IN8− 之间是否互通</b>。互通 → 8 根 GPIO 线 + 1~2 根地线回 Pi 即可；<b>不互通</b>（每通道独立隔离输入，本板很可能是这种）→ 在端子上用短跳线把 8 个 IN− 并成一条信号地母线，再用 2 根线回 Pi Pin34/39。<b class="d">别用 16 根线单独回 Pi</b>，那是 8 个地环。</li>
+      <li><b>IN− 与 DC− 是否导通</b>。光耦板<span class="st-ok">通常不导通 = 真隔离</span>，此时按图 4"两侧地各回各的源"接，不要人为把它们连起来。若导通，则板本身就是单点共地，Pi 与 12V 之间不得再拉第二根地线。</li>
+    </ol>
+    <b>IN1~IN8 ↔ 阀/泵 的分配沿用 <code>p4-pi-wiring.html</code></b>：IN1=阀 L1（GPIO5）、IN7=泵 A（GPIO20）是 P1 已实装的两路，其余六路 P4 定案。改分配就同步改 <code>adhesion.py</code> 的 <code>VALVE_PINS</code> / <code>PUMP_PIN</code>。
+  </div>
+  <h2>图 3 · 单路负载接线详图（低边开关 · 阀 / 泵各一路）</h2>
+  <figure>
+    <svg viewBox="0 0 780 470" role="img" aria-label="单路负载接线详图：左为电磁阀通道，线圈跨接 OUT1+ 与 OUT1− 经板内 MOS 到 DC−，线圈并 1N4007 续流；右为真空泵通道，泵正极取自泵轨、负极进 OUT7−，电机并 SS34 与 100nF">
+      <defs>
+        <marker id="ms3" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <!-- ============ A · 阀 ============ -->
+      <text class="t-bx" x="195" y="26">A · 一路电磁阀（感性负载 ×6）</text>
+      <line class="w-pwr" x1="40" y1="60" x2="350" y2="60"/>
+      <text class="t-pw" x="44" y="52">板内 DC+ 母线（DC+ 端子 ← 12V-V 阀轨）</text>
+      <line class="w-pwr2" x1="150" y1="60" x2="150" y2="100"/>
+      <circle class="scr" cx="150" cy="72" r="6"/>
+      <text class="t-pin" x="160" y="74">OUT1+ 端子</text>
+      <circle class="nd" cx="150" cy="90" r="3.5"/>
+
+      <!-- 续流二极管支路 -->
+      <polyline class="sch" points="150,90 100,90 100,110"/>
+      <polygon points="94,132 106,132 100,118" fill="var(--ink)" opacity=".8"/>
+      <line class="sch" x1="93" y1="116" x2="107" y2="116" stroke-width="2.4"/>
+      <polyline class="sch" points="100,132 100,178 150,178"/>
+      <text class="t-bm" x="20" y="118">1N4007</text>
+      <text class="t-bm" x="20" y="135">阴极环</text>
+      <text class="t-bm" x="20" y="152">朝 +12V</text>
+
+      <!-- 线圈 -->
+      <rect class="rb" x="132" y="100" width="36" height="64" rx="3"/>
+      <text class="t-b" x="178" y="120">0520B 线圈</text>
+      <text class="t-bm" x="178" y="137">12V · ≈0.3A</text>
+      <text class="t-bm" x="178" y="154">无极性，两根线可对调</text>
+      <line class="sch" x1="150" y1="164" x2="150" y2="200"/>
+      <circle class="nd" cx="150" cy="178" r="3.5"/>
+
+      <!-- 板内通道 -->
+      <rect class="sv-boxoff" x="100" y="200" width="180" height="100" rx="8"/>
+      <text class="t-bxm" x="190" y="222">YYNMOS-8 通道 1（板内）</text>
+      <circle class="scr" cx="150" cy="200" r="6"/>
+      <text class="t-pin" x="160" y="196">OUT1− 端子</text>
+      <line class="sch" x1="150" y1="206" x2="150" y2="236"/>
+      <rect class="mos" x="132" y="236" width="36" height="30" rx="2"/>
+      <text class="t-pin" x="172" y="255">MOS（低边）</text>
+      <rect class="blk" x="106" y="236" width="22" height="30" rx="2"/>
+      <line class="sch" x1="128" y1="251" x2="132" y2="251"/>
+      <line class="sch" x1="150" y1="266" x2="150" y2="294"/>
+      <circle class="scr" cx="150" cy="300" r="6"/>
+      <text class="t-pin" x="160" y="304">DC− 端子</text>
+      <line class="w-gnd2" x1="150" y1="306" x2="150" y2="320"/>
+
+      <!-- 控制侧 -->
+      <circle class="scr" cx="100" cy="251" r="6"/>
+      <line class="w-sig" x1="34" y1="251" x2="92" y2="251" marker-end="url(#ms3)"/>
+      <text class="t-acc" x="34" y="242">IN1+ ← GPIO5</text>
+      <circle class="nds" cx="70" cy="251" r="3.5"/>
+      <line class="sch" x1="70" y1="251" x2="70" y2="258"/>
+      <rect class="rb" x="64" y="258" width="12" height="24" rx="2"/>
+      <line class="sch" x1="70" y1="282" x2="70" y2="286"/>
+      <text class="t-pin" x="58" y="276" text-anchor="end">10k 跨 IN±</text>
+      <circle class="scr" cx="100" cy="286" r="6"/>
+      <text class="t-pin" x="108" y="290">IN1− 端子</text>
+      <polyline class="w-gnd2" points="94,286 30,286 30,306"/>
+      <circle class="ndg" cx="70" cy="286" r="3.5"/>
+      <line class="sch" x1="20" y1="306" x2="40" y2="306"/>
+      <line class="sch" x1="24" y1="311" x2="36" y2="311"/>
+      <line class="sch" x1="28" y1="316" x2="32" y2="316"/>
+      <text class="t-pin" x="44" y="312">信号地</text>
+
+      <line class="w-gnd" x1="60" y1="320" x2="350" y2="320"/>
+      <text class="t-bm" x="66" y="338">功率地（V−）→ 汇接见图 4</text>
+
+      <!-- ============ B · 泵 ============ -->
+      <text class="t-bx" x="585" y="26">B · 一路真空泵（电机负载 ×2）</text>
+      <line class="w-pwr" x1="430" y1="60" x2="740" y2="60"/>
+      <text class="t-pw" x="434" y="52">12V-P 泵轨（XL6009 #1，不经板 DC+）</text>
+      <line class="w-pwr2" x1="540" y1="60" x2="540" y2="104"/>
+      <circle class="nd" cx="540" cy="86" r="3.5"/>
+
+      <!-- 吸收支路 -->
+      <polyline class="sch" points="540,86 470,86 470,108"/>
+      <polygon points="464,130 476,130 470,116" fill="var(--ink)" opacity=".8"/>
+      <line class="sch" x1="463" y1="114" x2="477" y2="114" stroke-width="2.4"/>
+      <line class="sch" x1="470" y1="130" x2="470" y2="146"/>
+      <line class="sch" x1="462" y1="146" x2="478" y2="146" stroke-width="2.4"/>
+      <line class="sch" x1="462" y1="154" x2="478" y2="154" stroke-width="2.4"/>
+      <polyline class="sch" points="470,154 470,178 540,178"/>
+      <text class="t-bm" x="456" y="122" text-anchor="end">SS34</text>
+      <text class="t-bm" x="456" y="156" text-anchor="end">100nF</text>
+
+      <!-- 电机 -->
+      <circle class="rb" cx="540" cy="130" r="26"/>
+      <text class="t-bx" x="540" y="135">M</text>
+      <text class="t-b" x="578" y="120">555 双头泵</text>
+      <text class="t-bm" x="578" y="137">12V · 0.5~0.8A</text>
+      <text class="t-bm" x="578" y="154">红「+」黑「−」有极性</text>
+      <text class="t-bm" x="578" y="171">启动浪涌 2~3×</text>
+      <line class="sch" x1="540" y1="156" x2="540" y2="200"/>
+      <circle class="nd" cx="540" cy="178" r="3.5"/>
+
+      <!-- 板内通道 -->
+      <rect class="sv-boxoff" x="490" y="200" width="180" height="100" rx="8"/>
+      <text class="t-bxm" x="580" y="222">YYNMOS-8 通道 7（板内）</text>
+      <circle class="scr" cx="540" cy="200" r="6"/>
+      <text class="t-pin" x="550" y="196">OUT7− 端子</text>
+      <line class="sch" x1="540" y1="206" x2="540" y2="236"/>
+      <rect class="mos" x="522" y="236" width="36" height="30" rx="2"/>
+      <text class="t-pin" x="562" y="255">MOS（低边）</text>
+      <rect class="blk" x="496" y="236" width="22" height="30" rx="2"/>
+      <line class="sch" x1="518" y1="251" x2="522" y2="251"/>
+      <line class="sch" x1="540" y1="266" x2="540" y2="294"/>
+      <circle class="scr" cx="540" cy="300" r="6"/>
+      <text class="t-pin" x="550" y="304">DC− 端子</text>
+      <line class="w-gnd2" x1="540" y1="306" x2="540" y2="320"/>
+
+      <circle class="scr" cx="490" cy="251" r="6"/>
+      <line class="w-sig" x1="424" y1="251" x2="482" y2="251" marker-end="url(#ms3)"/>
+      <text class="t-acc" x="424" y="242">IN7+ ← GPIO20</text>
+      <circle class="nds" cx="460" cy="251" r="3.5"/>
+      <line class="sch" x1="460" y1="251" x2="460" y2="258"/>
+      <rect class="rb" x="454" y="258" width="12" height="24" rx="2"/>
+      <line class="sch" x1="460" y1="282" x2="460" y2="286"/>
+      <text class="t-pin" x="448" y="276" text-anchor="end">10k 跨 IN±</text>
+      <circle class="scr" cx="490" cy="286" r="6"/>
+      <text class="t-pin" x="498" y="290">IN7− 端子</text>
+      <polyline class="w-gnd2" points="484,286 420,286 420,306"/>
+      <circle class="ndg" cx="460" cy="286" r="3.5"/>
+      <line class="sch" x1="410" y1="306" x2="430" y2="306"/>
+      <line class="sch" x1="414" y1="311" x2="426" y2="311"/>
+      <line class="sch" x1="418" y1="316" x2="422" y2="316"/>
+      <text class="t-pin" x="434" y="312">信号地</text>
+
+      <line class="w-gnd" x1="450" y1="320" x2="740" y2="320"/>
+      <text class="t-bm" x="456" y="338">功率地（V−）→ 汇接见图 4</text>
+
+      <text class="t-foot" x="16" y="358">低边开关的含义：MOS 只串在负载的「−」侧。阀最省事——两根线跨接 OUT1+ / OUT1− 即可，「+」由板内 DC+ 母线供给；</text>
+      <text class="t-foot" x="16" y="374">泵则相反，<tspan fill="var(--warn)" font-weight="700">OUT7+ / OUT8+ 必须空置</tspan>（它们内部并在 DC+ = 阀轨上，接了就等于把泵并回阀轨，分轨白分），「+」单独吃泵轨。</text>
+      <text class="t-foot" x="16" y="392">阀与泵都是感性负载，断开瞬间的反电动势会打穿 MOS。<tspan fill="var(--warn)" font-weight="700">板上有无续流二极管必须实测确认</tspan>：</text>
+      <text class="t-foot" x="16" y="408">二极管档量每通道 OUTn− 与 OUTn+ 之间，反向读到 ≈0.5V 压降 = 有，开路 = 无。</text>
+      <text class="t-foot" x="16" y="424">无则每只阀外并 1N4007、每只泵外并 SS34 + 100nF，全部贴着负载端子焊、引线越短越好。</text>
+      <text class="t-foot" x="16" y="442">10k 直接跨在每路 INn+ / INn− 端子之间：Pi 的 <tspan font-weight="700">GPIO5 / GPIO6 复位默认上拉</tspan>（GPIO0~8 上拉、9~27 下拉），</text>
+      <text class="t-foot" x="16" y="458">高电平触发板遇上它 = 开机瞬间阀 L1/L2 通电放气。下拉后 IN 静态应 &lt;0.8V，实测「Pi 断电时阀不动作」才算过。</text>
+    </svg>
+  </figure>
+  <h2>图 4 · 地线拓扑（单点共地）</h2>
+  <figure>
+    <svg viewBox="0 0 780 420" role="img" aria-label="地线拓扑图：电池负极为系统参考地，功率地母线接两路 XL6009 与 MOSFET 板 V−，5V 降压把地带给 Pi，Pi 的地再给 MOSFET 板信号地与分压板">
+      <text class="t-bx" x="389" y="26">一条功率地母线 + 一条信号地，唯一交汇点 = 电池「−」</text>
+
+      <!-- 功率域用电器 -->
+      <rect class="sv-box" x="180" y="70" width="100" height="50" rx="6"/>
+      <text class="t-bx" x="230" y="92">XL6009 #1</text>
+      <text class="t-bs" x="230" y="109">泵轨 GND</text>
+      <rect class="sv-box" x="310" y="70" width="100" height="50" rx="6"/>
+      <text class="t-bx" x="360" y="92">XL6009 #2</text>
+      <text class="t-bs" x="360" y="109">阀轨 GND</text>
+      <rect class="sv-box" x="440" y="70" width="120" height="50" rx="6"/>
+      <text class="t-bx" x="500" y="92">YYNMOS-8</text>
+      <text class="t-bs" x="500" y="109">DC− 功率地端子</text>
+      <rect class="sv-box" x="585" y="70" width="110" height="50" rx="6"/>
+      <text class="t-bx" x="640" y="92">5V/5A 降压</text>
+      <text class="t-bs" x="640" y="109">输入 GND</text>
+
+      <!-- 电池与功率地母线 -->
+      <rect class="sv-boxa" x="16" y="150" width="130" height="60" rx="6"/>
+      <text class="t-bx" x="81" y="174">2S 电池「−」</text>
+      <text class="t-bs" x="81" y="192">XT60 黑 · 16AWG</text>
+      <line class="w-gnd" x1="146" y1="180" x2="700" y2="180"/>
+      <text class="t-bm" x="330" y="202">功率地母线（16~18AWG，星形接到电池「−」，不串糖葫芦）</text>
+      <line class="w-gnd2" x1="230" y1="180" x2="230" y2="120"/>
+      <line class="w-gnd2" x1="360" y1="180" x2="360" y2="120"/>
+      <line class="w-gnd2" x1="500" y1="180" x2="500" y2="120"/>
+      <line class="w-gnd2" x1="640" y1="180" x2="640" y2="120"/>
+      <circle class="ndg" cx="230" cy="180" r="4"/>
+      <circle class="ndg" cx="360" cy="180" r="4"/>
+      <circle class="ndg" cx="500" cy="180" r="4"/>
+      <circle class="ndg" cx="640" cy="180" r="4"/>
+
+      <!-- 参考地符号 -->
+      <line class="w-gnd2" x1="81" y1="210" x2="81" y2="234"/>
+      <line class="sch" x1="63" y1="234" x2="99" y2="234" stroke-width="2.4"/>
+      <line class="sch" x1="69" y1="241" x2="93" y2="241" stroke-width="2.4"/>
+      <line class="sch" x1="75" y1="248" x2="87" y2="248" stroke-width="2.4"/>
+      <text class="t-bm" x="106" y="240">系统参考地</text>
+
+      <!-- 5V 降压 → Pi -->
+      <polyline class="w-pwr" points="695,95 720,95 720,245 695,245"/>
+      <text class="t-dim" x="726" y="170">5V + GND</text>
+
+      <!-- Pi 与信号地 -->
+      <rect class="sv-boxa" x="585" y="220" width="110" height="50" rx="6"/>
+      <text class="t-bx" x="640" y="242">树莓派 Pi 5</text>
+      <text class="t-bs" x="640" y="259">Pin 34 / 39 GND</text>
+      <rect class="sv-box" x="430" y="215" width="130" height="50" rx="6"/>
+      <text class="t-bx" x="495" y="237">板信号地</text>
+      <text class="t-bs" x="495" y="254">IN1− ~ IN8− 并联</text>
+      <line class="w-gnd2" x1="585" y1="240" x2="560" y2="240"/>
+      <rect class="sv-box" x="585" y="290" width="110" height="46" rx="6"/>
+      <text class="t-bx" x="640" y="311">分压板 + 传感器</text>
+      <text class="t-bs" x="640" y="328">7 路地汇于 Pin 9</text>
+      <line class="w-gnd2" x1="640" y1="270" x2="640" y2="290"/>
+
+      <!-- 板内是否导通 -->
+      <path class="w-off" d="M545,215 L545,192 A12,12 0 0 1 545,168 L545,120"/>
+      <text class="t-bsw" x="620" y="146" text-anchor="start">IN− 与 DC− 导通吗？</text>
+      <text class="t-bs" x="620" y="162" text-anchor="start">光耦板通常不导通</text>
+
+      <text class="t-foot" x="16" y="358">跨接线（灰虚线）是全图唯一有争议的一根：<tspan fill="var(--warn)" font-weight="700">量出板内不导通（真隔离）就别人为把它接起来</tspan>——</text>
+      <text class="t-foot" x="16" y="374">两侧地各回各的源，在电池「−」处天然共地，环面积最小；量出导通（不隔离）则板本身就是那个单点，</text>
+      <text class="t-foot" x="16" y="390">此时 Pi 与 12V 之间不要再拉第二根地线，否则成环。地环流的代价很具体：7 路模拟量满量程只有</text>
+      <text class="t-foot" x="16" y="406">0.25~2.25V，几十 mV 的环流噪声就够让 −30kPa 的吸附判据抖动，而判据抖 = 状态机误判 = 墙上抬错脚。</text>
+    </svg>
+  </figure>
+  <h2>图 5 · 压力采样链（5V 域线束）</h2>
+  <figure>
+    <svg viewBox="0 0 780 424" role="img" aria-label="压力采样链：七只 XGZP6847A 压力传感器每只三线接入分压汇接板 S1 到 S7，板上经 ADS1115 两块转成 I2C 送 Pi">
+      <defs>
+        <marker id="ms5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+      <text class="t-bx" x="389" y="26">7 只 XGZP6847A（5V 域）→ 分压板 → ADS1115 ×2（3.3V 域）→ Pi I2C</text>
+
+      <rect class="sv-box" x="20" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="66" y="64">S1</text>
+      <text class="t-bs" x="66" y="81">罐压</text>
+      <text class="t-bs" x="66" y="97">#1 · A0</text>
+      <text class="t-bs" x="66" y="112">罐出口三通</text>
+      <rect class="sv-box" x="128" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="174" y="64">S2</text>
+      <text class="t-bs" x="174" y="81">足 L1</text>
+      <text class="t-bs" x="174" y="97">#1 · A1</text>
+      <text class="t-bs" x="174" y="112">配 OUT1</text>
+      <rect class="sv-box" x="236" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="282" y="64">S3</text>
+      <text class="t-bs" x="282" y="81">足 L2</text>
+      <text class="t-bs" x="282" y="97">#1 · A2</text>
+      <text class="t-bs" x="282" y="112">配 OUT2</text>
+      <rect class="sv-box" x="344" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="390" y="64">S4</text>
+      <text class="t-bs" x="390" y="81">足 L3</text>
+      <text class="t-bs" x="390" y="97">#1 · A3</text>
+      <text class="t-bs" x="390" y="112">配 OUT3</text>
+      <rect class="sv-box" x="452" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="498" y="64">S5</text>
+      <text class="t-bs" x="498" y="81">足 R1</text>
+      <text class="t-bs" x="498" y="97">#2 · A0</text>
+      <text class="t-bs" x="498" y="112">配 OUT4</text>
+      <rect class="sv-box" x="560" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="606" y="64">S6</text>
+      <text class="t-bs" x="606" y="81">足 R2</text>
+      <text class="t-bs" x="606" y="97">#2 · A1</text>
+      <text class="t-bs" x="606" y="112">配 OUT5</text>
+      <rect class="sv-box" x="668" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="714" y="64">S7</text>
+      <text class="t-bs" x="714" y="81">足 R3</text>
+      <text class="t-bs" x="714" y="97">#2 · A2</text>
+      <text class="t-bs" x="714" y="112">配 OUT6</text>
+
+      <line class="w-sig" x1="66"  y1="116" x2="180" y2="200"/>
+      <line class="w-sig" x1="174" y1="116" x2="250" y2="200"/>
+      <line class="w-sig" x1="282" y1="116" x2="320" y2="200"/>
+      <line class="w-sig" x1="390" y1="116" x2="390" y2="200"/>
+      <line class="w-sig" x1="498" y1="116" x2="460" y2="200"/>
+      <line class="w-sig" x1="606" y1="116" x2="530" y2="200"/>
+      <line class="w-sig" x1="714" y1="116" x2="600" y2="200"/>
+      <text class="t-acc lbl" x="390" y="160" text-anchor="middle">每路 3 线：5V · OUT（0.5~4.5V）· GND —— JST-XH 3P 或直焊 + 热缩</text>
+
+      <rect class="sv-boxa" x="150" y="200" width="480" height="70" rx="6"/>
+      <text class="t-bx" x="390" y="224">分压汇接板（洞洞板 7×9cm，S1~S7 沿长边排开）</text>
+      <text class="t-bs" x="390" y="242">每路 10k/10k 对半分压 + 100nF ≈300Hz 低通 → 0.25~2.25V</text>
+      <text class="t-bs" x="390" y="259">板上焊死 ADS1115 ×2（0x48 / 0x49，PGA=±4.096V）· 图纸见 p4-divider-board.html</text>
+
+      <line class="w-sig" x1="390" y1="270" x2="390" y2="292" marker-end="url(#ms5)"/>
+      <rect class="sv-boxa" x="260" y="296" width="260" height="44" rx="6"/>
+      <text class="t-bx" x="390" y="317">Pi 5 · J1：5V / 3.3V / GND / SDA / SCL</text>
+      <text class="t-bs" x="390" y="333">2×20 IDC 整体扣 40pin，禁杜邦</text>
+
+      <text class="t-foot" x="16" y="360">传感器装在<tspan font-weight="700">阀与吸盘之间（吸盘侧）</tspan>，所以阀关着也能读脚压——吸附确认与"打嗝"检测都靠它</text>
+      <text class="t-foot" x="16" y="376">（P1 单传感器教训 + P2 打嗝实测 30s 进失控）。取压走 4mm 三通，每足一只 + 罐一只 = 7 只。</text>
+      <text class="t-foot" x="16" y="394">走线：7 路模拟线走<tspan font-weight="700">左缘信号理线梳</tspan>，12V 泵/阀线走<tspan font-weight="700">右缘功率理线梳</tspan>，不同梳、不并捆、不平行长距——</text>
+      <text class="t-foot" x="16" y="410">0.25~2.25V 的量程经不起泵线的开关噪声耦合。</text>
+    </svg>
+  </figure>
+  <div class="note">
+    <b>端子接线速查表</b>（照表拧螺丝；控制线色沿用 <code>p4-pi-wiring.html</code>，功率线一律红/黑 + 热缩标签环）
+    <table class="vtab">
+      <tr><th>#</th><th>从（端子）</th><th>到（端子）</th><th>线</th><th>状态</th></tr>
+      <tr><td>1</td><td>电池 XT60 红</td><td>总开关 → 5A 保险 → XL6009 #1/#2 的 IN+（两块并接）</td><td>16AWG 红</td><td>固定</td></tr>
+      <tr><td>2</td><td>电池 XT60 黑</td><td>功率地母线 → XL6009 #1/#2 的 IN−</td><td>16AWG 黑</td><td>固定</td></tr>
+      <tr><td>3</td><td>XL6009 #2 OUT+</td><td>YYNMOS-8 <b>DC+</b>（板内并到 8 个 OUTn+）</td><td>20AWG 红 · 标「12V-V」</td><td>固定</td></tr>
+      <tr><td>4</td><td>XL6009 #2 OUT−</td><td>功率地母线</td><td>20AWG 黑</td><td>固定</td></tr>
+      <tr><td>5</td><td>YYNMOS-8 <b>DC−</b></td><td>功率地母线（八路回流都走它，最粗的一根）</td><td>16AWG 黑</td><td>固定</td></tr>
+      <tr><td>6</td><td>XL6009 #1 OUT+</td><td>泵 A「+」、泵 B「+」（泵轨，<b>不经板 DC+</b>）</td><td>18AWG 红 · 标「12V-P」</td><td>固定</td></tr>
+      <tr><td>7</td><td>XL6009 #1 OUT−</td><td>功率地母线</td><td>18AWG 黑</td><td>固定</td></tr>
+      <tr><td>8</td><td>阀 L1 / L2 / L3（两根线，无极性）</td><td><b>OUT1+ 和 OUT1−</b> / OUT2± / OUT3±</td><td>22AWG 绿</td><td>固定</td></tr>
+      <tr><td>9</td><td>阀 R1 / R2 / R3（两根线，无极性）</td><td>OUT4± / OUT5± / OUT6±</td><td>22AWG 白</td><td>固定</td></tr>
+      <tr><td>10</td><td>泵 A「−」/ 泵 B「−」</td><td><b>OUT7−</b> / <b>OUT8−</b></td><td>20AWG 黑 · 标「泵 A/B」</td><td>固定</td></tr>
+      <tr><td>11</td><td>—</td><td><b class="d">OUT7+ / OUT8+ 空置不接</b>（接了 = 泵被并回阀轨）</td><td>—</td><td>分轨的关键</td></tr>
+      <tr><td>12</td><td>Pi Pin29 GPIO5</td><td>IN1+（阀 L1）</td><td>24AWG 绿</td><td><span class="st-ok">P1 已实装</span></td></tr>
+      <tr><td>13</td><td>Pi Pin31/33 · 36/35/40</td><td>IN2+/IN3+ · IN4+/IN5+/IN6+（阀 L2 L3 R1 R2 R3）</td><td>24AWG 绿/白</td><td><span class="st-tbd">建议，P4 定案</span></td></tr>
+      <tr><td>14</td><td>Pi Pin38 GPIO20</td><td>IN7+（泵 A）</td><td>24AWG 紫</td><td><span class="st-ok">P1 已实装</span></td></tr>
+      <tr><td>15</td><td>Pi Pin37 GPIO26</td><td>IN8+（泵 B）</td><td>24AWG 紫</td><td><span class="st-tbd">建议，P4 定案</span></td></tr>
+      <tr><td>16</td><td>IN1− ~ IN8−</td><td>端子上短跳线并成一条信号地（若板内已并则免）</td><td>24AWG 黑</td><td>先量再定</td></tr>
+      <tr><td>17</td><td>Pi Pin34 / Pin39</td><td>上一行那条信号地（两根并线）</td><td>24AWG 黑</td><td>固定</td></tr>
+      <tr><td>18</td><td>每路 INn+</td><td>10k 电阻 → 同路 INn−（8 只，焊在端子上）</td><td>—</td><td><b>新增</b>，见图 3</td></tr>
+      <tr><td>19</td><td>每只阀线圈两端</td><td>1N4007 并联（阴极朝「+」）；泵为 SS34 + 100nF</td><td>—</td><td>板无续流管时必加</td></tr>
+      <tr><td>20</td><td>Pi Pin1 / 2 / 9 / 3 / 5</td><td>分压板 J1（3.3V / 5V / GND / SDA / SCL）</td><td>橙/红/黑/蓝/黄</td><td>固定</td></tr>
+      <tr><td>21</td><td>XGZP6847A ×7</td><td>分压板 S1~S7（每口 5V·OUT·GND）</td><td>JST-XH 3P</td><td>固定</td></tr>
+    </table>
+    端子名照板上丝印拧，不必管它在左端还是右端；第 12~15 行的 GPIO 分配与 <code>adhesion.py</code> 的 <code>VALVE_PINS</code> / <code>PUMP_PIN</code> 必须同步改。
+  </div>
+
+  <div class="note">
+    <b>12V 电流预算与选轨依据</b>
+    <table class="vtab">
+      <tr><th>负载</th><th>单件 @12V</th><th>同时工作</th><th>该轨稳态</th><th>峰值</th><th>供电</th></tr>
+      <tr><td>0520B 电磁阀</td><td>0.25~0.38A<sup>估</sup></td><td>≤2（爬墙步态只有"释放中"的足通电）</td><td>0.5~0.8A</td><td>0.8A</td><td>XL6009 #2 阀轨</td></tr>
+      <tr><td>板栅极驱动 + 8 只 LED</td><td>—</td><td>常在</td><td>&lt;0.1A</td><td>—</td><td>XL6009 #2 阀轨</td></tr>
+      <tr><td>555 双头泵</td><td>0.5~0.8A<sup>估</sup></td><td>2（滞环控制，多数时间停）</td><td>1.0~1.6A</td><td>3~5A 启动浪涌</td><td>XL6009 #1 泵轨</td></tr>
+      <tr><td colspan="3">12V 合计</td><td>1.6~2.5A</td><td>—</td><td>—</td></tr>
+      <tr><td colspan="3">折算 7.4V 电池侧（η≈0.85）</td><td>3.1~4.8A</td><td>瞬态 ~7A</td><td>2S 锂电</td></tr>
+    </table>
+    <ul>
+      <li><b>为什么必须分轨</b>：合轨时单只 XL6009（3A 档）要扛 2.5A 稳态 + 泵启动的 5A 浪涌，输出必跌；跌压期间阀线圈保持力下降，而本项目的阀"通电 = 放气"，误动作方向恰好是<b class="d">松开吸盘</b>。分轨后泵轨 1.6A、阀轨 0.9A，各自都在舒适区，且泵的浪涌打不到阀。</li>
+      <li><b>泵轨输出端并 470~1000µF / 25V 电解</b>（贴着 XL6009 输出端子），吸启动浪涌；阀轨并 220µF 即可。<b class="d">注意极性</b>。</li>
+      <li>估值来自 P1 实测"1 阀 + 1 泵 ≈ 1A"。到货后逐件用钳表实测回填本表——这张表决定线径与保险值，不是装饰。</li>
+      <li>地面三角步态若允许 3 足同时释放，阀轨按 3 只 ≈1.1A 复核（仍在余量内）。</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <b>与既有文档的三处有意差异</b>（本图是端子级落地，遇到冲突以本图为准，并请回填 P4-BAY-DESIGN）
+    <ol>
+      <li><b>双轨供电</b>：<code>p4-system-diagram.html</code> 与 P4-BAY-DESIGN §2.2 画的是"XL6009 ×2 并排 → MOSFET 板电源入"，读起来像两块并联同一条 12V。<b class="d">升压模块不能直接并联</b>（输出电压不可能完全一致，高的那块独扛全部负载，另一块空转甚至倒灌）。本图改为 #1 专供泵、#2 专供板 DC+（阀由板内 OUTn+ 母线取电），两块各自独立，只共功率地。舱内布局不用改——两块仍并排，只是出线各走各的。</li>
+      <li><b>泵「+」不经板 DC+，OUT7+ / OUT8+ 空置</b>：背面丝印显示每通道有独立的 OUTn+ / OUTn−，而 OUTn+ 内部并在 DC+ 上。所以阀最省事——两根线跨 OUTn+ / OUTn− 就完事；泵反过来，必须让 OUT7+/OUT8+ 空着、「+」单独吃泵轨，否则两条轨在板内被 DC+ 母线短接，分轨就白分了。<b class="d">这是分轨能成立的前提，也是接线时唯一容易接错的地方</b>。</li>
+      <li><b>INn± 之间 10k + 5A 保险</b>：两项既有文档没有的新增件。板的输入是 8 组光耦隔离对（INn+ / INn−），10k 就跨在同一路的这两个端子上，为 GPIO5/6 的复位默认上拉兜底（见图 3 footnote）；保险是 2S 锂电短路能量决定的——XT60 之后、升压之前那一段是全机唯一没有任何限流的地方。</li>
+    </ol>
+  </div>
+
+  <div class="note">
+    <b>装配与检验清单</b>（按顺序做，每步不过不进入下一步）
+    <ol>
+      <li><b>板未上机先量三处</b>：图 2 note 的三条（DC+↔OUTn+ 是否通、IN− 之间是否通、IN− 与 DC− 是否隔离）。结果决定阀的接法、信号地的并法、以及图 4 那根跨接线接不接。</li>
+      <li><b>两块 XL6009 空载调压</b>：各自单独接电池、<b>空载</b>把电位器调到 12.0V，断电、标记"#1 泵轨 / #2 阀轨"后再接负载。两块调完互不再动。</li>
+      <li><b>先接控制、不接负载</b>：Pi ↔ IN1+~IN8+ + 并好的 IN− 信号地 + 8 只 10k。Pi 断电状态量每路 INn+ 对 INn− &lt;0.8V；Pi 上电但程序未跑时复量一次，仍 &lt;0.8V 才算过。</li>
+      <li><b>空载点动</b>：接 12V、不接阀泵，逐路 GPIO 点动，看 LED 与 OUTn− 对 OUTn+ 的电压翻转（关断 ≈12V、导通 ≈0V）。八路全通过再接负载。</li>
+      <li><b>负载逐路上</b>：先上 6 阀（听咔哒、<b class="d">同时确认气路方向</b>：断电时吸盘通真空、通电时通大气），再上 2 泵。每上一路复查一次总电流。</li>
+      <li><b>断电保压实测</b>：整机吸附状态下直接拉总开关，六足应全部保持吸附 ≥60s（这是 <code>VALVE_ON_LEVEL=0</code> 接法的全部意义）。<b class="d">此项不过，禁止上墙。</b></li>
+      <li><b>传感链最后接</b>：<code>i2cdetect -y 1</code> 见 0x48/0x49；7 只传感器悬空置于大气，读数应一致 ≈0.25V。泵开机再读一遍，7 路读数抖动 &lt;±1kPa 才说明分梳走线到位。</li>
+      <li>全部通过后 <code>vcgencmd get_throttled</code> 复查 0x0，并把实测电流、端子位、GPIO 映射回填本页与 <code>adhesion.py</code>。</li>
+    </ol>
+  </div>
+</main>
+</body>
+</html>

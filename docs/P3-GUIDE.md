@@ -37,8 +37,9 @@ ROADMAP 的分阶段设定是：**P3 地面行走用标准小腿**（left/right-
 "触地检测步态"降级为开环三角步态 + 压力/电流兜底（已记入验收核对表）；
 足底开关仍随第二批购入，留 P4 实验。
 
-> ⚠ 吸盘小腿现有**两种版本**，用哪种定版后再生成右腿版 STL——定版前
-> 吸盘小腿（左右共 5 件）都先别打，其余件照打。
+> **✅ 吸盘小腿已定版（2026-07-27）**：采用 `left-tibia-suction.stl`，配套
+> `suction-foot-door.stl`；不采用带触地环的 `*-exp.stl` 试验版。右腿版
+> `right-tibia-suction.stl` 已按官方左右小腿相同方式镜像生成，可以开始打印。
 
 ## 第 1 步 · 下单第二批（当天做，快递是关键路径）
 
@@ -63,17 +64,17 @@ ROADMAP 的分阶段设定是：**P3 地面行走用标准小腿**（left/right-
 | left-coxa2 / right-coxa2 | 3 / 3 | 1（L1） | 2 / 3 | 同名多版本取编号最大 |
 | left-femur / right-femur | 3 / 3 | 1（L1） | 2 / 3 | PLA 4 壁 40% 填充 |
 | left-tibia-suction | 3 | 1（L1） | 2 | **PETG 立打**：吸盘腔朝下,5~6 壁 45%,brim ≥8mm（README 打印说明） |
-| right-tibia-suction | 3 | 0 | 3 | ⚠ **右腿版 STL 还不存在**,吸盘小腿定版后生成,见下 |
+| right-tibia-suction | 3 | 0 | 3 | **PETG 立打**；已由定版左腿沿 XZ 平面镜像生成，配同款门盖 |
 | suction-foot-door | 6+2 备 | 1（L1） | 7 | 平躺无支撑 |
 | top-cover4 / bottom-cover | 各 1 | 0 | 各 1 | bottom-cover 与 -flat 二选一,按电池布局 |
 | shield、servo2040-bottom-cover、battery-bar | 各 1 | 0 | 各 1 | 小件见缝插针 |
 | 备件 | coxa/femur/tibia 各 +1 | | | 摔机快修用,最后打 |
 | **P4 气动舱固定件** | 1 套 | 0 | 1 套 | **第二批到货后实测尺寸再设计**（扩展 generate_climbing_parts.py）：泵 TPU 软固定（隔膜泵震动,硬锁会松螺丝+毛刺读数）、6 阀阵列梁、PET 罐抱箍（罐先单独抽 -70kPa 做压瘪测试）、7 路压力传感器位 + 感测三通（每足支管引回舱）、PCB 柱、理线梳;整舱做成可拆模块,大质量件贴机身平面摊平（重心距墙）;每腿真空管过 coxa 关节留服务环。**电气+气路连接拓扑见 `html/p4-system-diagram.html`** |
 
-⚠ **右腿吸盘小腿目前没有 STL**（README 注明"右腿版待生成"）。两个办法：
-切片软件里把 `left-tibia-suction.stl` 镜像后直接打（吸盘腔/六角袋均对称，可行）；
-或改 `tools/generate_climbing_parts.py` 正式生成右版入库（干净，可复现）。
-建议后者——喊 Claude 改生成器，半小时的事。
+`right-tibia-suction.stl` 由 `tools/generate_climbing_parts.py` 正式生成：对定版
+`left-tibia-suction.stl` 的参数化几何做 `Y → -Y` 镜像，与官方
+`left-tibia.stl` / `right-tibia.stl` 的左右变换一致。吸盘腔、六角袋和螺丝位
+随主体镜像；门盖自身关于中心面对称，左右腿共用 `suction-foot-door.stl`。
 
 **每打完一批就称重记 `weight-log.md`**：P2 的全部验收建立在"整机 2.5kg"上，
 1.8 倍余量里最大的变数就是超重（分析见 P2 验收讨论）。结构件全齐时小计一次，

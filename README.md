@@ -29,11 +29,12 @@ Pi 5 上运行的自研 Python 包：单腿 IK/FK、三角/波浪/爬墙步态�
 
 | 文件 | 用途 |
 |---|---|
-| `left-tibia-suction.stl` | 吸盘足 v3：与 MakeYourPet left-tibia **一体化**的小腿（替代 left-tibia.stl + 旧吸盘足，腿短约 59mm）。末端腔体按实购"2.5 折吸盘+双六角螺母+直角宝塔"一体件（`images/xipan_marked.jpeg`）做全形状负模：Ø27 折痕座圈+5°肩面 → Ø17 主孔 → Ø15 凹槽凸筋 → 六角袋锁转动 → 弯头腔。打印 3 件（右腿版待生成） |
-| `suction-foot-door.stl` | 上述腔体的门盖：吸盘放入后盖上、502 粘接（含前半负模 + 4 定位销），宝塔嘴从门顶上方开口伸出、可转动 |
+| `left-tibia-suction.stl` | **定版吸盘小腿**：与 MakeYourPet left-tibia 一体化（替代 left-tibia.stl + 旧吸盘足，腿短约 59mm）。末端腔体按实购“2.5 折吸盘+双六角螺母+直角宝塔”一体件（`images/xipan_marked.jpeg`）做全形状负模：Ø27 折痕座圈 + 45° 肩面 → Ø17 主孔 → Ø15 凹槽凸筋 → 六角袋锁转动 → 弯头腔。打印 3 件 |
+| `right-tibia-suction.stl` | 定版右腿吸盘小腿：由左腿沿 XZ 平面镜像生成，与官方左右 tibia 的变换一致；打印 3 件，配同款 `suction-foot-door.stl` |
+| `suction-foot-door.stl` | 定版吸盘腔门盖：含前半负模、4 个定位销和 2 个 M5 沉头过孔，左右腿共用；宝塔嘴从门顶开口伸出、可转动 |
 | `component_plate.stl` | M3 网格安装板，固定真空泵/电磁阀/传感器 |
 
-打印建议：PETG 优先；`left-tibia-suction` **立打**（吸盘腔朝下、tibia 朝上，5~6 壁、45% 填充、开 brim ≥8mm，tibia 细节可开支撑保险）——方轴轴线距 tibia 平背面仅 4.5mm 而腔体半径 17mm，平躺必穿打印床，几何上只能立打；`suction-foot-door` 外平面朝下平躺、无支撑。
+打印建议：PETG 优先；左右 `tibia-suction` 均**立打**（吸盘腔朝下、tibia 朝上，5~6 壁、45% 填充、开 brim ≥8mm，tibia 细节可开支撑保险）——方轴轴线距 tibia 平背面仅 4.5mm 而腔体半径 17mm，平躺必穿打印床，几何上只能立打；`suction-foot-door` 外平面朝下平躺、无支撑。带触地环的 `*-exp.stl` 为未采用的试验版。
 
 尺寸与实购件不符时（如吸盘颈部直径），改 `tools/generate_climbing_parts.py` 顶部 `PARAMS` 后重新生成：
 

@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>P4 V1 器件舱 · 交互式 3D 装配示意</title>
+<style>
+  :root {
+    --bg:#f3f5f7; --panel:#fff; --panel2:#f8fafb; --ink:#1e2a36; --muted:#62717e;
+    --line:#d5dde4; --accent:#0e7ac4; --accent-soft:rgba(14,122,196,.10);
+    --mechanical:#7d8e9d; --pneumatic:#17836a; --electronic:#b26a00; --actuator:#8b5daf;
+    --tube:#1aa985; --wire:#347dc1; --warn:#b5452f; --shadow:0 10px 34px rgba(31,46,59,.09);
+  }
+  @media (prefers-color-scheme:dark) {
+    :root { --bg:#10161c; --panel:#171f27; --panel2:#121a21; --ink:#e3eaf1; --muted:#93a1ae;
+      --line:#2a3541; --accent:#53a8e4; --accent-soft:rgba(83,168,228,.14);
+      --mechanical:#879bad; --pneumatic:#4bc2a0; --electronic:#e0a64f; --actuator:#b88bd4;
+      --tube:#43c8a4; --wire:#69b4ea; --warn:#e0785c; --shadow:0 14px 40px rgba(0,0,0,.27); }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Avenir Next","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; line-height:1.55; }
+  header { max-width:1440px; margin:auto; padding:26px 24px 14px; }
+  .eyebrow { margin:0 0 5px; color:var(--muted); font-size:12px; letter-spacing:.14em; text-transform:uppercase; }
+  h1 { margin:0 0 6px; font-size:25px; letter-spacing:-.02em; }
+  .sub { margin:0; color:var(--muted); font-size:14px; max-width:1060px; }
+  main { max-width:1440px; margin:auto; padding:0 24px 36px; display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:16px; }
+  .viewer, .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); }
+  .viewer { min-width:0; overflow:hidden; position:relative; }
+  .toolbar { min-height:55px; padding:10px 12px; border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  button, .chip { color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:7px 10px; font:inherit; font-size:12px; cursor:pointer; }
+  button:hover, button:focus-visible, .chip:hover { border-color:var(--accent); outline:none; }
+  button.active { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .sep { height:24px; width:1px; background:var(--line); margin:0 2px; }
+  .slider { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
+  .slider input { width:88px; accent-color:var(--accent); }
+  .canvas-wrap { height:min(72vh,760px); min-height:520px; position:relative; background:
+    radial-gradient(circle at 50% 42%, var(--accent-soft), transparent 48%), var(--panel2); }
+  canvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+  canvas.dragging { cursor:grabbing; }
+  .selection-banner { position:absolute; z-index:6; left:50%; top:12px; transform:translateX(-50%); max-width:calc(100% - 28px); min-width:min(390px,calc(100% - 28px)); padding:9px 14px; border:1px solid color-mix(in srgb,var(--accent) 52%,var(--line)); border-radius:9px; color:var(--ink); background:var(--panel); box-shadow:0 5px 18px rgba(25,43,58,.16); text-align:center; font-size:13px; pointer-events:none; }
+  .selection-banner .selection-prefix { color:var(--muted); font-weight:600; }
+  .selection-banner .selection-name { color:var(--accent); font-weight:750; }
+  .selection-banner.empty .selection-name { color:var(--muted); font-weight:500; }
+  .scene-object-label { position:absolute; z-index:5; left:0; top:0; max-width:min(280px,calc(100% - 16px)); padding:5px 9px; overflow:hidden; border:1px solid var(--accent); border-radius:6px; color:var(--ink); background:color-mix(in srgb,var(--panel) 96%,transparent); box-shadow:0 4px 14px rgba(20,35,47,.22); font-size:12px; font-weight:700; line-height:1.25; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; backdrop-filter:blur(4px); }
+  .scene-object-label.selected { border-width:2px; border-color:var(--warn); color:var(--warn); }
+  .scene-object-label.hovered { opacity:.92; font-weight:600; }
+  .scene-object-label[hidden] { display:none; }
+  .axis-note { position:absolute; left:13px; bottom:11px; padding:5px 8px; border-radius:6px; color:var(--muted); background:color-mix(in srgb,var(--panel) 86%,transparent); border:1px solid var(--line); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; pointer-events:none; }
+  .hint { position:absolute; right:13px; bottom:11px; color:var(--muted); font-size:11px; pointer-events:none; }
+  aside { display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .panel { padding:14px; }
+  .panel h2 { margin:0 0 10px; font-size:15px; }
+  .filters { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .filter { display:flex; align-items:center; gap:7px; padding:7px 8px; border:1px solid var(--line); border-radius:7px; font-size:12px; cursor:pointer; user-select:none; }
+  .filter input { margin:0; accent-color:var(--accent); }
+  .swatch { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  .search { width:100%; margin-top:10px; padding:8px 9px; color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:7px; font:inherit; font-size:12px; }
+  .search:focus { outline:none; border-color:var(--accent); }
+  .inventory { max-height:274px; overflow:auto; border-top:1px solid var(--line); }
+  .inventory-group { position:sticky; top:0; z-index:1; padding:7px 3px 5px; color:var(--muted); background:var(--panel); border-bottom:1px solid var(--line); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  .object-list { max-height:310px; overflow:auto; border-top:1px solid var(--line); }
+  .object-row { width:100%; border:0; border-bottom:1px solid var(--line); border-radius:0; padding:8px 3px; background:transparent; display:grid; grid-template-columns:10px 1fr auto; align-items:center; gap:8px; text-align:left; }
+  .object-row:hover, .object-row.selected { background:var(--accent-soft); }
+  .object-row.selected { color:var(--accent); }
+  .object-row .dot { width:9px; height:9px; border-radius:50%; }
+  .object-row small { display:block; color:var(--muted); }
+  .part-row { width:100%; border:0; border-bottom:1px solid var(--line); border-radius:0; padding:8px 3px; background:transparent; display:grid; grid-template-columns:24px 1fr auto; align-items:center; gap:7px; text-align:left; }
+  .part-row:hover { background:var(--accent-soft); }
+  .part-row.selected { color:var(--accent); background:var(--accent-soft); }
+  .num { width:21px; height:21px; display:grid; place-items:center; border-radius:50%; color:var(--muted); background:var(--panel2); border:1px solid var(--line); font-size:10px; }
+  .part-row small { color:var(--muted); }
+  .badge { display:inline-flex; padding:2px 6px; border-radius:999px; font-size:10px; color:var(--muted); border:1px solid var(--line); white-space:nowrap; }
+  .detail { min-height:230px; }
+  .detail-empty { color:var(--muted); font-size:13px; padding:18px 4px; }
+  .detail-title { display:flex; gap:8px; align-items:flex-start; margin-bottom:9px; }
+  .detail-title h2 { margin:0; line-height:1.3; flex:1; }
+  .kind { flex:0 0 auto; border-radius:5px; color:#fff; padding:2px 6px; font-size:10px; }
+  .kv { display:grid; grid-template-columns:68px 1fr; gap:6px 9px; padding:8px 0; border-top:1px solid var(--line); font-size:12px; }
+  .kv dt { color:var(--muted); }
+  .kv dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; color:var(--accent); }
+  .legend-note { color:var(--muted); font-size:11px; margin:9px 0 0; }
+  .status { display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--muted); padding-top:9px; }
+  .warning { border-left:3px solid var(--warn); background:color-mix(in srgb,var(--warn) 7%,transparent); border-radius:6px; padding:8px 10px; color:var(--muted); font-size:11px; margin-top:9px; }
+  .foot { grid-column:1/-1; color:var(--muted); font-size:12px; padding:2px 4px; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  @media(max-width:920px) {
+    main { grid-template-columns:1fr; }
+    aside { display:grid; grid-template-columns:1fr 1fr; }
+    .canvas-wrap { min-height:480px; height:64vh; }
+  }
+  @media(max-width:620px) {
+    header, main { padding-left:12px; padding-right:12px; }
+    aside { display:flex; }
+    .toolbar .slider { display:none; }
+    .canvas-wrap { min-height:430px; }
+    .selection-banner { top:8px; min-width:calc(100% - 20px); max-width:calc(100% - 20px); padding:8px 10px; }
+    .scene-object-label { max-width:calc(100% - 16px); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <p class="eyebrow">Spider · P4 Bay V1 · Assembly Digital Mock-up</p>
+  <h1>P4 V1 整机与器件舱 · 交互式 3D 装配示意</h1>
+  <p class="sub">拖动旋转、滚轮缩放、点击器件查看装配坐标与接口方向。已加入 frame、六腿、18 个舵机与腹面 Servo2040；几何是位置/连杆代理，不替代实物 CAD。坐标原点为 frame 与舱体中心，<b>+Y 指向机器人头部</b>。</p>
+</header>
+
+<main>
+  <section class="viewer" aria-label="P4 V1 三维装配视图">
+    <div class="toolbar">
+      <button data-view="iso" class="active" aria-pressed="true">整机等轴</button>
+      <button data-view="bay" aria-pressed="false">舱体特写</button>
+      <button data-view="top" aria-pressed="false">俯视</button>
+      <button data-view="front" aria-pressed="false">头部视角</button>
+      <button data-view="side" aria-pressed="false">右视</button>
+      <span class="sep"></span>
+      <button id="reset">复位</button>
+      <button id="xray" class="active" aria-pressed="true">甲板半透明</button>
+      <button id="template" aria-pressed="false">试装模板</button>
+      <label class="slider">爆炸 <input id="explode" type="range" min="0" max="55" value="0"><span id="explodeValue">0</span></label>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="scene" aria-label="可旋转的 P4 V1 3D 装配示意图"></canvas>
+      <div id="selectionBanner" class="selection-banner empty" role="status" aria-live="polite" aria-atomic="true">
+        <span class="selection-prefix">当前选中：</span><span id="selectionName" class="selection-name">点击模型或“装配对象”目录选择器件</span>
+      </div>
+      <div id="selectedSceneLabel" class="scene-object-label selected" aria-hidden="true" hidden></div>
+      <div id="hoveredSceneLabel" class="scene-object-label hovered" aria-hidden="true" hidden></div>
+      <div class="axis-note">+X 右 · +Y 头 · +Z 上</div>
+      <div class="hint">拖动旋转 · 滚轮缩放 · 点击选中</div>
+    </div>
+  </section>
+
+  <aside>
+    <section class="panel">
+      <h2>显示与查找</h2>
+      <div class="filters" id="filters"></div>
+      <input id="search" class="search" type="search" placeholder="搜索名称 / ID / 接口…" aria-label="搜索器件">
+      <div class="status"><span id="visibleCount"></span><span>V1 · mm</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>打印件清单</h2>
+      <div class="inventory" id="inventory"></div>
+      <p class="legend-note">含原 P4 舱 13 类及整机结构件；“试装/兼容参考件”不进入当前 P4 终态。点击一类可聚焦其装配实例。</p>
+    </section>
+
+    <section class="panel">
+      <h2>装配对象</h2>
+      <div class="object-list" id="objectList" aria-label="可选择的打印件、器件和连线路径"></div>
+      <p class="legend-note">与搜索和分类筛选同步；选择条目会在三维视图中描边并显示世界坐标。</p>
+    </section>
+
+    <section class="panel detail" id="detail">
+      <div class="detail-empty">点击三维器件或左侧打印件清单查看名称、坐标、尺寸、层级和接口方向。</div>
+    </section>
+  </aside>
+
+  <p class="foot">数据基线：<code>hardware/climbing-parts/p4-bay-v1/layout-report.json</code>、<code>software/hexapod/config.py</code>、MakeYourPet STL 边界与 <code>docs/P3-GUIDE.md</code>。腿部按 43/80/120 mm 关节轴长显示；打印件外形和舵机壳为简化代理，装配前仍须实测扫掠。</p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const C = {
+    mechanical:'#7d8e9d', pneumatic:'#17836a', electronic:'#b26a00',
+    tube:'#1aa985', wire:'#347dc1', actuator:'#8b5daf', selected:'#e14b36', pcb:'#2e8b57', tpu:'#9b69b7'
+  };
+  const categoryInfo = {
+    mechanical:['机械件',C.mechanical], pneumatic:['气动件',C.pneumatic],
+    electronic:['电子件',C.electronic], actuator:['舵机',C.actuator], tube:['管路',C.tube], wire:['线束',C.wire]
+  };
+  const items = [];
+  const add = o => { o.visible = o.visible !== false; o.rot = o.rot || 0; o.interfaces = o.interfaces || '—'; items.push(o); return o; };
+  const box = (id,name,cat,pos,dims,layer,extra={}) => add({id,name,cat,pos,dims,layer,shape:'box',...extra});
+  const cyl = (id,name,cat,pos,dims,layer,extra={}) => add({id,name,cat,pos,dims,layer,shape:'cyl',axis:'z',...extra});
+  const line = (id,name,cat,points,layer,extra={}) => add({id,name,cat,points,layer,shape:'line',...extra});
+  const beam = (id,name,cat,a,b,width,height,layer,extra={}) => {
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]);
+    return add({id,name,cat,a,b,pos:a.map((v,i)=>(v+b[i])/2),dims:[len,width,height],layer,shape:'beam',...extra});
+  };
+
+  const printedTypes = [
+    ['fit-template','试装轮廓模板','×1','首印校验件，不进入正式装配','P4 舱 · 13 类'],
+    ['baseplate','主底板','×1','PETG · 190×130×4','P4 舱 · 13 类'],
+    ['electrical-deck','电气甲板','×1','PETG · 184×108×3','P4 舱 · 13 类'],
+    ['deck-post','100 mm 甲板支柱','×6','试装件；正式优先金属 M3','P4 舱 · 13 类'],
+    ['spacer-m25','M2.5 6 mm 隔柱','×4','Pi 5','P4 舱 · 13 类'],
+    ['spacer-m3','M3 6 mm 隔柱','×24','6 块非 Pi PCB，每板 4 个','P4 舱 · 13 类'],
+    ['pump-adapter','泵适配板','×2','右件旋转 180°','P4 舱 · 13 类'],
+    ['pump-pad','TPU 泵减振垫','×2','TPU 95A','P4 舱 · 13 类'],
+    ['valve-rail','六阀竖装轨','×1','侧嘴朝 −Y','P4 舱 · 13 类'],
+    ['sensor-bridge','七传感器桥','×1','2+2+2+1','P4 舱 · 13 类'],
+    ['manifold-clip','歧管卡扣','×2','C 环需打印支撑','P4 舱 · 13 类'],
+    ['switch-bracket','总开关支架','×1','KCD1 + XT60/保险','P4 舱 · 13 类'],
+    ['cable-comb','线束梳','×4','左信号 / 右功率','P4 舱 · 13 类'],
+    ['platform-frame','机身 frame','×1','STL 边界 198×205.4×16','整机结构'],
+    ['left-coxa2','左侧 coxa2','×3','STL 边界 59×19×59；轴长 43','整机结构'],
+    ['right-coxa2','右侧 coxa2','×3','STL 边界 59×19×59；轴长 43','整机结构'],
+    ['left-femur','左侧 femur','×3','STL 边界 92×16×59；轴长 80','整机结构'],
+    ['right-femur','右侧 femur','×3','STL 边界 92×16×59；轴长 80','整机结构'],
+    ['left-tibia-suction','左吸盘 tibia','×3','STL 边界 87.2×25×115.8；轴长 120','整机结构'],
+    ['right-tibia-suction','右吸盘 tibia','×3','STL 边界 87.2×25×115.8；轴长 120','整机结构'],
+    ['suction-foot-door','吸盘足门盖','×6','STL 边界 34×19.6×29.5','整机结构'],
+    ['servo2040-cover','Servo2040 腹面托盘','×1','STL 边界 96×130×14','腹面结构'],
+    ['battery-bar','电池固定条','×1','STL 边界 78×9×28','腹面结构'],
+    ['top-cover4-ref','top-cover4（P3 替换件）','×1','P4 舱已替代；默认不装','兼容参考 · 非 P4 终态'],
+    ['bottom-cover-ref','普通 bottom-cover（替换件）','×1','与 Servo2040 托盘二选一','兼容参考 · 非 P4 终态'],
+    ['shield-ref','shield（官方兼容件）','×1','安装位需按实物方案确认','兼容参考 · 非 P4 终态']
+  ];
+
+  // 整机基座与腹面件。frame 用带中央开口的环形包络，避免遮住腹面控制器。
+  add({id:'frame',name:'MakeYourPet 机身 frame',cat:'mechanical',pos:[0,0,-8],dims:[198,205.4,16],opening:[76,116],layer:'整机结构',shape:'frame',printed:'platform-frame',color:'#586b7a',opacity:.72,interfaces:'六个 coxa 舵机口；顶面 (±44,±40) 接 P4 底板；腹面接 Servo2040 托盘',source:'frame.stl 边界；P4-BAY-DESIGN §0/§2.3',note:'开口环为 STL 外包络代理，不复刻曲面、舵机口与局部筋位；装配前须做六腿动态扫掠。'});
+  box('servo2040-cover','Servo2040 腹面托盘','mechanical',[0,0,-23],[96,129.95,14],'frame 腹面',{printed:'servo2040-cover',color:'#697c8b',opacity:.72,interfaces:'锁在 frame 腹面；容纳 Servo2040，中央开口与 Pi USB 下潜线相邻',source:'servo2040-bottom-cover.stl 边界；P4-BAY-DESIGN §0-1/2'});
+  box('servo2040','Pimoroni Servo2040 控制板','electronic',[0,5,-34],[56,86,7],'frame 腹面',{color:'#2c9366',interfaces:'USB-C → Pi；通道 0~17 → 18 舵机；7.4V 舵机电源轨',source:'BOM 表 1；P4-BAY-DESIGN §0-2；官方接线图',note:'板体为可辨识位置代理，实际 PCB、排针和固定孔尺寸须以到货实测为准。'});
+  box('battery-bar','电池固定条','mechanical',[0,-44,-43],[78,9,28],'frame 腹面',{printed:'battery-bar',color:'#718392',interfaces:'配合魔术贴/扎带固定 2S 电池；不得挤压平衡头与 XT60',source:'battery-bar.stl 边界；P3-GUIDE 第 2 步'});
+  box('battery','2S 7.4V 电池（位置代理）','electronic',[0,-30,-64],[48,110,24],'frame 腹面',{color:'#6b7280',interfaces:'XT60 → 总开关/保险；舵机 7.4V 轨与升压输入',source:'BOM 表 1；P4-BAY-DESIGN §0-1',note:'电池外形和沿腹面的最终位置待实物尺寸、线头弯曲半径与重心复核。'});
+
+  // P3 兼容件：P4 终态不与上方/腹面现用件重叠装配，点击清单时才显示。
+  box('top-cover4-ref','top-cover4（P3 顶盖替换件）','mechanical',[0,0,6.1],[100,140,12.18],'装配外参考',{printed:'top-cover4-ref',color:'#8da0ae',opacity:.28,visible:false,interfaces:'复用 frame 顶面四孔；P4 终态由器件舱底板替代',source:'top-cover4.stl 边界',note:'兼容参考件；不可与当前 P4 舱底板重叠安装。'});
+  box('bottom-cover-ref','普通 bottom-cover（非 Servo2040 版）','mechanical',[0,0,-23],[96,129.95,14],'装配外参考',{printed:'bottom-cover-ref',color:'#8da0ae',opacity:.28,visible:false,interfaces:'frame 腹面替换接口',source:'bottom-cover.stl 边界',note:'与 servo2040-bottom-cover 外包络相同，属于替换方案，不与当前托盘同时安装。'});
+  box('shield-ref','shield（官方兼容参考件）','mechanical',[0,0,60],[41.98,40,120.62],'装配外参考',{printed:'shield-ref',color:'#8da0ae',opacity:.24,visible:false,interfaces:'安装接口和 P4 共存关系待实物方案确认',source:'shield.stl 边界',note:'仅按 STL 外包络显示；当前 P4 终态未锁定其安装姿态。'});
+
+  // 六腿安装点来自 software/hexapod/config.py。
+  // config 坐标为 +X 前/+Y 左；本页为 +X 右/+Y 头，故 htmlX=-configY、htmlY=configX，平面角=90°+config angle。
+  const legDefs=[
+    ['L1','左前 L1',-63,83.5,145,[15,16,17],'left'], ['L2','左中 L2',-81.5,0,180,[9,10,11],'left'], ['L3','左后 L3',-63,-83.5,215,[3,4,5],'left'],
+    ['R1','右前 R1',63,83.5,35,[12,13,14],'right'], ['R2','右中 R2',81.5,0,0,[6,7,8],'right'], ['R3','右后 R3',63,-83.5,-35,[0,1,2],'right']
+  ];
+  const legGeometry=[];
+  legDefs.forEach(([id,label,mx,my,angle,channels,side])=>{
+    const a=angle*Math.PI/180, dx=Math.cos(a), dy=Math.sin(a), hip=[mx,my,-8];
+    const elbow=[mx+43*dx,my+43*dy,-8];
+    // P3 stand_height=90 / foot_reach=130 的 IK 代理姿态：alpha≈21.5°，膝点相对髋高≈29.3 mm。
+    const knee=[mx+117.43*dx,my+117.43*dy,21.34], foot=[mx+130*dx,my+130*dy,-98];
+    const sideName=side==='left'?'左':'右';
+    legGeometry.push({id,label,hip,elbow,knee,foot,angle,channels,side});
+    beam(`coxa-${id}`,`${label} · ${sideName} coxa2 打印连杆`,'mechanical',hip,elbow,19,16,'腿部结构',{printed:`${side}-coxa2`,color:'#6f8291',interfaces:`frame 腿根 ↔ femur 轴；coxa 关节轴长 43 mm`,source:'P3-GUIDE 打印清单；config.py COXA_LEN=43',note:'连杆梁为装配轴线代理；STL 外包络 59×19×59 mm。'});
+    beam(`femur-${id}`,`${label} · ${sideName} femur 打印连杆`,'mechanical',elbow,knee,16,14,'腿部结构',{printed:`${side}-femur`,color:'#788b99',interfaces:'coxa 末端 ↔ tibia 膝轴；femur 关节轴长 80 mm',source:'P3-GUIDE 打印清单；config.py FEMUR_LEN=80',note:'连杆梁为装配轴线代理；STL 外包络 92×16×59 mm。'});
+    beam(`tibia-${id}`,`${label} · ${sideName} tibia-suction 打印件`,'mechanical',knee,foot,25,15,'腿部结构',{printed:`${side}-tibia-suction`,color:'#8093a0',interfaces:'膝轴 ↔ 吸盘唇口圆心；内部容纳 M5 金具与吸盘',source:'P3-GUIDE 定版说明；config.py TIBIA_LEN=120',note:'连杆梁为吸盘小腿轴线代理；STL 外包络约 87.2×25×115.8 mm。'});
+    box(`foot-door-${id}`,`${label} · 吸盘足门盖`,'mechanical',[foot[0],foot[1],foot[2]+3],[34,19.6,6],'足端',{printed:'suction-foot-door',color:'#687c8b',rot:angle,interfaces:'封闭 tibia-suction 足端腔；定版件粘接固定',source:'suction-foot-door.stl 边界；P3-GUIDE 第 2 步',note:'显示厚度压缩为 6 mm 以突出装配层级；实际 STL 外包络 34×19.6×29.5 mm。'});
+    cyl(`suction-cup-${id}`,`${label} · 真空吸盘`,'pneumatic',[foot[0],foot[1],foot[2]-4],[38,38,8],'足端',{color:'#299579',interfaces:`4 mm 真空管 → ${id} 阀后支路；与 tibia-suction M5 金具连接`,source:'P4 气路拓扑',note:'吸盘直径与压缩量为视觉代理，实际自由态/吸附态高度需实测。'});
+    [['coxa',hip],['femur',elbow],['tibia',knee]].forEach(([joint,pos],j)=>
+      box(`servo-${id}-${joint}`,`${label} · ${joint} 舵机 CH${channels[j]}`,'actuator',pos,[40,22,40],'舵机',{color:C.actuator,rot:angle,interfaces:`Servo2040 CH${channels[j]}；7.4V 电源；输出轴连接 ${joint} 打印件`,source:'BOM 18 舵机；config.py 通道映射',note:'40×22×40 mm 仅为通用舵机视觉代理，不作为 DS3235 安装验收尺寸；花键方向与零位须逐腿标定。'}));
+  });
+
+  // 13 类打印件：坐标来自 V1 装配报告。简单代理刻意不复刻 STL 细节。
+  box('baseplate','主底板','mechanical',[0,0,2],[190,130,4],'底层', {printed:'baseplate', color:'#798b9b', opacity:.66, interfaces:'车架孔 (±44,±40)；模块孔位于底板上表面'});
+  box('electrical-deck','电气甲板','mechanical',[0,0,105.5],[184,108,3],'上层甲板', {printed:'electrical-deck', color:'#93a4b1', opacity:.28, interfaces:'6×M3 支柱；左信号、右功率开放式出线口'});
+  const postXY=[[-85,-48],[-85,0],[-85,48],[85,-48],[85,0],[85,48]];
+  postXY.forEach((p,i)=>cyl(`post-${i+1}`,`100 mm 甲板支柱 ${i+1}`,'mechanical',[p[0],p[1],54],[9,9,100],'立柱', {printed:'deck-post', color:'#657987', interfaces:'底端接主底板 M3；顶端接电气甲板 M3'}));
+  box('pump-adapter-L','左泵适配板','mechanical',[-46,24,6],[64,54,4],'底层', {printed:'pump-adapter', interfaces:'底板 M3；泵支架 48×28 mm M4'});
+  box('pump-adapter-R','右泵适配板','mechanical',[46,24,6],[64,54,4],'底层', {printed:'pump-adapter', rot:180, interfaces:'底板 M3；泵支架 48×28 mm M4；旋转 180°'});
+  box('pump-pad-L','左泵 TPU 减振垫','mechanical',[-46,24,9.5],[56,36,3],'底层', {printed:'pump-pad', color:C.tpu, interfaces:'夹在金属泵架与适配板之间'});
+  box('pump-pad-R','右泵 TPU 减振垫','mechanical',[46,24,9.5],[56,36,3],'底层', {printed:'pump-pad', color:C.tpu, interfaces:'夹在金属泵架与适配板之间'});
+  box('valve-rail','六阀竖装轨','mechanical',[0,-44.5,19.45],[154,32,30.9],'底层', {printed:'valve-rail', opacity:.74, interfaces:'6×0520B；底嘴向 −Z，侧嘴向 −Y；歧管卡扣孔'});
+  box('sensor-bridge','七传感器桥','mechanical',[0,12,15.5],[44.1,90,23],'底层', {printed:'sensor-bridge', opacity:.6, interfaces:'7×15 mm 针脚窗口；桥底 3×M3'});
+  const clipX=[-17,17];
+  clipX.forEach((x,i)=>cyl(`manifold-clip-${i?'R':'L'}`,`${i?'右':'左'}歧管卡扣`,'mechanical',[x,-49.5,42],[24,24,68],'底层', {printed:'manifold-clip', opacity:.58, interfaces:'底部 2×M3 接阀轨；C 环夹 Ø20 歧管', note:'圆柱为卡扣包络代理'}));
+  box('switch-bracket','总开关支架','mechanical',[0,60,22],[50,10,36],'底层', {printed:'switch-bracket', opacity:.65, interfaces:'底板 2×M3；KCD1 面板孔；XT60/保险扎带槽'});
+  [[-87,-24.5,-90],[-87,24.5,-90],[87,-24.75,90],[87,24.75,90]].forEach((p,i)=>
+    box(`comb-${i+1}`,`${i<2?'信号':'功率'}线束梳 ${i%2+1}`,'mechanical',[p[0],p[1],12],[36,14,16],'底层', {printed:'cable-comb',rot:p[2],interfaces:`${i<2?'左侧信号线束':'右侧功率线束'}；2×M3`}));
+
+  // PCB 隔柱：顶面 Z=107，顶板 PCB 向上；底面 PCB 向下。
+  const piHoles=[[39.5,-21], [39.5,37], [-9.5,-21], [-9.5,37]];
+  piHoles.forEach((p,i)=>cyl(`pi-spacer-${i+1}`,`Pi M2.5 隔柱 ${i+1}`,'mechanical',[p[0],p[1],110],[7,7,6],'甲板顶面',{printed:'spacer-m25',interfaces:'M2.5 / 试装孔 Ø3.0'}));
+  const m3Holes=[[-23,-41.5],[-23,41.5],[-81,-41.5],[-81,41.5],[79.5,-18.5],[79.5,22.5],[60.5,-18.5],[60.5,22.5],[-.5,27],[86.5,27],[-.5,36],[86.5,38.5],[-43.75,-18.25],[-43.75,48.25],[-78.25,-18.25],[-78.25,48.25],[-35.5,-47.5],[7.5,-47.5],[-35.5,-26.5],[7.5,-26.5],[34.5,-47.5],[77.5,-47.5],[34.5,-26.5],[77.5,-26.5]];
+  m3Holes.forEach((p,i)=>cyl(`m3-spacer-${i+1}`,`M3 隔柱 ${i+1}`,'mechanical',[p[0],p[1],i<8?110:101],[7.5,7.5,6],i<8?'甲板顶面':'甲板底面',{printed:'spacer-m3',interfaces:'M3 / 试装孔 Ø3.6'}));
+  // fit-template 是首印校验件，默认隐藏；显示时作为底板外廓叠层。
+  box('fit-template','试装轮廓模板（装配外）','mechanical',[0,0,.5],[190,130,1],'装配外校验件',{printed:'fit-template',color:'#53a8e4',opacity:.16,visible:false,template:true,interfaces:'仅用于六腿动态扫掠，不留在正式装配中'});
+
+  // 主要真实气动器件代理。
+  [-46,46].forEach((x,i)=>box(`pump-${i?'R':'L'}`,`${i?'右':'左'} 555 双头真空泵`,'pneumatic',[x,24,35],[56,38,48],'底层器件',{color:'#277f72',interfaces:'12V-P 功率线；真空出口 → 歧管/储气罐',note:'泵体前后偏置待实测；当前按支架中心显示'}));
+  const valveX=[-58.75,-35.25,-11.75,11.75,35.25,58.75];
+  const valveNames=['L1','L2','L3','R1','R2','R3'];
+  valveX.forEach((x,i)=>box(`valve-${i+1}`,`0520B 电磁阀 ${valveNames[i]}`,'pneumatic',[x,-44.5,39.5],[20,16,25],'底层器件',{color:'#31967c',interfaces:`底嘴 −Z 真空母线；侧嘴 −Y → ${valveNames[i]} 足；12V-V / MOS OUT${i+1}`,note:'塑料嘴按 Ø8×12 净空；伸出量待实测'}));
+  const sensorXY=[[-10.75,-20.25],[10.75,-20.25],[-10.75,1.25],[10.75,1.25],[-10.75,22.75],[10.75,22.75],[0,44.25]];
+  sensorXY.forEach((p,i)=>box(`sensor-${i+1}`,`XGZP6847A 压力传感器 ${i+1}`,'pneumatic',[p[0],p[1],23],[18,18,8],'底层器件',{color:'#47a88f',interfaces:`取压口 +Z；针脚 −Z → 分压汇接板 CH${i+1}`}));
+  add({id:'manifold',name:'1 进 6 出真空歧管',cat:'pneumatic',pos:[0,-49.5,65],dims:[115,20,20],layer:'底层器件',shape:'cyl',axis:'x',color:'#1f7968',interfaces:'两泵/储气罐输入；6 路输出 → 阀底嘴'});
+  cyl('valve-nozzles','阀底嘴净空（6 路）','pneumatic',[0,-44.5,21],[8,8,12],'底层器件',{opacity:.25,interfaces:'−Z 方向必须贯通',visible:false});
+
+  // 真实电子器件代理。board_size 与旋转后的 V1 包络一致。
+  box('divider','7 路分压汇接板','electronic',[-52,0,116],[70,91,6],'甲板顶面',{color:C.pcb,interfaces:'JST 传感器口向左开放边；Pi IDC → +Y',rot:90});
+  box('pi5','Raspberry Pi 5','electronic',[15,8,117],[56,85,8],'甲板顶面',{color:'#2f9860',interfaces:'GPIO −X；USB-A/网口 +Y；USB-C 电源 +X',rot:90});
+  box('buck5','5V / 5A 降压模块','electronic',[70,2,115],[24,46,6],'甲板顶面',{color:'#2f9860',interfaces:'7.4V 输入 −Y；USB-C 5V 输出 +Y',rot:90});
+  box('mos','YYNMOS-8 MOSFET 板','electronic',[43,24,96],[93,54,8],'甲板底面',{color:'#316f8e',interfaces:'IN1~8 +Y 开放边；OUT/DC −Y（20 mm 接线走廊）'});
+  box('relay','30A 舵机电源继电器','electronic',[-61,15,96],[40,72,8],'甲板底面',{color:'#3d78a0',interfaces:'30A 功率端 −Y；线圈控制 +Y 开放边',rot:90});
+  box('xl-pump','XL6009 #1 · 泵轨','electronic',[-14,-37,97],[50,28,7],'甲板底面',{color:'#326f92',interfaces:'电池输入 +X；12V-P 输出 −X',rot:180});
+  box('xl-valve','XL6009 #2 · 阀轨','electronic',[56,-37,97],[50,28,7],'甲板底面',{color:'#326f92',interfaces:'电池输入 −X；12V-V 输出 +X'});
+  box('cap-pump','泵轨滤波电容','electronic',[-48,-37,94],[13,13,22],'甲板底面',{color:'#4d689c',interfaces:'并联于 XL6009 泵轨 OUT'});
+  box('cap-valve','阀轨滤波电容','electronic',[87,-37,96],[10,10,16],'甲板底面',{color:'#4d689c',interfaces:'并联于 XL6009 阀轨 OUT'});
+  box('switch','KCD1 总开关','electronic',[0,61.5,27],[21,16,25],'底层器件',{color:'#b64e45',interfaces:'2S 电池正极串联；面板操作面朝 +Y'});
+  box('fuse','5A 保险 / XT60 接线位','electronic',[20,58,12],[24,12,8],'底层器件',{color:'#d18a2d',interfaces:'电池 → 总开关 → 保险 → 7.4V 母线'});
+
+  // 气路：位置走向示意；路径不代表软管精确弯曲半径。
+  line('tube-pump-L','左泵真空管','tube',[[-46,24,59],[-72,6,68],[-57.5,-49.5,65]],'管路',{interfaces:'左泵 → 歧管左端'});
+  line('tube-pump-R','右泵真空管','tube',[[46,24,59],[72,6,68],[57.5,-49.5,65]],'管路',{interfaces:'右泵 → 歧管右端'});
+  valveX.forEach((x,i)=>line(`tube-valve-${i+1}`,`歧管 → 阀 ${valveNames[i]} 真空管`,'tube',[[x,-49.5,65],[x,-58,57],[x,-44.5,52]],'管路',{interfaces:`歧管支路 ${i+1} → 阀 ${valveNames[i]} 底嘴`}));
+  valveX.forEach((x,i)=>line(`tube-foot-${i+1}`,`阀 ${valveNames[i]} → 足端管`,'tube',[[x,-52.5,39.5],[x,-71,35],[x+(i<3?-18:18),-82,28]],'管路',{interfaces:`阀 ${valveNames[i]} 侧嘴 −Y → 对应吸盘`}));
+  sensorXY.slice(0,6).forEach((p,i)=>line(`tube-sensor-${i+1}`,`足端取压管 ${valveNames[i]}`,'tube',[[valveX[i],-71,35],[p[0],p[1],30]],'管路',{interfaces:`${valveNames[i]} 支路 → 压力传感器 ${i+1}`,opacity:.7}));
+  line('tube-sensor-tank','母线取压管','tube',[[0,-49.5,65],[0,44.25,30]],'管路',{interfaces:'真空母线 → 压力传感器 7',opacity:.7});
+
+  // 线束：只画主干与分支方向，端子级定义见参考 HTML。
+  line('wire-sensor','传感器模拟线束','wire',[[0,12,28],[-70,15,35],[-87,24.5,24],[-87,24.5,92],[-52,0,113]],'线束',{interfaces:'7× XGZP6847A → 左信号梳 → 分压汇接板'});
+  line('wire-idc','Pi ↔ 分压板 IDC / I²C','wire',[[-52,43,118],[-18,50,124],[15,50,121]],'线束',{interfaces:'Pi GPIO / ADS1115 I²C；低压信号'});
+  line('wire-mos-signal','Pi → MOS 8 路控制','wire',[[15,8,121],[-2,49,122],[-20,60,106],[43,56,96]],'线束',{interfaces:'GPIO ×8 → IN1+~IN8+；信号地单点共地'});
+  line('wire-power-trunk','右侧 7.4V / 12V 功率主干','wire',[[20,58,16],[87,24.75,25],[87,-24.75,75],[86,-37,97]],'线束',{color:C.electronic,dash:[],interfaces:'保险输出 → 右功率梳 → 两块 XL6009 / MOS DC+'});
+  line('wire-pumps','泵 12V-P 线束','wire',[[-39,-37,97],[87,-24.75,72],[60,8,44],[46,24,54],[-46,24,54]],'线束',{color:C.electronic,dash:[],interfaces:'XL6009 #1 OUT → 泵正极；泵负极 → MOS OUT7−/8−'});
+  line('wire-valves','六阀 12V-V 线束','wire',[[81,-37,97],[87,-24.75,70],[70,-44.5,57],[-58.75,-44.5,55]],'线束',{color:C.electronic,dash:[],interfaces:'XL6009 #2 / MOS OUT1~6 → 六阀线圈'});
+  line('wire-pi-servo2040','Pi ↔ Servo2040 USB','wire',[[15,8,117],[15,8,108],[0,5,-30]],'线束',{interfaces:'Pi USB-A → Servo2040 USB-C；穿 frame / P4 底板中央开口',source:'P4-BAY-DESIGN §0-2；p4-pi-wiring.html'});
+  legGeometry.forEach(leg=>line(`wire-servo-${leg.id}`,`Servo2040 → ${leg.id} 三舵机线束`,'wire',[[0,5,-34],[leg.hip[0]*.72,leg.hip[1]*.72,-25],leg.hip,leg.elbow,leg.knee],'线束',{interfaces:`Servo2040 CH${leg.channels.join('/')} → ${leg.id} coxa/femur/tibia；腿根保留服务环`,source:'config.py 通道映射；P3-GUIDE 第 3 步',opacity:.72}));
+
+  // 绘制状态。
+  const canvas=document.getElementById('scene'), wrap=document.getElementById('canvasWrap'), ctx=canvas.getContext('2d');
+  const selectionBanner=document.getElementById('selectionBanner'), selectionName=document.getElementById('selectionName');
+  const selectedSceneLabel=document.getElementById('selectedSceneLabel'), hoveredSceneLabel=document.getElementById('hoveredSceneLabel');
+  let yaw=-.72, pitch=.58, zoom=1.10, targetZ=-15, selected=null, hovered=null, explode=0, xray=true, showTemplate=false;
+  let drag=false, moved=false, lastX=0, lastY=0, hitFaces=[];
+  const activeCats=new Set(Object.keys(categoryInfo));
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+  const rgba=(hex,a=1)=>{ const h=hex.replace('#',''); const v=parseInt(h.length===3?h.split('').map(x=>x+x).join(''):h,16); return `rgba(${v>>16},${(v>>8)&255},${v&255},${a})`; };
+  const shade=(hex,f,a=1)=>{ const h=hex.replace('#',''),v=parseInt(h,16); return `rgba(${clamp(((v>>16)&255)*f,0,255)|0},${clamp(((v>>8)&255)*f,0,255)|0},${clamp((v&255)*f,0,255)|0},${a})`; };
+  function resize(){ const dpr=Math.min(2,devicePixelRatio||1),r=wrap.getBoundingClientRect(); canvas.width=Math.round(r.width*dpr); canvas.height=Math.round(r.height*dpr); canvas.style.width=r.width+'px'; canvas.style.height=r.height+'px'; ctx.setTransform(dpr,0,0,dpr,0,0); draw(); }
+  function itemOffset(o){
+    if(!explode) return 0;
+    if(o.layer==='甲板顶面') return explode*1.7;
+    if(o.layer==='上层甲板') return explode;
+    if(o.layer==='甲板底面') return explode*.72;
+    if(o.layer==='线束' || o.layer==='管路') return explode*.25;
+    return 0;
+  }
+  function project(p,o){
+    const z=p[2]+(o?itemOffset(o):0), cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+    const dx=p[0],dy=p[1],dz=z-targetZ;
+    const right=cy*dx-sy*dy, depth=sy*dx+cy*dy, vertical=cp*dz-sp*depth, camDepth=sp*dz+cp*depth;
+    return [canvas.clientWidth/2+right*zoom,canvas.clientHeight*.54-vertical*zoom,camDepth];
+  }
+  function rotateXY(p,a){ const c=Math.cos(a),s=Math.sin(a); return [p[0]*c-p[1]*s,p[0]*s+p[1]*c,p[2]]; }
+  function boxFaces(o){
+    const [w,d,h]=o.dims, a=(o.rot||0)*Math.PI/180, [x,y,z]=o.pos;
+    let v=[[-w/2,-d/2,-h/2],[w/2,-d/2,-h/2],[w/2,d/2,-h/2],[-w/2,d/2,-h/2],[-w/2,-d/2,h/2],[w/2,-d/2,h/2],[w/2,d/2,h/2],[-w/2,d/2,h/2]];
+    v=v.map(q=>{q=rotateXY(q,a);return [q[0]+x,q[1]+y,q[2]+z]});
+    return [[0,1,2,3],[4,7,6,5],[0,4,5,1],[1,5,6,2],[2,6,7,3],[3,7,4,0]].map((ix,i)=>({pts:ix.map(k=>project(v[k],o)),shade:[.66,1.08,.78,.92,.82,.72][i]}));
+  }
+  function frameFaces(o){
+    const [w,d,h]=o.dims,[ow,od]=o.opening, side=(w-ow)/2, end=(d-od)/2, [x,y,z]=o.pos;
+    const parts=[
+      {pos:[x-(ow+side)/2,y,z],dims:[side,d,h]}, {pos:[x+(ow+side)/2,y,z],dims:[side,d,h]},
+      {pos:[x,y-(od+end)/2,z],dims:[ow,end,h]}, {pos:[x,y+(od+end)/2,z],dims:[ow,end,h]}
+    ];
+    return parts.flatMap(p=>boxFaces({...o,...p,shape:'box'}));
+  }
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const unit=v=>{const n=Math.hypot(...v)||1;return v.map(x=>x/n);};
+  function beamFaces(o){
+    const u=unit(o.b.map((v,i)=>v-o.a[i])), ref=Math.abs(u[2])<.88?[0,0,1]:[0,1,0], v=unit(cross(ref,u)), w=cross(u,v);
+    const c=o.pos, hl=o.dims[0]/2, hw=o.dims[1]/2, hh=o.dims[2]/2;
+    const vertex=(su,sv,sw)=>c.map((q,i)=>q+u[i]*hl*su+v[i]*hw*sv+w[i]*hh*sw);
+    const verts=[vertex(-1,-1,-1),vertex(1,-1,-1),vertex(1,1,-1),vertex(-1,1,-1),vertex(-1,-1,1),vertex(1,-1,1),vertex(1,1,1),vertex(-1,1,1)];
+    return [[0,1,2,3],[4,7,6,5],[0,4,5,1],[1,5,6,2],[2,6,7,3],[3,7,4,0]].map((ix,i)=>({pts:ix.map(k=>project(verts[k],o)),shade:[.66,1.08,.78,.92,.82,.72][i]}));
+  }
+  function cylFaces(o){
+    const axis=o.axis||'z', len=axis==='x'?o.dims[0]:o.dims[2], r=(axis==='x'?o.dims[1]:o.dims[0])/2, n=14, [cx,cy,cz]=o.pos, rings=[[],[]];
+    for(let k=0;k<2;k++) for(let i=0;i<n;i++){ const a=i*2*Math.PI/n, q=axis==='x'?[cx+(k-.5)*len,cy+Math.cos(a)*r,cz+Math.sin(a)*r]:[cx+Math.cos(a)*r,cy+Math.sin(a)*r,cz+(k-.5)*len]; rings[k].push(q); }
+    const fs=[];
+    for(let i=0;i<n;i++) fs.push({pts:[project(rings[0][i],o),project(rings[0][(i+1)%n],o),project(rings[1][(i+1)%n],o),project(rings[1][i],o)],shade:.72+(i%5)*.07});
+    fs.push({pts:rings[0].map(p=>project(p,o)),shade:.66},{pts:[...rings[1]].reverse().map(p=>project(p,o)),shade:1.04});
+    return fs;
+  }
+  function isShown(o){
+    if(!activeCats.has(o.cat)) return false;
+    if(o.template && !showTemplate) return false;
+    const q=document.getElementById('search').value.trim().toLowerCase();
+    if(q && !`${o.name} ${o.id} ${o.interfaces} ${o.printed||''} ${o.layer||''} ${o.source||''} ${o.note||''}`.toLowerCase().includes(q)) return false;
+    return o.visible!==false || (o.template&&showTemplate);
+  }
+  function polyPath(points){ const p=new Path2D(); p.moveTo(points[0][0],points[0][1]); for(let i=1;i<points.length;i++) p.lineTo(points[i][0],points[i][1]); p.closePath(); return p; }
+  function drawGrid(){
+    ctx.save(); ctx.lineWidth=1; ctx.strokeStyle=rgba(css('--line')||'#d5dde4',.48);
+    for(let i=-220;i<=220;i+=40){ [[[-220,i,-98],[220,i,-98]],[[i,-220,-98],[i,220,-98]]].forEach(seg=>{const a=project(seg[0]),b=project(seg[1]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();}); }
+    const axes=[[[0,0,0],[225,0,0],'X','#c05252'],[[0,0,0],[0,225,0],'Y','#438969'],[[0,0,0],[0,0,145],'Z','#397caf']];
+    ctx.font='11px ui-monospace,monospace'; axes.forEach(([a,b,t,col])=>{a=project(a);b=project(b);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.fillStyle=col;ctx.fillText('+'+t,b[0]+4,b[1]-3);}); ctx.restore();
+  }
+  function draw(){
+    if(!canvas.clientWidth) return;
+    ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight); drawGrid(); hitFaces=[];
+    const solids=[], lines=[];
+    items.filter(isShown).forEach(o=>{
+      if(o.shape==='line') { const pts=o.points.map(p=>project(p,o)); lines.push({o,pts,depth:pts.reduce((s,p)=>s+p[2],0)/pts.length}); return; }
+      const faces=o.shape==='cyl'?cylFaces(o):o.shape==='beam'?beamFaces(o):o.shape==='frame'?frameFaces(o):boxFaces(o);
+      faces.forEach(f=>solids.push({o,pts:f.pts,depth:f.pts.reduce((s,p)=>s+p[2],0)/f.pts.length,shade:f.shade}));
+    });
+    solids.sort((a,b)=>a.depth-b.depth);
+    solids.forEach(f=>{
+      const o=f.o, base=o.color||C[o.cat], isSel=selected===o.id, isHover=hovered===o.id;
+      let alpha=o.opacity==null?.86:o.opacity; if(o.id==='electrical-deck'&&xray) alpha=.18;
+      const p=polyPath(f.pts); ctx.fillStyle=isSel?rgba(C.selected,alpha):shade(base,f.shade,alpha); ctx.fill(p);
+      ctx.strokeStyle=isSel?C.selected:(isHover?'#f0a43c':shade(base,.72,Math.min(1,alpha+.2))); ctx.lineWidth=isSel?2.4:(isHover?1.8:.7); ctx.stroke(p);
+      hitFaces.push({o,path:p});
+    });
+    lines.sort((a,b)=>a.depth-b.depth).forEach(l=>{
+      const isSel=selected===l.o.id,isHover=hovered===l.o.id; ctx.beginPath(); ctx.moveTo(l.pts[0][0],l.pts[0][1]); for(let i=1;i<l.pts.length;i++)ctx.lineTo(l.pts[i][0],l.pts[i][1]);
+      ctx.strokeStyle=isSel?C.selected:(l.o.color||C[l.o.cat]); ctx.lineWidth=isSel?5:(isHover?4:2.5); ctx.globalAlpha=l.o.opacity==null?.9:l.o.opacity; ctx.setLineDash(l.o.dash ?? (l.o.cat==='wire'?[7,4]:[])); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+      l.pts.forEach((p,i)=>{ if(i===0||i===l.pts.length-1){ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.arc(p[0],p[1],isSel?4:2.6,0,Math.PI*2);ctx.fill();} });
+      const pad=new Path2D(); pad.moveTo(l.pts[0][0],l.pts[0][1]); for(let i=1;i<l.pts.length;i++)pad.lineTo(l.pts[i][0],l.pts[i][1]); hitFaces.push({o:l.o,path:pad,line:true});
+    });
+    updateSceneLabels();
+    const count=items.filter(isShown).length; document.getElementById('visibleCount').textContent=`当前显示 ${count} 个对象`;
+  }
+  function sceneAnchor(o){
+    return o.pos?project([o.pos[0],o.pos[1],o.pos[2]+(o.dims?.[2]||0)/2],o):project(o.points[Math.floor(o.points.length/2)],o);
+  }
+  function placeSceneLabel(el,o,offsetY=0){
+    if(!o || !isShown(o)){el.hidden=true;return;}
+    el.textContent=o.name; el.hidden=false;
+    const p=sceneAnchor(o), w=el.offsetWidth, h=el.offsetHeight;
+    el.style.left=`${clamp(p[0]+12,8,canvas.clientWidth-w-8)}px`;
+    el.style.top=`${clamp(p[1]-h-10+offsetY,58,canvas.clientHeight-h-34)}px`;
+  }
+  function updateSceneLabels(){
+    const selectedItem=items.find(o=>o.id===selected), hoveredItem=items.find(o=>o.id===hovered&&o.id!==selected);
+    placeSceneLabel(selectedSceneLabel,selectedItem);
+    placeSceneLabel(hoveredSceneLabel,hoveredItem,selectedItem?30:0);
+  }
+  function renderSelectionBanner(o){
+    selectionBanner.classList.toggle('empty',!o);
+    selectionName.textContent=o?o.name:'点击模型或“装配对象”目录选择器件';
+  }
+  function hitAt(x,y){
+    for(let i=hitFaces.length-1;i>=0;i--){ const h=hitFaces[i]; if(h.line){ctx.save();ctx.lineWidth=10;if(ctx.isPointInStroke(h.path,x,y)){ctx.restore();return h.o;}ctx.restore();} else if(ctx.isPointInPath(h.path,x,y)) return h.o; }
+    return null;
+  }
+  function fmt(v){ return Array.isArray(v)?`(${v.map(n=>Number(n).toFixed(1)).join(', ')}) mm`:'—'; }
+  function select(id,focus=false){ selected=id; const o=items.find(x=>x.id===id); renderDetail(o); renderInventory(); renderObjectList(); renderSelectionBanner(o); if(o&&focus&&o.pos){ /* 保持当前朝向，只确保选中标签重绘 */ } draw(); }
+  function renderDetail(o){
+    const d=document.getElementById('detail'); if(!o){d.innerHTML='<div class="detail-empty">点击三维器件或打印件清单查看名称、坐标、尺寸、层级和接口方向。</div>';return;}
+    const label=categoryInfo[o.cat][0], col=categoryInfo[o.cat][1], coords=o.pos?fmt(o.pos):`${o.points.length} 个路径节点`, dims=o.dims?fmt(o.dims):'软管/线束路径';
+    const ptype=o.printed?printedTypes.find(p=>p[0]===o.printed):null;
+    d.innerHTML=`<div class="detail-title"><h2>${o.name}</h2><span class="kind" style="background:${col}">${label}</span></div>
+      <dl class="kv"><dt>ID</dt><dd><code>${o.id}</code></dd><dt>中心坐标</dt><dd>${coords}</dd><dt>代理尺寸</dt><dd>${dims}</dd><dt>装配层级</dt><dd>${o.layer}</dd><dt>接口方向</dt><dd>${o.interfaces}</dd>${ptype?`<dt>打印件类</dt><dd>${ptype[1]} ${ptype[2]}</dd>`:''}${o.source?`<dt>位置依据</dt><dd>${o.source}</dd>`:''}</dl>
+      ${o.note?`<div class="warning">${o.note}</div>`:''}`;
+  }
+  function renderFilters(){ const e=document.getElementById('filters'); e.innerHTML=''; Object.entries(categoryInfo).forEach(([key,[name,col]])=>{const l=document.createElement('label');l.className='filter';l.innerHTML=`<input type="checkbox" checked data-cat="${key}"><span class="swatch" style="background:${col}"></span>${name}`;l.querySelector('input').onchange=ev=>{ev.target.checked?activeCats.add(key):activeCats.delete(key);renderObjectList();draw();};e.appendChild(l);}); }
+  function renderInventory(){
+    const e=document.getElementById('inventory'); e.innerHTML=''; let group=''; printedTypes.forEach((p,i)=>{ if(p[4]!==group){group=p[4];const h=document.createElement('div');h.className='inventory-group';h.textContent=group;e.appendChild(h);} const inst=items.filter(o=>o.printed===p[0]); const b=document.createElement('button'); b.className='part-row'+(inst.some(o=>o.id===selected)?' selected':''); b.innerHTML=`<span class="num">${i+1}</span><span>${p[1]}<br><small>${p[3]}</small></span><span class="badge">${p[2]}</span>`; b.onclick=()=>{ if(p[0]==='fit-template'&&!showTemplate){showTemplate=true;document.getElementById('template').classList.add('active');} const target=inst[0]; if(target){target.visible=true;select(target.id,true);} }; e.appendChild(b); });
+  }
+  function renderObjectList(){
+    const e=document.getElementById('objectList'); e.innerHTML='';
+    items.filter(isShown).sort((a,b)=>a.layer.localeCompare(b.layer,'zh-CN')||a.name.localeCompare(b.name,'zh-CN')).forEach(o=>{
+      const b=document.createElement('button'); b.className='object-row'+(o.id===selected?' selected':''); b.setAttribute('aria-pressed',o.id===selected?'true':'false');
+      b.innerHTML=`<span class="dot" style="background:${o.color||categoryInfo[o.cat][1]}"></span><span>${o.name}<small>${o.layer} · ${o.id}</small></span><span class="badge">${categoryInfo[o.cat][0]}</span>`;
+      b.onclick=()=>select(o.id,true); e.appendChild(b);
+    });
+    if(!e.children.length)e.innerHTML='<div class="detail-empty">没有符合当前筛选的对象。</div>';
+  }
+  function setView(v){ const views={iso:[-.72,.58,1.10,-15],bay:[-.72,.58,3.12,54],top:[0,1.54,.90,0],front:[Math.PI,.05,1.34,5],side:[-Math.PI/2,.08,1.34,5]}; [yaw,pitch,zoom,targetZ]=views[v]; document.querySelectorAll('[data-view]').forEach(b=>{const active=b.dataset.view===v;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');}); draw(); }
+  canvas.addEventListener('pointerdown',e=>{drag=true;moved=false;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId);canvas.classList.add('dragging');});
+  canvas.addEventListener('pointermove',e=>{const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(drag){const dx=e.clientX-lastX,dy=e.clientY-lastY;if(Math.abs(dx)+Math.abs(dy)>2)moved=true;yaw+=dx*.008;pitch=clamp(pitch+dy*.006,-1.35,1.54);lastX=e.clientX;lastY=e.clientY;draw();}else{const h=hitAt(x,y),id=h?.id||null;if(id!==hovered){hovered=id;canvas.style.cursor=id?'pointer':'grab';draw();}}});
+  canvas.addEventListener('pointerup',e=>{const r=canvas.getBoundingClientRect();if(!moved){const h=hitAt(e.clientX-r.left,e.clientY-r.top);select(h?.id||null);}drag=false;canvas.classList.remove('dragging');});
+  canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom*Math.exp(-e.deltaY*.001),.7,7);draw();},{passive:false});
+  document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));
+  document.getElementById('reset').onclick=()=>{explode=0;document.getElementById('explode').value=0;document.getElementById('explodeValue').textContent='0';select(null);setView('iso');};
+  document.getElementById('xray').onclick=e=>{xray=!xray;e.currentTarget.classList.toggle('active',xray);e.currentTarget.setAttribute('aria-pressed',xray?'true':'false');draw();};
+  document.getElementById('template').onclick=e=>{showTemplate=!showTemplate;e.currentTarget.classList.toggle('active',showTemplate);e.currentTarget.setAttribute('aria-pressed',showTemplate?'true':'false');renderObjectList();draw();};
+  document.getElementById('explode').oninput=e=>{explode=+e.target.value;document.getElementById('explodeValue').textContent=explode;draw();};
+  document.getElementById('search').oninput=()=>{renderObjectList();draw();};
+  new ResizeObserver(resize).observe(wrap); renderFilters();renderInventory();renderObjectList();renderDetail(null);renderSelectionBanner(null);resize();
+})();
+</script>
+</body>
+</html>

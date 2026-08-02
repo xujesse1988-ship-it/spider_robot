@@ -1,0 +1,1836 @@
+{
+  "version": "V1",
+  "units": "mm",
+  "coordinate_system": "+Y=head, origin=base/deck center",
+  "frame_attachment_holes": [
+    [
+      -44.0,
+      -40.0
+    ],
+    [
+      44.0,
+      -40.0
+    ],
+    [
+      -44.0,
+      40.0
+    ],
+    [
+      44.0,
+      40.0
+    ]
+  ],
+  "base_module_holes": [
+    [
+      -85.0,
+      -48.0
+    ],
+    [
+      85.0,
+      -48.0
+    ],
+    [
+      -85.0,
+      0.0
+    ],
+    [
+      85.0,
+      0.0
+    ],
+    [
+      -85.0,
+      48.0
+    ],
+    [
+      85.0,
+      48.0
+    ],
+    [
+      -60.0,
+      0.0
+    ],
+    [
+      -40.0,
+      0.0
+    ],
+    [
+      -60.0,
+      48.0
+    ],
+    [
+      -40.0,
+      48.0
+    ],
+    [
+      40.0,
+      0.0
+    ],
+    [
+      60.0,
+      0.0
+    ],
+    [
+      40.0,
+      48.0
+    ],
+    [
+      60.0,
+      48.0
+    ],
+    [
+      -72.0,
+      -56.0
+    ],
+    [
+      -72.0,
+      -36.0
+    ],
+    [
+      72.0,
+      -56.0
+    ],
+    [
+      72.0,
+      -36.0
+    ],
+    [
+      0.0,
+      -9.5
+    ],
+    [
+      0.0,
+      12.0
+    ],
+    [
+      0.0,
+      33.5
+    ],
+    [
+      -18.0,
+      60.0
+    ],
+    [
+      18.0,
+      60.0
+    ],
+    [
+      -87.0,
+      -36.5
+    ],
+    [
+      -87.0,
+      -12.5
+    ],
+    [
+      -87.0,
+      12.5
+    ],
+    [
+      -87.0,
+      36.5
+    ],
+    [
+      87.0,
+      -36.75
+    ],
+    [
+      87.0,
+      -12.75
+    ],
+    [
+      87.0,
+      12.75
+    ],
+    [
+      87.0,
+      36.75
+    ]
+  ],
+  "deck_post_holes": [
+    [
+      -85.0,
+      -48.0
+    ],
+    [
+      85.0,
+      -48.0
+    ],
+    [
+      -85.0,
+      0.0
+    ],
+    [
+      85.0,
+      0.0
+    ],
+    [
+      -85.0,
+      48.0
+    ],
+    [
+      85.0,
+      48.0
+    ]
+  ],
+  "valve_rail_clip_holes": [
+    [
+      -25.0,
+      -52.5
+    ],
+    [
+      -9.0,
+      -52.5
+    ],
+    [
+      9.0,
+      -52.5
+    ],
+    [
+      25.0,
+      -52.5
+    ]
+  ],
+  "recommended_base_layout": {
+    "pump_adapter_centers": [
+      [
+        -46.0,
+        24.0,
+        4.0
+      ],
+      [
+        46.0,
+        24.0,
+        4.0
+      ]
+    ],
+    "sensor_bridge_center": [
+      0.0,
+      12.0,
+      4.0
+    ],
+    "valve_rail_center": [
+      0.0,
+      -44.5,
+      4.0
+    ],
+    "manifold_axis": [
+      0.0,
+      -49.5,
+      65.0
+    ],
+    "manifold_clip_centers": [
+      [
+        -17.0,
+        -49.5,
+        65.0
+      ],
+      [
+        17.0,
+        -49.5,
+        65.0
+      ]
+    ],
+    "switch_bracket_center": [
+      0.0,
+      60.0,
+      4.0
+    ],
+    "signal_combs": [
+      [
+        -87.0,
+        -24.5,
+        4.0
+      ],
+      [
+        -87.0,
+        24.5,
+        4.0
+      ]
+    ],
+    "power_combs": [
+      [
+        87.0,
+        -24.75,
+        4.0
+      ],
+      [
+        87.0,
+        24.75,
+        4.0
+      ]
+    ]
+  },
+  "electrical_deck_assembled_z": {
+    "baseplate_top": 4.0,
+    "post_length": 100.0,
+    "deck_bottom": 104.0,
+    "deck_top": 107.0
+  },
+  "electrical_deck": {
+    "divider": {
+      "side": "top",
+      "center": [
+        -52.0,
+        0.0
+      ],
+      "board_size": [
+        70.0,
+        91.0
+      ],
+      "source_board_size": [
+        91.0,
+        70.0
+      ],
+      "rotation_deg": 90.0,
+      "ports": {
+        "sensor_JST": "vertical; route to left open edge",
+        "Pi_IDC": "+Y"
+      },
+      "absolute_holes": [
+        [
+          -23.000000000000004,
+          -41.5,
+          3.6
+        ],
+        [
+          -22.999999999999996,
+          41.5,
+          3.6
+        ],
+        [
+          -81.0,
+          -41.5,
+          3.6
+        ],
+        [
+          -81.0,
+          41.5,
+          3.6
+        ]
+      ]
+    },
+    "pi5": {
+      "side": "top",
+      "center": [
+        15.0,
+        8.0
+      ],
+      "board_size": [
+        56.0,
+        85.0
+      ],
+      "source_board_size": [
+        85.0,
+        56.0
+      ],
+      "rotation_deg": 90.0,
+      "ports": {
+        "GPIO": "-X",
+        "USB_A_Ethernet": "+Y open edge",
+        "USB_C_power": "+X"
+      },
+      "absolute_holes": [
+        [
+          39.5,
+          -21.0,
+          3.0
+        ],
+        [
+          39.5,
+          37.0,
+          3.0
+        ],
+        [
+          -9.5,
+          -21.0,
+          3.0
+        ],
+        [
+          -9.5,
+          37.0,
+          3.0
+        ]
+      ]
+    },
+    "buck_5v": {
+      "side": "top",
+      "center": [
+        70.0,
+        2.0
+      ],
+      "board_size": [
+        24.0,
+        46.0
+      ],
+      "source_board_size": [
+        46.0,
+        24.0
+      ],
+      "rotation_deg": 90.0,
+      "ports": {
+        "input": "-Y",
+        "USB_C_output": "+Y"
+      },
+      "absolute_holes": [
+        [
+          79.5,
+          -18.5,
+          3.6
+        ],
+        [
+          79.5,
+          22.5,
+          3.6
+        ],
+        [
+          60.5,
+          -18.5,
+          3.6
+        ],
+        [
+          60.5,
+          22.5,
+          3.6
+        ]
+      ]
+    },
+    "yynmos8": {
+      "side": "bottom",
+      "center": [
+        43.0,
+        24.0
+      ],
+      "board_size": [
+        93.0,
+        54.0
+      ],
+      "source_board_size": [
+        93.0,
+        54.0
+      ],
+      "rotation_deg": 0.0,
+      "ports": {
+        "signal_IN": "+Y open edge",
+        "power_OUT_DC": "-Y 20 mm corridor"
+      },
+      "absolute_holes": [
+        [
+          -0.5,
+          27.0,
+          3.6
+        ],
+        [
+          86.5,
+          27.0,
+          3.6
+        ],
+        [
+          -0.5,
+          36.0,
+          3.6
+        ],
+        [
+          86.5,
+          38.5,
+          3.6
+        ]
+      ]
+    },
+    "relay": {
+      "side": "bottom",
+      "center": [
+        -61.0,
+        15.0
+      ],
+      "board_size": [
+        40.0,
+        72.0
+      ],
+      "source_board_size": [
+        72.0,
+        40.0
+      ],
+      "rotation_deg": 90.0,
+      "ports": {
+        "30A_power": "-Y",
+        "coil_control": "+Y open edge"
+      },
+      "absolute_holes": [
+        [
+          -43.75,
+          -18.25,
+          3.6
+        ],
+        [
+          -43.75,
+          48.25,
+          3.6
+        ],
+        [
+          -78.25,
+          -18.25,
+          3.6
+        ],
+        [
+          -78.25,
+          48.25,
+          3.6
+        ]
+      ]
+    },
+    "xl6009_pump": {
+      "side": "bottom",
+      "center": [
+        -14.0,
+        -37.0
+      ],
+      "board_size": [
+        50.0,
+        28.0
+      ],
+      "source_board_size": [
+        50.0,
+        28.0
+      ],
+      "rotation_deg": 180.0,
+      "ports": {
+        "OUT_pump_rail": "-X",
+        "IN_battery": "+X shared 20 mm corridor"
+      },
+      "absolute_holes": [
+        [
+          7.5,
+          -26.5,
+          3.6
+        ],
+        [
+          -35.5,
+          -26.5,
+          3.6
+        ],
+        [
+          7.5,
+          -47.5,
+          3.6
+        ],
+        [
+          -35.5,
+          -47.5,
+          3.6
+        ]
+      ]
+    },
+    "xl6009_valve": {
+      "side": "bottom",
+      "center": [
+        56.0,
+        -37.0
+      ],
+      "board_size": [
+        50.0,
+        28.0
+      ],
+      "source_board_size": [
+        50.0,
+        28.0
+      ],
+      "rotation_deg": 0.0,
+      "ports": {
+        "IN_battery": "-X shared 20 mm corridor",
+        "OUT_valve_rail": "+X open edge"
+      },
+      "absolute_holes": [
+        [
+          34.5,
+          -47.5,
+          3.6
+        ],
+        [
+          77.5,
+          -47.5,
+          3.6
+        ],
+        [
+          34.5,
+          -26.5,
+          3.6
+        ],
+        [
+          77.5,
+          -26.5,
+          3.6
+        ]
+      ]
+    }
+  },
+  "component_keepouts": {
+    "pump_each_conservative": {
+      "size_mm": [
+        62.0,
+        86.0,
+        53.0
+      ],
+      "warning": "measure 86 mm body offset from bracket-hole centre before climb"
+    },
+    "valve_each_vertical": {
+      "body_mm": [
+        20.0,
+        16.0,
+        25.0
+      ],
+      "plastic_nozzle_keepout": "Ø8 x 12; measure actual protrusion"
+    },
+    "manifold": {
+      "body_mm": [
+        115.0,
+        20.0
+      ],
+      "axis_world_mm": [
+        0.0,
+        -49.5,
+        65.0
+      ]
+    },
+    "pump_filter_cap": {
+      "body_max_mm": [
+        22.0,
+        13.0
+      ],
+      "location": "beside XL6009 pump OUT"
+    },
+    "valve_filter_cap": {
+      "body_max_mm": [
+        16.0,
+        10.0
+      ],
+      "location": "beside XL6009 valve OUT"
+    }
+  },
+  "parts": {
+    "p4-bay-fit-template-v1": {
+      "file": "p4-bay-fit-template-v1.stl",
+      "quantity": 1,
+      "material": "PLA/PETG",
+      "note": "first print; verifies frame envelope only",
+      "watertight": true,
+      "extents_mm": [
+        190.0,
+        130.0,
+        1.0
+      ],
+      "volume_cm3_each": 17.213
+    },
+    "p4-bay-baseplate-v1": {
+      "file": "p4-bay-baseplate-v1.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "flat 4 mm plate; no raised V0 opening rib",
+      "watertight": true,
+      "extents_mm": [
+        190.0,
+        130.0,
+        4.0
+      ],
+      "volume_cm3_each": 72.19
+    },
+    "p4-bay-electrical-deck-v1": {
+      "file": "p4-bay-electrical-deck-v1.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "re-laid for terminal service corridors",
+      "watertight": true,
+      "extents_mm": [
+        184.0,
+        108.0,
+        3.0
+      ],
+      "volume_cm3_each": 57.213
+    },
+    "p4-bay-deck-post-100mm-v1": {
+      "file": "p4-bay-deck-post-100mm-v1.stl",
+      "quantity": 6,
+      "material": "PETG trial",
+      "note": "use purchased M3 standoffs for climb service",
+      "watertight": true,
+      "extents_mm": [
+        9.0,
+        9.0,
+        100.0
+      ],
+      "volume_cm3_each": 5.224
+    },
+    "p4-bay-spacer-m25-6mm-v1": {
+      "file": "p4-bay-spacer-m25-6mm-v1.stl",
+      "quantity": 4,
+      "material": "PETG/PLA",
+      "note": "Pi 5; enlarged Ø3.0 trial hole",
+      "watertight": true,
+      "extents_mm": [
+        7.0,
+        7.0,
+        6.0
+      ],
+      "volume_cm3_each": 0.188
+    },
+    "p4-bay-spacer-m3-6mm-v1": {
+      "file": "p4-bay-spacer-m3-6mm-v1.stl",
+      "quantity": 24,
+      "material": "PETG/PLA",
+      "note": "six non-Pi PCBs; four spacers each",
+      "watertight": true,
+      "extents_mm": [
+        7.5,
+        7.5,
+        6.0
+      ],
+      "volume_cm3_each": 0.204
+    },
+    "p4-bay-pump-adapter-v1": {
+      "file": "p4-bay-pump-adapter-v1.stl",
+      "quantity": 2,
+      "material": "PETG",
+      "note": "same part; right instance rotates 180 degrees",
+      "watertight": true,
+      "extents_mm": [
+        64.0,
+        54.0,
+        4.0
+      ],
+      "volume_cm3_each": 13.06
+    },
+    "p4-bay-pump-pad-tpu-v1": {
+      "file": "p4-bay-pump-pad-tpu-v1.stl",
+      "quantity": 2,
+      "material": "TPU 95A",
+      "note": "between metal bracket and adapter",
+      "watertight": true,
+      "extents_mm": [
+        56.0,
+        36.0,
+        3.0
+      ],
+      "volume_cm3_each": 5.73
+    },
+    "p4-bay-valve-rail-v1": {
+      "file": "p4-bay-valve-rail-v1.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "six vertical valves; side nozzle faces -Y",
+      "watertight": true,
+      "extents_mm": [
+        154.0,
+        32.0,
+        30.9
+      ],
+      "volume_cm3_each": 27.973
+    },
+    "p4-bay-sensor-bridge-v1": {
+      "file": "p4-bay-sensor-bridge-v1.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "raised 2+2+2+1 bridge over frame opening",
+      "watertight": true,
+      "extents_mm": [
+        44.1,
+        90.0,
+        23.0
+      ],
+      "volume_cm3_each": 10.763
+    },
+    "p4-bay-manifold-clip-v1": {
+      "file": "p4-bay-manifold-clip-v1.stl",
+      "quantity": 2,
+      "material": "PETG",
+      "note": "mounts on valve-rail front pads; support required",
+      "watertight": true,
+      "extents_mm": [
+        24.0,
+        26.379,
+        67.727
+      ],
+      "volume_cm3_each": 2.451
+    },
+    "p4-bay-switch-bracket-v1": {
+      "file": "p4-bay-switch-bracket-v1.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "front-edge KCD1 plus XT60/fuse tie slots",
+      "watertight": true,
+      "extents_mm": [
+        50.0,
+        10.0,
+        36.0
+      ],
+      "volume_cm3_each": 4.704
+    },
+    "p4-bay-cable-comb-v1": {
+      "file": "p4-bay-cable-comb-v1.stl",
+      "quantity": 4,
+      "material": "PETG/PLA",
+      "note": "two signal-left and two power-right",
+      "watertight": true,
+      "extents_mm": [
+        36.0,
+        14.0,
+        16.0
+      ],
+      "volume_cm3_each": 2.468
+    }
+  },
+  "validation": {
+    "assembly_instances": [
+      {
+        "id": "baseplate",
+        "part": "p4-bay-baseplate-v1",
+        "translation_mm": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "pump-left",
+        "part": "p4-bay-pump-adapter-v1",
+        "translation_mm": [
+          -46.0,
+          24.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "pump-right",
+        "part": "p4-bay-pump-adapter-v1",
+        "translation_mm": [
+          46.0,
+          24.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          180.0
+        ]
+      },
+      {
+        "id": "pump-pad-left",
+        "part": "p4-bay-pump-pad-tpu-v1",
+        "translation_mm": [
+          -46.0,
+          24.0,
+          8.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "pump-pad-right",
+        "part": "p4-bay-pump-pad-tpu-v1",
+        "translation_mm": [
+          46.0,
+          24.0,
+          8.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          180.0
+        ]
+      },
+      {
+        "id": "valve-rail",
+        "part": "p4-bay-valve-rail-v1",
+        "translation_mm": [
+          0.0,
+          -44.5,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "sensor-bridge",
+        "part": "p4-bay-sensor-bridge-v1",
+        "translation_mm": [
+          0.0,
+          12.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "manifold-clip-left",
+        "part": "p4-bay-manifold-clip-v1",
+        "translation_mm": [
+          -17.0,
+          -52.5,
+          8.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "manifold-clip-right",
+        "part": "p4-bay-manifold-clip-v1",
+        "translation_mm": [
+          17.0,
+          -52.5,
+          8.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "electrical-deck",
+        "part": "p4-bay-electrical-deck-v1",
+        "translation_mm": [
+          0.0,
+          0.0,
+          104.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "switch-bracket",
+        "part": "p4-bay-switch-bracket-v1",
+        "translation_mm": [
+          0.0,
+          60.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "comb-left-tail",
+        "part": "p4-bay-cable-comb-v1",
+        "translation_mm": [
+          -87.0,
+          -24.5,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          -90.0
+        ]
+      },
+      {
+        "id": "comb-left-head",
+        "part": "p4-bay-cable-comb-v1",
+        "translation_mm": [
+          -87.0,
+          24.5,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          -90.0
+        ]
+      },
+      {
+        "id": "comb-right-tail",
+        "part": "p4-bay-cable-comb-v1",
+        "translation_mm": [
+          87.0,
+          -24.75,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          90.0
+        ]
+      },
+      {
+        "id": "comb-right-head",
+        "part": "p4-bay-cable-comb-v1",
+        "translation_mm": [
+          87.0,
+          24.75,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          90.0
+        ]
+      },
+      {
+        "id": "post--85--48",
+        "part": "p4-bay-deck-post-100mm-v1",
+        "translation_mm": [
+          -85.0,
+          -48.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "post--85-0",
+        "part": "p4-bay-deck-post-100mm-v1",
+        "translation_mm": [
+          -85.0,
+          0.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "post--85-48",
+        "part": "p4-bay-deck-post-100mm-v1",
+        "translation_mm": [
+          -85.0,
+          48.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "post-85--48",
+        "part": "p4-bay-deck-post-100mm-v1",
+        "translation_mm": [
+          85.0,
+          -48.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "post-85-0",
+        "part": "p4-bay-deck-post-100mm-v1",
+        "translation_mm": [
+          85.0,
+          0.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "post-85-48",
+        "part": "p4-bay-deck-post-100mm-v1",
+        "translation_mm": [
+          85.0,
+          48.0,
+          4.0
+        ],
+        "rotation_deg_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "required_assembly_instance_ids": [
+      "baseplate",
+      "pump-left",
+      "pump-right",
+      "pump-pad-left",
+      "pump-pad-right",
+      "valve-rail",
+      "sensor-bridge",
+      "manifold-clip-left",
+      "manifold-clip-right",
+      "electrical-deck",
+      "switch-bracket",
+      "comb-left-tail",
+      "comb-left-head",
+      "comb-right-tail",
+      "comb-right-head",
+      "post--85--48",
+      "post--85-0",
+      "post--85-48",
+      "post-85--48",
+      "post-85-0",
+      "post-85-48"
+    ],
+    "collision_ignore_pairs": [],
+    "collision_volume_tolerance_mm3": 0.05,
+    "base_hole_match_tolerance_mm": 0.25,
+    "fastener_mounts": [
+      {
+        "name": "pump-left",
+        "instance": "pump-left",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            -60,
+            0
+          ],
+          [
+            -40,
+            0
+          ],
+          [
+            -60,
+            48
+          ],
+          [
+            -40,
+            48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "pump-right",
+        "instance": "pump-right",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            40,
+            0
+          ],
+          [
+            60,
+            0
+          ],
+          [
+            40,
+            48
+          ],
+          [
+            60,
+            48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "valve-rail",
+        "instance": "valve-rail",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            -72.0,
+            -56.0
+          ],
+          [
+            -72.0,
+            -36.0
+          ],
+          [
+            72.0,
+            -56.0
+          ],
+          [
+            72.0,
+            -36.0
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "sensor-bridge",
+        "instance": "sensor-bridge",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            0.0,
+            -9.5
+          ],
+          [
+            0.0,
+            12.0
+          ],
+          [
+            0.0,
+            33.5
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "switch-bracket",
+        "instance": "switch-bracket",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            -18.0,
+            60.0
+          ],
+          [
+            18.0,
+            60.0
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "comb-left-tail",
+        "instance": "comb-left-tail",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            -87,
+            -36.5
+          ],
+          [
+            -87,
+            -12.5
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "comb-left-head",
+        "instance": "comb-left-head",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            -87,
+            12.5
+          ],
+          [
+            -87,
+            36.5
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "comb-right-tail",
+        "instance": "comb-right-tail",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            87,
+            -36.75
+          ],
+          [
+            87,
+            -12.75
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "comb-right-head",
+        "instance": "comb-right-head",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            87,
+            12.75
+          ],
+          [
+            87,
+            36.75
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post--85--48-base",
+        "instance": "post--85--48",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            -85,
+            -48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post--85--48-deck",
+        "instance": "post--85--48",
+        "base_instance": "electrical-deck",
+        "base_hole_set": "deck_post_holes",
+        "bolt_centers_world_mm": [
+          [
+            -85,
+            -48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post--85-0-base",
+        "instance": "post--85-0",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            -85,
+            0
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post--85-0-deck",
+        "instance": "post--85-0",
+        "base_instance": "electrical-deck",
+        "base_hole_set": "deck_post_holes",
+        "bolt_centers_world_mm": [
+          [
+            -85,
+            0
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post--85-48-base",
+        "instance": "post--85-48",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            -85,
+            48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post--85-48-deck",
+        "instance": "post--85-48",
+        "base_instance": "electrical-deck",
+        "base_hole_set": "deck_post_holes",
+        "bolt_centers_world_mm": [
+          [
+            -85,
+            48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post-85--48-base",
+        "instance": "post-85--48",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            85,
+            -48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post-85--48-deck",
+        "instance": "post-85--48",
+        "base_instance": "electrical-deck",
+        "base_hole_set": "deck_post_holes",
+        "bolt_centers_world_mm": [
+          [
+            85,
+            -48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post-85-0-base",
+        "instance": "post-85-0",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            85,
+            0
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post-85-0-deck",
+        "instance": "post-85-0",
+        "base_instance": "electrical-deck",
+        "base_hole_set": "deck_post_holes",
+        "bolt_centers_world_mm": [
+          [
+            85,
+            0
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post-85-48-base",
+        "instance": "post-85-48",
+        "base_instance": "baseplate",
+        "bolt_centers_world_mm": [
+          [
+            85,
+            48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "post-85-48-deck",
+        "instance": "post-85-48",
+        "base_instance": "electrical-deck",
+        "base_hole_set": "deck_post_holes",
+        "bolt_centers_world_mm": [
+          [
+            85,
+            48
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "clip-left",
+        "instance": "manifold-clip-left",
+        "base_instance": "valve-rail",
+        "base_hole_set": "valve_rail_clip_holes",
+        "bolt_centers_world_mm": [
+          [
+            -25,
+            -52.5
+          ],
+          [
+            -9,
+            -52.5
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      },
+      {
+        "name": "clip-right",
+        "instance": "manifold-clip-right",
+        "base_instance": "valve-rail",
+        "base_hole_set": "valve_rail_clip_holes",
+        "bolt_centers_world_mm": [
+          [
+            9,
+            -52.5
+          ],
+          [
+            25,
+            -52.5
+          ]
+        ],
+        "screw_diameter_mm": 3.0
+      }
+    ],
+    "deck": {
+      "instance": "electrical-deck",
+      "minimum_board_edge_clearance_mm": 2.0,
+      "minimum_same_side_gap_mm": 2.0,
+      "minimum_terminal_service_depth_mm": 20.0,
+      "maximum_service_zone_owner_gap_mm": 0.25,
+      "terminal_service_zones": [
+        {
+          "name": "MOS power terminals",
+          "owner": "yynmos8",
+          "side": "bottom",
+          "center_mm": [
+            43,
+            -13
+          ],
+          "size_mm": [
+            93,
+            20
+          ]
+        },
+        {
+          "name": "MOS signal ribbon",
+          "owner": "yynmos8",
+          "side": "bottom",
+          "center_mm": [
+            43,
+            56
+          ],
+          "size_mm": [
+            93,
+            10
+          ],
+          "minimum_depth_mm": 10,
+          "allow_beyond_deck": true
+        },
+        {
+          "name": "relay 30A terminals",
+          "owner": "relay",
+          "side": "bottom",
+          "center_mm": [
+            -61,
+            -31
+          ],
+          "size_mm": [
+            40,
+            20
+          ]
+        },
+        {
+          "name": "relay control",
+          "owner": "relay",
+          "side": "bottom",
+          "center_mm": [
+            -61,
+            56
+          ],
+          "size_mm": [
+            40,
+            10
+          ],
+          "minimum_depth_mm": 10,
+          "allow_beyond_deck": true
+        },
+        {
+          "name": "pump XL output",
+          "owner": "xl6009_pump",
+          "side": "bottom",
+          "center_mm": [
+            -49,
+            -37
+          ],
+          "size_mm": [
+            20,
+            28
+          ]
+        },
+        {
+          "name": "pump XL input",
+          "owner": "xl6009_pump",
+          "side": "bottom",
+          "center_mm": [
+            21,
+            -37
+          ],
+          "size_mm": [
+            20,
+            28
+          ]
+        },
+        {
+          "name": "valve XL input",
+          "owner": "xl6009_valve",
+          "side": "bottom",
+          "center_mm": [
+            21,
+            -37
+          ],
+          "size_mm": [
+            20,
+            28
+          ]
+        },
+        {
+          "name": "valve XL output",
+          "owner": "xl6009_valve",
+          "side": "bottom",
+          "center_mm": [
+            91,
+            -37
+          ],
+          "size_mm": [
+            20,
+            28
+          ],
+          "allow_beyond_deck": true
+        },
+        {
+          "name": "5V input",
+          "owner": "buck_5v",
+          "side": "top",
+          "center_mm": [
+            70,
+            -28.5
+          ],
+          "size_mm": [
+            24,
+            15
+          ],
+          "minimum_depth_mm": 15
+        },
+        {
+          "name": "5V USB-C output",
+          "owner": "buck_5v",
+          "side": "top",
+          "center_mm": [
+            70,
+            32.5
+          ],
+          "size_mm": [
+            24,
+            15
+          ],
+          "minimum_depth_mm": 15
+        }
+      ]
+    },
+    "minimum_downward_probe_counts": {
+      "sensor_pin": 7,
+      "valve_nozzle": 6
+    },
+    "downward_clearance_probes": [
+      {
+        "name": "sensor pin window 1",
+        "kind": "sensor_pin",
+        "center_world_mm": [
+          -10.75,
+          -20.25
+        ],
+        "diameter_mm": 13.0,
+        "z_range_world_mm": [
+          0.0,
+          19.0
+        ],
+        "must_clear_instances": [
+          "baseplate",
+          "sensor-bridge"
+        ]
+      },
+      {
+        "name": "sensor pin window 2",
+        "kind": "sensor_pin",
+        "center_world_mm": [
+          10.75,
+          -20.25
+        ],
+        "diameter_mm": 13.0,
+        "z_range_world_mm": [
+          0.0,
+          19.0
+        ],
+        "must_clear_instances": [
+          "baseplate",
+          "sensor-bridge"
+        ]
+      },
+      {
+        "name": "sensor pin window 3",
+        "kind": "sensor_pin",
+        "center_world_mm": [
+          -10.75,
+          1.25
+        ],
+        "diameter_mm": 13.0,
+        "z_range_world_mm": [
+          0.0,
+          19.0
+        ],
+        "must_clear_instances": [
+          "baseplate",
+          "sensor-bridge"
+        ]
+      },
+      {
+        "name": "sensor pin window 4",
+        "kind": "sensor_pin",
+        "center_world_mm": [
+          10.75,
+          1.25
+        ],
+        "diameter_mm": 13.0,
+        "z_range_world_mm": [
+          0.0,
+          19.0
+        ],
+        "must_clear_instances": [
+          "baseplate",
+          "sensor-bridge"
+        ]
+      },
+      {
+        "name": "sensor pin window 5",
+        "kind": "sensor_pin",
+        "center_world_mm": [
+          -10.75,
+          22.75
+        ],
+        "diameter_mm": 13.0,
+        "z_range_world_mm": [
+          0.0,
+          19.0
+        ],
+        "must_clear_instances": [
+          "baseplate",
+          "sensor-bridge"
+        ]
+      },
+      {
+        "name": "sensor pin window 6",
+        "kind": "sensor_pin",
+        "center_world_mm": [
+          10.75,
+          22.75
+        ],
+        "diameter_mm": 13.0,
+        "z_range_world_mm": [
+          0.0,
+          19.0
+        ],
+        "must_clear_instances": [
+          "baseplate",
+          "sensor-bridge"
+        ]
+      },
+      {
+        "name": "sensor pin window 7",
+        "kind": "sensor_pin",
+        "center_world_mm": [
+          0.0,
+          44.25
+        ],
+        "diameter_mm": 13.0,
+        "z_range_world_mm": [
+          0.0,
+          19.0
+        ],
+        "must_clear_instances": [
+          "baseplate",
+          "sensor-bridge"
+        ]
+      },
+      {
+        "name": "valve downward nozzle 1",
+        "kind": "valve_nozzle",
+        "center_world_mm": [
+          -58.75,
+          -44.5
+        ],
+        "diameter_mm": 8.0,
+        "z_range_world_mm": [
+          15.0,
+          27.0
+        ],
+        "must_clear_instances": [
+          "valve-rail"
+        ]
+      },
+      {
+        "name": "valve downward nozzle 2",
+        "kind": "valve_nozzle",
+        "center_world_mm": [
+          -35.25,
+          -44.5
+        ],
+        "diameter_mm": 8.0,
+        "z_range_world_mm": [
+          15.0,
+          27.0
+        ],
+        "must_clear_instances": [
+          "valve-rail"
+        ]
+      },
+      {
+        "name": "valve downward nozzle 3",
+        "kind": "valve_nozzle",
+        "center_world_mm": [
+          -11.75,
+          -44.5
+        ],
+        "diameter_mm": 8.0,
+        "z_range_world_mm": [
+          15.0,
+          27.0
+        ],
+        "must_clear_instances": [
+          "valve-rail"
+        ]
+      },
+      {
+        "name": "valve downward nozzle 4",
+        "kind": "valve_nozzle",
+        "center_world_mm": [
+          11.75,
+          -44.5
+        ],
+        "diameter_mm": 8.0,
+        "z_range_world_mm": [
+          15.0,
+          27.0
+        ],
+        "must_clear_instances": [
+          "valve-rail"
+        ]
+      },
+      {
+        "name": "valve downward nozzle 5",
+        "kind": "valve_nozzle",
+        "center_world_mm": [
+          35.25,
+          -44.5
+        ],
+        "diameter_mm": 8.0,
+        "z_range_world_mm": [
+          15.0,
+          27.0
+        ],
+        "must_clear_instances": [
+          "valve-rail"
+        ]
+      },
+      {
+        "name": "valve downward nozzle 6",
+        "kind": "valve_nozzle",
+        "center_world_mm": [
+          58.75,
+          -44.5
+        ],
+        "diameter_mm": 8.0,
+        "z_range_world_mm": [
+          15.0,
+          27.0
+        ],
+        "must_clear_instances": [
+          "valve-rail"
+        ]
+      }
+    ]
+  },
+  "v1_limits": [
+    "The fit template still requires a full-leg dynamic sweep before baseplate printing.",
+    "Measure pump-body fore/aft offset from its 48x28 bracket-hole centre.",
+    "Measure both 0520B plastic nozzle protrusions; V1 uses a conservative 12 mm proxy.",
+    "Tank cradle remains deferred until the actual tank and mounting ears arrive.",
+    "Manifold clips require slicer support under the C ring."
+  ]
+}

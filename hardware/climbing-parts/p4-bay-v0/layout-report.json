@@ -1,0 +1,602 @@
+{
+  "units": "mm",
+  "coordinate_system": "+Y=head, deck origin=center",
+  "frame_attachment_holes": [
+    [
+      -44.0,
+      -40.0
+    ],
+    [
+      44.0,
+      -40.0
+    ],
+    [
+      -44.0,
+      0.0
+    ],
+    [
+      44.0,
+      0.0
+    ],
+    [
+      -44.0,
+      40.0
+    ],
+    [
+      44.0,
+      40.0
+    ]
+  ],
+  "base_module_holes": [
+    [
+      -45.0,
+      -48.0
+    ],
+    [
+      -45.0,
+      -24.0
+    ],
+    [
+      -45.0,
+      24.0
+    ],
+    [
+      -45.0,
+      48.0
+    ],
+    [
+      -65.0,
+      -48.0
+    ],
+    [
+      -65.0,
+      -24.0
+    ],
+    [
+      -65.0,
+      0.0
+    ],
+    [
+      -65.0,
+      24.0
+    ],
+    [
+      -65.0,
+      48.0
+    ],
+    [
+      -85.0,
+      -48.0
+    ],
+    [
+      -85.0,
+      -24.0
+    ],
+    [
+      -85.0,
+      0.0
+    ],
+    [
+      -85.0,
+      24.0
+    ],
+    [
+      -85.0,
+      48.0
+    ],
+    [
+      45.0,
+      -48.0
+    ],
+    [
+      45.0,
+      -24.0
+    ],
+    [
+      45.0,
+      24.0
+    ],
+    [
+      45.0,
+      48.0
+    ],
+    [
+      65.0,
+      -48.0
+    ],
+    [
+      65.0,
+      -24.0
+    ],
+    [
+      65.0,
+      0.0
+    ],
+    [
+      65.0,
+      24.0
+    ],
+    [
+      65.0,
+      48.0
+    ],
+    [
+      85.0,
+      -48.0
+    ],
+    [
+      85.0,
+      -24.0
+    ],
+    [
+      85.0,
+      0.0
+    ],
+    [
+      85.0,
+      24.0
+    ],
+    [
+      85.0,
+      48.0
+    ]
+  ],
+  "recommended_base_layout": {
+    "valve_rail_center": [
+      0.0,
+      -48.0,
+      3.0
+    ],
+    "manifold_axis": [
+      0.0,
+      -18.0,
+      37.0
+    ],
+    "manifold_clip_centers": [
+      [
+        -55.0,
+        -18.0
+      ],
+      [
+        55.0,
+        -18.0
+      ]
+    ],
+    "pump_adapter_center": [
+      -52.0,
+      22.0,
+      3.0
+    ],
+    "sensor_block_center": [
+      45.0,
+      22.0,
+      3.0
+    ]
+  },
+  "electrical_deck_assembled_z": {
+    "baseplate_top": 3.0,
+    "post_length": 90.0,
+    "deck_bottom": 93.0,
+    "deck_top": 96.0
+  },
+  "electrical_deck": {
+    "pi5": {
+      "side": "top",
+      "center": [
+        -47.0,
+        14.0
+      ],
+      "board_size": [
+        85.0,
+        56.0
+      ],
+      "absolute_holes": [
+        [
+          -76.0,
+          -10.5,
+          2.8
+        ],
+        [
+          -18.0,
+          -10.5,
+          2.8
+        ],
+        [
+          -76.0,
+          38.5,
+          2.8
+        ],
+        [
+          -18.0,
+          38.5,
+          2.8
+        ]
+      ]
+    },
+    "divider": {
+      "side": "top",
+      "center": [
+        44.0,
+        8.0
+      ],
+      "board_size": [
+        91.0,
+        70.0
+      ],
+      "absolute_holes": [
+        [
+          2.5,
+          -21.0,
+          3.4
+        ],
+        [
+          85.5,
+          -21.0,
+          3.4
+        ],
+        [
+          2.5,
+          37.0,
+          3.4
+        ],
+        [
+          85.5,
+          37.0,
+          3.4
+        ]
+      ]
+    },
+    "buck_5v": {
+      "side": "top",
+      "center": [
+        56.0,
+        -41.5
+      ],
+      "board_size": [
+        46.0,
+        24.0
+      ],
+      "absolute_holes": [
+        [
+          35.5,
+          -51.0,
+          3.4
+        ],
+        [
+          76.5,
+          -51.0,
+          3.4
+        ],
+        [
+          35.5,
+          -32.0,
+          3.4
+        ],
+        [
+          76.5,
+          -32.0,
+          3.4
+        ]
+      ]
+    },
+    "yynmos8": {
+      "side": "bottom",
+      "center": [
+        -43.0,
+        14.0
+      ],
+      "board_size": [
+        93.0,
+        54.0
+      ],
+      "absolute_holes": [
+        [
+          -86.5,
+          17.0,
+          3.4
+        ],
+        [
+          0.5,
+          17.0,
+          3.4
+        ],
+        [
+          -86.5,
+          26.0,
+          3.4
+        ],
+        [
+          0.5,
+          28.5,
+          3.4
+        ]
+      ]
+    },
+    "relay": {
+      "side": "bottom",
+      "center": [
+        45.0,
+        15.0
+      ],
+      "board_size": [
+        72.0,
+        40.0
+      ],
+      "absolute_holes": [
+        [
+          11.75,
+          -2.25,
+          3.4
+        ],
+        [
+          78.25,
+          -2.25,
+          3.4
+        ],
+        [
+          11.75,
+          32.25,
+          3.4
+        ],
+        [
+          78.25,
+          32.25,
+          3.4
+        ]
+      ]
+    },
+    "xl6009_left": {
+      "side": "bottom",
+      "center": [
+        -51.0,
+        -38.0
+      ],
+      "board_size": [
+        50.0,
+        28.0
+      ],
+      "absolute_holes": [
+        [
+          -72.5,
+          -48.5,
+          3.4
+        ],
+        [
+          -29.5,
+          -48.5,
+          3.4
+        ],
+        [
+          -72.5,
+          -27.5,
+          3.4
+        ],
+        [
+          -29.5,
+          -27.5,
+          3.4
+        ]
+      ]
+    },
+    "xl6009_right": {
+      "side": "bottom",
+      "center": [
+        5.0,
+        -39.0
+      ],
+      "board_size": [
+        50.0,
+        28.0
+      ],
+      "absolute_holes": [
+        [
+          -16.5,
+          -49.5,
+          3.4
+        ],
+        [
+          26.5,
+          -49.5,
+          3.4
+        ],
+        [
+          -16.5,
+          -28.5,
+          3.4
+        ],
+        [
+          26.5,
+          -28.5,
+          3.4
+        ]
+      ]
+    }
+  },
+  "parts": {
+    "p4-bay-fit-template-v0": {
+      "file": "p4-bay-fit-template-v0.stl",
+      "quantity": 1,
+      "material": "PLA/PETG",
+      "note": "先打印；验证 190×130 外廓和 6 个 frame 孔",
+      "watertight": true,
+      "extents_mm": [
+        190.0,
+        130.0,
+        1.0
+      ],
+      "volume_cm3_each": 17.2
+    },
+    "p4-bay-baseplate-v0": {
+      "file": "p4-bay-baseplate-v0.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "确认试装模板不碰 coxa 线束后再打印",
+      "watertight": true,
+      "extents_mm": [
+        190.0,
+        130.0,
+        8.0
+      ],
+      "volume_cm3_each": 69.997
+    },
+    "p4-bay-electrical-deck-v0": {
+      "file": "p4-bay-electrical-deck-v0.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "双面装板；元件面按 layout-report.json",
+      "watertight": true,
+      "extents_mm": [
+        184.0,
+        108.0,
+        3.0
+      ],
+      "volume_cm3_each": 57.944
+    },
+    "p4-bay-deck-post-90mm-v0": {
+      "file": "p4-bay-deck-post-90mm-v0.stl",
+      "quantity": 6,
+      "material": "PETG",
+      "note": "优先用采购的 M3×90 六角柱或组合柱",
+      "watertight": true,
+      "extents_mm": [
+        9.0,
+        9.0,
+        90.0
+      ],
+      "volume_cm3_each": 4.905
+    },
+    "p4-bay-spacer-m25-6mm-v0": {
+      "file": "p4-bay-spacer-m25-6mm-v0.stl",
+      "quantity": 4,
+      "material": "PETG/PLA",
+      "note": "Pi 5 用",
+      "watertight": true,
+      "extents_mm": [
+        7.0,
+        7.0,
+        6.0
+      ],
+      "volume_cm3_each": 0.194
+    },
+    "p4-bay-spacer-m3-6mm-v0": {
+      "file": "p4-bay-spacer-m3-6mm-v0.stl",
+      "quantity": 20,
+      "material": "PETG/PLA",
+      "note": "其余 PCB，按实际装板数量打印",
+      "watertight": true,
+      "extents_mm": [
+        7.0,
+        7.0,
+        6.0
+      ],
+      "volume_cm3_each": 0.176
+    },
+    "p4-bay-pump-adapter-v0": {
+      "file": "p4-bay-pump-adapter-v0.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "V0 单泵；第二泵复用同一件",
+      "watertight": true,
+      "extents_mm": [
+        64.0,
+        54.0,
+        4.0
+      ],
+      "volume_cm3_each": 12.899
+    },
+    "p4-bay-pump-pad-tpu-v0": {
+      "file": "p4-bay-pump-pad-tpu-v0.stl",
+      "quantity": 1,
+      "material": "TPU 95A",
+      "note": "泵金属支架与适配板之间",
+      "watertight": true,
+      "extents_mm": [
+        58.0,
+        38.0,
+        3.0
+      ],
+      "volume_cm3_each": 6.314
+    },
+    "p4-bay-valve-rail-v0": {
+      "file": "p4-bay-valve-rail-v0.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "6 条 2.5mm 扎带作为上压固定",
+      "watertight": true,
+      "extents_mm": [
+        154.0,
+        34.0,
+        10.0
+      ],
+      "volume_cm3_each": 11.005
+    },
+    "p4-bay-sensor-block-v0": {
+      "file": "p4-bay-sensor-block-v0.stl",
+      "quantity": 1,
+      "material": "PETG/PLA",
+      "note": "4+3 双排；针脚向下、气嘴向上",
+      "watertight": true,
+      "extents_mm": [
+        104.0,
+        64.0,
+        11.0
+      ],
+      "volume_cm3_each": 16.016
+    },
+    "p4-bay-manifold-clip-v0": {
+      "file": "p4-bay-manifold-clip-v0.stl",
+      "quantity": 2,
+      "material": "PETG",
+      "note": "主干 Ø20；抬高避让阀轨，打印两只",
+      "watertight": true,
+      "extents_mm": [
+        30.0,
+        26.6,
+        45.857
+      ],
+      "volume_cm3_each": 4.82
+    },
+    "p4-bay-switch-bracket-v0": {
+      "file": "p4-bay-switch-bracket-v0.stl",
+      "quantity": 1,
+      "material": "PETG",
+      "note": "KCD1 卡口壁厚 1.8；XT60 用扎带固定",
+      "watertight": true,
+      "extents_mm": [
+        50.0,
+        20.0,
+        33.0
+      ],
+      "volume_cm3_each": 5.372
+    },
+    "p4-bay-cable-comb-v0": {
+      "file": "p4-bay-cable-comb-v0.stl",
+      "quantity": 4,
+      "material": "PETG/PLA",
+      "note": "功率线与模拟线分开使用",
+      "watertight": true,
+      "extents_mm": [
+        48.0,
+        14.0,
+        16.0
+      ],
+      "volume_cm3_each": 3.561
+    }
+  },
+  "print_set_estimate": {
+    "excludes_fit_template": true,
+    "geometric_solid_volume_cm3": 237.16,
+    "all_solid_mass_upper_bound_g": 300.8,
+    "density_assumptions_g_cm3": {
+      "PETG_or_PLA": 1.27,
+      "TPU": 1.21
+    },
+    "warning": "Slicer mass depends on walls/infill; weigh the actual V0 before climb use."
+  },
+  "v0_limits": [
+    "Print and physically verify the 1 mm fit template before the baseplate.",
+    "Tank cradle omitted until the tank diameter, length and ear spacing are measured.",
+    "V0 is single-pump; a second pump uses another identical adapter after mass review.",
+    "Frame needs two added M3 self-tap points at (±44,0); drill pilot Ø2.8 mm only after fit check."
+  ]
+}

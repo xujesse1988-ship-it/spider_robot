@@ -6,3 +6,4 @@ __pycache__/
 # macOS
 .DS_Store
 **/.DS_Store
+.playwright-mcp/

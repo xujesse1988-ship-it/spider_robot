@@ -49,11 +49,20 @@ TIBIA_ATTACH = 68.0
 
 def _leg(name, mx, my, ang, ch, touch, coxa_cal=None, femur_cal=None, tibia_cal=None):
     c, f, t = ch
+    # 右腿是左腿的镜像装配：femur/tibia 舵机转向与关节约定相反（±45 脉宽对调），
+    # coxa 转向不变（左右轴都竖直，镜像不翻转向）但零位镜像（attach 变号）。
+    # 官方配置 18 路同为 2000/1000，方向差在官方 app 运动学里消化；本包左右腿
+    # 用同一关节约定（α 抬起为正、k 弯曲为正、γ 逆时针为正），方向差收进标定表。
+    right = name.startswith("R")
+    m45, p45 = (1000.0, 2000.0) if right else (2000.0, 1000.0)
     return LegConfig(
         name=name, mount_x=mx, mount_y=my, mount_angle_deg=ang,
-        coxa=coxa_cal or ServoCal(channel=c, attach_deg=COXA_ATTACH),
-        femur=femur_cal or ServoCal(channel=f, attach_deg=FEMUR_ATTACH),
-        tibia=tibia_cal or ServoCal(channel=t, attach_deg=TIBIA_ATTACH),
+        coxa=coxa_cal or ServoCal(channel=c,
+                                  attach_deg=-COXA_ATTACH if right else COXA_ATTACH),
+        femur=femur_cal or ServoCal(channel=f, attach_deg=FEMUR_ATTACH,
+                                    us_m45=m45, us_p45=p45),
+        tibia=tibia_cal or ServoCal(channel=t, attach_deg=TIBIA_ATTACH,
+                                    us_m45=m45, us_p45=p45),
         touch_idx=touch,
     )
 

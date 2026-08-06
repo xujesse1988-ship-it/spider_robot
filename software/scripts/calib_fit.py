@@ -44,7 +44,7 @@ HELP = """命令（角度单位度，坐标用方格纸格子数一致即可）:
   rech <Δh> / recd <AP> / recp <x> <y> / rec <角度>   记录当前脉宽的角度样本
   list / drop            看样本 / 删最近一条
   fit                    拟合当前舵机，缓存结果
-  save                   全部结果写 docs/data/ JSON + 打印 config 粘贴块
+  save                   结果合并写 docs/data/calib_pm45.json + 打印 config 粘贴块
   h / q                  帮助 / 断电退出"""
 
 
@@ -171,16 +171,22 @@ class Session:
             return
         ddir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "..", "..", "docs", "data")
-        path = os.path.normpath(os.path.join(
-            ddir, f"calib_pm45_{time.strftime('%Y%m%d')}.json"))
+        path = os.path.normpath(os.path.join(ddir, "calib_pm45.json"))
+        data = {}
+        if os.path.exists(path):
+            with open(path) as f:
+                data = json.load(f)
+        stamp = time.strftime("%Y-%m-%d")
+        for (l, j), v in self.fits.items():
+            data[f"{l}.{j}"] = dict(v, date=stamp)
         with open(path, "w") as f:
-            json.dump({f"{l}.{j}": v for (l, j), v in self.fits.items()},
-                      f, ensure_ascii=False, indent=1)
-        print(f"已存 {path}\n--- config.py 粘贴块（中位=1500）---")
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        print(f"已存 {path}（自动合并历史场次，共 {len(data)}/18 路）")
+        print("--- config.py 粘贴块（中位=1500，含历史场次）---")
         for name in [l.name for l in CFG.legs]:
             lines = []
             for j in JOINTS:
-                v = self.fits.get((name, j))
+                v = data.get(f"{name}.{j}")
                 if v:
                     lines.append(
                         f"{j}_cal=ServoCal(channel={v['channel']}, "

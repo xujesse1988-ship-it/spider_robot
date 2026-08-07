@@ -49,7 +49,13 @@ HELP = """命令（角度单位度，坐标用方格纸格子数一致即可）:
   1520 | +10 | -25       绝对/相对脉宽，缓动到位
   base x1 y1 x2 y2       基线 C_L1→C_R1 两投点坐标（全局记一次）
   hip x y                当前腿 coxa 轴投点（每腿一次）
-  rech <Δh> / recz <Δz> [Δh] / recd <AP> / recp <x> <y> / rec <角度>   记录角度样本
+  rech <Δh>              femur：Δh = 膝轴螺丝心高 − 髋轴螺丝心高(mm)，sinα = Δh/l2
+  recz <Δz> [Δh]         tibia：Δz = 膝轴K螺丝心高 − 唇口圆心高(mm)，k = α + asin(Δz/l3)
+                         α 默认取 femur 拟合线（本场或历史），给可选 Δh(膝−髋)则现场算；
+                         取小腿明显倾斜的姿态，别接近竖直（正弦变平+分支歧义）
+  recd <AP>              tibia：AP = femur 舵盘螺丝心→唇口圆心直距(mm)，余弦定理 k=180−θ
+  recp <x> <y>           coxa：唇口圆心垂直投点的纸坐标；先 base/hip 建基准
+  rec <角度>              通用：自行算好的关节角(度)
   list / drop            看样本 / 删最近一条
   fit                    拟合当前舵机，缓存结果
   save                   结果合并写 docs/data/calib_pm45.json + 打印 config 粘贴块

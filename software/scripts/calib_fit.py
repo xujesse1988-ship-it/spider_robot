@@ -149,7 +149,7 @@ class Session:
             l2, l3 = CFG.femur_len, self.l3
             c = (l2 * l2 + l3 * l3 - ap * ap) / (2 * l2 * l3)
             if not -1.0 <= c <= 1.0:
-                raise ValueError(f"AP={ap} 与 80/{l3} 构不成三角形")
+                raise ValueError(f"AP={ap} 与 {l2}/{l3} 构不成三角形")
             return 180.0 - math.degrees(math.acos(c))   # k = 180 - θ
         if cmd == "recp":
             if self.joint != "coxa":
@@ -209,7 +209,6 @@ class Session:
             print("还没有拟合结果")
             return
         path = CALIB_JSON
-        os.makedirs(os.path.dirname(path), exist_ok=True)
         data = {}
         if os.path.exists(path):
             with open(path) as f:
@@ -217,9 +216,13 @@ class Session:
         stamp = time.strftime("%Y-%m-%d")
         for (l, j), v in self.fits.items():
             data[f"{l}.{j}"] = dict(v, date=stamp)
-        with open(path, "w") as f:
-            json.dump(data, f, ensure_ascii=False, indent=1)
-        print(f"已存 {path}（自动合并历史场次，共 {len(data)}/18 路）")
+        if self.real:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                json.dump(data, f, ensure_ascii=False, indent=1)
+            print(f"已存 {path}（自动合并历史场次，共 {len(data)}/18 路）")
+        else:
+            print(f"mock 干跑：不写 {path}，只打印粘贴块")
         print("--- config.py 粘贴块（中位=1500，含历史场次）---")
         for name in [l.name for l in CFG.legs]:
             lines = []

@@ -7,12 +7,14 @@
      身体俯仰（绕后髋抬头）能改善多少
 
 模型（前腿竖直平面 2D，忽略 coxa 偏摆，保守）：
-  髋 = 原点；coxa 43mm 水平 + femur 80 + tibia 120（L1 实测，唇口自由态口径）
+  髋 = 原点；coxa 43mm 水平 + femur 81 + tibia 123.7（2026-08-07 定案，唇口自由态口径；
+    实际取值随 hexapod.config 走）
   关节电气行程（舵机 ±90° × 安装偏角）:
     femur α ∈ [-40.3°, +139.7°]（L1 实测 attach α=49.7°）
     膝内角 θ ∈ [0°, 176.4°]（L1 实测 attach k=93.6 → k∈[3.6°,183.6°] → θ=180-k，θ≤0 无物理意义）
-  ⚠ 吸盘轴 ≠ K→P 连线：物理吸盘轴沿方轴方向 = a_t + CUP_DELTA（δ=-22.7°，
-    K 在 (47.8,-14.6) 而方轴在 x=1.3 的固定几何差，LEG-GEOMETRY-OPEN §2.13）
+  ⚠ 吸盘轴 ≠ K→P 连线：物理吸盘轴沿方轴方向 = a_t + CUP_DELTA（δ=-25.2°，
+    K=输出轴 (54.0,-7.2) 而方轴在 x=1.3 的固定几何差，2026-08-07 定案，
+    L3-DISPUTE-OPEN 裁决节；LEG-GEOMETRY-OPEN §2.13 的 -22.7 基于旧 K，已作废）
   a_t = α + θ - 180°（K→P 连线方向）
 运行:  .venv/bin/python tools/workspace_analysis.py
 """
@@ -25,7 +27,10 @@ from hexapod.kinematics import leg_ik, WorkspaceError
 
 ALPHA_LIM = (-40.3, 139.7)   # femur 电气行程（L1 实测 attach α=49.7 ± 90）
 THETA_LIM = (0.0, 176.4)     # 膝内角（L1 实测 attach k=93.6：θ∈(-3.6,176.4)，下限取 0）
-CUP_DELTA = -22.7            # 物理吸盘轴 = a_t + CUP_DELTA（§2.13，勿再用 a_t 当吸盘轴）
+CUP_DELTA = -25.2            # 物理吸盘轴 = a_t + CUP_DELTA（勿再用 a_t 当吸盘轴）。
+                             # 2026-08-07 定案 K=(54.0,-7.2)：自由态 atan(52.74/111.84)=25.2°
+                             # （h_cup=19，l3=123.7）；密封/真空 h_cup≈8 → 27.6°、l3≈113.8
+                             # ——P4 支撑相 IK 须按相位取 (l3,δ) 对，本常数只代表自由态
 H_HIP = 90.0                 # 站立时髋轴离地高度 mm
 BODY_LEN = 167.0             # 前后髋距（官方 L1_TO_L3）
 

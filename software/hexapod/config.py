@@ -91,8 +91,10 @@ LEG_NAMES = tuple(l.name for l in DEFAULT_LEGS)
 class RobotConfig:
     # 连杆长度 mm（官方 COXA_LEN/FEMUR_LEN/TIBIA_LEN）
     coxa_len: float = 43.0
-    femur_len: float = 80.0
-    tibia_len: float = 120.0    # L1 实测 K→吸盘唇口圆心(自由态)；官方原版腿=134
+    femur_len: float = 81.0     # 实测舵盘螺丝心距（2026-08-06 同侧缘法复核）；官方设计=80
+    tibia_len: float = 123.7    # 2026-08-07 定案：K=输出轴(54.0,-7.2)+h_cup=19，几何链
+                                # 123.65 与 08-06 贴纸勾股 123.7 咬合，双腿复测一致
+                                # （docs/L3-DISPUTE-OPEN.md 裁决节）；旧 120 锚错 K，官方=134
     # 站立姿态
     stand_height: float = 90.0  # 髋轴平面离地高度
     foot_reach: float = 130.0   # 足端到髋轴的水平距离（沿腿中性方向）

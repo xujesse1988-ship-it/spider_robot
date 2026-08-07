@@ -7,9 +7,14 @@ us_m45 / us_p45 / attach_deg，打印 config.py 可直接粘贴的 ServoCal 行�
   attach_deg = 拟合线在 1500µs（新腿统一中位）处的关节角
   us_m45/us_p45 = 1500 ∓ 45/斜率——左右腿方向差天然在斜率符号里
 角度实测（记录命令见 REPL）：
-  femur 高差法  rech <Δh>      sinα = Δh/80；Δh = 膝轴螺丝心高 − 髋轴螺丝心高(mm)
+  femur 高差法  rech <Δh>      sinα = Δh/femur_len；Δh = 膝轴螺丝心高 − 髋轴螺丝心高(mm)
+  tibia 高差法  recz <Δz> [Δh] Δz = 膝轴K螺丝心高 − 唇口圆心高(mm)；k = α + asin(Δz/l3)。
+                               α 默认取 femur 拟合线（本场 fit 或 calib_pm45.json）在
+                               当前脉宽的值；给了可选 Δh(膝高−髋高) 则现场 asin(Δh/l2)。
+                               立尺读高可复现、对横向偏距(唇↔K盘面 27.5)天然免疫；
+                               姿态取小腿明显倾斜的脉宽，避免接近竖直（正弦变平+歧义）
   tibia 三边法  recd <AP>      AP = femur 舵盘螺丝心→吸盘唇口圆心直线距离(mm)，
-                               余弦定理解 θ，k = 180−θ（l3 默认 120，--l3 可改）
+                               余弦定理解 θ，k = 180−θ（l3 默认取 config.tibia_len）
   coxa 投点法   recp <x> <y>   唇口圆心垂直投点的纸上坐标；先 base/hip 建基准
   通用          rec <角度>      自行算好的关节角（度）
 
@@ -33,6 +38,9 @@ from hexapod.driver import Servo2040Driver, MockDriver, NUM_SERVOS
 
 CENTER_US = 1500.0
 US_LO, US_HI = 600.0, 2400.0    # 软限位：防误敲极端值撞结构
+CALIB_JSON = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..",
+    "docs", "data", "calib_pm45.json"))
 RAMP_STEP, RAMP_DT = 10.0, 0.02  # 缓动：10µs/20ms ≈ 全程 2s
 JOINTS = ("coxa", "femur", "tibia")
 
@@ -41,7 +49,7 @@ HELP = """命令（角度单位度，坐标用方格纸格子数一致即可）:
   1520 | +10 | -25       绝对/相对脉宽，缓动到位
   base x1 y1 x2 y2       基线 C_L1→C_R1 两投点坐标（全局记一次）
   hip x y                当前腿 coxa 轴投点（每腿一次）
-  rech <Δh> / recd <AP> / recp <x> <y> / rec <角度>   记录当前脉宽的角度样本
+  rech <Δh> / recz <Δz> [Δh] / recd <AP> / recp <x> <y> / rec <角度>   记录角度样本
   list / drop            看样本 / 删最近一条
   fit                    拟合当前舵机，缓存结果
   save                   结果合并写 docs/data/calib_pm45.json + 打印 config 粘贴块
@@ -117,6 +125,23 @@ class Session:
             if abs(dh) > CFG.femur_len:
                 raise ValueError(f"|Δh| 不能超过 femur 长 {CFG.femur_len}")
             return math.degrees(math.asin(dh / CFG.femur_len))
+        if cmd == "recz":
+            if self.joint != "tibia":
+                raise ValueError("recz 只用于 tibia")
+            dz = float(args[0])
+            if abs(dz) > self.l3:
+                raise ValueError(f"|Δz| 不能超过 l3={self.l3}")
+            if abs(dz) > 0.95 * self.l3:
+                print("  ⚠ 小腿接近竖直：正弦变平且有分支歧义，建议换更倾斜的姿态")
+            if len(args) > 1:                       # 现场 Δh 求 α（同 rech）
+                dh = float(args[1])
+                if abs(dh) > CFG.femur_len:
+                    raise ValueError(f"|Δh| 不能超过 femur 长 {CFG.femur_len}")
+                alpha = math.degrees(math.asin(dh / CFG.femur_len))
+            else:
+                alpha = self.femur_alpha()
+            # Δz>0=唇心低于K；K→唇心俯角 asin(Δz/l3)，k = α − a_t = α + asin(Δz/l3)
+            return alpha + math.degrees(math.asin(dz / self.l3))
         if cmd == "recd":
             if self.joint != "tibia":
                 raise ValueError("recd 只用于 tibia")
@@ -138,6 +163,20 @@ class Session:
             az = math.degrees(math.atan2(py - hip[1], px - hip[0]))
             return norm_deg(az - self.base_az - 90.0 - self.leg.mount_angle_deg)
         raise ValueError(cmd)
+
+    def femur_alpha(self):
+        """femur 当前脉宽对应的 α：优先本场拟合，其次 calib_pm45.json 历史场次。"""
+        us = self.cur[self.leg.femur.channel]
+        v = self.fits.get((self.leg.name, "femur"))
+        if v is None and os.path.exists(CALIB_JSON):
+            with open(CALIB_JSON) as fh:
+                v = json.load(fh).get(f"{self.leg.name}.femur")
+        if v is None:
+            raise ValueError("recz 需要 α：先标本腿 femur（fit 或历史 save），"
+                             "或 recz <Δz> <Δh> 现场给膝高−髋高")
+        alpha = v["attach_deg"] + v["slope_deg_per_us"] * (us - CENTER_US)
+        print(f"  α(femur@{us:.0f}µs) = {alpha:.2f}°")
+        return alpha
 
     # ---- 拟合 ----
     def fit(self):
@@ -169,9 +208,8 @@ class Session:
         if not self.fits:
             print("还没有拟合结果")
             return
-        ddir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "..", "..", "docs", "data")
-        path = os.path.normpath(os.path.join(ddir, "calib_pm45.json"))
+        path = CALIB_JSON
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         data = {}
         if os.path.exists(path):
             with open(path) as f:
@@ -201,7 +239,8 @@ def main():
     ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--mock", action="store_true", help="无硬件干跑")
     ap.add_argument("--l3", type=float, default=CFG.tibia_len,
-                    help="tibia 有效长 K→唇口 (mm)，116/120 之争裁决后改这里")
+                    help="tibia 有效长 K→唇口 (mm)，默认取 config.tibia_len"
+                         "（2026-08-07 定案 123.7）")
     args = ap.parse_args()
 
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
@@ -248,7 +287,7 @@ def main():
                         raise ValueError("先 s 选腿")
                     s.hips[s.leg.name] = (float(t[1]), float(t[2]))
                     print(f"  {s.leg.name} hip = {s.hips[s.leg.name]}")
-                elif cmd in ("rec", "rech", "recd", "recp"):
+                elif cmd in ("rec", "rech", "recz", "recd", "recp"):
                     if not s.leg:
                         raise ValueError("先 s 选舵机")
                     s.add(s.angle_from(cmd, t[1:]))

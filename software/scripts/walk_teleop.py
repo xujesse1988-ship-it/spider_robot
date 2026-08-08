@@ -20,6 +20,7 @@ from hexapod.gait import GaitEngine
 
 SPEED = 40.0    # mm/s
 TURN = 0.3      # rad/s
+POWER_PRINT_S = 0.5   # 电压/电流状态行刷新间隔（原地覆写，不刷屏）
 
 
 def read_key(timeout):
@@ -45,6 +46,7 @@ def main():
     t = 0.0
     dt = 1.0 / bot.cfg.update_hz
     last_power_check = 0.0
+    peak_a = 0.0
     print("遥控就绪 (w/s/a/d/q/e, 空格停, ESC 退出)")
     try:
         while True:
@@ -71,15 +73,18 @@ def main():
                 bot.engine = GaitEngine(bot.cfg, WAVE)
 
             bot.move_feet(bot.engine.foot_targets(t, vx, vy, wz))
-            if t - last_power_check > 2.0:
-                bot.check_power()  # 欠压直接抛异常停机
+            if t - last_power_check > POWER_PRINT_S:
+                v, c = bot.check_power()  # 欠压直接抛异常停机
+                peak_a = max(peak_a, c)
+                print(f"\r电压 {v:.2f}V  电流 {c:5.2f}A  峰值 {peak_a:5.2f}A  ",
+                      end="", flush=True)
                 last_power_check = t
             time.sleep(dt)
             t += dt
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
         drv.close()
-        print("已断舵机电，退出。")
+        print("\n已断舵机电，退出。")
 
 
 if __name__ == "__main__":

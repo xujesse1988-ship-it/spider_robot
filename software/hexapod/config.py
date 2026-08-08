@@ -69,19 +69,32 @@ def _leg(name, mx, my, ang, ch, touch, coxa_cal=None, femur_cal=None, tibia_cal=
 
 # 髋关节布局：L1_TO_R1=126, L1_TO_L3=167, L2_TO_R2=163；角部腿倾角 55°
 # 舵机通道映射与足底开关索引来自官方配置（TS_L1=P23 ... TS_R3=P18）
+# ±45° 标定 2026-08-08 calib_fit.py 全 18 路拟合（样本与残差见 docs/data/calib_pm45.json）
 DEFAULT_LEGS = (
     _leg("L1",  83.5,  63.0,  55.0, (15, 16, 17), 23,
-         coxa_cal=ServoCal(channel=15, attach_deg=COXA_ATTACH, us_m45=1980.0, us_p45=1040.0),
-         # femur 2026-07-17 高差法实测 Δh=61/FK=80 → α_center=49.7°（=官方35+一齿14.4，吻合）
-         femur_cal=ServoCal(channel=16, attach_deg=49.7, us_m45=1980.0, us_p45=1040.0),
-         # tibia 2026-07-19 新吸盘件三边复测：回中 FP=145 → θ_center=90.7°，k 零位=89.3
-         # （旧件 07-17 为 93.6；同日实测新件方向反转——发 k=71.5 膝收拢——已对调 ±45 脉宽）
-         tibia_cal=ServoCal(channel=17, attach_deg=89.3, us_m45=1980.0, us_p45=1040.0)),
-    _leg("L2",   0.0,  81.5,  90.0, (9, 10, 11), 21),
-    _leg("L3", -83.5,  63.0, 125.0, (3, 4, 5), 19),
-    _leg("R1",  83.5, -63.0, -55.0, (12, 13, 14), 22),
-    _leg("R2",   0.0, -81.5, -90.0, (6, 7, 8), 20),
-    _leg("R3", -83.5, -63.0, -125.0, (0, 1, 2), 18),
+         coxa_cal=ServoCal(channel=15, attach_deg=3.31, us_m45=1959.0, us_p45=1041.0),
+         femur_cal=ServoCal(channel=16, attach_deg=45.71, us_m45=1973.4, us_p45=1026.6),
+         tibia_cal=ServoCal(channel=17, attach_deg=104.06, us_m45=1947.3, us_p45=1052.7)),
+    _leg("L2",   0.0,  81.5,  90.0, (9, 10, 11), 21,
+         coxa_cal=ServoCal(channel=9, attach_deg=1.55, us_m45=1955.8, us_p45=1044.2),
+         femur_cal=ServoCal(channel=10, attach_deg=48.48, us_m45=1933.1, us_p45=1066.9),
+         tibia_cal=ServoCal(channel=11, attach_deg=94.04, us_m45=1949.5, us_p45=1050.5)),
+    _leg("L3", -83.5,  63.0, 125.0, (3, 4, 5), 19,
+         coxa_cal=ServoCal(channel=3, attach_deg=18.37, us_m45=1956.9, us_p45=1043.1),
+         femur_cal=ServoCal(channel=4, attach_deg=45.25, us_m45=1961.1, us_p45=1038.9),
+         tibia_cal=ServoCal(channel=5, attach_deg=100.4, us_m45=1927.1, us_p45=1072.9)),
+    _leg("R1",  83.5, -63.0, -55.0, (12, 13, 14), 22,
+         coxa_cal=ServoCal(channel=12, attach_deg=3.38, us_m45=1954.9, us_p45=1045.1),
+         femur_cal=ServoCal(channel=13, attach_deg=55.7, us_m45=1043.2, us_p45=1956.8),
+         tibia_cal=ServoCal(channel=14, attach_deg=101.12, us_m45=1051.0, us_p45=1949.0)),
+    _leg("R2",   0.0, -81.5, -90.0, (6, 7, 8), 20,
+         coxa_cal=ServoCal(channel=6, attach_deg=-0.21, us_m45=1954.0, us_p45=1046.0),
+         femur_cal=ServoCal(channel=7, attach_deg=53.78, us_m45=1054.0, us_p45=1946.0),
+         tibia_cal=ServoCal(channel=8, attach_deg=105.08, us_m45=1046.8, us_p45=1953.2)),
+    _leg("R3", -83.5, -63.0, -125.0, (0, 1, 2), 18,
+         coxa_cal=ServoCal(channel=0, attach_deg=-20.41, us_m45=1959.6, us_p45=1040.4),
+         femur_cal=ServoCal(channel=1, attach_deg=47.26, us_m45=1045.1, us_p45=1954.9),
+         tibia_cal=ServoCal(channel=2, attach_deg=100.04, us_m45=1058.4, us_p45=1941.6)),
 )
 
 LEG_NAMES = tuple(l.name for l in DEFAULT_LEGS)

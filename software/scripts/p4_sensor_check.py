@@ -23,6 +23,7 @@
 """
 import argparse
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -365,6 +366,7 @@ def wiggle(bus, chnum, thresh_kpa):
 
     n = ev = 0
     worst = 0.0
+    signs = []
     in_ev = False
     ev_peak = 0.0
     ev_t0 = 0.0
@@ -388,6 +390,7 @@ def wiggle(bus, chnum, thresh_kpa):
                     in_ev = False
                     ev += 1
                     worst = max(worst, abs(ev_peak))
+                    signs.append(1 if ev_peak > 0 else -1)
                     why = ("电压掉 → OUT 线开路或 5V 丢失（分压被下臂拉向地）"
                            if ev_peak < 0 else "电压升 → GND 侧接触不良")
                     dur = (time.time() - ev_t0) * 1000
@@ -410,10 +413,20 @@ def wiggle(bus, chnum, thresh_kpa):
         print(f"\n\n  —— 结果 ——")
         print(f"  通道 {num}({name})  采样 {n} 点 / {el:.0f}s  实际 {n/max(el,1e-3):.0f} Hz")
         if ev:
-            print(f"  ❌ 抓到 {ev} 次瞬断，最大偏移 {worst:.1f} kPa")
-            print("     这一路存在间歇性接触不良，必须修好再上墙——足压读数是吸附")
-            print("     状态机判 ATTACHED 的依据，一次假读就可能让另一条腿提前抬起。")
-            print("     断电后按刚才能触发的那一项定位：重新焊该焊点 / 重压该压接端子。")
+            alt = sum(1 for a, b in zip(signs, signs[1:]) if a != b)
+            alt_ratio = alt / max(len(signs) - 1, 1)
+            if ev >= 6 and alt_ratio >= 0.7:
+                print(f"  ⚠ 抓到 {ev} 次越界，但其中 {alt_ratio*100:.0f}% 是正负交替出现的，")
+                print(f"     最大偏移仅 {worst:.1f} kPa —— **这是周期性干扰的特征，不是瞬断**。")
+                print("     真瞬断是单向的（线断了分压点只会被拉向地）、随机的、接近满量程。")
+                print("     交替 = 围绕基线上下摆的正弦波，被本工具按半周期切成了多次事件。")
+                print(f"     下一步用 --scope {num} 看波形和频率定性，别去拆焊点：")
+                print(f"         python3 scripts/p4_sensor_check.py --scope {num} --secs 3")
+            else:
+                print(f"  ❌ 抓到 {ev} 次瞬断，最大偏移 {worst:.1f} kPa")
+                print("     这一路存在间歇性接触不良，必须修好再上墙——足压读数是吸附")
+                print("     状态机判 ATTACHED 的依据，一次假读就可能让另一条腿提前抬起。")
+                print("     断电后按刚才能触发的那一项定位：重新焊该焊点 / 重压该压接端子。")
         else:
             hz = min(n / max(el, 1e-3), 860.0)   # ADS1115 转换率封顶 860SPS
             print(f"  ✅ 本次没抓到超过 ±{thresh_kpa:.1f} kPa 的偏移")
@@ -421,6 +434,120 @@ def wiggle(bus, chnum, thresh_kpa):
             print(f"     即约 {1000.0/hz:.1f} ms 一格。ADS 是 ΔΣ 型、按窗口积分，比这更短的瞬断")
             print("     会被平均成幅度变小的凹陷——仍看得见，但可能低于阈值。")
             print("     另外只有刚才真晃到的部位算验过，没晃到的不算。")
+
+
+# ---------------- 波形/频谱模式 ----------------
+
+def _pick(readers, chnum):
+    entry = next((c for c in CHANNELS if c[0] == chnum), None)
+    if entry is None:
+        sys.exit(f"没有通道 {chnum}，可选 1~8。")
+    if entry[3] not in readers:
+        sys.exit(f"通道 {chnum} 挂在 0x{entry[3]:02X}，该模块没应答。")
+    return entry
+
+
+def _spectrum(ts, kpa, f_lo=5, f_hi=200):
+    """按实际时间戳做 DFT（采样不均匀也能用），返回 [(幅度kPa, 频率Hz)] 降序。"""
+    n = len(ts)
+    step = max(1, n // 4000)          # 控制纯 Python 的计算量
+    ts, kpa = ts[::step], kpa[::step]
+    m = len(kpa)
+    dc = sum(kpa) / m
+    out = []
+    for f in range(f_lo, f_hi + 1):
+        re = im = 0.0
+        w = 2 * math.pi * f
+        for t, k in zip(ts, kpa):
+            a = w * t
+            re += (k - dc) * math.cos(a)
+            im += (k - dc) * math.sin(a)
+        out.append((2 * math.hypot(re, im) / m, f))
+    out.sort(reverse=True)
+    return out
+
+
+def scope(bus, chnum, secs, csv_path):
+    """抓一段原始波形，看它到底是"瞬断"还是"周期性干扰"。"""
+    readers, _ = find_readers(bus)
+    num, s, name, addr, ain, kind = _pick(readers, chnum)
+    r = readers[addr]
+    print(f"抓波形：通道 {num} {s} {name}   （0x{addr:02X} AIN{ain}）  {secs:.1f} 秒")
+    print("  想复现干扰就在采集期间做那个动作（比如用手碰分压板）。\n")
+    r.start_continuous(ain)
+    time.sleep(0.05)
+
+    ts, vs = [], []
+    t0 = time.time()
+    while time.time() - t0 < secs:
+        ts.append(time.time() - t0)
+        vs.append(r.read_last())
+    try:
+        r.stop_continuous()
+    except OSError:
+        pass
+
+    srt = sorted(vs)
+    v_med = srt[len(srt) // 2]
+    kpa = [(v - v_med) * V_DIV * KPA_PER_V for v in vs]
+    p2p = max(kpa) - min(kpa)
+    rate = len(vs) / secs
+    print(f"  采样 {len(vs)} 点 / {secs:.1f}s ({rate:.0f} Hz)   "
+          f"基线 {v_med:.4f}V   峰峰 {p2p:.2f} kPa   "
+          f"范围 {min(kpa):+.2f} ~ {max(kpa):+.2f} kPa")
+
+    if csv_path:
+        with open(csv_path, "w", encoding="utf-8") as f:
+            f.write("t_s,v_adc,kpa_dev\n")
+            for t, v, k in zip(ts, vs, kpa):
+                f.write(f"{t:.6f},{v:.6f},{k:.4f}\n")
+        print(f"  原始数据 → {csv_path}")
+
+    peaks = _spectrum(ts, kpa)
+    print("\n  频谱主峰（5~200Hz）：")
+    shown, used = 0, []
+    for amp, f in peaks:
+        if any(abs(f - u) < 4 for u in used):
+            continue
+        used.append(f)
+        print(f"    {f:3d} Hz   幅度 {amp:5.2f} kPa")
+        shown += 1
+        if shown >= 3:
+            break
+
+    top_amp, top_f = peaks[0]
+    # 单一正弦：能量集中在主峰，2×幅度 ≈ 峰峰值（占比→100%）。
+    # 孤立脉冲：频谱宽带铺开，任何单根谱线占比都很低。占比才是判据，不是绝对幅度。
+    ratio = 200 * top_amp / max(p2p, 1e-6)
+    print("\n  —— 判读 ——")
+    print(f"  主峰 {top_f} Hz、幅度 {top_amp:.2f} kPa，占峰峰的 {ratio:.0f}%")
+    if p2p < 0.5:
+        print(f"  ✅ 峰峰仅 {p2p:.2f} kPa，就是本底噪声，波形干净。")
+        print("     没复现出问题的话，是刚才那个动作没做到——干扰/瞬断都得现场复现才测得到。")
+        return
+    if ratio < 40:
+        print(f"  ⚠ 主峰只占 {ratio:.0f}%，能量铺在整个频段 —— 不是周期信号，")
+        print("     而是孤立脉冲的宽带频谱。")
+        if p2p > 5.0:
+            print(f"     峰峰 {p2p:.1f} kPa 的孤立大偏移，**这才像真瞬断**：")
+            print(f"         python3 scripts/p4_sensor_check.py --wiggle {num}")
+            print("     按七步定位到具体焊点/端子。")
+        else:
+            print(f"     但峰峰只有 {p2p:.2f} kPa，量级接近噪声，暂不用管。")
+        return
+    if top_amp < 0.3:
+        print(f"  ✅ 周期成分幅度仅 {top_amp:.2f} kPa，远小于 -30kPa 判据，可以忽略。")
+        return
+    mains = 45 <= top_f <= 55 or 95 <= top_f <= 105
+    if mains:
+        print("  ❗ 这是工频（50Hz）或其二次谐波（100Hz）—— **电磁干扰，不是接触故障**。")
+        print("     分压点源阻抗 10k∥10k=5k，配 100nF 的转折频率 318Hz，对 50Hz 几乎")
+        print("     不衰减，所以手一碰就把市电感应耦合进来了。别去拆焊点。")
+        print("     验证：改用充电宝/电池给 Pi 供电再测一次，主峰应显著变小或消失。")
+    else:
+        print(f"  ⚠ 周期性干扰但不在工频附近。查 {top_f}Hz 附近有什么在开关——")
+        print("     泵/阀 PWM、舵机、开关电源。模拟线与功率线必须分梳走。")
+    print("  无论哪种，周期性干扰都不该用拆焊点来治；真瞬断的特征是单向、随机、大幅。")
 
 
 # ---------------- 大气点标定模式 ----------------
@@ -470,6 +597,10 @@ def main():
                     help="锁定通道 N 高速采样抓瞬断，边晃线边看（怀疑接触不良时用）")
     ap.add_argument("--thresh", type=float, default=1.0, metavar="KPA",
                     help="--wiggle 的报警阈值 kPa（默认 1.0，静态噪声约 0.05）")
+    ap.add_argument("--scope", type=int, metavar="N",
+                    help="抓通道 N 的原始波形并测频率，分清干扰与真瞬断")
+    ap.add_argument("--secs", type=float, default=3.0, help="--scope 采集秒数（默认 3）")
+    ap.add_argument("--csv", metavar="PATH", help="--scope 把原始波形写成 CSV")
     ap.add_argument("--zero", action="store_true", help="逐路标定大气点 V_ATM")
     ap.add_argument("--save", action="store_true", help="--zero 时把表写进 docs/data/")
     ap.add_argument("--fixed-atm", action="store_true",
@@ -480,7 +611,9 @@ def main():
 
     bus = open_bus(a.bus)
     try:
-        if a.wiggle is not None:
+        if a.scope is not None:
+            scope(bus, a.scope, a.secs, a.csv)
+        elif a.wiggle is not None:
             wiggle(bus, a.wiggle, a.thresh)
         elif a.zero:
             zero(bus, max(a.samples, 32), a.save)

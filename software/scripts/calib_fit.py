@@ -8,6 +8,7 @@ us_m45 / us_p45 / attach_deg，打印 config.py 可直接粘贴的 ServoCal 行�
   us_m45/us_p45 = 1500 ∓ 45/斜率——左右腿方向差天然在斜率符号里
 角度实测（记录命令见 REPL）：
   femur 高差法  rech <Δh>      sinα = Δh/femur_len；Δh = 膝轴螺丝心高 − 髋轴螺丝心高(mm)
+                               姿态别接近竖直（正弦变平，1mm 读数误差放大到数度）
   tibia 高差法  recz <Δz> [Δh] Δz = 膝轴K螺丝心高 − 唇口圆心高(mm)；k = α + asin(Δz/l3)。
                                α 默认取 femur 拟合线（本场 fit 或 calib_pm45.json）在
                                当前脉宽的值；给了可选 Δh(膝高−髋高) 则现场 asin(Δh/l2)。
@@ -50,6 +51,7 @@ HELP = """命令（角度单位度，坐标用方格纸格子数一致即可）:
   base x1 y1 x2 y2       基线 C_L1→C_R1 两投点坐标（全局记一次）
   hip x y                当前腿 coxa 轴投点（每腿一次）
   rech <Δh>              femur：Δh = 膝轴螺丝心高 − 髋轴螺丝心高(mm)，sinα = Δh/l2
+                         别取接近竖直的姿态；样本尽量落在 |α|<60°
   recz <Δz> [Δh]         tibia：Δz = 膝轴K螺丝心高 − 唇口圆心高(mm)，k = α + asin(Δz/l3)
                          α 默认取 femur 拟合线（本场或历史），给可选 Δh(膝−髋)则现场算；
                          取小腿明显倾斜的姿态，别接近竖直（正弦变平+分支歧义）
@@ -130,7 +132,14 @@ class Session:
             dh = float(args[0])
             if abs(dh) > CFG.femur_len:
                 raise ValueError(f"|Δh| 不能超过 femur 长 {CFG.femur_len}")
-            return math.degrees(math.asin(dh / CFG.femur_len))
+            alpha = math.degrees(math.asin(dh / CFG.femur_len))
+            # 同 recz：接近竖直时正弦变平，1mm 读数误差被放大成好几度
+            amp = math.degrees(1.0 / (CFG.femur_len *
+                                      math.cos(math.radians(alpha))))
+            if amp > 1.5:
+                print(f"  ⚠ α={alpha:.0f}° 接近竖直：1mm 读数误差 ≈ {amp:.1f}°，"
+                      "换更水平的姿态（行走工作点 α≈24°，样本尽量 |α|<60°）")
+            return alpha
         if cmd == "recz":
             if self.joint != "tibia":
                 raise ValueError("recz 只用于 tibia")

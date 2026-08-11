@@ -77,7 +77,11 @@ DEFAULT_LEGS = (
          tibia_cal=ServoCal(channel=17, attach_deg=104.06, us_m45=1947.3, us_p45=1052.7)),
     _leg("L2",   0.0,  81.5,  90.0, (9, 10, 11), 21,
          coxa_cal=ServoCal(channel=9, attach_deg=1.55, us_m45=1955.8, us_p45=1044.2),
-         femur_cal=ServoCal(channel=10, attach_deg=48.48, us_m45=1933.1, us_p45=1066.9),
+         # femur 2026-08-09 重拟合：原 4 样本里 1200µs 那个 α=81°，高差法在接近竖直处
+         # 正弦变平（1mm 读数误差 ≈ 4.5°），把斜率拉到 -0.1039（其余五路 0.095~0.101）。
+         # 去掉后 attach 48.48->47.81、残差 1.34->0.01°。行走工作点 α≈24°(≈1735µs)，
+         # 由 1500/1800 两样本夹住，比原拟合可信。
+         femur_cal=ServoCal(channel=10, attach_deg=47.81, us_m45=1952.5, us_p45=1047.5),
          tibia_cal=ServoCal(channel=11, attach_deg=94.04, us_m45=1949.5, us_p45=1050.5)),
     _leg("L3", -83.5,  63.0, 125.0, (3, 4, 5), 19,
          coxa_cal=ServoCal(channel=3, attach_deg=18.37, us_m45=1956.9, us_p45=1043.1),

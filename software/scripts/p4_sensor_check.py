@@ -17,6 +17,7 @@
 用法：
   python3 scripts/p4_sensor_check.py              # 一次性自检报告
   python3 scripts/p4_sensor_check.py --live       # 连续监视（吸气测试用这个）
+  python3 scripts/p4_sensor_check.py --wiggle 7   # 锁定 7 路高速抓瞬断（晃线时读数跳）
   python3 scripts/p4_sensor_check.py --zero       # 逐路标定大气点 V_ATM，存表
   python3 scripts/p4_sensor_check.py --live --fixed-atm   # 用固定 4.486 而非自动基线
 """
@@ -72,11 +73,29 @@ class ADS1115:
             time.sleep(0.002)
             if self.bus.read_i2c_block_data(self.addr, 0x01, 2)[0] & 0x80:
                 break   # OS 位回 1 = 转换完成
-        hi, lo = self.bus.read_i2c_block_data(self.addr, 0x00, 2)
-        raw = (hi << 8) | lo
-        if raw > 32767:
-            raw -= 65536
-        return raw * PGA_FSR / 32768
+        return self._raw_to_v(self.bus.read_i2c_block_data(self.addr, 0x00, 2))
+
+    @staticmethod
+    def _raw_to_v(b):
+        raw = (b[0] << 8) | b[1]
+        return (raw - 65536 if raw > 32767 else raw) * PGA_FSR / 32768
+
+    def start_continuous(self, ch):
+        """连续转换 860SPS，锁定单通道——抓毫秒级瞬断用。
+
+        单次模式下 6 路轮采、每路 0.15s 才看一眼，1ms 量级的接触不良基本采不到。
+        锁定一路 + 连续模式后采样率能到几百 Hz，才有资格说"没抓到就是没有"。
+        """
+        # MSB: OS=1 | MUX=100+ch | PGA=001(±4.096V) | MODE=0(连续)
+        # LSB: DR=111(860SPS) | 比较器关闭
+        self.bus.write_i2c_block_data(self.addr, 0x01, [0xC2 + (ch << 4), 0xE3])
+        time.sleep(0.01)
+
+    def read_last(self):
+        return self._raw_to_v(self.bus.read_i2c_block_data(self.addr, 0x00, 2))
+
+    def stop_continuous(self):
+        self.bus.write_i2c_block_data(self.addr, 0x01, [0xC3, 0x83])
 
 
 def to_kpa(v_adc, v_atm):
@@ -296,6 +315,114 @@ def live(bus, fixed_atm, samples):
                   "传感器 5V 供电、或换一路传感器交叉验证。")
 
 
+# ---------------- 抓瞬断模式 ----------------
+
+WIGGLE_STEPS = [
+    "传感器本体（拿手轻轻晃）",
+    "三根线在传感器根部的出线处（逐根轻捻、轻拉）",
+    "线束中段",
+    "线在分压板 S 口接头处（轻推轻拔，别用力）",
+    "S 口接头外壳本身",
+    "用指甲/塑料镊子轻敲板上该路的 R_A / R_B / 100nF 焊点",
+    "轻掰一下板子（模拟机身震动下的形变）",
+]
+
+
+def wiggle(bus, chnum, thresh_kpa):
+    """锁定一路高速采样，边晃线边抓瞬断。"""
+    readers, _ = find_readers(bus)
+    entry = next((c for c in CHANNELS if c[0] == chnum), None)
+    if entry is None:
+        sys.exit(f"没有通道 {chnum}，可选 1~8。")
+    num, s, name, addr, ain, kind = entry
+    if addr not in readers:
+        sys.exit(f"通道 {num} 挂在 0x{addr:02X}，该模块没应答。")
+
+    r = readers[addr]
+    tag, _ = classify(r.read_v(ain), kind)
+    if tag not in ("正常", "偏低"):
+        sys.exit(f"通道 {num}({name}) 当前判定「{tag}」，不是稳态在线，先跑不带参数的自检。")
+
+    print(f"抓瞬断：通道 {num} {s} {name}   （0x{addr:02X} AIN{ain}）")
+    r.start_continuous(ain)
+    time.sleep(0.05)
+
+    t0 = time.time()
+    base = []
+    while time.time() - t0 < 1.5:
+        base.append(r.read_last())
+    base.sort()
+    v_base = base[len(base) // 2]
+    rate = len(base) / 1.5
+    noise_kpa = (base[-1] - base[0]) * V_DIV * KPA_PER_V
+    print(f"  基线 {v_base:.4f}V（{v_base*V_DIV:.3f}V 传感器侧）  "
+          f"静态噪声 {noise_kpa:.2f} kPa  采样率 ≈{rate:.0f} Hz")
+    print(f"  报警阈值 ±{thresh_kpa:.1f} kPa —— 超过就是接触问题，不是噪声\n")
+    print("  按顺序逐项做，每项晃 10 秒，记下哪一项能触发：")
+    for i, step in enumerate(WIGGLE_STEPS, 1):
+        print(f"    {i}. {step}")
+    print("\n  Ctrl-C 结束。\n")
+
+    n = ev = 0
+    worst = 0.0
+    in_ev = False
+    ev_peak = 0.0
+    ev_t0 = 0.0
+    calm = 0
+    t_start = time.time()
+    last_status = 0.0
+    try:
+        while True:
+            v = r.read_last()
+            n += 1
+            dev = (v - v_base) * V_DIV * KPA_PER_V
+            if abs(dev) > thresh_kpa:
+                if not in_ev:
+                    in_ev, ev_peak, ev_t0 = True, dev, time.time()
+                elif abs(dev) > abs(ev_peak):
+                    ev_peak = dev
+                calm = 0
+            elif in_ev:
+                calm += 1
+                if calm >= 5:
+                    in_ev = False
+                    ev += 1
+                    worst = max(worst, abs(ev_peak))
+                    why = ("电压掉 → OUT 线开路或 5V 丢失（分压被下臂拉向地）"
+                           if ev_peak < 0 else "电压升 → GND 侧接触不良")
+                    dur = (time.time() - ev_t0) * 1000
+                    sys.stdout.write("\r\033[K")
+                    print(f"  ⚡ 瞬断 #{ev}  t={time.time()-t_start:5.1f}s  "
+                          f"峰值 {ev_peak:+7.1f} kPa  持续 {dur:.0f} ms   {why}")
+            now = time.time()
+            if now - last_status > 0.3:
+                last_status = now
+                sys.stdout.write(f"\r  已采 {n} 点 / {now-t_start:.0f}s "
+                                 f"({n/max(now-t_start,1e-3):.0f} Hz)  "
+                                 f"瞬断 {ev} 次  最大偏移 {worst:.1f} kPa   ")
+                sys.stdout.flush()
+    except KeyboardInterrupt:
+        el = time.time() - t_start
+        try:
+            r.stop_continuous()
+        except OSError:
+            pass
+        print(f"\n\n  —— 结果 ——")
+        print(f"  通道 {num}({name})  采样 {n} 点 / {el:.0f}s  实际 {n/max(el,1e-3):.0f} Hz")
+        if ev:
+            print(f"  ❌ 抓到 {ev} 次瞬断，最大偏移 {worst:.1f} kPa")
+            print("     这一路存在间歇性接触不良，必须修好再上墙——足压读数是吸附")
+            print("     状态机判 ATTACHED 的依据，一次假读就可能让另一条腿提前抬起。")
+            print("     断电后按刚才能触发的那一项定位：重新焊该焊点 / 重压该压接端子。")
+        else:
+            hz = min(n / max(el, 1e-3), 860.0)   # ADS1115 转换率封顶 860SPS
+            print(f"  ✅ 本次没抓到超过 ±{thresh_kpa:.1f} kPa 的偏移")
+            print(f"     能力边界：有效 {hz:.0f} 次转换/秒（轮询再快也只是重复读同一次结果），")
+            print(f"     即约 {1000.0/hz:.1f} ms 一格。ADS 是 ΔΣ 型、按窗口积分，比这更短的瞬断")
+            print("     会被平均成幅度变小的凹陷——仍看得见，但可能低于阈值。")
+            print("     另外只有刚才真晃到的部位算验过，没晃到的不算。")
+
+
 # ---------------- 大气点标定模式 ----------------
 
 def zero(bus, samples, save):
@@ -337,7 +464,12 @@ def zero(bus, samples, save):
 
 def main():
     ap = argparse.ArgumentParser(description="P4 分压板 + 气压传感器自检")
-    ap.add_argument("--live", action="store_true", help="连续监视，吸气测试用")
+    ap.add_argument("--live", action="store_true",
+                    help="连续监视，吸气测试用（每路 ~0.15s 一次，抓不了毫秒级瞬断）")
+    ap.add_argument("--wiggle", type=int, metavar="N",
+                    help="锁定通道 N 高速采样抓瞬断，边晃线边看（怀疑接触不良时用）")
+    ap.add_argument("--thresh", type=float, default=1.0, metavar="KPA",
+                    help="--wiggle 的报警阈值 kPa（默认 1.0，静态噪声约 0.05）")
     ap.add_argument("--zero", action="store_true", help="逐路标定大气点 V_ATM")
     ap.add_argument("--save", action="store_true", help="--zero 时把表写进 docs/data/")
     ap.add_argument("--fixed-atm", action="store_true",
@@ -348,7 +480,9 @@ def main():
 
     bus = open_bus(a.bus)
     try:
-        if a.zero:
+        if a.wiggle is not None:
+            wiggle(bus, a.wiggle, a.thresh)
+        elif a.zero:
             zero(bus, max(a.samples, 32), a.save)
         elif a.live:
             live(bus, a.fixed_atm, a.samples)

@@ -649,12 +649,27 @@ def zero(bus, samples, save):
     print("\n".join(rows))
     if not table:
         return
-    print("\n粘进 Pi5VacuumIO 的形式：")
-    print("    V_ATM_BY_CH = {" + ", ".join(f"{k}: {v}" for k, v in table.items()) + "}")
+    vals = list(table.values())
+    spread = (max(vals) - min(vals)) * KPA_PER_V
+    mean = sum(vals) / len(vals)
+    print(f"\n  极差 {spread:.2f} kPa，均值 {mean:.4f} V（现用统一值 {V_ATM_NOMINAL}）")
+    if spread <= 1.0:
+        print(f"  ✅ 各路一致（相对 -30kPa 的 ATTACH 判据只占 {spread/30*100:.0f}%）。")
+        print(f"     **不必改代码用逐路表**，继续用统一的 V_ATM={V_ATM_NOMINAL} 即可；")
+        print("     本表的价值是存档基线——将来某只漂了或坏了，拿新读数对比就知道是哪只。")
+    else:
+        print("  ⚠ 各路差异已不可忽略，建议逐路表。粘进 Pi5VacuumIO 的形式：")
+        print("    V_ATM_BY_CH = {" +
+              ", ".join(f"{k}: {v}" for k, v in table.items()) + "}")
     if save:
         VATM_TABLE_PATH.parent.mkdir(parents=True, exist_ok=True)
         VATM_TABLE_PATH.write_text(
-            json.dumps({"kpa_per_v": KPA_PER_V, "v_div": V_DIV, "v_atm_by_channel": table},
+            json.dumps({"date": time.strftime("%Y-%m-%d"),
+                        "note": "各路大气点基线，存档备查；极差小时不必用逐路表",
+                        "spread_kpa": round(spread, 3),
+                        "kpa_per_v": KPA_PER_V, "v_div": V_DIV,
+                        "v_atm_nominal": V_ATM_NOMINAL,
+                        "v_atm_by_channel": table},
                        ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"\n已写入 {VATM_TABLE_PATH}")
 

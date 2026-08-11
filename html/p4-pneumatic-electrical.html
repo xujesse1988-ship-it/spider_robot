@@ -213,7 +213,7 @@
       <text class="t-bs" x="692" y="225">两线跨接 OUTn+ / OUTn−</text>
       <text class="t-bsw" x="692" y="246">断电 = 吸盘接真空</text>
       <text class="t-bsw" x="692" y="263">通电 = 吸盘放大气</text>
-      <text class="t-bs" x="692" y="285">线圈无极性 · 并 1N4007</text>
+      <text class="t-bs" x="692" y="285">线圈无极性 · 续流管板内已有</text>
       <text class="t-bs" x="692" y="302">L1 L2 L3 R1 R2 R3</text>
 
       <!-- 泵组 -->
@@ -357,17 +357,20 @@
   </figure>
 
   <div class="note">
-    <b>丝印读到之后，仍要量的三处</b>（通断档，断电、板上不接任何东西，合计一分钟）
-    <ol>
-      <li><b>DC+ 与 8 个 OUTn+ 是否导通</b>。<span class="st-ok">应导通</span>——这是本板"每通道只切「−」侧"的低边开关结构，也是<b>阀两根线直接跨 OUTn+ / OUTn− 就能工作</b>（不必另拉 12V）与<b>泵必须绕开 OUTn+</b>（否则泵会被并回阀轨，分轨失效）这两条接法的前提。<b class="d">若不导通</b>，说明每通道的「+」是独立端子，那就把阀的「+」自己接到 12V-V，泵接法不变。</li>
-      <li><b>IN1− ~ IN8− 之间是否互通</b>。互通 → 8 根 GPIO 线 + 1~2 根地线回 Pi 即可；<b>不互通</b>（每通道独立隔离输入，本板很可能是这种）→ 在端子上用短跳线把 8 个 IN− 并成一条信号地母线，再用 2 根线回 Pi Pin34/39。<b class="d">别用 16 根线单独回 Pi</b>，那是 8 个地环。</li>
-      <li><b>IN− 与 DC− 是否导通</b>。光耦板<span class="st-ok">通常不导通 = 真隔离</span>，此时按图 4"两侧地各回各的源"接，不要人为把它们连起来。若导通，则板本身就是单点共地，Pi 与 12V 之间不得再拉第二根地线。</li>
-    </ol>
-    <b>IN1~IN8 ↔ 阀/泵 的分配沿用 <code>p4-pi-wiring.html</code></b>：IN1=阀 L1（GPIO5）、IN7=泵 A（GPIO20）是 P1 已实装的两路，其余六路 P4 定案。改分配就同步改 <code>adhesion.py</code> 的 <code>VALVE_PINS</code> / <code>PUMP_PIN</code>。
+    <b>板未上机的四处实测——已完成（2026-08-11）</b>（通断档 / 二极管档，断电、板上不接任何东西）
+    <table class="vtab">
+      <tr><th>量什么</th><th>实测</th><th>定下了什么</th></tr>
+      <tr><td>DC+ ↔ 8 个 OUTn+</td><td><span class="st-ok">导通</span></td><td>"每通道只切「−」侧"的低边开关结构坐实。<b>阀两根线直接跨 OUTn+ / OUTn− 就能工作</b>（不必另拉 12V）；<b>泵必须绕开 OUTn+</b>，否则被并回阀轨、分轨失效</td></tr>
+      <tr><td>IN1− ~ IN8− 相互之间</td><td><span class="st-tbd">不互通</span></td><td>8 路输入各自独立隔离 → <b class="d">必须</b>在端子上用 <b>7 根短跳线</b>把 IN− 并成一条信号地母线，再 2 根线回 Pi Pin34/39（速查表第 16 行）。图 2 里 IN− 是隔一个螺丝一个，跳线跨着接</td></tr>
+      <tr><td>IN− ↔ DC−</td><td><span class="st-ok">不导通</span></td><td>光耦真隔离 → 图 4 那根灰虚线<b>确定不接</b>，两侧地各回各的源，在电池「−」处天然共地</td></tr>
+      <tr><td>OUTn− → OUTn+<br>（二极管档，红笔在 OUTn−）</td><td><span class="st-ok">0.591V<br>8 路全有</span></td><td>每通道<b>自带续流管</b>，阳极在 OUTn−、阴极在 OUTn+ = DC+。0.591V 说明是<b>硅管</b>（表笔约 1mA，硅 PN 0.55~0.65V、肖特基只有 0.15~0.35V）。阀因此<b>免外并 1N4007</b>；泵另有讲究，见图 3</td></tr>
+    </table>
+    <b class="d">别用 16 根线把 8 个 IN− 单独拉回 Pi</b>，那是 8 个地环。IN− 并成母线这件事和 8 只 10k 是绑在一起的——IN− 不接到 Pi 地，10k 就没有参考点，下拉无从谈起。
+    <br><b>IN1~IN8 ↔ 阀/泵 的分配沿用 <code>p4-pi-wiring.html</code></b>：IN1=阀 L1（GPIO5）、IN7=泵 A（GPIO20）是 P1 已实装的两路，其余六路 P4 定案。改分配就同步改 <code>adhesion.py</code> 的 <code>VALVE_PINS</code> / <code>PUMP_PIN</code>。
   </div>
   <h2>图 3 · 单路负载接线详图（低边开关 · 阀 / 泵各一路）</h2>
   <figure>
-    <svg viewBox="0 0 780 470" role="img" aria-label="单路负载接线详图：左为电磁阀通道，线圈跨接 OUT1+ 与 OUT1− 经板内 MOS 到 DC−，线圈并 1N4007 续流；右为真空泵通道，泵正极取自泵轨、负极进 OUT7−，电机并 SS34 与 100nF">
+    <svg viewBox="0 0 780 506" role="img" aria-label="单路负载接线详图：左为电磁阀通道，线圈跨接 OUT1+ 与 OUT1− 经板内 MOS 到 DC−，续流管板内已有故画虚线；右为真空泵通道，泵正极取自泵轨、负极进 OUT7−，电机外并 SS34 与 100nF">
       <defs>
         <marker id="ms3" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
           <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
@@ -383,14 +386,14 @@
       <text class="t-pin" x="160" y="74">OUT1+ 端子</text>
       <circle class="nd" cx="150" cy="90" r="3.5"/>
 
-      <!-- 续流二极管支路 -->
-      <polyline class="sch" points="150,90 100,90 100,110"/>
-      <polygon points="94,132 106,132 100,118" fill="var(--ink)" opacity=".8"/>
-      <line class="sch" x1="93" y1="116" x2="107" y2="116" stroke-width="2.4"/>
-      <polyline class="sch" points="100,132 100,178 150,178"/>
-      <text class="t-bm" x="20" y="118">1N4007</text>
-      <text class="t-bm" x="20" y="135">阴极环</text>
-      <text class="t-bm" x="20" y="152">朝 +12V</text>
+      <!-- 续流二极管支路：板内已有（虚线 = 不用你装） -->
+      <polyline class="w-off" points="150,90 100,90 100,110"/>
+      <polygon points="94,132 106,132 100,118" fill="var(--muted)" opacity=".85"/>
+      <line class="w-off" x1="93" y1="116" x2="107" y2="116" stroke-width="2.4" stroke-dasharray="none"/>
+      <polyline class="w-off" points="100,132 100,178 150,178"/>
+      <text class="t-bm" x="20" y="118">续流管</text>
+      <text class="t-bm" x="20" y="135">板内已有</text>
+      <text class="t-bm" x="20" y="152">外并免装</text>
 
       <!-- 线圈 -->
       <rect class="rb" x="132" y="100" width="36" height="64" rx="3"/>
@@ -501,11 +504,13 @@
 
       <text class="t-foot" x="16" y="358">低边开关的含义：MOS 只串在负载的「−」侧。阀最省事——两根线跨接 OUT1+ / OUT1− 即可，「+」由板内 DC+ 母线供给；</text>
       <text class="t-foot" x="16" y="374">泵则相反，<tspan fill="var(--warn)" font-weight="700">OUT7+ / OUT8+ 必须空置</tspan>（它们内部并在 DC+ = 阀轨上，接了就等于把泵并回阀轨，分轨白分），「+」单独吃泵轨。</text>
-      <text class="t-foot" x="16" y="392">阀与泵都是感性负载，断开瞬间的反电动势会打穿 MOS。<tspan fill="var(--warn)" font-weight="700">板上有无续流二极管必须实测确认</tspan>：</text>
-      <text class="t-foot" x="16" y="408">二极管档量每通道 OUTn− 与 OUTn+ 之间，反向读到 ≈0.5V 压降 = 有，开路 = 无。</text>
-      <text class="t-foot" x="16" y="424">无则每只阀外并 1N4007、每只泵外并 SS34 + 100nF，全部贴着负载端子焊、引线越短越好。</text>
-      <text class="t-foot" x="16" y="442">10k 直接跨在每路 INn+ / INn− 端子之间：Pi 的 <tspan font-weight="700">GPIO5 / GPIO6 复位默认上拉</tspan>（GPIO0~8 上拉、9~27 下拉），</text>
-      <text class="t-foot" x="16" y="458">高电平触发板遇上它 = 开机瞬间阀 L1/L2 通电放气。下拉后 IN 静态应 &lt;0.8V，实测「Pi 断电时阀不动作」才算过。</text>
+      <text class="t-foot" x="16" y="392"><tspan font-weight="700">虚线 = 板内已有、不用你装；实线 = 要你外接。</tspan>实测八路每通道都自带续流管（OUTn−→OUTn+ 读 0.591V = 硅管）。</text>
+      <text class="t-foot" x="16" y="408">对<tspan font-weight="700">阀</tspan>，它正好跨在线圈两端 → <tspan font-weight="700">6 只 1N4007 免装</tspan>。对<tspan font-weight="700">泵</tspan>，它跨的却是「泵负端 → 阀轨」而不是电机两端：</text>
+      <text class="t-foot" x="16" y="424">MOS 靠它保护已经够，但续流回路要绕经阀轨和大半个线束，环面积极大。<tspan fill="var(--warn)" font-weight="700">所以泵仍外并 SS34 + 100nF</tspan>，</text>
+      <text class="t-foot" x="16" y="440">把回路缩回电机这一小圈；肖特基 0.4V 会抢在板内硅管 0.85V 之前导通，1N4007 打平抢不稳。</text>
+      <text class="t-foot" x="16" y="456">100nF 治的是另一件事——电刷换向的宽带噪声，对 7 路 0.25~2.25V 的模拟采样更要命。两件都贴着泵端子焊、引线越短越好。</text>
+      <text class="t-foot" x="16" y="474">10k 直接跨在每路 INn+ / INn− 端子之间：Pi 的 <tspan font-weight="700">GPIO5 / GPIO6 复位默认上拉</tspan>（GPIO0~8 上拉、9~27 下拉），</text>
+      <text class="t-foot" x="16" y="490">高电平触发板遇上它 = 开机瞬间阀 L1/L2 通电放气。下拉后 IN 静态应 &lt;0.8V，实测「Pi 断电时阀不动作」才算过。</text>
     </svg>
   </figure>
   <h2>图 4 · 地线拓扑（单点共地）</h2>
@@ -559,7 +564,7 @@
       <text class="t-bs" x="640" y="259">Pin 34 / 39 GND</text>
       <rect class="sv-box" x="430" y="215" width="130" height="50" rx="6"/>
       <text class="t-bx" x="495" y="237">板信号地</text>
-      <text class="t-bs" x="495" y="254">IN1− ~ IN8− 并联</text>
+      <text class="t-bs" x="495" y="254">IN1−~IN8− 7 跳线手并</text>
       <line class="w-gnd2" x1="585" y1="240" x2="560" y2="240"/>
       <rect class="sv-box" x="585" y="290" width="110" height="46" rx="6"/>
       <text class="t-bx" x="640" y="311">分压板 + 传感器</text>
@@ -568,13 +573,13 @@
 
       <!-- 板内是否导通 -->
       <path class="w-off" d="M545,215 L545,192 A12,12 0 0 1 545,168 L545,120"/>
-      <text class="t-bsw" x="620" y="146" text-anchor="start">IN− 与 DC− 导通吗？</text>
-      <text class="t-bs" x="620" y="162" text-anchor="start">光耦板通常不导通</text>
+      <text class="t-bsw" x="620" y="146" text-anchor="start">实测 IN− 与 DC− 不导通</text>
+      <text class="t-bs" x="620" y="162" text-anchor="start">真隔离 → 此线确定不接</text>
 
-      <text class="t-foot" x="16" y="358">跨接线（灰虚线）是全图唯一有争议的一根：<tspan fill="var(--warn)" font-weight="700">量出板内不导通（真隔离）就别人为把它接起来</tspan>——</text>
-      <text class="t-foot" x="16" y="374">两侧地各回各的源，在电池「−」处天然共地，环面积最小；量出导通（不隔离）则板本身就是那个单点，</text>
-      <text class="t-foot" x="16" y="390">此时 Pi 与 12V 之间不要再拉第二根地线，否则成环。地环流的代价很具体：7 路模拟量满量程只有</text>
-      <text class="t-foot" x="16" y="406">0.25~2.25V，几十 mV 的环流噪声就够让 −30kPa 的吸附判据抖动，而判据抖 = 状态机误判 = 墙上抬错脚。</text>
+      <text class="t-foot" x="16" y="358">跨接线（灰虚线）曾是全图唯一有争议的一根，现已实测定案：<tspan fill="var(--warn)" font-weight="700">板内 IN− 与 DC− 不导通 = 真隔离，此线确定不接</tspan>。</text>
+      <text class="t-foot" x="16" y="374">两侧地各回各的源，在电池「−」处天然共地，环面积最小。（若当初量出导通，则板本身就是那个单点，此时 Pi 与 12V 之间不得再拉第二根地线。）</text>
+      <text class="t-foot" x="16" y="390">地环流的代价很具体：7 路模拟量满量程只有 0.25~2.25V，几十 mV 的环流噪声就够让 −30kPa 的吸附判据抖动，</text>
+      <text class="t-foot" x="16" y="406">而判据抖 = 状态机误判 = 墙上抬错脚。</text>
     </svg>
   </figure>
   <h2>图 5 · 压力采样链（5V 域线束）</h2>
@@ -667,10 +672,10 @@
       <tr><td>13</td><td>Pi Pin31/33 · 36/35/40</td><td>IN2+/IN3+ · IN4+/IN5+/IN6+（阀 L2 L3 R1 R2 R3）</td><td>24AWG 绿/白</td><td><span class="st-tbd">建议，P4 定案</span></td></tr>
       <tr><td>14</td><td>Pi Pin38 GPIO20</td><td>IN7+（泵 A）</td><td>24AWG 紫</td><td><span class="st-ok">P1 已实装</span></td></tr>
       <tr><td>15</td><td>Pi Pin37 GPIO26</td><td>IN8+（泵 B）</td><td>24AWG 紫</td><td><span class="st-tbd">建议，P4 定案</span></td></tr>
-      <tr><td>16</td><td>IN1− ~ IN8−</td><td>端子上短跳线并成一条信号地（若板内已并则免）</td><td>24AWG 黑</td><td>先量再定</td></tr>
+      <tr><td>16</td><td>IN1− ~ IN8−</td><td>端子上 <b>7 根短跳线</b>并成一条信号地（实测板内不互通，<b class="d">必做</b>；IN− 是隔一个螺丝一个，跨着接）</td><td>24AWG 黑</td><td><span class="st-ok">实测定案</span></td></tr>
       <tr><td>17</td><td>Pi Pin34 / Pin39</td><td>上一行那条信号地（两根并线）</td><td>24AWG 黑</td><td>固定</td></tr>
       <tr><td>18</td><td>每路 INn+</td><td>10k 电阻 → 同路 INn−（8 只，焊在端子上）</td><td>—</td><td><b>新增</b>，见图 3</td></tr>
-      <tr><td>19</td><td>每只阀线圈两端</td><td>1N4007 并联（阴极朝「+」）；泵为 SS34 + 100nF</td><td>—</td><td>板无续流管时必加</td></tr>
+      <tr><td>19</td><td>每只泵电机两端</td><td><b>SS34 + 100nF 并联</b>（二极管阴极朝「+」），贴着泵端子焊。<b>阀不必外并</b>——板内续流管已跨在线圈两端</td><td>—</td><td><span class="st-ok">实测定案</span></td></tr>
       <tr><td>20</td><td>Pi Pin1 / 2 / 9 / 3 / 5</td><td>分压板 J1（3.3V / 5V / GND / SDA / SCL）</td><td>橙/红/黑/蓝/黄</td><td>固定</td></tr>
       <tr><td>21</td><td>XGZP6847A ×7</td><td>分压板 S1~S7（每口 5V·OUT·GND）</td><td>JST-XH 3P</td><td>固定</td></tr>
     </table>
@@ -721,8 +726,8 @@
   <div class="note">
     <b>装配与检验清单</b>（按顺序做，每步不过不进入下一步）
     <ol>
-      <li><b>板未上机先量三处</b>：图 2 note 的三条（DC+↔OUTn+ 是否通、IN− 之间是否通、IN− 与 DC− 是否隔离）。结果决定阀的接法、信号地的并法、以及图 4 那根跨接线接不接。</li>
-      <li><b>两块 XL6009 空载调压</b>：各自单独接电池、<b>空载</b>把电位器调到 12.0V，断电、标记"#1 泵轨 / #2 阀轨"后再接负载。两块调完互不再动。</li>
+      <li><b>板未上机先量的四处</b>：<span class="st-ok">已全部完成 2026-08-11，结果见图 2 下方表</span>。八路续流管已逐路确认，本步收口。</li>
+      <li><b>两块 XL6009 空载调压，且故意留压差</b>：各自单独接电池、<b>空载</b>调到 <b>#2 阀轨 12.2V / #1 泵轨 11.8V</b>（<b class="d">不是都调 12.0V</b>），断电、标记"#1 泵轨 / #2 阀轨"后再接负载。压差方向要故意留：板内续流管在「泵负端 → 阀轨」这个方向上，泵轨一旦比阀轨高出一个 Vf（实测硅管 ≈0.59V）就会经电机绕组往阀轨漏电流，泵会嗡嗡响或慢转。手调两块表的 0.1V 误差本来够不着这个门槛，留 0.4V 是防电位器随泵振动漂。<b>验收</b>：泵停 + 3 阀同时通电（阀轨最低、泵轨最高的那一刻）量两条轨，阀轨仍高于泵轨才算过。</li>
       <li><b>先接控制、不接负载</b>：Pi ↔ IN1+~IN8+ + 并好的 IN− 信号地 + 8 只 10k。Pi 断电状态量每路 INn+ 对 INn− &lt;0.8V；Pi 上电但程序未跑时复量一次，仍 &lt;0.8V 才算过。</li>
       <li><b>空载点动</b>：接 12V、不接阀泵，逐路 GPIO 点动，看 LED 与 OUTn− 对 OUTn+ 的电压翻转（关断 ≈12V、导通 ≈0V）。八路全通过再接负载。</li>
       <li><b>负载逐路上</b>：先上 6 阀（听咔哒、<b class="d">同时确认气路方向</b>：断电时吸盘通真空、通电时通大气），再上 2 泵。每上一路复查一次总电流。</li>

@@ -467,6 +467,44 @@ def _spectrum(ts, kpa, f_lo=5, f_hi=200):
     return out
 
 
+def _ascii_plot(vals, width=68, height=11):
+    """把一段波形画成字符示波器：看形状比看数字管用。"""
+    lo, hi = min(vals), max(vals)
+    if hi - lo < 1e-9:
+        hi = lo + 1.0
+    n = len(vals)
+    cols = []
+    for c in range(width):
+        a = c * n // width
+        b = max(a + 1, (c + 1) * n // width)
+        seg = vals[a:b]
+        cols.append((min(seg), max(seg)))
+    out = []
+    for r in range(height):
+        y_hi = hi - (hi - lo) * r / height
+        y_lo = hi - (hi - lo) * (r + 1) / height
+        line = "".join("█" if (mx >= y_lo and mn <= y_hi) else " " for mn, mx in cols)
+        out.append(f"  {y_hi:+7.2f} |{line}")
+    return out
+
+
+def _excursions(kpa, thresh):
+    """返回 [(起点下标, 长度, 峰值)]，用于看是单向台阶还是双向尖峰。"""
+    evs, i, n = [], 0, len(kpa)
+    while i < n:
+        if abs(kpa[i]) > thresh:
+            j, peak = i, kpa[i]
+            while j < n and abs(kpa[j]) > thresh:
+                if abs(kpa[j]) > abs(peak):
+                    peak = kpa[j]
+                j += 1
+            evs.append((i, j - i, peak))
+            i = j
+        else:
+            i += 1
+    return evs
+
+
 def scope(bus, chnum, secs, csv_path):
     """抓一段原始波形，看它到底是"瞬断"还是"周期性干扰"。"""
     readers, _ = find_readers(bus)
@@ -515,6 +553,24 @@ def scope(bus, chnum, secs, csv_path):
         if shown >= 3:
             break
 
+    # ---- 形态分析：接触瞬断是单向台阶，压电/静电是双向尖峰 ----
+    ex_thresh = max(0.5, 0.3 * max(abs(min(kpa)), abs(max(kpa))))
+    evs = _excursions(kpa, ex_thresh)
+    neg = sum(1 for _, _, p in evs if p < 0)
+    pos = len(evs) - neg
+    if evs:
+        dur_ms = [1000.0 * L / rate for _, L, _ in evs]
+        print(f"\n  越界事件（|偏移| > {ex_thresh:.2f} kPa）：{len(evs)} 次   "
+              f"向下 {neg} / 向上 {pos}   时长 {min(dur_ms):.1f}~{max(dur_ms):.1f} ms")
+        k = max(range(len(evs)), key=lambda i: abs(evs[i][2]))
+        c, L, pk = evs[k]
+        half = max(60, L * 3)
+        a, b = max(0, c - half), min(len(kpa), c + L + half)
+        print(f"\n  最大一次（{pk:+.2f} kPa，{1000.0*L/rate:.1f} ms）附近波形 "
+              f"[{(b-a)/rate*1000:.0f} ms 窗口，纵轴 kPa]：")
+        for line in _ascii_plot(kpa[a:b]):
+            print(line)
+
     top_amp, top_f = peaks[0]
     # 单一正弦：能量集中在主峰，2×幅度 ≈ 峰峰值（占比→100%）。
     # 孤立脉冲：频谱宽带铺开，任何单根谱线占比都很低。占比才是判据，不是绝对幅度。
@@ -526,14 +582,28 @@ def scope(bus, chnum, secs, csv_path):
         print("     没复现出问题的话，是刚才那个动作没做到——干扰/瞬断都得现场复现才测得到。")
         return
     if ratio < 40:
-        print(f"  ⚠ 主峰只占 {ratio:.0f}%，能量铺在整个频段 —— 不是周期信号，")
-        print("     而是孤立脉冲的宽带频谱。")
-        if p2p > 5.0:
-            print(f"     峰峰 {p2p:.1f} kPa 的孤立大偏移，**这才像真瞬断**：")
+        print(f"  ⚠ 主峰只占 {ratio:.0f}%，能量铺在整个频段 —— 不是周期信号，是脉冲。")
+        onesided = evs and (neg == 0 or pos == 0)
+        deep = p2p > 20.0
+        if onesided and deep:
+            print(f"     而且 {len(evs)} 次全是单向的、峰峰 {p2p:.1f} kPa —— "
+                  "**这才是真瞬断**（线一断分压点只被拉向地）：")
             print(f"         python3 scripts/p4_sensor_check.py --wiggle {num}")
             print("     按七步定位到具体焊点/端子。")
+        elif evs:
+            print(f"     向下 {neg} 次 / 向上 {pos} 次、峰峰 {p2p:.1f} kPa。"
+                  f"{'双向' if not onesided else '单向但幅度小'}且远不到满量程")
+            print("     （真开路应该冲到 -112 kPa 附近），更像**机械应力或静电**：")
+            print("     陶瓷电容有压电效应，按压/掰板子会自己发电；手指触碰也会注入电荷。")
+            print("     用这个实验分开——碰板子时你同时给了它「电」和「力」，拆开测：")
+            print(f"       ① 只给力：用塑料笔杆按压板子（不碰金属），再跑 --scope {num}")
+            print(f"       ② 只给电：先摸一下接地物放电，再用手指轻触、不施力")
+            print("       ①有②无 = 机械/压电（改善板子固定与应力释放即可，不用拆焊点）")
+            print("       ②有①无 = 静电/耦合（机器上电池供电、无人触碰，基本无害）")
+            print(f"     另外务必做对照：同样手法测另一路（--scope 2）。别的路也这样 = 板级"
+                  "共性，不是本路焊接问题。")
         else:
-            print(f"     但峰峰只有 {p2p:.2f} kPa，量级接近噪声，暂不用管。")
+            print(f"     峰峰只有 {p2p:.2f} kPa，量级接近噪声，暂不用管。")
         return
     if top_amp < 0.3:
         print(f"  ✅ 周期成分幅度仅 {top_amp:.2f} kPa，远小于 -30kPa 判据，可以忽略。")

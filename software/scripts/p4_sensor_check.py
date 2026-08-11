@@ -34,16 +34,17 @@ PGA_FSR = 4.096         # ADS1115 PGA=±4.096V（±2.048 会在放气确认区�
 V_ADC_ATM = V_ATM_NOMINAL / V_DIV   # ≈2.243V，分压板上应该看到的大气点
 
 # ---- 通道映射：与 html/p4-divider-board.html 的映射表一致 ----
-# (通道号, S口, 名称, ADS 地址, AIN)
+# (通道号, S口, 名称, ADS 地址, AIN, 类别)
+# 类别 spare = 板图里"只留焊盘"的第 8 路：分压电阻没装，AIN 悬空，读数飘是正常的
 CHANNELS = [
-    (1, "S1", "罐压",   0x48, 0),
-    (2, "S2", "足 L1",  0x48, 1),
-    (3, "S3", "足 L2",  0x48, 2),
-    (4, "S4", "足 L3",  0x48, 3),
-    (5, "S5", "足 R1",  0x49, 0),
-    (6, "S6", "足 R2",  0x49, 1),
-    (7, "S7", "足 R3",  0x49, 2),
-    (8, "—",  "备用",   0x49, 3),
+    (1, "S1", "罐压",   0x48, 0, "tank"),
+    (2, "S2", "足 L1",  0x48, 1, "foot"),
+    (3, "S3", "足 L2",  0x48, 2, "foot"),
+    (4, "S4", "足 L3",  0x48, 3, "foot"),
+    (5, "S5", "足 R1",  0x49, 0, "foot"),
+    (6, "S6", "足 R2",  0x49, 1, "foot"),
+    (7, "S7", "足 R3",  0x49, 2, "foot"),
+    (8, "—",  "备用",   0x49, 3, "spare"),
 ]
 
 VATM_TABLE_PATH = Path(__file__).resolve().parents[2] / "docs" / "data" / "p4_vatm.json"
@@ -82,9 +83,15 @@ def to_kpa(v_adc, v_atm):
     return KPA_PER_V * (v_adc * V_DIV - v_atm)
 
 
-def classify(v_adc):
+def classify(v_adc, kind="foot"):
     """按"当前处于大气压"的前提判定一路的接线状态。"""
+    if kind == "spare":
+        return "空位", ("板图第 8 路只留焊盘、分压电阻没装，AIN 悬空 —— "
+                        "电压飘在中间值、噪声比其他路大一个量级都是正常的")
     if v_adc < 0.10:
+        if kind == "tank":
+            return "未接", "罐压传感器还没接（储气罐没到货），预期如此；" \
+                           "读数贴地也说明该路下臂 R_B 是好的"
         return "未接", "分压点被下臂 10k 拉到地——传感器没插 / S 口断线 / 没给 5V"
     if v_adc < 0.90:
         return "异常低", "≈满真空才该这么低。查：传感器 5V 供电、S 口三根线顺序、传感器本身"
@@ -101,7 +108,7 @@ def sample(readers, n=16):
     """每路采 n 次，返回 {通道号: (均值, 峰峰值)}。"""
     acc = {ch[0]: [] for ch in CHANNELS}
     for _ in range(n):
-        for num, _s, _name, addr, ain in CHANNELS:
+        for num, _s, _name, addr, ain, _k in CHANNELS:
             r = readers.get(addr)
             if r is not None:
                 acc[num].append(r.read_v(ain))
@@ -160,14 +167,15 @@ def report(bus, samples):
     print(f"\n  每路采样 {samples} 次：\n")
     print("  通道 S口  名称    ADC(V)  传感器(V)  p-p(mV)    kPa   判定")
     print("  " + "-" * 68)
-    online, faulty, notconn = [], [], []
-    for num, s, name, addr, ain in CHANNELS:
+    online, faulty, notconn, spare = [], [], [], []
+    for num, s, name, addr, ain, kind in CHANNELS:
         if num not in data:
             print(f"   {num}   {s:3s} {name:6s}   ——  该路的 ADS(0x{addr:02X}) 未应答")
             continue
         mean, pp = data[num]
-        tag, note = classify(mean)
-        kpa = "    ——" if tag == "未接" else f"{to_kpa(mean, V_ATM_NOMINAL):6.1f}"
+        tag, note = classify(mean, kind)
+        kpa = ("    ——" if tag in ("未接", "空位")
+               else f"{to_kpa(mean, V_ATM_NOMINAL):6.1f}")
         print(f"   {num}   {s:3s} {name:6s} {mean:6.3f}   {mean*V_DIV:6.3f}   "
               f"{pp*1000:6.1f}  {kpa}   {tag}")
         if note:
@@ -175,7 +183,9 @@ def report(bus, samples):
         if tag in ("正常", "偏低"):
             online.append((num, name, mean, pp))
         elif tag == "未接":
-            notconn.append(num)
+            notconn.append((num, name))
+        elif tag == "空位":
+            spare.append(num)
         else:
             faulty.append((num, name, tag))
 
@@ -184,8 +194,11 @@ def report(bus, samples):
         print("  ❌ 有问题的路：" + "、".join(f"{n}({nm}) {t}" for n, nm, t in faulty))
         print("     先断电，用万用表复查这些路：S口OUT→分压点 ≈10k、分压点→GND ≈10k。")
     if notconn:
-        print(f"  未接 {len(notconn)} 路：通道 " + "、".join(str(n) for n in notconn) +
-              "（罐压 S1 还没买罐、备用 S8 只留焊盘 —— 这两路未接是预期的）")
+        print("  ○ 未接 " + "、".join(f"{n}({nm})" for n, nm in notconn) +
+              " —— 读数贴地是好事，说明这些路的下臂 R_B 有效")
+    if spare:
+        print("  ○ 空位 通道 " + "、".join(str(n) for n in spare) +
+              " —— 只留焊盘、没装分压，AIN 悬空，读数飘属正常，不用管")
     if not online:
         print("  没有任何一路读到正常的传感器。先按上面的提示排线。")
         return data
@@ -223,10 +236,10 @@ def live(bus, fixed_atm, samples):
     for c in CHANNELS:
         if c[0] not in base:
             continue
-        tag, _ = classify(base[c[0]][0])
+        tag, _ = classify(base[c[0]][0], c[5])
         if tag in ("正常", "偏低"):
             active.append(c)
-        elif tag != "未接":
+        elif tag not in ("未接", "空位"):
             bad.append((c[0], c[2], tag))
     if bad:
         print("⚠ 以下路判定异常，已排除在监视之外（先跑不带参数的自检看原因）：")
@@ -241,7 +254,7 @@ def live(bus, fixed_atm, samples):
     else:
         v_atm = {c[0]: base[c[0]][0] * V_DIV for c in active}
         print("大气基线：启动时自动采集（要求此刻所有传感器都通大气、没堵没吸）")
-    for num, s, name, _a, _i in active:
+    for num, s, name, _a, _i, _k in active:
         print(f"  通道 {num} {s:3s} {name:6s} V_ATM = {v_atm[num]:.3f} V")
 
     lo = {c[0]: 0.0 for c in active}   # 本次最深负压
@@ -253,7 +266,7 @@ def live(bus, fixed_atm, samples):
     try:
         while True:
             rows = []
-            for num, s, name, addr, ain in active:
+            for num, s, name, addr, ain, _k in active:
                 v = readers[addr].read_v(ain)
                 kpa = to_kpa(v, v_atm[num])
                 lo[num] = min(lo[num], kpa)
@@ -272,7 +285,7 @@ def live(bus, fixed_atm, samples):
     except KeyboardInterrupt:
         print("\n\n本次各路最深负压：")
         ok = False
-        for num, s, name, _a, _i in active:
+        for num, s, name, _a, _i, _k in active:
             verdict = "✅ 读到负压，该路通" if lo[num] < -5.0 else "—  没吸过 / 没读到变化"
             print(f"  通道 {num} {s:3s} {name:6s} {lo[num]:7.1f} kPa   {verdict}")
             ok = ok or lo[num] < -5.0
@@ -292,11 +305,14 @@ def zero(bus, samples, save):
     print(f"逐路标定大气点 V_ATM（采样 {samples} 次/路）。确认此刻所有传感器都通大气……")
     data = sample(readers, samples)
     table, rows = {}, []
-    for num, s, name, addr, ain in CHANNELS:
+    for num, s, name, addr, ain, kind in CHANNELS:
         if num not in data:
             continue
         mean, pp = data[num]
-        tag, _ = classify(mean)
+        tag, _ = classify(mean, kind)
+        if tag in ("未接", "空位"):
+            rows.append(f"  {num} {s:3s} {name:6s}  {tag}，跳过")
+            continue
         if tag not in ("正常", "偏低"):
             rows.append(f"  {num} {s:3s} {name:6s}  {tag}（{mean:.3f}V），跳过——"
                         f"这一路先修好再标定")

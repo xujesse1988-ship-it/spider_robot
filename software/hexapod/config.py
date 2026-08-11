@@ -120,6 +120,11 @@ class RobotConfig:
     max_step: float = 60.0      # 单周期最大步幅 mm
     cycle_time: float = 1.5     # 步态周期 s
     update_hz: float = 50.0
+    # 直线跑偏补偿（开环步行必然有残余漂移：标定残差 + 支撑相打滑）。
+    # 测法：直行 2m，量末端航向变化和侧移，除以 2 填进来，符号"向左为正"。
+    # 只在有前进/后退速度时按 vx 比例生效，静止和原地转向不受影响。
+    yaw_trim_deg_per_m: float = 0.0   # 每走 1m 实测左转多少度
+    side_trim_mm_per_m: float = 0.0   # 每走 1m 实测左移多少 mm
     # 安全阈值（官方 WARN_*：2S 电池）
     volt_warn: float = 6.4
     volt_cutoff: float = 6.0

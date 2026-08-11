@@ -71,6 +71,9 @@ class GaitEngine:
                      wz: float = 0.0) -> dict:
         """t 时刻各腿足端目标（身体系）。静止指令时全部回默认站位。"""
         targets = {}
+        if vx:      # 跑偏补偿：与前进速度成正比，反号抵消实测漂移
+            wz -= math.radians(self.cfg.yaw_trim_deg_per_m) * vx / 1000.0
+            vy -= self.cfg.side_trim_mm_per_m * vx / 1000.0
         moving = abs(vx) > 1e-6 or abs(vy) > 1e-6 or abs(wz) > 1e-6
         for name in LEG_NAMES:
             x0, y0, z0 = self.default_feet[name]

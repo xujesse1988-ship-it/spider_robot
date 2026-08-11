@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
 from hexapod.gait import GaitEngine, TRIPOD, WAVE, CLIMB
@@ -42,3 +43,24 @@ def test_stride_capped():
 def test_static_command_returns_default_feet():
     eng = GaitEngine(CFG, TRIPOD)
     assert eng.foot_targets(1.23) == eng.default_feet
+
+
+def test_trim_equals_explicit_speed_offset():
+    """跑偏 trim = 按 vx 比例叠加的 wz/vy 修正，且符号与实测漂移相反。"""
+    vx = 40.0
+    trimmed = GaitEngine(replace(CFG, yaw_trim_deg_per_m=2.0,
+                                 side_trim_mm_per_m=15.0), TRIPOD)
+    plain = GaitEngine(CFG, TRIPOD)
+    expect = plain.foot_targets(0.4, vx, -15.0 * vx / 1000.0,
+                                -math.radians(2.0) * vx / 1000.0)
+    assert trimmed.foot_targets(0.4, vx) == expect
+
+
+def test_trim_inactive_without_forward_speed():
+    """静止和原地转向不受 trim 影响。"""
+    trimmed = GaitEngine(replace(CFG, yaw_trim_deg_per_m=2.0,
+                                 side_trim_mm_per_m=15.0), TRIPOD)
+    plain = GaitEngine(CFG, TRIPOD)
+    assert trimmed.foot_targets(0.4) == plain.default_feet
+    assert trimmed.foot_targets(0.4, 0.0, 0.0, 0.3) == \
+        plain.foot_targets(0.4, 0.0, 0.0, 0.3)

@@ -103,16 +103,19 @@
   <header>
     <p class="eyebrow">Spider · P4 整机 · 气路子系统电气接线（配整机连接图 / Pi 引脚图 / 分压板图纸）</p>
     <h1>气路部分电气组件连接图</h1>
-    <p class="sub">只画<b>为气路服务的那套电</b>：升压 → MOSFET → 6 阀 + 2 泵的 12V 功率链、Pi 的 8 路控制链、
+    <p class="sub">只画<b>为气路服务的那套电</b>：升压 → MOSFET → 6 阀 + 2 泵位（V0 装 1）的 12V 功率链、Pi 的 8 路控制链、
     7 路压力传感的 5V 采样链。舵机 / Servo2040 / 继电器不属于气路，见
     <code>html/p4-system-diagram.html</code>。本图落到<b>端子级</b>——哪根线拧进哪个螺丝端子，端子名逐字取自
     <code>images/YYNMOS-8_back.jpg</code> 的背面丝印。两处与既有文档的差异是有意的设计决定，
     见图 1 的<b>双轨供电</b>与图 3 的<b>泵「+」不经板 DC+、OUT7+/OUT8+ 空置</b>。</p>
+    <p class="sub"><b class="d">泵的数量：本图按双泵位画满，但 V0 实装单泵。</b>依据是 <code>P4-BAY-DESIGN</code> 的减重对策
+    「首飞只装单泵，双泵位留着」。凡图中标<b>泵 B / 通道 8 / IN8± / OUT8±</b> 之处，V0 一律空置——端子和线位都留着，
+    补第二台泵时直接接上，其余接法不变。电流预算两种工况都列了，<b>双轨供电的结论对单泵同样成立</b>（见预算表下方核算）。</p>
   </header>
 
   <h2>图 1 · 气路电气总接线图（端子级）</h2>
   <figure>
-    <svg viewBox="0 0 780 700" role="img" aria-label="气路电气总接线图：2S 电池经总开关保险分两路 XL6009 升压，阀轨进 MOSFET 板 DC+ 并供 6 只电磁阀，泵轨直供 2 只真空泵，Pi 经 10 芯排线控制 IN1+ 到 IN8+">
+    <svg viewBox="0 0 780 700" role="img" aria-label="气路电气总接线图：2S 电池经总开关保险分两路 XL6009 升压，阀轨进 MOSFET 板 DC+ 并供 6 只电磁阀，泵轨直供真空泵（V0 单泵、双泵位留着），Pi 经 10 芯排线控制 IN1+ 到 IN8+">
       <defs>
         <marker id="mp" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
           <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
@@ -171,9 +174,9 @@
       <text class="t-pw" x="590" y="124" text-anchor="middle">阀「+」由板内 DC+ → OUTn+ 母线供给，不另拉线</text>
       <text class="t-dim" x="382" y="160" text-anchor="end">12V-V → DC+</text>
 
-      <!-- 泵轨 12V-P：下行绕过板，直供 2 泵 -->
+      <!-- 泵轨 12V-P：下行绕过板，直供泵（V0 单泵，双泵位留着） -->
       <polyline class="w-pwr" points="378,286 386,286 386,540 700,540 700,494" marker-end="url(#mp)"/>
-      <text class="t-pw" x="520" y="558" text-anchor="middle">12V-P 泵轨 → 2 只泵「+」（不经板 DC+，见图 3）</text>
+      <text class="t-pw" x="520" y="558" text-anchor="middle">12V-P 泵轨 → 泵「+」（V0 单泵；不经板 DC+，见图 3）</text>
 
       <!-- MOSFET 板 -->
       <rect class="sv-box" x="396" y="150" width="170" height="330" rx="6"/>
@@ -218,7 +221,7 @@
 
       <!-- 泵组 -->
       <rect class="sv-box" x="616" y="380" width="152" height="110" rx="6"/>
-      <text class="t-bx" x="692" y="404">真空泵 ×2</text>
+      <text class="t-bx" x="692" y="404">真空泵 ×2（V0 装 1）</text>
       <text class="t-bs" x="692" y="422">555 双头隔膜泵 12V</text>
       <text class="t-bs" x="692" y="439">「+」吃泵轨，「−」进 OUTn−</text>
       <text class="t-bsw" x="692" y="456">OUT7+ / OUT8+ 空置不接</text>
@@ -237,7 +240,7 @@
   </figure>
   <h2>图 2 · YYNMOS-8 端子分配与装舱朝向（俯视 = 元件面）</h2>
   <figure>
-    <svg viewBox="0 0 780 548" role="img" aria-label="YYNMOS-8 八路 MOSFET 板俯视端子分配图：上排 16 位信号端子分 4 加 6 加 6 三块，下排 18 位功率输出端子分 6 加 6 加 6 三块，四个安装孔坐标标注">
+    <svg viewBox="0 0 780 568" role="img" aria-label="YYNMOS-8 八路 MOSFET 板俯视端子分配图：上排 16 位信号端子分 4 加 6 加 6 三块，下排 18 位功率输出端子分 6 加 6 加 6 三块，四个安装孔坐标标注">
       <text class="t-bx" x="389" y="26">YYNMOS-8 俯视图（元件面）· 93 × 54mm · 4 × Ø3.0 安装孔</text>
       <text class="t-bm" x="389" y="48" text-anchor="middle">端子名取自背面丝印实物照片；信号侧 16 位朝机头、正对 XL6009，功率侧 18 位朝机尾、正对阀轨</text>
 
@@ -353,6 +356,7 @@
       <text class="t-foot" x="16" y="500">端子名逐字取自背面丝印（images/YYNMOS-8_back.jpg）：信号侧 = 8 组光耦隔离的 INn+ / INn−，</text>
       <text class="t-foot" x="16" y="516">功率侧 = DC+ / DC− 电源入 + 8 组 OUTn+ / OUTn− 输出对。孔坐标为实测值（相对左下角，mm）。</text>
       <text class="t-foot" x="16" y="532"><tspan fill="var(--warn)" font-weight="700">左右次序是背面照片翻面推定</tspan>——量一下 DC+ 与任一 OUTn+ 是否导通即可坐实；若 DC 在另一端，本图左右镜像即可，端子名不变。</text>
+      <text class="t-foot" x="16" y="552"><tspan font-weight="700">V0 实装单泵</tspan>：通道 8（IN8± / OUT8±）整路空置，端子和线位留着，补第二台泵时直接接上。通道 1~7 照接。</text>
     </svg>
   </figure>
 
@@ -440,7 +444,7 @@
       <text class="t-bm" x="66" y="338">功率地（V−）→ 汇接见图 4</text>
 
       <!-- ============ B · 泵 ============ -->
-      <text class="t-bx" x="585" y="26">B · 一路真空泵（电机负载 ×2）</text>
+      <text class="t-bx" x="585" y="26">B · 一路真空泵（电机负载 ×2，V0 装 1）</text>
       <line class="w-pwr" x1="430" y1="60" x2="740" y2="60"/>
       <text class="t-pw" x="434" y="52">12V-P 泵轨（XL6009 #1，不经板 DC+）</text>
       <line class="w-pwr2" x1="540" y1="60" x2="540" y2="104"/>
@@ -672,16 +676,16 @@
       <tr><td>3</td><td>XL6009 #2 OUT+</td><td>YYNMOS-8 <b>DC+</b>（板内并到 8 个 OUTn+）</td><td>20AWG 红 · 标「12V-V」</td><td>固定</td></tr>
       <tr><td>4</td><td>XL6009 #2 OUT−</td><td>功率地母线</td><td>20AWG 黑</td><td>固定</td></tr>
       <tr><td>5</td><td>YYNMOS-8 <b>DC−</b></td><td>功率地母线（八路回流都走它，最粗的一根）</td><td>16AWG 黑</td><td>固定</td></tr>
-      <tr><td>6</td><td>XL6009 #1 OUT+</td><td>泵 A「+」、泵 B「+」（泵轨，<b>不经板 DC+</b>）</td><td>18AWG 红 · 标「12V-P」</td><td>固定</td></tr>
+      <tr><td>6</td><td>XL6009 #1 OUT+</td><td>泵 A「+」、泵 B「+」（泵轨，<b>不经板 DC+</b>）。<b>V0 只接泵 A</b></td><td>18AWG 红 · 标「12V-P」</td><td>固定</td></tr>
       <tr><td>7</td><td>XL6009 #1 OUT−</td><td>功率地母线</td><td>18AWG 黑</td><td>固定</td></tr>
       <tr><td>8</td><td>阀 L1 / L2 / L3（两根线，无极性）</td><td><b>OUT1+ 和 OUT1−</b> / OUT2± / OUT3±</td><td>22AWG 绿</td><td>固定</td></tr>
       <tr><td>9</td><td>阀 R1 / R2 / R3（两根线，无极性）</td><td>OUT4± / OUT5± / OUT6±</td><td>22AWG 白</td><td>固定</td></tr>
-      <tr><td>10</td><td>泵 A「−」/ 泵 B「−」</td><td><b>OUT7−</b> / <b>OUT8−</b></td><td>20AWG 黑 · 标「泵 A/B」</td><td>固定</td></tr>
+      <tr><td>10</td><td>泵 A「−」/ 泵 B「−」</td><td><b>OUT7−</b> / <b>OUT8−</b>。<b>V0 只接泵 A → OUT7−；OUT8− 空置</b></td><td>20AWG 黑 · 标「泵 A/B」</td><td>固定</td></tr>
       <tr><td>11</td><td>—</td><td><b class="d">OUT7+ / OUT8+ 空置不接</b>（接了 = 泵被并回阀轨）</td><td>—</td><td>分轨的关键</td></tr>
       <tr><td>12</td><td>Pi Pin29 GPIO5</td><td>IN1+（阀 L1）</td><td>24AWG 绿</td><td><span class="st-ok">P1 已实装</span></td></tr>
       <tr><td>13</td><td>Pi Pin31/33 · 36/35/40</td><td>IN2+/IN3+ · IN4+/IN5+/IN6+（阀 L2 L3 R1 R2 R3）</td><td>24AWG 绿/白</td><td><span class="st-tbd">建议，P4 定案</span></td></tr>
       <tr><td>14</td><td>Pi Pin38 GPIO20</td><td>IN7+（泵 A）</td><td>24AWG 紫</td><td><span class="st-ok">P1 已实装</span></td></tr>
-      <tr><td>15</td><td>Pi Pin37 GPIO26</td><td>IN8+（泵 B）</td><td>24AWG 紫</td><td><span class="st-tbd">建议，P4 定案</span></td></tr>
+      <tr><td>15</td><td>Pi Pin37 GPIO26</td><td>IN8+（泵 B）</td><td>24AWG 紫</td><td><span class="st-tbd">V0 不接</span>，脚位预留</td></tr>
       <tr><td>16</td><td>IN1− ~ IN8−</td><td>端子上 <b>7 根短跳线</b>并成一条信号地（实测板内不互通，<b class="d">必做</b>；IN− 是隔一个螺丝一个，跨着接）</td><td>24AWG 黑</td><td><span class="st-ok">实测定案</span></td></tr>
       <tr><td>17</td><td>Pi <b>Pin39</b>（Pin34 选接）</td><td>上一行那条信号地。<b>一根即可</b>——只回几十 mA 的光耦电流，断了也是安全方向（光耦无回路 = 阀不通电 = 保压）；Pin34 在同一条排线里，顺手接上算冗余</td><td>24AWG 黑</td><td>固定</td></tr>
       <tr><td>18</td><td>每路 INn+</td><td>下拉电阻 → 同路 INn−（8 只，拧在端子上）。<b>4.7k~10k 皆可，本机实装 6.2k</b></td><td>—</td><td><b>新增</b>，见图 3</td></tr>
@@ -740,7 +744,7 @@
       <li><b>两块 XL6009 空载调压，且故意留压差</b>：各自单独接电池、<b>空载</b>调到 <b>#2 阀轨 12.2V / #1 泵轨 11.8V</b>（<b class="d">不是都调 12.0V</b>），断电、标记"#1 泵轨 / #2 阀轨"后再接负载。压差方向要故意留：板内续流管在「泵负端 → 阀轨」这个方向上，泵轨一旦比阀轨高出一个 Vf（实测硅管 ≈0.59V）就会经电机绕组往阀轨漏电流，泵会嗡嗡响或慢转。手调两块表的 0.1V 误差本来够不着这个门槛，留 0.4V 是防电位器随泵振动漂。<b>验收</b>：泵停 + 3 阀同时通电（阀轨最低、泵轨最高的那一刻）量两条轨，阀轨仍高于泵轨才算过。</li>
       <li><b>先接控制、不接负载</b>：Pi ↔ IN1+~IN8+ + 并好的 IN− 信号地 + 8 只下拉（实装 6.2k）。<b>Pi 上电但程序未跑时</b>量每路 INn+ 对 INn−，&lt;0.8V 才算过——这一刻才是 GPIO5/6 复位上拉真正生效的窗口。Pi 断电时内部上拉不供电，那一测恒过、说明不了问题。</li>
       <li><b>空载点动</b>：接 12V、不接阀泵，逐路 GPIO 点动，看 LED 与 OUTn− 对 OUTn+ 的电压翻转（关断 ≈12V、导通 ≈0V）。八路全通过再接负载。</li>
-      <li><b>负载逐路上</b>：先上 6 阀（听咔哒、<b class="d">同时确认气路方向</b>：断电时吸盘通真空、通电时通大气），再上 2 泵。每上一路复查一次总电流。</li>
+      <li><b>负载逐路上</b>：先上 6 阀（听咔哒、<b class="d">同时确认气路方向</b>：断电时吸盘通真空、通电时通大气），再上泵（<b>V0 只上泵 A → 通道 7</b>）。每上一路复查一次总电流。</li>
       <li><b>断电保压实测</b>：整机吸附状态下直接拉总开关，六足应全部保持吸附 ≥60s（这是 <code>VALVE_ON_LEVEL=0</code> 接法的全部意义）。<b class="d">此项不过，禁止上墙。</b></li>
       <li><b>传感链最后接</b>：<code>i2cdetect -y 1</code> 见 0x48/0x49；7 只传感器悬空置于大气，读数应一致 ≈0.25V。泵开机再读一遍，7 路读数抖动 &lt;±1kPa 才说明分梳走线到位。</li>
       <li>全部通过后 <code>vcgencmd get_throttled</code> 复查 0x0，并把实测电流、端子位、GPIO 映射回填本页与 <code>adhesion.py</code>。</li>

@@ -370,7 +370,7 @@
       <tr><td>OUTn− → OUTn+<br>（二极管档，红笔在 OUTn−）</td><td><span class="st-ok">0.591V<br>8 路全有</span></td><td>每通道<b>自带续流管</b>，阳极在 OUTn−、阴极在 OUTn+ = DC+。0.591V 说明是<b>硅管</b>（表笔约 1mA，硅 PN 0.55~0.65V、肖特基只有 0.15~0.35V）。阀因此<b>免外并 1N4007</b>；泵另有讲究，见图 3</td></tr>
     </table>
     <b class="d">别用 16 根线把 8 个 IN− 单独拉回 Pi</b>，那是 8 个地环。IN− 并成母线这件事和 8 只下拉电阻是绑在一起的——IN− 不接到 Pi 地，电阻就没有参考点，下拉无从谈起。
-    <br><b>IN1~IN8 ↔ 阀/泵 的分配沿用 <code>p4-pi-wiring.html</code></b>：IN1=阀 L1（GPIO5）、IN7=泵 A（GPIO20）是 P1 已实装的两路，其余六路 P4 定案。改分配就同步改 <code>adhesion.py</code> 的 <code>VALVE_PINS</code> / <code>PUMP_PIN</code>。
+    <br><b>IN1~IN8 ↔ 阀/泵 的分配沿用 <code>p4-pi-wiring.html</code></b>：IN1=阀 L1（GPIO5）、IN7=泵 A（GPIO20）是 P1 已实装的两路，其余五路阀 08-14 用 <code>p4_mosfet_check.py</code> 逐路点动实测通过（IN8 泵 B 空置）。改分配就同步改 <code>adhesion.py</code> 的 <code>VALVE_PINS</code> / <code>PUMP_PIN</code>（已回填 <code>[5, 6, 13, 16, 19, 21]</code>）。
   </div>
   <h2>图 3 · 单路负载接线详图（低边开关 · 阀 / 泵各一路）</h2>
   <figure>
@@ -683,7 +683,7 @@
       <tr><td>10</td><td>泵 A「−」/ 泵 B「−」</td><td><b>OUT7−</b> / <b>OUT8−</b>。<b>V0 只接泵 A → OUT7−；OUT8− 空置</b></td><td>20AWG 黑 · 标「泵 A/B」</td><td>固定</td></tr>
       <tr><td>11</td><td>—</td><td><b class="d">OUT7+ / OUT8+ 空置不接</b>（接了 = 泵被并回阀轨）</td><td>—</td><td>分轨的关键</td></tr>
       <tr><td>12</td><td>Pi Pin29 GPIO5</td><td>IN1+（阀 L1）</td><td>24AWG 绿</td><td><span class="st-ok">P1 已实装</span></td></tr>
-      <tr><td>13</td><td>Pi Pin31/33 · 36/35/40</td><td>IN2+/IN3+ · IN4+/IN5+/IN6+（阀 L2 L3 R1 R2 R3）</td><td>24AWG 绿/白</td><td><span class="st-tbd">建议，P4 定案</span></td></tr>
+      <tr><td>13</td><td>Pi Pin31/33 · 36/35/40</td><td>IN2+/IN3+ · IN4+/IN5+/IN6+（阀 L2 L3 R1 R2 R3）</td><td>24AWG 绿/白</td><td><span class="st-ok">08-14 点动实测通过</span></td></tr>
       <tr><td>14</td><td>Pi Pin38 GPIO20</td><td>IN7+（泵 A）</td><td>24AWG 紫</td><td><span class="st-ok">P1 已实装</span></td></tr>
       <tr><td>15</td><td>Pi Pin37 GPIO26</td><td>IN8+（泵 B）</td><td>24AWG 紫</td><td><span class="st-tbd">V0 不接</span>，脚位预留</td></tr>
       <tr><td>16</td><td>IN1− ~ IN8−</td><td>端子上 <b>7 根短跳线</b>并成一条信号地（实测板内不互通，<b class="d">必做</b>；IN− 是隔一个螺丝一个，跨着接）</td><td>24AWG 黑</td><td><span class="st-ok">实测定案</span></td></tr>

@@ -76,8 +76,8 @@ class MockVacuumIO:
 
 class Pi5VacuumIO:
     """树莓派 5 实机 IO。P1 台架:1 阀 1 泵 1 传感器;P4 扩到 6 阀 2 泵。"""
-    VALVE_PINS = [5]
-    PUMP_PIN = 20
+    VALVE_PINS = [5, 6, 13, 16, 19, 21]   # L1 L2 L3 R1 R2 R3,08-14 点动实测通过
+    PUMP_PIN = 20                          # 泵 A;泵 B(GPIO26)V0 空置
     VALVE_ON_LEVEL = 0     # set_valve(True)=吸盘接通真空 的 GPIO 电平,按实测为 0
     ADS_ADDR = 0x48
     V_DIV = 2.0            # 1:1 电阻分压

@@ -83,7 +83,7 @@
          └─ XL6009 升压 12V → MOSFET板 → 6 阀 + 2 泵
 Pi 5 ─USB──→ Servo2040（chica 串口协议：18 舵机 + 6 足底开关 + 电压/电流）
 Pi 5 ─I2C──→ ADS1115 ×2 → XGZP6847A 压力传感器（P1 起）
-Pi 5 ─GPIO─→ MOSFET 板（阀/泵开关，P1 起）
+Pi 5 ─GPIO─→ MOSFET 板（阀/泵开关，P1 起）；GPIO17 → 舵机继电器（P4 起）
 Pi 5 ─CSI──→ 摄像头模块（P5，FPV）
 ```
 

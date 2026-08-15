@@ -7,13 +7,19 @@
   GET 响应: 0xC7, startIdx, count, 然后每项 [低7位, 高7位]
 
 索引表（cmdPins）：0..17 舵机 SERVO1..18；18..23 足底开关 TS1..TS6；
-24 电流；25 电压；26 RELAY（舵机总使能，同时驱动 GPIO26 上的物理继电器）；27/28 A1/A2。
+24 电流；25 电压；26 RELAY（固件内部舵机使能；其 GPIO26 引脚 08-15 起悬空不接）；
+27/28 A1/A2。
 
 值均为 14 位。舵机值 = 脉宽 µs。换算（来自固件常量）：
   电压 V = raw / 310.3        电流 A = (raw - 512) * 0.0814
 
 固件逐字节读取超时 100µs —— 一个数据包必须一次 write() 发完，不能分段。
-上电后舵机不动，直到 SET RELAY=1；先发好全部脉宽再使能，舵机会直接到位。
+上电后舵机不动，直到 enable(True)；先发好全部脉宽再使能，舵机会直接到位。
+
+物理继电器（舵机 7.4V 总闸，切正极高边）08-15 定案改由 Pi GPIO17 驱动，
+不再走 Servo2040 A0/GPIO26：enable() 串口 RELAY 指令照发（保固件使能），
+功率通断由 GPIO17 收口。高电平吸合（模块跳线插 H 侧）；lgpio 进程退出后
+GPIO 回输入态 → 继电器释放 → 舵机断电（常闭阀保真空），天然急停兜底。
 """
 import time
 
@@ -59,11 +65,21 @@ def decode_get_response(buf: bytes, start: int, count: int):
 class Servo2040Driver:
     """通过 USB CDC 串口驱动 Servo2040（树莓派上通常是 /dev/ttyACM0）。"""
 
+    RELAY_PIN = 17   # Pi GPIO17（Pin11）→ 继电器 IN1，高电平吸合（跳线 H 侧）
+    GPIOCHIP = 4     # 树莓派 5
+
     def __init__(self, port: str = "/dev/ttyACM0", timeout: float = 0.2):
         import serial  # 延迟导入，无 pyserial 时仍可用 MockDriver
+        import lgpio   # 物理继电器在 Pi GPIO17，缺 lgpio 时禁止静默降级
         self.ser = serial.Serial(port, baudrate=115200, timeout=timeout)
         time.sleep(0.2)  # 等固件退出 LED 等待循环
         self.ser.reset_input_buffer()
+        self._lg = lgpio
+        try:
+            self._h = lgpio.gpiochip_open(self.GPIOCHIP)
+        except Exception:
+            self._h = lgpio.gpiochip_open(0)
+        lgpio.gpio_claim_output(self._h, self.RELAY_PIN, 0)  # 初始必断
 
     # --- 输出 ---
     def set_pulses_us(self, start: int, values) -> None:
@@ -74,7 +90,13 @@ class Servo2040Driver:
         self.ser.write(encode_set(IDX_SERVO1, values18))
 
     def enable(self, on: bool) -> None:
-        self.ser.write(encode_set(IDX_RELAY, [1 if on else 0]))
+        # 合闸：先固件使能再上功率；分闸：先断功率——通断始终由 GPIO17 收口
+        if on:
+            self.ser.write(encode_set(IDX_RELAY, [1]))
+            self._lg.gpio_write(self._h, self.RELAY_PIN, 1)
+        else:
+            self._lg.gpio_write(self._h, self.RELAY_PIN, 0)
+            self.ser.write(encode_set(IDX_RELAY, [0]))
 
     # --- 读取 ---
     def _get(self, start: int, count: int):
@@ -99,6 +121,7 @@ class Servo2040Driver:
     def close(self) -> None:
         self.enable(False)
         self.ser.close()
+        self._lg.gpiochip_close(self._h)
 
 
 class MockDriver:

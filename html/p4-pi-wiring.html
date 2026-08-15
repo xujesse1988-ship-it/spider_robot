@@ -92,6 +92,7 @@
     <h1>Pi 5 与各组件的引脚级连线图</h1>
     <p class="sub">系统图是拓扑级，这张落到"哪根线插哪个脚"。泵/阀的真实 GPIO 取自
     <code>software/hexapod/adhesion.py</code>（Pi5VacuumIO，P1 已实装）：<b>阀 L1 = GPIO5、泵 A = GPIO20</b>；
+    舵机继电器 = <b>GPIO17</b>（<code>driver.py</code>，08-15 定案，原 Servo2040 A0/GPIO26）；
     其余 6 路 MOSFET 控制为建议分配（P4 装配时定案），已避开 I2C1 / UART / SPI0 / ID-EEPROM / PWM 音频脚。</p>
   </header>
 
@@ -140,9 +141,11 @@
       <text class="t-lb" x="316" y="186" text-anchor="end">GND → 分压板 J1</text>
       <circle class="pu" cx="373" cy="182" r="8.5"/><text class="t-numu" x="373" y="185">10</text>
       <text class="t-un" x="396" y="186">GPIO15 · UART RXD（避用）</text>
-      <!-- 行 6 -->
-      <circle class="pu" cx="339" cy="208" r="8.5"/><text class="t-numu" x="339" y="211">11</text>
-      <text class="t-un" x="316" y="212" text-anchor="end">GPIO17（空闲，留扩展）</text>
+      <!-- 行 6：Pin11 GPIO17 舵机继电器 -->
+      <line class="tks" x1="320" y1="208" x2="331" y2="208"/>
+      <circle class="ps" cx="339" cy="208" r="8.5"/>
+      <text class="t-num" x="339" y="211">11</text>
+      <text class="t-lb" x="316" y="212" text-anchor="end">GPIO17 → 舵机继电器 IN1（高电平吸合）· <tspan fill="var(--warn)" font-weight="700">定案待装</tspan></text>
       <circle class="pu" cx="373" cy="208" r="8.5"/><text class="t-numu" x="373" y="211">12</text>
       <text class="t-un" x="396" y="212">GPIO18 · PWM 音频（避用）</text>
       <!-- 行 7 -->
@@ -242,7 +245,7 @@
       <circle class="pg" cx="340" cy="612" r="7"/><text class="t-bm" x="352" y="616">地</text>
       <circle class="pu" cx="400" cy="612" r="7"/><text class="t-bm" x="412" y="616">未用（淡色）</text>
       <text class="t-bm" x="510" y="616"><tspan fill="var(--accent)" font-weight="700">P1 已实装</tspan> ｜ <tspan fill="var(--warn)" font-weight="700">建议，P4 定案</tspan></text>
-      <text class="t-foot" x="16" y="644">泵/阀真实脚位取自 software/hexapod/adhesion.py（Pi5VacuumIO：VALVE_PINS=[5]、PUMP_PIN=20，lgpio gpiochip4）；其余 6 路为建议分配，避开 I2C1(2/3)、UART(14/15)、SPI0(7~11)、ID-EEPROM(0/1)、PWM 音频(12/18)。</text>
+      <text class="t-foot" x="16" y="644">泵/阀真实脚位取自 software/hexapod/adhesion.py（Pi5VacuumIO：VALVE_PINS=[5]、PUMP_PIN=20，lgpio gpiochip4）；舵机继电器 GPIO17 取自 driver.py（RELAY_PIN）；其余 6 路为建议分配，避开 I2C1(2/3)、UART(14/15)、SPI0(7~11)、ID-EEPROM(0/1)、PWM 音频(12/18)。</text>
       <text class="t-foot" x="16" y="660">⚠ 阀控电平按 P1 实测 VALVE_ON_LEVEL=0（GPIO 低电平 = 吸盘接真空）——P4 每路装好后逐路实测再写映射，别照抄。8 路控制脚集中在 Pin 29~40 一端，便于压接成一束排线。</text>
     </svg>
   </figure>
@@ -268,9 +271,9 @@
       <rect class="sv-box" x="330" y="56" width="190" height="88" rx="6"/>
       <text class="t-bx" x="425" y="80">Servo2040 · chica 固件</text>
       <text class="t-bs" x="425" y="98">舵机轨 7.4V = 电池 + 继电器</text>
-      <text class="t-bs" x="425" y="114">（RELAY 指令驱动其 GPIO26）</text>
-      <text class="t-bm" x="540" y="70">与 Pi 只共 USB 地——舵机电源</text>
-      <text class="t-bm" x="540" y="86">与 Pi 无任何电气共享</text>
+      <text class="t-bs" x="425" y="114">（继电器改由 Pi GPIO17 驱动）</text>
+      <text class="t-bm" x="540" y="70">功率轨与 Pi 只共地；继电器线圈</text>
+      <text class="t-bm" x="540" y="86">/控制侧属 Pi（5V 轨 + GPIO17）</text>
       <text class="t-bm" x="540" y="110">足底开关 ×6 → Servo2040 传感器口</text>
       <text class="t-bm" x="540" y="126">TS1~6（索引 18~23），不占 Pi 引脚</text>
       <text class="t-bm" x="540" y="142">（路线 B 暂不装）</text>
@@ -300,6 +303,7 @@
       <tr><td>5</td><td>GPIO3</td><td>SCL1</td><td>ADS1115 ×2（0x48/0x49）</td><td>固定</td><td>黄</td></tr>
       <tr><td>9</td><td>—</td><td>GND</td><td>分压板 J1</td><td>固定</td><td>黑</td></tr>
       <tr><td>4 + 6</td><td>—</td><td>5V + GND</td><td>供电路线 b：5V/5A 直上（配对粗线）</td><td><span class="st-tbd">待定案</span></td><td>红/黑（18AWG+）</td></tr>
+      <tr><td>11</td><td>GPIO17</td><td>—</td><td>继电器 IN1 · 舵机 7.4V 总闸（高电平吸合，跳线 H 侧）</td><td><span class="st-tbd">定案待装</span></td><td>棕</td></tr>
       <tr><td>29</td><td>GPIO5</td><td>—</td><td>MOSFET IN1 · 阀 L1</td><td><span class="st-ok">P1 已实装</span></td><td>绿</td></tr>
       <tr><td>31</td><td>GPIO6</td><td>—</td><td>MOSFET IN2 · 阀 L2</td><td><span class="st-tbd">建议</span></td><td>绿</td></tr>
       <tr><td>33</td><td>GPIO13</td><td>—</td><td>MOSFET IN3 · 阀 L3</td><td><span class="st-tbd">建议</span></td><td>绿</td></tr>
@@ -312,6 +316,7 @@
       <tr><td>39</td><td>—</td><td>GND</td><td>MOSFET 板信号地（同点并线）</td><td>固定</td><td>黑</td></tr>
     </table>
     USB：Pi USB-A → Servo2040（<code>/dev/ttyACM0</code>，chica 固件），舵机供电不经 Pi。
+    继电器线圈 DC+/DC− 接 5V/5A 降压输出（与 Pi 同源，~100mA），不占排针；控制只占 Pin11。
   </div>
 
   <div class="note">

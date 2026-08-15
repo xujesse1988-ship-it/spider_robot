@@ -98,6 +98,7 @@
     <h1>整机器件连接示意图（电气 + 气路）</h1>
     <p class="sub">这是 <b>P4 整机目标态</b>的连接拓扑。图 1 电气：2S 电池经 XT60 总开关分三路
     （舵机 7.4V 直供 / Pi 独立 5V / 气动 12V），控制信号走 USB·GPIO·I2C；
+    图 1b 继电器：舵机电源总闸的端子级接线；
     图 2 气路：双泵 + 储气罐 + 1 进 6 出歧管构成真空母线，6 条完全相同的支路到各足吸盘。</p>
   </header>
 
@@ -234,6 +235,89 @@
       <line class="w-off" x1="490" y1="660" x2="530" y2="660" marker-end="url(#mo)"/>
       <text class="t-bm" x="538" y="664">路线 B 暂不装（灰虚线）</text>
       <text class="t-foot" x="16" y="690">拓扑示意，不按比例；箭头 = 供电 / 信号方向。ADS1115 3.3V、XGZP6847A 5V 均取自 Pi（全系统共地），供电走线从略。继电器由 Pi GPIO17 驱动（高电平吸合，08-15 定案，原 Servo2040 A0），断开 = 舵机整轨断电，Pi 与 Servo2040 逻辑侧仍在线。</text>
+    </svg>
+  </figure>
+
+  <h2>图 1b · 继电器接线细节（舵机电源总闸）</h2>
+  <figure>
+    <svg viewBox="0 0 780 460" role="img" aria-label="继电器接线细节：电池正极经 XT60 到 COM，NO 到 Servo2040 电源正，NC 空置；电池负极直连不过继电器；线圈 5V 与地取自 5V 降压输出，IN1 由 Pi GPIO17 高电平触发">
+      <defs>
+        <marker id="mp2" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
+        </marker>
+        <marker id="ms2" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <!-- 电池负极：顶部绕行直连 Servo2040，不过继电器 -->
+      <polyline class="w-pwr" points="89,120 89,46 680,46 680,132" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="385" y="38" text-anchor="middle">电池 −（黑）直连 Servo2040 −，不过继电器</text>
+
+      <!-- 电池 → COM -->
+      <rect class="sv-boxa" x="24" y="120" width="130" height="78" rx="6"/>
+      <text class="t-bx" x="89" y="144">2S 7.4V 锂电 ×1</text>
+      <text class="t-bs" x="89" y="161">XT60 总开关在正极</text>
+      <text class="t-bs" x="89" y="177">5000~6200mAh</text>
+      <line class="w-pwr" x1="154" y1="176" x2="292" y2="176" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="223" y="168" text-anchor="middle">+7.4V 正极 · ≥16AWG</text>
+      <rect class="sv-warnbox" x="24" y="222" width="260" height="26" rx="6"/>
+      <text class="t-warn" x="154" y="239" text-anchor="middle">⚠ 切正极高边——低边会被 USB 地旁路</text>
+
+      <!-- 继电器模块 -->
+      <rect class="sv-box" x="300" y="70" width="210" height="185" rx="8"/>
+      <text class="t-bx" x="405" y="94">30A 继电器模块 ×1</text>
+      <text class="t-bs" x="405" y="111">SLA-5VDC-SL-C · 光耦 + 板载续流管</text>
+      <!-- H/L 触发跳线 -->
+      <rect class="sv-solid" x="384" y="134" width="6" height="6"/>
+      <rect class="sv-solid" x="398" y="134" width="6" height="6"/>
+      <rect class="sv-solid" x="412" y="134" width="6" height="6"/>
+      <rect class="sv-solid" x="395" y="131" width="24" height="12" rx="2"/>
+      <text class="t-dim" x="378" y="142" text-anchor="end">L</text>
+      <text class="t-dim" x="424" y="142">H</text>
+      <text class="t-bsw" x="405" y="162">跳线必须插 H 侧 = 高电平吸合</text>
+      <!-- 功率端子：COM 左入，NO 右出，NC 空置 -->
+      <rect class="sv-solid" x="292" y="168" width="16" height="16" rx="2"/>
+      <text class="t-b" x="314" y="181" font-weight="700">COM</text>
+      <rect class="sv-solid" x="502" y="168" width="16" height="16" rx="2"/>
+      <text class="t-b" x="496" y="181" text-anchor="end" font-weight="700">NO</text>
+      <text class="t-bs" x="405" y="181">触点 30A</text>
+      <rect class="sv-boxoff" x="502" y="196" width="16" height="16" rx="2"/>
+      <text class="t-bm" x="496" y="209" text-anchor="end">NC</text>
+      <text class="t-bm" x="526" y="209">空置不接</text>
+      <!-- 控制端子：DC+ / DC− / IN1 -->
+      <text class="t-dim" x="330" y="243" text-anchor="middle">DC+</text>
+      <text class="t-dim" x="383" y="243" text-anchor="middle">DC−</text>
+      <text class="t-dim" x="436" y="243" text-anchor="middle">IN1</text>
+      <rect class="sv-solid" x="323" y="248" width="14" height="14" rx="2"/>
+      <rect class="sv-solid" x="376" y="248" width="14" height="14" rx="2"/>
+      <rect class="sv-solid" x="429" y="248" width="14" height="14" rx="2"/>
+
+      <!-- NO → Servo2040 -->
+      <line class="w-pwr" x1="518" y1="176" x2="586" y2="176" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="552" y="168" text-anchor="middle">+7.4V</text>
+      <rect class="sv-box" x="590" y="136" width="166" height="92" rx="6"/>
+      <text class="t-bx" x="673" y="160">Servo2040 ×1</text>
+      <text class="t-bs" x="673" y="178">电源螺丝端子 + / −</text>
+      <text class="t-bs" x="673" y="194">舵机轨 7.4V → 18 舵机</text>
+      <text class="t-bs" x="673" y="210">逻辑侧走 USB，不受总闸影响</text>
+
+      <!-- 控制侧：5V 轨 + Pi GPIO17 -->
+      <rect class="sv-box" x="150" y="340" width="170" height="60" rx="6"/>
+      <text class="t-bx" x="235" y="364">5V/5A 降压输出</text>
+      <text class="t-bs" x="235" y="382">与 Pi 同源的 5V 轨</text>
+      <polyline class="w-pwr" points="215,340 215,296 330,296 330,262" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="272" y="289" text-anchor="middle">5V · 线圈 ≈100mA</text>
+      <polyline class="w-pwr" points="290,340 290,316 383,316 383,262" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="336" y="310" text-anchor="middle">GND</text>
+      <rect class="sv-boxa" x="430" y="340" width="180" height="60" rx="6"/>
+      <text class="t-bx" x="520" y="364">树莓派 Pi 5</text>
+      <text class="t-bs" x="520" y="382">GPIO17（Pin11）→ IN1</text>
+      <polyline class="w-sig" points="480,340 480,296 436,296 436,262" marker-end="url(#ms2)"/>
+      <text class="t-acc" x="488" y="322">高电平 = 吸合，悬空 / 低 = 断</text>
+
+      <text class="t-foot" x="16" y="430">继电器释放 = 舵机整轨断电（安全默认）：Pi 进程退出后 GPIO17 回输入态即自动断电；常闭阀保真空，机器人挂住不掉。</text>
+      <text class="t-foot" x="16" y="446">到手三查：IN1 悬空 = 断、3.3V = 通、释放 = 断。线圈 DC+ 也可改从 Pi 排针 5V 取（同一条轨，随供电路线 a/b 定案时收口）。</text>
     </svg>
   </figure>
 

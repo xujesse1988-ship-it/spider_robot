@@ -160,11 +160,15 @@ class ClimbEngine:
             return self.targets()
         if not self.started:
             if not self._tank_ready():   # 冷罐上电：先建罐压再抽第一只脚
+                # 计"连续"不就绪时长：抽气尝试会周期性放掉罐压再等泵恢复，
+                # 累计口径会把正常的反复等待攒成假超时（--air 架空必踩）
                 self._precharge_t += dt
                 if self._precharge_t > PRECHARGE_TIMEOUT_S:
-                    self.frozen = (f"罐压 {PRECHARGE_TIMEOUT_S:.0f}s 未建立到 "
+                    self.frozen = (f"罐压连续 {PRECHARGE_TIMEOUT_S:.0f}s 未建立到 "
                                    f"{TANK_READY_KPA:.0f}kPa（泵/气路异常）")
                     return self.targets()
+            else:
+                self._precharge_t = 0.0
             self._run_machines(dt)
             if not self._attach_queue and all(
                     p == LegPhase.STANCE for p in self.phase_of.values()):
@@ -240,9 +244,11 @@ class ClimbEngine:
                 for n in LEG_NAMES}
 
     def clear_freeze(self):
-        """人工处理后解除冻结；重试计数清零，挂着 FAULT 的腿自动重新压附。"""
+        """人工处理后解除冻结；重试/等待计时全部清零，挂着 FAULT 的腿自动
+        重新压附（罐压计时不清会导致解冻后一帧不就绪立刻复冻）。"""
         self.frozen = None
         self._block_t = 0.0
+        self._precharge_t = 0.0
         for n in LEG_NAMES:
             self.retries[n] = 0
 

@@ -8,20 +8,24 @@
 用法:
   python climb_walk.py --mock                # 无硬件干跑（Mock 吸盘必吸上）
   python climb_walk.py --mock --air          # 干跑架空路径（Mock 吸盘全漏）
-  python climb_walk.py --dry                 # 真舵机 + 仿真气路：GPIO/I2C 完全
-                                             # 不碰，纯排练步态动作（气动舱未
-                                             # 接全时用；吸附确认是假的）
+  python climb_walk.py --dry                 # 真舵机 + 仿真气路：阀泵/气路
+                                             # GPIO/I2C 不碰（舵机继电器 GPIO17
+                                             # 仍占用），纯排练步态动作（气动舱
+                                             # 未接全时用；吸附确认是假的）
   python climb_walk.py --air                 # 实机架空：阀/泵真动作，吸不上不停走
   python climb_walk.py                       # 地面玻璃板 / 上墙（全链路）
   python climb_walk.py --release             # 善后：全阀放气+回站姿
 
 安全（P4-GUIDE）：
-  - Ctrl-C 中断＝冻结不放气不断使能（吸附中的机器人不能掉），善后跑 --release
+  - Ctrl-C 中断＝不放气退出，善后跑 --release。⚠ 进程退出后六阀翻回"通罐"位：
+    六足全吸附时≈保持吸附；**有腿悬空时罐压会经敞口吸盘泄掉**——墙上异常
+    优先"保持进程 + 冻结态"悬停，不到万不得已不杀进程
   - 上墙全程安全绳；--air 旁路只用于架空，上墙严禁
   - 电压/电流状态行常显：墙上五足持续剪切载荷 ~3A 级是常态，盯"吸附后总电流
     回落基线"判据（不回落 = 该腿 press_delta 没吃干净，舵机在和真空对抗）
 """
 import argparse
+import os
 import select
 import sys
 import termios
@@ -46,18 +50,26 @@ ADH_CH = {"released": "r", "pressing": "p", "sucking": "s",
 
 
 def read_key(timeout):
+    """读一个按键。必须用 os.read 直读 fd——sys.stdin.read(1) 是带缓冲的
+    TextIOWrapper，会把方向键 3 字节整批吞进 Python 缓冲、只吐出 ESC，
+    随后按 fd 判"有没有尾巴"必然判空，防误触整体失效（审核发现 #1/#3）。"""
     r, _, _ = select.select([sys.stdin], [], [], timeout)
     if not r:
         return None
-    ch = sys.stdin.read(1)
-    if ch == "\x1b":
-        # 方向键等发的是转义序列（ESC [ X）：把尾巴吞掉、不当 ESC 用。
+    data = os.read(sys.stdin.fileno(), 8)
+    if not data:
+        return None
+    if data[0:1] == b"\x1b":
+        # 同批到达多字节 = 方向键/Alt 组合等转义序列：整包丢弃，不当 ESC 用。
         # 误触方向键绝不能触发"放气退出"（墙上等于坠落）。
-        r2, _, _ = select.select([sys.stdin], [], [], 0.01)
-        if r2:
-            sys.stdin.read(2)
+        if len(data) > 1:
             return None
-    return ch
+        # 裸 ESC：稍等一眼 fd，慢终端分包送到的转义尾巴同样丢弃
+        r2, _, _ = select.select([sys.stdin], [], [], 0.02)
+        if r2:
+            os.read(sys.stdin.fileno(), 8)
+            return None
+    return data[:1].decode("latin-1")
 
 
 def status_line(eng, ctl, io, v, c, peak, cmd, tag=""):
@@ -89,12 +101,20 @@ def main():
     ap.add_argument("--air", action="store_true",
                     help="架空模式：吸不上也继续走（旁路互锁与罐压冻结），上墙严禁")
     ap.add_argument("--dry", action="store_true",
-                    help="真舵机 + 仿真气路：不初始化任何 GPIO/I2C，阀泵不动，"
-                         "吸附确认由 Mock 假装成功；纯验证步态动作，上墙严禁")
+                    help="真舵机 + 仿真气路：不碰气路 GPIO(阀/泵)与 I2C，阀泵"
+                         "不动（舵机继电器 GPIO17 仍由 driver 占用），吸附确认"
+                         "由 Mock 假装成功；纯验证步态动作，上墙严禁")
     ap.add_argument("--cycle", type=float, default=DEFAULT_CONFIG.climb_cycle_time,
                     help="步态周期 s（先慢后提速）")
     ap.add_argument("--release", action="store_true", help="只做全放气+回站姿")
     args = ap.parse_args()
+    if args.cycle < 1.0:
+        ap.error(f"--cycle {args.cycle} 非法：步态周期至少 1s（0/负值会在六足"
+                 "吸附完成后才除零崩溃，审核发现 #8）")
+    if not args.release and not sys.stdin.isatty():
+        # TTY 检查必须在碰任何硬件之前：否则真机先上电站立、再在 termios
+        # 处崩溃断电瘫倒（审核发现 #5）。--release 无需键盘，放行。
+        sys.exit("需要交互终端（ssh 加 -t；勿用 nohup/管道跑本脚本）")
 
     cfg = replace(DEFAULT_CONFIG, climb_cycle_time=args.cycle)
     if args.air:
@@ -120,11 +140,21 @@ def main():
         for i in range(6):
             io.set_valve(i, False)
         io.set_pump(False)
-        time.sleep(0 if args.mock else 1.5)
-        bot.move_feet(bot.engine.default_feet)
+        real_pneu = not (args.mock or args.dry)
+        if real_pneu:
+            from hexapod.adhesion import RELEASE_KPA
+            t_end = time.time() + 5.0        # 放气用读数确认，不靠开环 sleep
+            while time.time() < t_end:
+                if all(io.read_foot_kpa(i) >= RELEASE_KPA for i in range(6)):
+                    break
+                time.sleep(0.2)
+            else:
+                print("⚠ 5s 后仍有足压未回大气（排气不畅？），继续回站姿需谨慎")
+        # 使能瞬间是硬跳：预置到爬墙站位（离中断时的姿态最近），再缓动回地面站姿
+        bot.move_feet(eng.default_feet)
         drv.enable(True)
         time.sleep(0 if args.mock else 1.0)
-        bot.stand(2.0)
+        bot.stand(3.0)
         drv.close()
         print("已全放气并回站姿。")
         return
@@ -164,7 +194,7 @@ def main():
                     break
                 last_esc = time.time()
                 print("\n再按一次 ESC 确认退出（会放气回站姿——墙上禁用！"
-                      "悬停冻结请用 Ctrl-C）")
+                      "墙上悬停 = 保持进程运行什么都不按）")
             elif k == "w":
                 vx, vy = SPEED, 0.0
             elif k == "s":
@@ -180,13 +210,18 @@ def main():
             elif k == " ":
                 vx = vy = wz = 0.0
             elif k == "f" and eng.frozen:
-                print(f"\n解除冻结: {eng.frozen}")
+                # 解冻同时清零速度：人工处理时手还在机器旁，绝不能带着
+                # 冻结前的旧速度立刻恢复行走（审核发现 #4）
+                vx = vy = wz = 0.0
+                print(f"\n解除冻结: {eng.frozen}（速度已清零，按 w 重新开始）")
                 eng.clear_freeze()
 
             bot.move_feet(eng.update(dt, vx, vy, wz))
 
             if eng.started and not was_started:
                 was_started = True
+                # 清掉启动期间误触存下的速度：吸附完成瞬间不许自己开走
+                vx = vy = wz = 0.0
                 print("\n✓ 六足吸附完成，遥控就绪：w/s 前后  a/d 左右  "
                       "q/e 转向  空格停  f 解冻  ESC×2 退出\n"
                       "  （速度指令是 0 时不抬腿——按 w 才开始走；爬墙步态"
@@ -226,9 +261,16 @@ def main():
             drv.close()
             print("完成。")
         else:
-            # Ctrl-C/异常：不放气不断使能（防坠落），善后跑 --release
-            print(f"\n中断：阀/舵机保持当前状态（防坠落）。"
-                  f"冻结: {eng.frozen or '无'}；善后请跑 --release。")
+            # Ctrl-C/异常：不主动放气（善后跑 --release）。
+            # ⚠ 但注意：进程一退出，lgpio 释放 + 下拉会把六阀全翻回"通罐"位
+            # ——若此刻有腿悬空（阀开着通大气的敞口吸盘被接回歧管），罐压
+            # 会经它泄光、其余吸附足跟着失压。墙上"保持当前状态"只在
+            # 六足全吸附时成立；有腿在摆动相时中断进程本身就是危险动作
+            # （审核发现 #2，系统级，待与气路硬件一起重审）。
+            print(f"\n中断：不放气退出。冻结: {eng.frozen or '无'}；"
+                  f"善后请跑 --release。\n"
+                  f"⚠ 若有腿悬空：进程退出会把该阀翻回通罐位、罐压将泄漏——"
+                  f"墙上请确认安全绳受力。")
 
 
 if __name__ == "__main__":

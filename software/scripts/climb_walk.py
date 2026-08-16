@@ -8,6 +8,9 @@
 用法:
   python climb_walk.py --mock                # 无硬件干跑（Mock 吸盘必吸上）
   python climb_walk.py --mock --air          # 干跑架空路径（Mock 吸盘全漏）
+  python climb_walk.py --dry                 # 真舵机 + 仿真气路：GPIO/I2C 完全
+                                             # 不碰，纯排练步态动作（气动舱未
+                                             # 接全时用；吸附确认是假的）
   python climb_walk.py --air                 # 实机架空：阀/泵真动作，吸不上不停走
   python climb_walk.py                       # 地面玻璃板 / 上墙（全链路）
   python climb_walk.py --release             # 善后：全阀放气+回站姿
@@ -57,12 +60,12 @@ def read_key(timeout):
     return ch
 
 
-def status_line(eng, ctl, io, v, c, peak):
+def status_line(eng, ctl, io, v, c, peak, tag=""):
     legs = " ".join(
         f"{n}{PHASE_CH[ph]}{'!' if leak else ADH_CH[adh]}"
         for n, (ph, adh, leak) in eng.status().items())
     tank = io.read_tank_kpa()
-    head = "启动" if not eng.started else f"t={eng.t:5.1f}"
+    head = ("启动" if not eng.started else f"t={eng.t:5.1f}") + tag
     tf = " 罐压失效!" if ctl.tank_fault else ""
     return (f"[{head}] {legs}  罐 {tank:6.1f}kPa{tf}  "
             f"{v:.2f}V {c:5.2f}A 峰 {peak:5.2f}A")
@@ -83,6 +86,9 @@ def main():
     ap.add_argument("--mock", action="store_true", help="无硬件干跑")
     ap.add_argument("--air", action="store_true",
                     help="架空模式：吸不上也继续走（旁路互锁与罐压冻结），上墙严禁")
+    ap.add_argument("--dry", action="store_true",
+                    help="真舵机 + 仿真气路：不初始化任何 GPIO/I2C，阀泵不动，"
+                         "吸附确认由 Mock 假装成功；纯验证步态动作，上墙严禁")
     ap.add_argument("--cycle", type=float, default=DEFAULT_CONFIG.climb_cycle_time,
                     help="步态周期 s（先慢后提速）")
     ap.add_argument("--release", action="store_true", help="只做全放气+回站姿")
@@ -93,10 +99,12 @@ def main():
         cfg = replace(cfg, max_attach_retry=1)   # 架空必 FAULT，少陪跑几轮重试
 
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
-    if args.mock:
+    if args.mock or args.dry:
+        # --dry：舵机真走，气路用 Mock 顶替（不碰 GPIO/I2C，阀泵不会动）。
+        # --air 叠加时 Mock 全漏，可在真腿上排练重试动作。
         io = MockVacuumIO(6)
         if args.air:
-            io.sealed = [False] * 6              # 干跑架空路径
+            io.sealed = [False] * 6
     else:
         from hexapod.adhesion import Pi5VacuumIO
         io = Pi5VacuumIO(6)
@@ -130,6 +138,8 @@ def main():
     print("爬墙站位就位（吸盘轴⊥面），开始全吸附启动序列……")
     if args.air:
         print("⚠ 架空模式：吸附失败不冻结，互锁旁路——上墙严禁本模式")
+    if args.dry:
+        print("⚠ 干跑模式：气路是仿真的，阀泵不会动，状态行气压是假数——上墙严禁")
 
     old = termios.tcgetattr(sys.stdin)
     tty.setcbreak(sys.stdin.fileno())
@@ -183,7 +193,8 @@ def main():
                 v, c = (drv.read_voltage_v(), drv.read_current_a()) \
                     if args.mock else bot.check_power()   # 欠压直接抛异常停机
                 peak_a = max(peak_a, c)
-                print("\r" + status_line(eng, ctl, io, v, c, peak_a) + "  ",
+                tag = " 干跑" if args.dry else ""
+                print("\r" + status_line(eng, ctl, io, v, c, peak_a, tag) + "  ",
                       end="", flush=True)
             time.sleep(max(0.0, dt - (time.time() - t_wall)))
             t_wall = time.time()

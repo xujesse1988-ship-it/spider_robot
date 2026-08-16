@@ -4,9 +4,10 @@ MockVacuumIO + MockDriver 上，仿真时间与控制周期同步推进。"""
 import math
 
 from hexapod.adhesion import AdhesionController, MockVacuumIO, FootState
-from hexapod.climb import ClimbEngine, LegPhase
+from hexapod.climb import ClimbEngine, LegPhase, TILT_BAND_DEG, _press_tilt
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
 from hexapod.driver import MockDriver
+from hexapod.kinematics import leg_ik
 from hexapod.robot import Hexapod
 
 DT = 0.02
@@ -44,6 +45,38 @@ def test_startup_attaches_all_before_clock_runs():
     for n in LEG_NAMES:
         assert math.isclose(eng.foot[n][2],
                             -CFG.stand_height - CFG.leg(n).press_delta_mm)
+
+
+def test_press_posture_cup_axis_perpendicular():
+    """爬墙站位的核心几何：压入位**物理吸盘轴**（= a_t + cup_delta，不是
+    K→唇心连线）必须垂直于吸附面（html/tibia-three-view.html 口径）。"""
+    io, ctl, eng = make_engine()
+    for leg in CFG.legs:
+        x, y, _ = eng.default_feet[leg.name]
+        r = math.hypot(x - leg.mount_x, y - leg.mount_y)
+        z_press = -CFG.stand_height - leg.press_delta_mm
+        _, a, th = leg_ik(CFG, r, 0.0, z_press)
+        axis_deg = math.degrees(a + th - math.pi) + CFG.cup_delta_deg
+        assert abs(axis_deg + 90.0) < 0.5, \
+            f"{leg.name} 吸盘轴 {axis_deg:.1f}°（应 -90°），r={r:.1f}"
+        # 旧默认站位（130）不满足该约束，站位必须是解出来的
+        assert r > 150.0
+
+
+def test_landing_clamped_to_tilt_band():
+    """任意方向的极限步长，落点压入位唇口倾角都不越 ±TILT_BAND_DEG。"""
+    io, ctl, eng = make_engine()
+    for n in LEG_NAMES:
+        leg = CFG.leg(n)
+        z_press = -CFG.stand_height - leg.press_delta_mm
+        for k in range(8):                     # 8 个方向的最大速度指令
+            ang = math.pi * k / 4
+            lx, ly = eng._landing_xy(n, 300 * math.cos(ang),
+                                     300 * math.sin(ang), 0.0)
+            r = math.hypot(lx - leg.mount_x, ly - leg.mount_y)
+            tilt = math.degrees(_press_tilt(CFG, r, z_press))
+            assert abs(tilt) <= TILT_BAND_DEG + 0.1, \
+                f"{n} 方向{k}: 落点倾角 {tilt:.1f}°"
 
 
 def test_stationary_command_never_lifts():

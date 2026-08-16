@@ -129,10 +129,21 @@ class RobotConfig:
     # 只在有前进/后退速度时按 vx 比例生效，静止和原地转向不受影响。
     yaw_trim_deg_per_m: float = 0.0   # 每走 1m 实测左转多少度
     side_trim_mm_per_m: float = 0.0   # 每走 1m 实测左移多少 mm
+    # 吸盘轴几何（L3-DISPUTE 裁决节定案；勿再拿 a_t 当吸盘轴——§2.13 教训）：
+    # 物理吸盘轴方向 = a_t + cup_delta_deg（a_t = alpha+theta-180 是 K→唇心方向，
+    # 与方轴夹 25.2°，K=(54.0,-7.2) 口径，见 html/tibia-three-view.html）。
+    # 爬墙站位与落点带由 ClimbEngine 据此解出：压入位吸盘轴 ⊥ 吸附面。
+    # ⚠ 口径配套：-25.2 是**自由态**（l3=123.7 目标系）的值，与本包"全程自由态
+    # 模型 + press_delta 记账"的做法配套（P4-GUIDE §4.2）；吸附态口径是
+    # 27.6°/l3≈113.8（裁决节），只在直接用吸附态 IK 时才用，勿混用。
+    cup_delta_deg: float = -25.2
     # 爬墙步态（ClimbEngine 用，设计依据 docs/P4-GUIDE.md 第 4 步）。
     # 摆动相分段速度都是绝对值（mm/s），超出相位窗时长时相位推进自动暂停，
     # 所以先取保守慢速，架空实测后再定值。
     climb_cycle_time: float = 3.6   # 爬墙周期 s（guide 3~4s，跑顺再提速）
+    climb_max_step: float = 40.0    # 爬墙单步步幅上限 mm（CLIMBING-DESIGN §6：
+                                    # 站高90+reach≈176 下步幅≤40 → 唇口偏角≤11.5°；
+                                    # 也约束支撑相真实位移——吸住的脚不能滑）
     lift_clearance: float = 15.0    # LIFT 沿面法向退开距离 mm（≥15，吸盘回弹 11~13）
     lift_speed: float = 40.0        # LIFT 抬离速度 mm/s（边放气边走，要跑赢回弹）
     transfer_time: float = 0.6      # TRANSFER 平移段时长 s（沿用 smoothstep+正弦形状）

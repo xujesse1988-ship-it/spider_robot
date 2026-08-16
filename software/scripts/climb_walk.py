@@ -124,7 +124,10 @@ def main():
     time.sleep(0 if args.mock else 1.0)
 
     bot.stand()
-    print("站姿完成，开始全吸附启动序列……")
+    # 过渡到爬墙站位：ClimbEngine 的站位是"压入位吸盘轴⊥面"的解（约 reach 176），
+    # 不是地面步态的 130——不先滑过去，引擎第一拍足端目标会跳变几十毫米
+    bot.glide_to(dict(eng.default_feet), 2.0)
+    print("爬墙站位就位（吸盘轴⊥面），开始全吸附启动序列……")
     if args.air:
         print("⚠ 架空模式：吸附失败不冻结，互锁旁路——上墙严禁本模式")
 

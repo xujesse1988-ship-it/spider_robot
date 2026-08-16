@@ -39,6 +39,7 @@ from enum import Enum
 from .adhesion import FootState
 from .config import RobotConfig, LEG_NAMES
 from .gait import Gait, GaitEngine, CLIMB, _smoothstep
+from .kinematics import leg_ik
 
 _EPS = 1e-6
 TANK_READY_KPA = -40.0      # 启动序列首次抽气前罐压须建立到此值（冷罐上电
@@ -46,6 +47,35 @@ TANK_READY_KPA = -40.0      # 启动序列首次抽气前罐压须建立到此�
 PRECHARGE_TIMEOUT_S = 30.0  # 罐压建立超时 -> 冻结报警（泵坏/大漏不能静默干等）
 VENT_STALL_S = 2.0          # LIFT 抬到位后等放气确认（RELEASED）的额外上限，
                             # 超时冻结报警——排气堵/传感器漂移不能静默停摆
+TILT_BAND_DEG = 12.0        # 落点带：压入位物理吸盘轴偏面法线的许用角。
+                            # P1 台架实测容差 ±15°，留余量；CLIMBING-DESIGN §6
+                            # 接受的工作带 ≤11.5°。越界步长按半径裁剪（§4.3）
+_R_BRACKET = (110.0, 190.0)  # 站位半径求解区间 mm（区间内倾角随半径单调增）
+
+
+def _press_tilt(cfg, r, z_press):
+    """(径向 r, 压入深度 z) 姿态下，物理吸盘轴偏离面法线的带符号角（rad）。
+    吸盘轴 = a_t + cup_delta（勿拿 a_t 当吸盘轴，LEG-GEOMETRY §2.13 教训）；
+    倾角只依赖 (r, z)——coxa 偏摆整体旋转腿平面，不改轴线离垂直的角度。"""
+    _, a, th = leg_ik(cfg, r, 0.0, z_press)
+    a_t = a + th - math.pi
+    return a_t + math.radians(cfg.cup_delta_deg) + math.pi / 2
+
+
+def _solve_reach(cfg, z_press, tilt_rad=0.0):
+    """解站位半径：压入位吸盘轴偏法线 = tilt_rad（0 = 严格垂直）。"""
+    lo, hi = _R_BRACKET
+    if _press_tilt(cfg, lo, z_press) >= tilt_rad:
+        return lo
+    if _press_tilt(cfg, hi, z_press) <= tilt_rad:
+        return hi
+    for _ in range(48):
+        mid = (lo + hi) / 2.0
+        if _press_tilt(cfg, mid, z_press) < tilt_rad:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
 
 
 class LegPhase(Enum):
@@ -78,11 +108,26 @@ class ClimbEngine:
         # 罐压传感器未接时的专用旁路，上墙严禁开
         self.ignore_tank_fault = ignore_tank_fault or air_mode
         self.z0 = -cfg.stand_height
-        # 默认站位/步幅/相位几何全部复用 GaitEngine（cycle_time 换成爬墙周期），
-        # 避免同一套公式在两处漂移
-        self._geom = GaitEngine(replace(cfg, cycle_time=cfg.climb_cycle_time),
-                                gait)
-        self.default_feet = self._geom.default_feet
+        # 步幅/相位几何复用 GaitEngine（cycle_time/max_step 换成爬墙参数），
+        # 避免公式漂移
+        self._geom = GaitEngine(replace(cfg, cycle_time=cfg.climb_cycle_time,
+                                        max_step=cfg.climb_max_step), gait)
+        # 爬墙站位 ≠ 地面站位（foot_reach=130 时吸盘轴偏法线 ~19°，超 ±15°
+        # 容差，唇口斜着接面吸不住）：逐腿解"压入位吸盘轴 ⊥ 吸附面"的半径
+        # （默认参数约 176mm），落点带按 ±TILT_BAND_DEG 换算成半径区间裁剪。
+        self.default_feet = {}
+        self._r_band = {}
+        for leg in cfg.legs:
+            z_press = self.z0 - leg.press_delta_mm
+            band = math.radians(TILT_BAND_DEG)
+            r0 = _solve_reach(cfg, z_press)
+            self._r_band[leg.name] = (_solve_reach(cfg, z_press, -band),
+                                      _solve_reach(cfg, z_press, band))
+            a = math.radians(leg.mount_angle_deg)
+            self.default_feet[leg.name] = (leg.mount_x + r0 * math.cos(a),
+                                           leg.mount_y + r0 * math.sin(a),
+                                           self.z0)
+        self._geom.default_feet = dict(self.default_feet)  # 速度场用同一站位
         # 当前指令足端目标（唯一事实源，机内所有分段都直接改它）
         self.foot = {n: list(p) for n, p in self.default_feet.items()}
         self.phase_of = {n: LegPhase.PRESS for n in LEG_NAMES}  # 启动即全压入
@@ -126,6 +171,7 @@ class ClimbEngine:
                 self.started = True
             return self.targets()
 
+        vx, vy, wz = self._clamp_speed(vx, vy, wz)
         moving = abs(vx) > 1e-6 or abs(vy) > 1e-6 or abs(wz) > 1e-6
 
         # 1. 相位窗归属（窗切换时复位窗内一次性标志）
@@ -216,6 +262,21 @@ class ClimbEngine:
                  if self._phase(n, t) >= self.gait.duty]
         return max(cands)[1] if cands else self._slot_leg
 
+    def _clamp_speed(self, vx, vy, wz):
+        """把速度指令整体缩放到爬墙步幅上限内。地面步态只截落点、超速部分靠
+        支撑足打滑消化；爬墙吸住的脚不能滑，**支撑相真实位移 = 速度×支撑
+        时长**必须 ≤ climb_max_step，否则支撑足会被拖出工作空间/落点带。"""
+        T_st = self.cfg.climb_cycle_time * self.gait.duty
+        worst = 0.0
+        for n in LEG_NAMES:
+            x0, y0, _ = self.default_feet[n]
+            worst = max(worst, math.hypot(vx - wz * y0, vy + wz * x0))
+        worst *= T_st
+        if worst <= self.cfg.climb_max_step:
+            return vx, vy, wz
+        s = self.cfg.climb_max_step / worst
+        return vx * s, vy * s, wz * s
+
     def _interlock_ok(self, name):
         """抬 name 前其余 5 足必须全部 ATTACHED 且没在漏气。"""
         if self.air_mode:
@@ -237,10 +298,19 @@ class ClimbEngine:
         return pause
 
     def _landing_xy(self, name, vx, vy, wz):
-        """本步落点（身体系）：默认位 + 半步幅（速度场与限幅复用 _geom）。"""
+        """本步落点（身体系）：默认位 + 半步幅（速度场与限幅复用 _geom），
+        再按落点带做径向裁剪——半径出带 = 压入位唇口倾角超容差，宁可缩步。"""
         ux, uy = self._geom._stride(name, vx, vy, wz)
         x0, y0, _ = self.default_feet[name]
-        return (x0 + ux / 2.0, y0 + uy / 2.0)
+        lx, ly = x0 + ux / 2.0, y0 + uy / 2.0
+        leg = self.cfg.leg(name)
+        dx, dy = lx - leg.mount_x, ly - leg.mount_y
+        r = math.hypot(dx, dy)
+        r_lo, r_hi = self._r_band[name]
+        r_c = min(max(r, r_lo), r_hi)
+        if abs(r_c - r) > _EPS:
+            dx, dy = dx * r_c / r, dy * r_c / r
+        return (leg.mount_x + dx, leg.mount_y + dy)
 
     def _may_attach(self, name):
         """启动序列里只放行队首（逐足抽气，防六阀同开抽垮罐），

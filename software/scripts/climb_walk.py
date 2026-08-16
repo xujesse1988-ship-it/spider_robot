@@ -60,14 +60,16 @@ def read_key(timeout):
     return ch
 
 
-def status_line(eng, ctl, io, v, c, peak, tag=""):
+def status_line(eng, ctl, io, v, c, peak, cmd, tag=""):
     legs = " ".join(
         f"{n}{PHASE_CH[ph]}{'!' if leak else ADH_CH[adh]}"
         for n, (ph, adh, leak) in eng.status().items())
     tank = io.read_tank_kpa()
     head = ("启动" if not eng.started else f"t={eng.t:5.1f}") + tag
     tf = " 罐压失效!" if ctl.tank_fault else ""
-    return (f"[{head}] {legs}  罐 {tank:6.1f}kPa{tf}  "
+    vx, vy, wz = cmd
+    sp = "停" if not (vx or vy or wz) else f"{vx:+.0f}/{vy:+.0f}/{wz:+.2f}"
+    return (f"[{head}] {legs}  速 {sp}  罐 {tank:6.1f}kPa{tf}  "
             f"{v:.2f}V {c:5.2f}A 峰 {peak:5.2f}A")
 
 
@@ -150,6 +152,7 @@ def main():
     last_frozen = None
     clean_exit = False
     last_esc = 0.0
+    was_started = False
     try:
         t_wall = time.time()
         while True:
@@ -182,6 +185,13 @@ def main():
 
             bot.move_feet(eng.update(dt, vx, vy, wz))
 
+            if eng.started and not was_started:
+                was_started = True
+                print("\n✓ 六足吸附完成，遥控就绪：w/s 前后  a/d 左右  "
+                      "q/e 转向  空格停  f 解冻  ESC×2 退出\n"
+                      "  （速度指令是 0 时不抬腿——按 w 才开始走；爬墙步态"
+                      "宁慢勿快，每步约 4s 属正常）")
+
             if eng.frozen != last_frozen:
                 last_frozen = eng.frozen
                 if eng.frozen:
@@ -194,7 +204,8 @@ def main():
                     if args.mock else bot.check_power()   # 欠压直接抛异常停机
                 peak_a = max(peak_a, c)
                 tag = " 干跑" if args.dry else ""
-                print("\r" + status_line(eng, ctl, io, v, c, peak_a, tag) + "  ",
+                print("\r" + status_line(eng, ctl, io, v, c, peak_a,
+                                         (vx, vy, wz), tag) + "  ",
                       end="", flush=True)
             time.sleep(max(0.0, dt - (time.time() - t_wall)))
             t_wall = time.time()

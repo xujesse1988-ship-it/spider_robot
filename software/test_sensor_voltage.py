@@ -7,8 +7,9 @@ def test_sensor_voltage():
     
     try:
         while True:
-            # 读取 ADS1115 引脚的电压
-            adc_v = io._read_v(0)
+            # 读取 ADS1115 引脚的电压（P4 起 _read_v 按 (地址, 通道) 寻址，
+            # 这里读足 0 = L1 对应的通道）
+            adc_v = io._read_v(*io.FOOT_ADC[0])
             
             # 计算传感器实际输出的电压 (乘以分压系数)
             sensor_v = adc_v * io.V_DIV

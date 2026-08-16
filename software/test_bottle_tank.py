@@ -9,17 +9,18 @@ def test_tank():
     io = Pi5VacuumIO(n_feet=1)
     
     try:
-        start_p = io.read_foot_kpa(0)
+        # P4 起 read_foot_kpa(0) 是足 L1 通道；罐压走独立通道 read_tank_kpa()
+        start_p = io.read_tank_kpa()
         print(f">>> 当前初始气压: {start_p:.2f} kPa")
         print(">>> 启动真空泵，目标真空度: -70 kPa")
-        
+
         # 启动真空泵
         io.set_pump(True)
-        
+
         t0 = time.time()
         # 持续循环直到气压小于等于 -70 kPa
         while True:
-            current_p = io.read_foot_kpa(0)
+            current_p = io.read_tank_kpa()
             elapsed = time.time() - t0
             
             # 实时打印气压信息 (回车符覆盖上一行)

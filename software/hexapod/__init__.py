@@ -5,6 +5,7 @@ from .gait import GaitEngine, TRIPOD, WAVE, CLIMB
 from .kinematics import leg_ik, leg_fk, WorkspaceError
 from .robot import Hexapod
 from .adhesion import AdhesionController, MockVacuumIO, FootState
+from .climb import ClimbEngine, LegPhase
 
 __all__ = [
     "RobotConfig", "DEFAULT_CONFIG", "LEG_NAMES",
@@ -13,4 +14,5 @@ __all__ = [
     "leg_ik", "leg_fk", "WorkspaceError",
     "Hexapod",
     "AdhesionController", "MockVacuumIO", "FootState",
+    "ClimbEngine", "LegPhase",
 ]

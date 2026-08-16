@@ -4,14 +4,21 @@
   RELEASED -> (request_attach) PRESSING -> SUCKING -> ATTACHED
   ATTACHED -> (request_release) VENTING -> RELEASED
   SUCKING 超时 -> FAULT（由步态层决定重试：抬脚 5mm 重新压紧）
+  ATTACHED 漏气（压力回升）-> is_leaking(i)=True，保持抽气挽救；
+           挽救超时的"全机冻结"由步态层（climb.ClimbEngine）执行
 
 关键安全约定：只有 ATTACHED 状态的脚才允许承重；
-爬墙步态每次抬脚前必须确认其余脚 attached_count >= 4。
+爬墙步态每次抬脚前必须确认其余脚全部 ATTACHED（P4 首爬用 5/5，见 climb.py）。
+
+判据防毛刺（P4-GUIDE 第 2 步之 4）：足压是判 ATTACHED 的唯一依据，一次假的
+深负压读数会让状态机放行抬腿、五足支撑变四足。所以 ATTACHED / 漏气 / 恢复
+都改成"条件连续成立一段时间"才翻状态，单点毛刺（静电注入、泵阀开关瞬变）
+被时间窗滤掉。
 
 硬件层通过 VacuumIO 抽象：
   - MockVacuumIO       无硬件仿真（一阶压力动力学），测试/开发用
-  - Pi5VacuumIO        树莓派 5 实机实现：GPIO+MOSFET 控阀/泵，ADS1115 读
-                       XGZP6847A 压力（待 P1 台架阶段按实际接线补全 TODO）
+  - Pi5VacuumIO        树莓派 5 实机：GPIO+YYNMOS-8 控 6 阀+泵，
+                       2×ADS1115 读 6 足压 + 1 罐压（XGZP6847A）
 """
 import time
 from enum import Enum
@@ -24,6 +31,16 @@ VENT_TIME_S = 0.4       # 放气时长
 PRESS_TIME_S = 0.3      # 压紧等待（由步态层保证足端已压到位）
 PUMP_ON_KPA = -55.0     # 储气罐压力高于此启动泵
 PUMP_OFF_KPA = -65.0    # 低于此停泵
+# 防毛刺时间窗：条件连续成立这么久才翻状态（比计次判据更稳——不依赖采样率）。
+# Pi5VacuumIO 有 CACHE_S=0.05 读数缓存 + 每周期突发限流（最坏陈旧 ~0.11s），
+# 窗必须显著大于最坏陈旧期才保证跨 ≥2 次真实采样。
+# 超时判据只在压力未达标时计时（见 SUCKING 分支），确认窗不挤占超时预算。
+ATTACH_CONFIRM_S = 0.2   # SUCKING -> ATTACHED 确认窗
+LEAK_DELTA_KPA = 10.0    # ATTACHED 后压力回升超过此幅度算疑似漏气
+LEAK_CONFIRM_S = 0.25    # 漏气报警 / 漏气恢复确认窗
+# 罐压合理区间：出界视为传感器失效（未接时分压点被拉到地 ≈ -112kPa，
+# 会骗过滞环让泵永不启动——P4-GUIDE 第 2 步之 5）
+TANK_KPA_MIN, TANK_KPA_MAX = -100.0, 10.0
 
 
 class FootState(Enum):
@@ -75,18 +92,36 @@ class MockVacuumIO:
 
 
 class Pi5VacuumIO:
-    """树莓派 5 实机 IO。P1 台架:1 阀 1 泵 1 传感器;P4 扩到 6 阀 2 泵。"""
+    """树莓派 5 实机 IO（P4 整机：6 阀 + 泵 A + 7 路压力）。
+
+    传感器映射与 html/p4-divider-board.html、scripts/p4_sensor_check.py 一致：
+      0x48: AIN0=S1 罐压, AIN1..3 = S2..S4 足 L1 L2 L3
+      0x49: AIN0..2 = S5..S7 足 R1 R2 R3, AIN3 = S8 备用（只留焊盘）
+    足序与 VALVE_PINS 同为 L1 L2 L3 R1 R2 R3，和 config.LEG_NAMES 对齐。
+    """
     VALVE_PINS = [5, 6, 13, 16, 19, 21]   # L1 L2 L3 R1 R2 R3,08-14 点动实测通过
     PUMP_PIN = 20                          # 泵 A;泵 B(GPIO26)V0 空置
+    PUMP_B_PIN = 26                        # 只定义不驱动（首飞单泵，P4-GUIDE 第 2 步之 1）
     # GPIO17 已被舵机继电器占用（driver.Servo2040Driver.RELAY_PIN），扩展别用
     VALVE_ON_LEVEL = 0     # set_valve(True)=吸盘接通真空 的 GPIO 电平,按实测为 0
-    ADS_ADDR = 0x48
     V_DIV = 2.0            # 1:1 电阻分压
-    V_ATM = 4.486          # 第 5 步实测大气点电压
+    V_ATM = 4.486          # 大气点电压（2026-08-11 六路实测极差 0.3kPa，统一用一个值）
     KPA_PER_V = 25.0       # 实测斜率
     GPIOCHIP = 4           # 树莓派 5
+    FOOT_ADC = [(0x48, 1), (0x48, 2), (0x48, 3),   # L1 L2 L3
+                (0x49, 0), (0x49, 1), (0x49, 2)]   # R1 R2 R3
+    TANK_ADC = (0x48, 0)
+    # 同一通道两次真实采样的最小间隔：7 路 × 每读 ~2-3ms，不加节流会拖垮 50Hz 主环。
+    # 判据端的确认窗（ATTACH_CONFIRM_S 等）必须大于最坏陈旧期，保证跨多次真实采样。
+    CACHE_S = 0.05
+    # 突发限流：各通道缓存会在同一控制周期集中过期（同刻回填→同刻失效），
+    # 不限流的话每第 3 个周期约 15-21ms 全花在 I2C 上，舵机指令流周期性抖动。
+    # 限每 BURST_WINDOW 内至多 MAX_BURST 次真实转换，其余通道先用旧值，
+    # 刷新自然摊成轮转；7 路最坏陈旧 ≈ 3 个周期 + CACHE_S ≈ 0.11s。
+    MAX_BURST = 3
+    BURST_WINDOW = 0.015
 
-    def __init__(self, n_feet=1):
+    def __init__(self, n_feet=6):
         import lgpio
         from smbus2 import SMBus
         self._lg, self.n = lgpio, n_feet
@@ -94,11 +129,14 @@ class Pi5VacuumIO:
             self._h = lgpio.gpiochip_open(self.GPIOCHIP)
         except Exception:
             self._h = lgpio.gpiochip_open(0)
-            
+
         for p in self.VALVE_PINS[:n_feet]:
             lgpio.gpio_claim_output(self._h, p, 1 - self.VALVE_ON_LEVEL)
         lgpio.gpio_claim_output(self._h, self.PUMP_PIN, 0)
         self._bus = SMBus(1)
+        self._cache = {}      # (addr, ch) -> (kpa, 采样时刻)
+        self._burst = []      # 最近 BURST_WINDOW 内真实转换的时间戳
+        self.read_faults = 0  # 转换超时计数（联调脚本可显示，持续超时会上抛）
 
     def set_valve(self, i, on):
         self._lg.gpio_write(self._h, self.VALVE_PINS[i],
@@ -107,26 +145,48 @@ class Pi5VacuumIO:
     def set_pump(self, on):
         self._lg.gpio_write(self._h, self.PUMP_PIN, 1 if on else 0)
 
-    def _read_v(self, ch=0):
-        import time
-        # Config MSB: 0xC3 = 1100 0011
-        # [15] OS=1 (Start)
-        # [14:12] MUX=100 (AIN0-GND, modified by ch<<4)
-        # [11:9] PGA=001 (±4.096V). 必须设为4.096V，因为分压后最高2.25V。
-        # 如果设2.048V，放气确认区间(接近大气压)会被削顶(读数平移)。
-        # 此时分辨率约 0.006 kPa / LSB，完全够用。
-        # [8] MODE=1 (Single-shot)
-        self._bus.write_i2c_block_data(self.ADS_ADDR, 0x01, [0xC3 + (ch << 4), 0x83])
-        time.sleep(0.01)
-        hi, lo = self._bus.read_i2c_block_data(self.ADS_ADDR, 0x00, 2)
-        raw = (hi << 8) | lo
-        return (raw - 65536 if raw > 32767 else raw) * 4.096 / 32768
+    def _read_v(self, addr, ch):
+        # Config MSB: 0xC3+ch<<4 = OS=1 | MUX=AINch-GND | PGA=±4.096V | 单次
+        # PGA 必须 ±4.096V：分压后最高 2.25V，设 ±2.048 会在放气确认区间削顶。
+        # LSB: 0xE3 = 860SPS + 比较器关闭；OS 位轮询等转换完（~1.2ms），
+        # 比旧版固定 sleep(0.01)@128SPS 快 5 倍——7 路轮询才喂得起 50Hz 主环。
+        self._bus.write_i2c_block_data(addr, 0x01, [0xC3 + (ch << 4), 0xE3])
+        deadline = time.time() + 0.05
+        while time.time() < deadline:
+            if self._bus.read_i2c_block_data(addr, 0x01, 2)[0] & 0x80:
+                hi, lo = self._bus.read_i2c_block_data(addr, 0x00, 2)
+                raw = (hi << 8) | lo
+                return (raw - 65536 if raw > 32767 else raw) * 4.096 / 32768
+            time.sleep(0.0005)
+        # OS 位始终没置位 = 转换没完成。此时 0x00 里躺着**上一个通道**的旧值
+        # （同芯片共用转换寄存器），绝不能读——罐压/足压互串会喂坏吸附判据。
+        return None
+
+    def _kpa(self, adc):
+        now = time.time()
+        hit = self._cache.get(adc)
+        if hit and now - hit[1] < self.CACHE_S:
+            return hit[0]
+        # 突发限流：本窗口配额用完就先用旧值（见 MAX_BURST 注释）
+        self._burst = [t for t in self._burst if now - t < self.BURST_WINDOW]
+        if hit and len(self._burst) >= self.MAX_BURST:
+            return hit[0]
+        self._burst.append(now)
+        v = self._read_v(*adc)
+        if v is None:                       # 转换超时：短期容忍用旧值，持续必须上抛
+            self.read_faults += 1
+            if hit and now - hit[1] < 0.5:
+                return hit[0]
+            raise IOError(f"ADS1115 0x{adc[0]:02x} AIN{adc[1]} 转换持续超时")
+        kpa = self.KPA_PER_V * (v * self.V_DIV - self.V_ATM)
+        self._cache[adc] = (kpa, now)
+        return kpa
 
     def read_foot_kpa(self, i):
-        return self.KPA_PER_V * (self._read_v(0) * self.V_DIV - self.V_ATM)
+        return self._kpa(self.FOOT_ADC[i])
 
     def read_tank_kpa(self):
-        return self.read_foot_kpa(0)
+        return self._kpa(self.TANK_ADC)
 
     def close(self):
         self._bus.close()
@@ -136,11 +196,21 @@ class Pi5VacuumIO:
 class AdhesionController:
     """6 足吸附状态机。每个控制周期调用 update(dt)。"""
 
-    def __init__(self, io, n_feet=6):
+    def __init__(self, io, n_feet=6, pump_without_tank=False):
         self.io = io
         self.n = n_feet
+        # 罐压传感器失效时的降级泵策略（架空联调、罐压未接时用）：
+        # False = 停泵置 fault 等上层报警；True = 有脚在抽气就开泵
+        self.pump_without_tank = pump_without_tank
         self.state = [FootState.RELEASED] * n_feet
+        # 仲裁位占位（远期双墙面混合足，P4-GUIDE 第 2 步之 6）：本阶段恒为 suction
+        self.mode = ["suction"] * n_feet
+        self.leaking = [False] * n_feet
+        self.tank_fault = False
         self._t_enter = [0.0] * n_feet
+        self._good_since = [None] * n_feet   # 压力满足吸附判据的起始时刻
+        self._bad_since = [None] * n_feet    # 压力回升出漏气判据的起始时刻
+        self._leak_since = [0.0] * n_feet
         self._now = 0.0
 
     # --- 步态层接口 ---
@@ -158,6 +228,13 @@ class AdhesionController:
     def attached_count(self):
         return sum(1 for s in self.state if s == FootState.ATTACHED)
 
+    def is_leaking(self, i):
+        return self.leaking[i]
+
+    def leak_time(self, i):
+        """当前这次漏气已持续多久（秒）；没漏返回 0。挽救超时判据用。"""
+        return self._now - self._leak_since[i] if self.leaking[i] else 0.0
+
     def clear_fault(self, i):
         if self.state[i] == FootState.FAULT:
             self.io.set_valve(i, False)
@@ -167,15 +244,31 @@ class AdhesionController:
     def _set(self, i, st):
         self.state[i] = st
         self._t_enter[i] = self._now
+        self._good_since[i] = self._bad_since[i] = None
+        self.leaking[i] = False
+
+    def _held(self, since, window):
+        """since 时刻起条件是否已连续保持 window 秒。"""
+        return since is not None and self._now - since >= window
 
     def update(self, dt):
         self._now += dt
-        # 泵滞环控制储气罐压力
+        # 泵滞环控制储气罐压力；罐压出合理区间 = 传感器失效/未接，停泵置 fault
+        # 交由步态层报警（假读数 -112kPa 会骗过滞环让泵永不启动）
         tank = self.io.read_tank_kpa()
-        if tank > PUMP_ON_KPA:
-            self.io.set_pump(True)
-        elif tank < PUMP_OFF_KPA:
-            self.io.set_pump(False)
+        if not (TANK_KPA_MIN <= tank <= TANK_KPA_MAX):
+            self.tank_fault = True
+            if self.pump_without_tank:   # 降级：抽气需求驱动泵，不看罐压
+                self.io.set_pump(any(s == FootState.SUCKING
+                                     for s in self.state))
+            else:
+                self.io.set_pump(False)
+        else:
+            self.tank_fault = False
+            if tank > PUMP_ON_KPA:
+                self.io.set_pump(True)
+            elif tank < PUMP_OFF_KPA:
+                self.io.set_pump(False)
 
         for i in range(self.n):
             st = self.state[i]
@@ -186,13 +279,39 @@ class AdhesionController:
                     self._set(i, FootState.SUCKING)
             elif st == FootState.SUCKING:
                 if self.io.read_foot_kpa(i) <= ATTACH_KPA:
-                    self._set(i, FootState.ATTACHED)
-                elif el > SUCK_TIMEOUT_S:
-                    self.io.set_valve(i, False)
-                    self._set(i, FootState.FAULT)
+                    if self._good_since[i] is None:
+                        self._good_since[i] = self._now
+                    if self._held(self._good_since[i], ATTACH_CONFIRM_S):
+                        self._set(i, FootState.ATTACHED)
+                else:
+                    self._good_since[i] = None
+                    # 超时只在压力未达标时计：已经吸到 -30 只是还在确认窗里的
+                    # 脚，不能被超时打成 FAULT 放掉（那是物理上密封好的脚）
+                    if el > SUCK_TIMEOUT_S:
+                        self.io.set_valve(i, False)
+                        self._set(i, FootState.FAULT)
             elif st == FootState.ATTACHED:
-                # 吸附中漏气报警（压力回升说明脱吸风险）
-                if self.io.read_foot_kpa(i) > ATTACH_KPA + 10:
+                kpa = self.io.read_foot_kpa(i)
+                good = kpa <= ATTACH_KPA
+                bad = kpa > ATTACH_KPA + LEAK_DELTA_KPA
+                if good:
+                    if self._good_since[i] is None:
+                        self._good_since[i] = self._now
+                else:
+                    self._good_since[i] = None
+                if bad:
+                    if self._bad_since[i] is None:
+                        self._bad_since[i] = self._now
+                else:
+                    self._bad_since[i] = None
+                if not self.leaking[i] and self._held(self._bad_since[i],
+                                                      LEAK_CONFIRM_S):
+                    self.leaking[i] = True
+                    self._leak_since[i] = self._now
+                elif self.leaking[i] and self._held(self._good_since[i],
+                                                    LEAK_CONFIRM_S):
+                    self.leaking[i] = False
+                if bad:
                     self.io.set_valve(i, True)  # 保持抽气尝试挽救
             elif st == FootState.VENTING:
                 self.io.set_valve(i, False)

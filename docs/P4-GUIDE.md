@@ -67,6 +67,11 @@
 
 ## 第 2 步 · 电气与 IO：`Pi5VacuumIO` 从 1 足扩到 6 足（2~3 天）
 
+> **2026-08-14 软件侧完成**：下列 1~6 已全部落码进 `adhesion.py`（GPIO 表
+> 08-14 点动实测过；7 路传感器映射照 p4_sensor_check；毛刺抑制改为时间窗
+> 判据；罐压独立通道 + 出界判失效停泵置 `tank_fault`；仲裁位 `mode` 占位）。
+> 待实机复核：整链 50Hz 主环耗时（ADS 已提到 860SPS + 0.05s 读数缓存）。
+
 现在的 `adhesion.py` 是 P1 台架版：`VALVE_PINS = [5]`、单泵、单 ADS1115。P4 扩展：
 
 1. **通道分配**：YYNMOS-8 恰好 8 路 = 6 阀 + 2 泵（首飞泵 2 路并定义、只接 1）。
@@ -155,6 +160,14 @@
       彻底分梳、必要时加屏蔽或双绞 → ③ 才考虑加大滤波电容。
 
 ## 第 4 步 · 软件线：步态引擎改造（本阶段核心工作量，2~3 周，Mock 上先行）
+
+> **2026-08-14 实装回填**：本步 4.1~4.5 已全部落码——`hexapod/climb.py`
+> (ClimbEngine，事件驱动分段摆动+相位暂停+互锁+重试+漏气冻结)、
+> `config.py`（每腿 `press_delta_mm` + `climb_*` 参数组）、`adhesion.py`
+> （判据时间窗防毛刺、is_leaking/leak_time、Pi5VacuumIO 七路传感器+罐压
+> 失效判断、mode 仲裁位）。联调入口 `scripts/climb_walk.py`
+> （--mock/--air/--release），可视化 `sim_walk.py --gait climb`。
+> 4.6 之 1、2 已完成（30 pytest 全绿 + GIF 目检），3、4 待实机。
 
 ### 4.1 摆动相从"一条曲线"改成分段状态机
 

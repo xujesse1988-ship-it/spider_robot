@@ -39,6 +39,10 @@ class LegConfig:
     femur: ServoCal
     tibia: ServoCal
     touch_idx: int          # chica 协议 GET 索引（18..23）
+    # 吸盘预压行程 mm（P4-GUIDE §4.2）：触面后沿法向再压入这么多才密封。
+    # 默认 = L1 口径 (h_cup 自由 19 − 密封 7.5) + 预载 1.5；杯批次差 2mm，
+    # 其余腿待逐腿实测 h_cup 回填（P4 第 7 步）。判据：吸附后总电流回落基线。
+    press_delta_mm: float = 13.0
 
 
 # 官方安装偏角
@@ -125,6 +129,20 @@ class RobotConfig:
     # 只在有前进/后退速度时按 vx 比例生效，静止和原地转向不受影响。
     yaw_trim_deg_per_m: float = 0.0   # 每走 1m 实测左转多少度
     side_trim_mm_per_m: float = 0.0   # 每走 1m 实测左移多少 mm
+    # 爬墙步态（ClimbEngine 用，设计依据 docs/P4-GUIDE.md 第 4 步）。
+    # 摆动相分段速度都是绝对值（mm/s），超出相位窗时长时相位推进自动暂停，
+    # 所以先取保守慢速，架空实测后再定值。
+    climb_cycle_time: float = 3.6   # 爬墙周期 s（guide 3~4s，跑顺再提速）
+    lift_clearance: float = 15.0    # LIFT 沿面法向退开距离 mm（≥15，吸盘回弹 11~13）
+    lift_speed: float = 40.0        # LIFT 抬离速度 mm/s（边放气边走，要跑赢回弹）
+    transfer_time: float = 0.6      # TRANSFER 平移段时长 s（沿用 smoothstep+正弦形状）
+    descend_speed: float = 30.0     # DESCEND 竖直下探速度 mm/s（消灭"拍地"）
+    press_speed: float = 15.0       # PRESS 压入速度 mm/s
+    retry_lift_mm: float = 5.0      # SUCKING 超时重试的回抬量
+    max_attach_retry: int = 3       # 连续失败次数上限，超过全机冻结报警
+    leak_rescue_s: float = 2.0      # ATTACHED 漏气挽救窗口 s，超时全机冻结
+    interlock_timeout_s: float = 2.0  # 抬腿互锁不满足的等待上限 s，超时冻结报警
+                                      # （与 leak_rescue_s 是两个独立的安全时延）
     # 安全阈值（官方 WARN_*：2S 电池）
     volt_warn: float = 6.4
     volt_cutoff: float = 6.0

@@ -36,9 +36,11 @@ def main():
 
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
-    bot.move_feet(bot.engine.default_feet)
+    # 缓慢站起：使能前先发蹲姿（离断电趴姿最近，使能跳变小），再慢滑到站姿
+    bot.move_feet(bot.crouch_feet())
     drv.enable(True)
-    bot.stand()
+    time.sleep(0 if args.mock else 1.0)
+    bot.stand(duration=4.0)
 
     old = termios.tcgetattr(sys.stdin)
     tty.setcbreak(sys.stdin.fileno())

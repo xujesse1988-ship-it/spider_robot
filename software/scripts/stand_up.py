@@ -19,10 +19,12 @@ def main():
 
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
-    # 先把目标脉宽发好再使能——固件会让舵机直接到位（避免上电乱跳）
-    bot.move_feet(bot.engine.default_feet)
+    # 缓慢站起：使能前先发蹲姿（离断电趴姿最近，使能跳变小），再慢滑到站姿。
+    # 舵机无位置回读，使能瞬间会满速跳到目标——跳变必须安排在蹲姿这一步。
+    bot.move_feet(bot.crouch_feet())
     drv.enable(True)
-    bot.stand(duration=2.0)
+    time.sleep(0 if args.mock else 1.0)
+    bot.stand(duration=4.0)
     print("站立完成。Ctrl-C 退出（退出即断舵机电）。")
     try:
         while True:

@@ -79,6 +79,21 @@ def test_landing_clamped_to_tilt_band():
                 f"{n} 方向{k}: 落点倾角 {tilt:.1f}°"
 
 
+def test_crouch_to_climb_stance_vertical_path_reachable():
+    """climb_walk 启动路径：爬墙站位 XY 的蹲姿 -> 站姿纯竖直插值全程 IK 可解
+    （吸盘不横拖的一步到位站起）。"""
+    io, ctl, eng = make_engine()
+    bot = Hexapod(MockDriver())
+    crouch = bot.crouch_feet(feet=eng.default_feet)
+    for s in range(11):
+        mix = {n: tuple(a + (b - a) * s / 10 for a, b in
+                        zip(crouch[n], eng.default_feet[n]))
+               for n in crouch}
+        bot.pulses(mix)
+        for n in crouch:                   # 纯竖直：XY 与爬墙站位完全一致
+            assert mix[n][:2] == eng.default_feet[n][:2]
+
+
 def test_stationary_command_never_lifts():
     io, ctl, eng = make_engine()
     start(eng)

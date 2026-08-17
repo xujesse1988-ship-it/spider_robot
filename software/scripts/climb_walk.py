@@ -173,16 +173,15 @@ def main():
         print("已全放气并回站姿。")
         return
 
-    # 缓慢站起：使能前先发蹲姿（离断电趴姿最近，使能跳变小），再慢滑到站姿
-    bot.move_feet(bot.crouch_feet())
+    # 缓慢站起，一步到位进爬墙站位：蹲姿直接用爬墙站位（吸盘轴⊥面的解，
+    # 约 reach 176）的 XY，从蹲到站是纯竖直上升——吸盘落地后不横拖。
+    # （旧流程"站姿130→爬墙站位176"的 glide 会拖着承重吸盘划 46mm）
+    bot.move_feet(bot.crouch_feet(feet=eng.default_feet))
     drv.enable(True)
     time.sleep(0 if args.mock else 1.0)
-    print("缓慢站起……")
-    bot.stand(duration=4.0)
-    # 过渡到爬墙站位：ClimbEngine 的站位是"压入位吸盘轴⊥面"的解（约 reach 176），
-    # 不是地面步态的 130——不先滑过去，引擎第一拍足端目标会跳变几十毫米
-    bot.glide_to(dict(eng.default_feet), 2.0)
-    print("爬墙站位就位（吸盘轴⊥面），开始全吸附启动序列……")
+    print("缓慢站起（竖直升至爬墙站位，吸盘轴⊥面）……")
+    bot.glide_to(dict(eng.default_feet), 4.0)
+    print("爬墙站位就位，开始全吸附启动序列……")
     if args.air:
         print("⚠ 架空模式：吸附失败不冻结，互锁旁路——上墙严禁本模式")
     if args.dry:

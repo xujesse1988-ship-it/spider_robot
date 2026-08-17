@@ -75,12 +75,13 @@ class Hexapod:
         """从当前足端位置平滑过渡到默认站姿。"""
         self.glide_to(dict(self.engine.default_feet), duration)
 
-    def crouch_feet(self, height: float = 20.0) -> dict:
-        """蹲姿足端目标：默认站位的 XY、身体离地仅 height。
-        舵机无位置回读，使能瞬间会满速跳到目标——上电时先发蹲姿再使能
-        （蹲姿离断电趴姿最近，跳变小），然后 stand() 慢滑 = 缓慢站起。"""
+    def crouch_feet(self, height: float = 20.0, feet: dict = None) -> dict:
+        """蹲姿足端目标：XY 取目标站位（默认地面站位，可传入如爬墙站位）、
+        身体离地仅 height。舵机无位置回读，使能瞬间会满速跳到目标——上电时
+        先发蹲姿再使能（蹲姿离断电趴姿最近，跳变小），再 glide 到同 XY 的
+        站姿 = 纯竖直缓慢站起，落地的脚不横拖。"""
         return {n: (x, y, -height)
-                for n, (x, y, _) in self.engine.default_feet.items()}
+                for n, (x, y, _) in (feet or self.engine.default_feet).items()}
 
     def glide_to(self, feet_target: dict, duration: float) -> None:
         steps = max(2, int(duration * self.cfg.update_hz))

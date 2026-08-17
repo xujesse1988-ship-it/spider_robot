@@ -95,12 +95,24 @@ def status_line(eng, ctl, io, v, c, peak, cmd, tag=""):
 
 
 def release_all(io, ctl, bot):
-    """善后：全阀断电放气，回站姿。地面用；墙上严禁（会坠落）。"""
+    """善后：全阀排气（通电位），回站姿。地面用；墙上严禁（会坠落）。"""
     for i in range(6):
         io.set_valve(i, False)
     io.set_pump(False)
     time.sleep(1.0)
     bot.stand(2.0)
+
+
+def coils_off(io):
+    """退出前必做：六路阀线圈全部断电（GPIO 拉低）+ 泵停。
+    本机阀是"通电=排气、断电=通罐"，排气是**维持态**——退出序列把 GPIO
+    拉高放气后就退进程，引脚会停在高电平，六个线圈一直通电发热（实机
+    2026-08-17 复现）。收尾必须像 p4_mosfet_check 一样全部拉低再走。
+    注意 set_valve(True) 恰是线圈断电电平（True=通罐位=低电平）；罐里若有
+    残余真空，地面吸盘可能被轻微重新吸住，关 12V 或重跑 --release 可放开。"""
+    for i in range(6):
+        io.set_valve(i, True)
+    io.set_pump(False)
 
 
 def main():
@@ -171,8 +183,9 @@ def main():
         drv.enable(True)
         time.sleep(0 if args.mock else 1.0)
         bot.stand(3.0)
+        coils_off(io)          # 排气是维持态：退出前必须把线圈全部断电
         drv.close()
-        print("已全放气并回站姿。")
+        print("已全放气并回站姿（阀线圈已断电）。")
         return
 
     # 缓慢站起，一步到位进爬墙站位：蹲姿直接用爬墙站位（吸盘轴⊥面的解，
@@ -217,6 +230,7 @@ def main():
                 if time.time() - last_esc < 2.0:
                     aborted = True
                     print("\n未开始吸附，断电退出。")
+                    coils_off(io)   # 上电即通电（排气位）的线圈也要收掉
                     drv.close()
                     return
                 last_esc = time.time()
@@ -292,7 +306,7 @@ def main():
             # 暂停处 Ctrl-C：未吸附，舵机保持使能站立
             print("\n在就位暂停处中断：未吸附。断电请直接关电源或跑 --release。")
         elif clean_exit:
-            print("\n退出：停走 -> 放气 -> 站姿 -> 断电")
+            print("\n退出：停走 -> 放气 -> 站姿 -> 线圈断电 -> 舵机断电")
             # 逐足正常放气（VENTING 流程），吸附中的先释放
             for i in range(6):
                 ctl.request_release(i)
@@ -301,19 +315,20 @@ def main():
                 if not args.mock:
                     time.sleep(dt)
             release_all(io, ctl, bot)
+            coils_off(io)      # 排气是维持态：退出前必须把线圈全部断电
             drv.close()
-            print("完成。")
+            print("完成（阀线圈已断电）。")
         else:
             # Ctrl-C/异常：不主动放气（善后跑 --release）。
-            # ⚠ 但注意：进程一退出，lgpio 释放 + 下拉会把六阀全翻回"通罐"位
-            # ——若此刻有腿悬空（阀开着通大气的敞口吸盘被接回歧管），罐压
-            # 会经它泄光、其余吸附足跟着失压。墙上"保持当前状态"只在
-            # 六足全吸附时成立；有腿在摆动相时中断进程本身就是危险动作
-            # （审核发现 #2，系统级，待与气路硬件一起重审）。
+            # 进程退出后 GPIO 终态未定论：2026-08-17 实测偏向"保持最后驱动
+            # 电平"（ESC 退出后拉高的线圈仍通电，故加了 coils_off 收尾），
+            # 但"释放回默认上下拉"在别的内核/重启后也可能出现。墙上中断
+            # 一律按最坏情形对待（可能泄罐压/可能线圈挂着耗电）：优先保持
+            # 进程冻结悬停，不到万不得已不杀进程（审核发现 #2，系统级）。
             print(f"\n中断：不放气退出。冻结: {eng.frozen or '无'}；"
                   f"善后请跑 --release。")
             if not args.no_tank:   # 无罐模式没有罐压可泄、也禁止上墙
-                print("⚠ 若有腿悬空：进程退出会把该阀翻回通罐位、罐压将泄漏"
+                print("⚠ 若有腿悬空：进程退出后阀终态不可控、罐压可能泄漏"
                       "——墙上请确认安全绳受力。")
 
 

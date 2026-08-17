@@ -257,7 +257,10 @@ class ClimbEngine:
         return self._geom.phase(name, t)   # _geom 的 cycle_time 已换成爬墙周期
 
     def _tank_ready(self):
-        """罐压已建立（或传感器失效被旁路时视为就绪，air 模式用）。"""
+        """罐压已建立（或传感器失效被旁路时视为就绪，air 模式用）。
+        无罐模式没有"预建罐压"概念：泵在 SUCKING 时实时抽，直接放行。"""
+        if getattr(self.ctl, "tankless", False):
+            return True
         return self.ctl.tank_fault or \
             self.ctl.io.read_tank_kpa() <= TANK_READY_KPA
 

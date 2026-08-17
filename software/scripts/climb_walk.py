@@ -13,6 +13,10 @@
                                              # 仍占用），纯排练步态动作（气动舱
                                              # 未接全时用；吸附确认是假的）
   python climb_walk.py --air                 # 实机架空：阀/泵真动作，吸不上不停走
+  python climb_walk.py --no-tank             # 无罐短测（储气罐未装）：泵直抽
+                                             # 歧管，罐压传感器不参与；没有储备
+                                             # 真空——挽救弱、断电不保真空，
+                                             # 只在地面做短暂测试，严禁上墙
   python climb_walk.py                       # 地面玻璃板 / 上墙（全链路）
   python climb_walk.py --release             # 善后：全阀放气+回站姿
 
@@ -76,12 +80,15 @@ def status_line(eng, ctl, io, v, c, peak, cmd, tag=""):
     legs = " ".join(
         f"{n}{PHASE_CH[ph]}{'!' if leak else ADH_CH[adh]}"
         for n, (ph, adh, leak) in eng.status().items())
-    tank = io.read_tank_kpa()
+    if ctl.tankless:
+        tank_txt = "罐 无罐"          # 无罐模式不读罐压传感器（读了也是悬空假数）
+    else:
+        tf = " 罐压失效!" if ctl.tank_fault else ""
+        tank_txt = f"罐 {io.read_tank_kpa():6.1f}kPa{tf}"
     head = ("启动" if not eng.started else f"t={eng.t:5.1f}") + tag
-    tf = " 罐压失效!" if ctl.tank_fault else ""
     vx, vy, wz = cmd
     sp = "停" if not (vx or vy or wz) else f"{vx:+.0f}/{vy:+.0f}/{wz:+.2f}"
-    return (f"[{head}] {legs}  速 {sp}  罐 {tank:6.1f}kPa{tf}  "
+    return (f"[{head}] {legs}  速 {sp}  {tank_txt}  "
             f"{v:.2f}V {c:5.2f}A 峰 {peak:5.2f}A")
 
 
@@ -104,6 +111,10 @@ def main():
                     help="真舵机 + 仿真气路：不碰气路 GPIO(阀/泵)与 I2C，阀泵"
                          "不动（舵机继电器 GPIO17 仍由 driver 占用），吸附确认"
                          "由 Mock 假装成功；纯验证步态动作，上墙严禁")
+    ap.add_argument("--no-tank", action="store_true",
+                    help="无罐短测：泵按'抽气需求+吸附足压滞环'直抽歧管，"
+                         "罐压传感器不参与，SUCK 超时放宽到 2.5s；没有储备真空"
+                         "（挽救弱/断电不保真空），只在地面短测，严禁上墙")
     ap.add_argument("--cycle", type=float, default=DEFAULT_CONFIG.climb_cycle_time,
                     help="步态周期 s（先慢后提速）")
     ap.add_argument("--release", action="store_true", help="只做全放气+回站姿")
@@ -131,7 +142,10 @@ def main():
         from hexapod.adhesion import Pi5VacuumIO
         io = Pi5VacuumIO(6)
     # --air 时罐压传感器可能未接：泵降级为"有脚在抽就开"，不被 tank_fault 停死
-    ctl = AdhesionController(io, pump_without_tank=args.air)
+    ctl_kw = dict(pump_without_tank=args.air, tankless=args.no_tank)
+    if args.no_tank:
+        ctl_kw["suck_timeout_s"] = 2.5   # 泵实时抽比罐存量慢，放宽超时
+    ctl = AdhesionController(io, **ctl_kw)
     bot = Hexapod(drv, cfg)
     eng = ClimbEngine(cfg, ctl, air_mode=args.air)
 
@@ -172,6 +186,9 @@ def main():
         print("⚠ 架空模式：吸附失败不冻结，互锁旁路——上墙严禁本模式")
     if args.dry:
         print("⚠ 干跑模式：气路是仿真的，阀泵不会动，状态行气压是假数——上墙严禁")
+    if args.no_tank:
+        print("⚠ 无罐模式：泵直抽歧管，没有储备真空——挽救能力弱、断电不保真空。"
+              "只做地面短测，时长自己控制，严禁上墙")
 
     old = termios.tcgetattr(sys.stdin)
     tty.setcbreak(sys.stdin.fileno())

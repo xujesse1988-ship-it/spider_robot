@@ -96,3 +96,47 @@ def test_pump_without_tank_follows_suck_demand():
     ctl.request_attach(0)
     run(ctl, 0.45)
     assert ctl.state[0] == FootState.SUCKING and io.pump   # 抽气中：泵跟上
+
+
+class _NoTankIO(MockVacuumIO):
+    """无罐模式禁读罐压：读了就炸（罐压传感器根本不在链路上）。"""
+
+    def read_tank_kpa(self):
+        raise AssertionError("无罐模式不许读罐压传感器")
+
+
+def test_tankless_pump_policy_and_never_reads_tank():
+    io = _NoTankIO(6)
+    ctl = AdhesionController(io, tankless=True)
+    ctl.update(0.02)
+    assert not io.pump and not ctl.tank_fault   # 空闲：泵停、无罐压报警
+    ctl.request_attach(0)
+    run(ctl, 2.0)                               # 抽气需求驱动泵 -> 吸附成功
+    assert ctl.state[0] == FootState.ATTACHED
+    # 已吸附足压滞环维持：人为放掉压力，泵应重新启动
+    run(ctl, 1.0)
+    io.foot_kpa[0] = -40.0                      # 高于 PUMP_ON(-55)：该补抽了
+    io.tank_kpa = -40.0                         # mock 内部物理（≠传感器读数）
+    ctl.update(0.02)
+    assert io.pump
+
+
+def test_tankless_climb_engine_full_cycle():
+    """无罐 + ClimbEngine：启动全吸附与行走全程不碰罐压传感器、不冻结。"""
+    from hexapod.climb import ClimbEngine, LegPhase
+    from hexapod.config import DEFAULT_CONFIG
+
+    io = _NoTankIO(6)
+    ctl = AdhesionController(io, tankless=True, suck_timeout_s=2.5)
+    eng = ClimbEngine(DEFAULT_CONFIG, ctl)
+    for _ in range(int(20 / 0.02)):
+        eng.update(0.02)
+        if eng.started:
+            break
+    assert eng.started and ctl.attached_count() == 6
+    lifted = False
+    for _ in range(int(10 / 0.02)):
+        eng.update(0.02, 30.0, 0.0, 0.0)
+        lifted = lifted or any(p != LegPhase.STANCE
+                               for p in eng.phase_of.values())
+    assert lifted and eng.frozen is None

@@ -196,12 +196,19 @@ class Pi5VacuumIO:
 class AdhesionController:
     """6 足吸附状态机。每个控制周期调用 update(dt)。"""
 
-    def __init__(self, io, n_feet=6, pump_without_tank=False):
+    def __init__(self, io, n_feet=6, pump_without_tank=False,
+                 tankless=False, suck_timeout_s=SUCK_TIMEOUT_S):
         self.io = io
         self.n = n_feet
         # 罐压传感器失效时的降级泵策略（架空联调、罐压未接时用）：
         # False = 停泵置 fault 等上层报警；True = 有脚在抽气就开泵
         self.pump_without_tank = pump_without_tank
+        # 无罐模式（储气罐未装的地面短测专用）：完全不读罐压传感器，
+        # 泵改按"抽气需求 + 已吸附足最差压滞环"直抽歧管。没有储备真空：
+        # 挽救能力弱、断电不保真空，严禁上墙、严禁长时间行走。
+        self.tankless = tankless
+        # SUCK 超时可调：无罐时没有罐的存量"瞬间咬住"，泵实时抽更慢
+        self.suck_timeout_s = suck_timeout_s
         self.state = [FootState.RELEASED] * n_feet
         # 仲裁位占位（远期双墙面混合足，P4-GUIDE 第 2 步之 6）：本阶段恒为 suction
         self.mode = ["suction"] * n_feet
@@ -253,22 +260,37 @@ class AdhesionController:
 
     def update(self, dt):
         self._now += dt
-        # 泵滞环控制储气罐压力；罐压出合理区间 = 传感器失效/未接，停泵置 fault
-        # 交由步态层报警（假读数 -112kPa 会骗过滞环让泵永不启动）
-        tank = self.io.read_tank_kpa()
-        if not (TANK_KPA_MIN <= tank <= TANK_KPA_MAX):
-            self.tank_fault = True
-            if self.pump_without_tank:   # 降级：抽气需求驱动泵，不看罐压
-                self.io.set_pump(any(s == FootState.SUCKING
-                                     for s in self.state))
-            else:
-                self.io.set_pump(False)
-        else:
-            self.tank_fault = False
-            if tank > PUMP_ON_KPA:
+        if self.tankless:
+            # 无罐：泵按需求直抽歧管——有脚在抽气必开；否则按已吸附足的
+            # 最差（最接近大气）压力做滞环维持。罐压传感器完全不参与。
+            if any(s == FootState.SUCKING for s in self.state):
                 self.io.set_pump(True)
-            elif tank < PUMP_OFF_KPA:
-                self.io.set_pump(False)
+            else:
+                att = [self.io.read_foot_kpa(i) for i in range(self.n)
+                       if self.state[i] == FootState.ATTACHED]
+                if not att:
+                    self.io.set_pump(False)
+                elif max(att) > PUMP_ON_KPA:
+                    self.io.set_pump(True)
+                elif max(att) < PUMP_OFF_KPA:
+                    self.io.set_pump(False)
+        else:
+            # 泵滞环控制储气罐压力；罐压出合理区间 = 传感器失效/未接，
+            # 停泵置 fault 交由步态层报警（假读数 -112kPa 会骗过滞环让泵永不启动）
+            tank = self.io.read_tank_kpa()
+            if not (TANK_KPA_MIN <= tank <= TANK_KPA_MAX):
+                self.tank_fault = True
+                if self.pump_without_tank:   # 降级：抽气需求驱动泵，不看罐压
+                    self.io.set_pump(any(s == FootState.SUCKING
+                                         for s in self.state))
+                else:
+                    self.io.set_pump(False)
+            else:
+                self.tank_fault = False
+                if tank > PUMP_ON_KPA:
+                    self.io.set_pump(True)
+                elif tank < PUMP_OFF_KPA:
+                    self.io.set_pump(False)
 
         for i in range(self.n):
             st = self.state[i]
@@ -287,7 +309,7 @@ class AdhesionController:
                     self._good_since[i] = None
                     # 超时只在压力未达标时计：已经吸到 -30 只是还在确认窗里的
                     # 脚，不能被超时打成 FAULT 放掉（那是物理上密封好的脚）
-                    if el > SUCK_TIMEOUT_S:
+                    if el > self.suck_timeout_s:
                         self.io.set_valve(i, False)
                         self._set(i, FootState.FAULT)
             elif st == FootState.ATTACHED:

@@ -49,6 +49,18 @@ def test_pump_hysteresis():
     assert not io.pump or io.tank_kpa > -80
 
 
+def test_pump_inhibit_overrides_hysteresis():
+    """取机窗口（climb_walk 'oo' 放吸盘保持站立）：pump_inhibit 置位后
+    泵不许再开——罐压浅时滞环本该开泵，也要被压住。"""
+    io = MockVacuumIO()
+    ctl = AdhesionController(io)
+    run(ctl, 1.0)
+    assert io.pump                     # 冷罐：滞环正在要求开泵
+    ctl.pump_inhibit = True
+    run(ctl, 1.0)
+    assert not io.pump                 # 置位后停泵，且不再被滞环重启
+
+
 class _LateSealIO:
     """脚本化压力曲线：SUCKING 后期（超时线前一点）才达标。
     回归用例：确认窗不能挤占超时预算——压力已达标、只是还在确认窗里的脚，

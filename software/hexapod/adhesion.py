@@ -212,6 +212,10 @@ class AdhesionController:
         # 无罐预抽请求（步态层在首次抽气前置位几秒）：阀全关时先把歧管抽空，
         # 否则首足 SUCK 独扛整段大气歧管，健康系统也可能白烧重试
         self.precharge = False
+        # 取机窗口（climb_walk 'oo' 放开吸盘保持站立）：置位后泵不许再开——
+        # 罐模式滞环否则会继续维持罐压。一次性置位，进程退出前不复位；
+        # 置位期间 tank_fault 不再刷新（吸盘已放，罐压不再是安全条件）
+        self.pump_inhibit = False
         # SUCK 超时可调：无罐时没有罐的存量"瞬间咬住"，泵实时抽更慢
         self.suck_timeout_s = suck_timeout_s
         self.state = [FootState.RELEASED] * n_feet
@@ -265,7 +269,9 @@ class AdhesionController:
 
     def update(self, dt):
         self._now += dt
-        if self.tankless:
+        if self.pump_inhibit:
+            self.io.set_pump(False)
+        elif self.tankless:
             # 无罐：泵按需求直抽歧管——预抽期/有脚在抽气必开；否则按已吸附
             # 足的最差（最接近大气）压力做滞环维持。罐压传感器完全不参与。
             if self.precharge or \

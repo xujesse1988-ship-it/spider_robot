@@ -6,6 +6,8 @@
   p   就位暂停后开始全吸附启动序列
   w/s 前进/后退   a/d 左移/右移   q/e 左转/右转   空格 停
   f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->放气->站姿->断电）
+  o×2 放开全部吸盘但六足保持站立（地面取机用：全阀排气+泵停，舵机撑住原地，
+      整机可直接从玻璃上拿起）。仅站立非走动时允许；墙上严禁（等于坠落）
 
 用法:
   python climb_walk.py --mock                # 无硬件干跑（Mock 吸盘必吸上）
@@ -42,7 +44,7 @@ from dataclasses import replace
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import AdhesionController, MockVacuumIO
-from hexapod.climb import ClimbEngine
+from hexapod.climb import ClimbEngine, LegPhase
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 
 SPEED = 15.0    # mm/s（爬墙宁慢勿快；跑顺再提）
@@ -214,9 +216,22 @@ def main():
     last_frozen = None
     clean_exit = False
     last_esc = 0.0
+    last_o = 0.0
+    released_hold = False   # 'oo' 取机窗口：吸盘已全放开，六足仅舵机撑住
     was_started = False
     at_pause = True      # 就位暂停中（尚未开始任何吸附动作）
     aborted = False      # 在暂停处确认退出（finally 不再做善后）
+
+    def hold_release_deny():
+        """'oo' 放开吸盘的前置检查：返回拒绝原因，None = 允许。
+        站立非走动 = 启动序列已完成 + 速度指令为零 + 六足全在支撑相。"""
+        if not eng.started:
+            return "启动序列未完成"
+        if vx or vy or wz:
+            return "尚在走动（先按空格停）"
+        if any(p != LegPhase.STANCE for p in eng.phase_of.values()):
+            return "有腿未回支撑相（等本步收尾再按）"
+        return None
     try:
         # —— 就位暂停：给操作者检查站位/气路/场地的窗口，按 p 才碰气路 ——
         print("就位暂停：确认无异常后按 p 开始全吸附启动序列（ESC×2 断电退出）")
@@ -247,6 +262,8 @@ def main():
                 last_esc = time.time()
                 print("\n再按一次 ESC 确认退出（会放气回站姿——墙上禁用！"
                       "墙上悬停 = 保持进程运行什么都不按）")
+            elif k in ("w", "s", "a", "d", "q", "e") and released_hold:
+                print("\n吸盘已放开（取机窗口），不可再走动——取下后 ESC×2 退出")
             elif k == "w":
                 vx, vy = SPEED, 0.0
             elif k == "s":
@@ -267,6 +284,28 @@ def main():
                 vx = vy = wz = 0.0
                 print(f"\n解除冻结: {eng.frozen}（速度已清零，按 w 重新开始）")
                 eng.clear_freeze()
+            elif k == "o":
+                # 取机窗口：放开全部吸盘但六足保持站立，便于整机从玻璃上拿起。
+                # 双击确认口径同 ESC；每次按键都重查前置（两击间状态可能变）
+                if released_hold:
+                    print("\n已是放开状态——取下后 ESC×2 退出")
+                else:
+                    deny = hold_release_deny()
+                    if deny:
+                        last_o = 0.0
+                        print(f"\n不允许放开：{deny}")
+                    elif time.time() - last_o < 2.0:
+                        released_hold = True
+                        ctl.pump_inhibit = True   # 罐模式滞环也不许再开泵
+                        for i in range(6):
+                            ctl.request_release(i)
+                        print("\n放开吸盘：全阀排气、泵停，六足仅舵机撑住原地。"
+                              "可整机拿起；取下后 ESC×2 退出"
+                              "（排气是维持态，阀线圈通电中，勿久放）")
+                    else:
+                        last_o = time.time()
+                        print("\n再按一次 o 确认放开全部吸盘（六足保持站立，"
+                              "仅舵机撑住）——墙上严禁（等于坠落）")
 
             bot.move_feet(eng.update(dt, vx, vy, wz))
 
@@ -275,7 +314,7 @@ def main():
                 # 清掉启动期间误触存下的速度：吸附完成瞬间不许自己开走
                 vx = vy = wz = 0.0
                 print("\n✓ 六足吸附完成，遥控就绪：w/s 前后  a/d 左右  "
-                      "q/e 转向  空格停  f 解冻  ESC×2 退出\n"
+                      "q/e 转向  空格停  f 解冻  o×2 放吸盘取机  ESC×2 退出\n"
                       "  （速度指令是 0 时不抬腿——按 w 才开始走；爬墙步态"
                       "宁慢勿快，每步约 4s 属正常）")
 
@@ -290,7 +329,8 @@ def main():
                 v, c = (drv.read_voltage_v(), drv.read_current_a()) \
                     if args.mock else bot.check_power()   # 欠压直接抛异常停机
                 peak_a = max(peak_a, c)
-                tag = " 干跑" if args.dry else ""
+                tag = (" 干跑" if args.dry else "") + \
+                      (" 已放开" if released_hold else "")
                 print("\r" + status_line(eng, ctl, io, v, c, peak_a,
                                          (vx, vy, wz), tag) + "  ",
                       end="", flush=True)

@@ -173,11 +173,12 @@ def main():
         print("已全放气并回站姿。")
         return
 
-    bot.move_feet(bot.engine.default_feet)       # 先发好姿态再使能，防上电乱跳
+    # 缓慢站起：使能前先发蹲姿（离断电趴姿最近，使能跳变小），再慢滑到站姿
+    bot.move_feet(bot.crouch_feet())
     drv.enable(True)
     time.sleep(0 if args.mock else 1.0)
-
-    bot.stand()
+    print("缓慢站起……")
+    bot.stand(duration=4.0)
     # 过渡到爬墙站位：ClimbEngine 的站位是"压入位吸盘轴⊥面"的解（约 reach 176），
     # 不是地面步态的 130——不先滑过去，引擎第一拍足端目标会跳变几十毫米
     bot.glide_to(dict(eng.default_feet), 2.0)

@@ -34,6 +34,18 @@ def test_all_targets_reachable_during_walk():
             bot.pulses(targets)  # 内部做 IK + 脉宽映射
 
 
+def test_crouch_pose_reachable():
+    """缓慢站起用的蹲姿（身体离地 20mm）全腿 IK 可解、蹲->站全程可达。"""
+    bot = Hexapod(MockDriver())
+    crouch = bot.crouch_feet()
+    bot.pulses(crouch)
+    for s in range(1, 11):                 # 蹲姿到站姿的插值路径逐点检查
+        mix = {n: tuple(a + (b - a) * s / 10 for a, b in
+                        zip(crouch[n], bot.engine.default_feet[n]))
+               for n in crouch}
+        bot.pulses(mix)
+
+
 def test_stride_capped():
     eng = GaitEngine(CFG, TRIPOD)
     ux, uy = eng._stride("L1", 1000.0, 0, 0)  # 荒谬大的速度

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """P4 步态-吸附联调：Mock 干跑 / 实机架空 / 地面玻璃板 / 上墙 共用入口。
 
-流程：站姿 -> 启动全吸附（六足压入、逐足抽气确认）-> 键盘遥控 CLIMB 步态。
+流程：缓慢站起（直达爬墙站位）-> 就位暂停（按 p 继续）-> 全吸附启动序列
+（六足压入、逐足抽气确认）-> 键盘遥控 CLIMB 步态。
+  p   就位暂停后开始全吸附启动序列
   w/s 前进/后退   a/d 左移/右移   q/e 左转/右转   空格 停
   f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->放气->站姿->断电）
 
@@ -181,7 +183,7 @@ def main():
     time.sleep(0 if args.mock else 1.0)
     print("缓慢站起（竖直升至爬墙站位，吸盘轴⊥面）……")
     bot.glide_to(dict(eng.default_feet), 4.0)
-    print("爬墙站位就位，开始全吸附启动序列……")
+    print("爬墙站位就位。")
     if args.air:
         print("⚠ 架空模式：吸附失败不冻结，互锁旁路——上墙严禁本模式")
     if args.dry:
@@ -200,7 +202,26 @@ def main():
     clean_exit = False
     last_esc = 0.0
     was_started = False
+    at_pause = True      # 就位暂停中（尚未开始任何吸附动作）
+    aborted = False      # 在暂停处确认退出（finally 不再做善后）
     try:
+        # —— 就位暂停：给操作者检查站位/气路/场地的窗口，按 p 才碰气路 ——
+        print("就位暂停：确认无异常后按 p 开始全吸附启动序列（ESC×2 断电退出）")
+        while True:
+            k = read_key(0.1)
+            if k == "p":
+                at_pause = False
+                print("开始全吸附启动序列……")
+                break
+            if k == "\x1b":
+                if time.time() - last_esc < 2.0:
+                    aborted = True
+                    print("\n未开始吸附，断电退出。")
+                    drv.close()
+                    return
+                last_esc = time.time()
+                print("再按一次 ESC 确认退出（尚未吸附；断电后请扶稳机身）")
+
         t_wall = time.time()
         while True:
             k = read_key(0)
@@ -265,7 +286,12 @@ def main():
         pass
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
-        if clean_exit:
+        if aborted:
+            pass          # 暂停处确认退出：已断电、已提示，无需善后
+        elif at_pause:
+            # 暂停处 Ctrl-C：未吸附，舵机保持使能站立
+            print("\n在就位暂停处中断：未吸附。断电请直接关电源或跑 --release。")
+        elif clean_exit:
             print("\n退出：停走 -> 放气 -> 站姿 -> 断电")
             # 逐足正常放气（VENTING 流程），吸附中的先释放
             for i in range(6):

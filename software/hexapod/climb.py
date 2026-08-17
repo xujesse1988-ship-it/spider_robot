@@ -44,6 +44,8 @@ from .kinematics import leg_ik
 _EPS = 1e-6
 TANK_READY_KPA = -40.0      # 启动序列首次抽气前罐压须建立到此值（冷罐上电
                             # 直接抽必然重试穷尽误冻结；-40 给 -30 判据留余量）
+TANKLESS_PRECHARGE_S = 3.0  # 无罐模式首次抽气前的盲抽时长：阀全关、歧管容积
+                            # 小，抽几秒即空——省得首足 SUCK 独扛整段大气歧管
 PRECHARGE_TIMEOUT_S = 30.0  # 罐压建立超时 -> 冻结报警（泵坏/大漏不能静默干等）
 VENT_STALL_S = 2.0          # LIFT 抬到位后等放气确认（RELEASED）的额外上限，
                             # 超时冻结报警——排气堵/传感器漂移不能静默停摆
@@ -143,6 +145,7 @@ class ClimbEngine:
         self._slot_skipped = False   # 本窗静止跳过
         self._block_t = 0.0          # 互锁不满足已等待时长
         self._precharge_t = 0.0      # 启动序列等罐压建立已耗时长
+        self._tankless_precharged = False   # 无罐盲抽已完成（一次性）
         self._seg_t = {n: 0.0 for n in LEG_NAMES}   # 当前摆动分段停留时长
         self._last_ph = dict(self.phase_of)
 
@@ -258,8 +261,15 @@ class ClimbEngine:
 
     def _tank_ready(self):
         """罐压已建立（或传感器失效被旁路时视为就绪，air 模式用）。
-        无罐模式没有"预建罐压"概念：泵在 SUCKING 时实时抽，直接放行。"""
+        无罐模式改为定时盲抽：读不到歧管压力（足压传感器在阀的吸盘侧、
+        阀关时看不见歧管），先请求泵抽 TANKLESS_PRECHARGE_S 再放行首足。"""
         if getattr(self.ctl, "tankless", False):
+            if not self._tankless_precharged:
+                if self._precharge_t < TANKLESS_PRECHARGE_S:
+                    self.ctl.precharge = True
+                    return False
+                self._tankless_precharged = True
+                self.ctl.precharge = False
             return True
         return self.ctl.tank_fault or \
             self.ctl.io.read_tank_kpa() <= TANK_READY_KPA
@@ -303,7 +313,17 @@ class ClimbEngine:
             if self.phase_of[n] == LegPhase.STANCE and self.ctl.is_leaking(i):
                 pause = True
                 if self.ctl.leak_time(i) > self.cfg.leak_rescue_s:
-                    self.frozen = f"{n} 漏气挽救超 {self.cfg.leak_rescue_s}s"
+                    # 无罐时支撑足全读共享歧管：新落脚不密封会把大家一起拖
+                    # 掉压，先报漏的往往不是真凶——文案里把嫌疑人指出来
+                    landing = [m for m in LEG_NAMES if self.phase_of[m] in
+                               (LegPhase.DESCEND, LegPhase.PRESS,
+                                LegPhase.RETRY_LIFT, LegPhase.WAIT)]
+                    hint = (f"（无罐：多为落地中的 {'/'.join(landing)} 不密封"
+                            "连带掉压，先查它的吸盘）"
+                            if getattr(self.ctl, "tankless", False) and landing
+                            else "")
+                    self.frozen = (f"{n} 漏气挽救超 "
+                                   f"{self.cfg.leak_rescue_s}s{hint}")
         return pause
 
     def _landing_xy(self, name, vx, vy, wz):

@@ -129,6 +129,11 @@ def test_tankless_climb_engine_full_cycle():
     io = _NoTankIO(6)
     ctl = AdhesionController(io, tankless=True, suck_timeout_s=2.5)
     eng = ClimbEngine(DEFAULT_CONFIG, ctl)
+    for _ in range(int(1.0 / 0.02)):
+        eng.update(0.02)
+    # 盲抽预抽期：泵已在转、但还没对任何脚开始抽气
+    assert io.pump and ctl.attached_count() == 0
+    assert all(s == FootState.RELEASED for s in ctl.state)
     for _ in range(int(20 / 0.02)):
         eng.update(0.02)
         if eng.started:

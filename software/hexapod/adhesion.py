@@ -207,6 +207,9 @@ class AdhesionController:
         # 泵改按"抽气需求 + 已吸附足最差压滞环"直抽歧管。没有储备真空：
         # 挽救能力弱、断电不保真空，严禁上墙、严禁长时间行走。
         self.tankless = tankless
+        # 无罐预抽请求（步态层在首次抽气前置位几秒）：阀全关时先把歧管抽空，
+        # 否则首足 SUCK 独扛整段大气歧管，健康系统也可能白烧重试
+        self.precharge = False
         # SUCK 超时可调：无罐时没有罐的存量"瞬间咬住"，泵实时抽更慢
         self.suck_timeout_s = suck_timeout_s
         self.state = [FootState.RELEASED] * n_feet
@@ -261,9 +264,10 @@ class AdhesionController:
     def update(self, dt):
         self._now += dt
         if self.tankless:
-            # 无罐：泵按需求直抽歧管——有脚在抽气必开；否则按已吸附足的
-            # 最差（最接近大气）压力做滞环维持。罐压传感器完全不参与。
-            if any(s == FootState.SUCKING for s in self.state):
+            # 无罐：泵按需求直抽歧管——预抽期/有脚在抽气必开；否则按已吸附
+            # 足的最差（最接近大气）压力做滞环维持。罐压传感器完全不参与。
+            if self.precharge or \
+                    any(s == FootState.SUCKING for s in self.state):
                 self.io.set_pump(True)
             else:
                 att = [self.io.read_foot_kpa(i) for i in range(self.n)

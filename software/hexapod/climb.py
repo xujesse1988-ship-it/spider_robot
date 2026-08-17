@@ -313,17 +313,11 @@ class ClimbEngine:
             if self.phase_of[n] == LegPhase.STANCE and self.ctl.is_leaking(i):
                 pause = True
                 if self.ctl.leak_time(i) > self.cfg.leak_rescue_s:
-                    # 无罐时支撑足全读共享歧管：新落脚不密封会把大家一起拖
-                    # 掉压，先报漏的往往不是真凶——文案里把嫌疑人指出来
-                    landing = [m for m in LEG_NAMES if self.phase_of[m] in
-                               (LegPhase.DESCEND, LegPhase.PRESS,
-                                LegPhase.RETRY_LIFT, LegPhase.WAIT)]
-                    hint = (f"（无罐：多为落地中的 {'/'.join(landing)} 不密封"
-                            "连带掉压，先查它的吸盘）"
-                            if getattr(self.ctl, "tankless", False) and landing
-                            else "")
+                    # 每足支路已装单向阀（歧管—阀罐口间，只许吸盘→歧管），
+                    # 盘压互相独立：报谁就是谁，不再有落脚连坐顶包
                     self.frozen = (f"{n} 漏气挽救超 "
-                                   f"{self.cfg.leak_rescue_s}s{hint}")
+                                   f"{self.cfg.leak_rescue_s}s"
+                                   f"（查 {n} 吸盘唇口/支路密封）")
         return pause
 
     def _landing_xy(self, name, vx, vy, wz):

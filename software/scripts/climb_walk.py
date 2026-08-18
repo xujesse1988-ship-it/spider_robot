@@ -5,8 +5,8 @@
 （六足压入、逐足抽气确认）-> 键盘遥控 CLIMB 步态。
   p   就位暂停后开始全吸附启动序列
   w/s 前进/后退   a/d 左移/右移   q/e 左转/右转   空格 停
-  f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->停泵->放气->
-      断电，终态停在爬墙站位；要地面站姿另跑 --release）
+  f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->停泵->逐足
+      串行放气->断电，终态停在爬墙站位；要地面站姿另跑 --release）
   o×2 放开全部吸盘但六足保持站立（地面取机用：全阀排气+泵停，舵机撑住原地，
       整机可直接从玻璃上拿起）。仅站立非走动时允许；墙上严禁（等于坠落）
 
@@ -53,7 +53,7 @@ from dataclasses import replace
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
-from hexapod.adhesion import (AdhesionController, MockVacuumIO,
+from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import ClimbEngine, LegPhase, COMP_TAIL_MAX
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
@@ -109,19 +109,6 @@ def status_line(eng, ctl, io, v, c, peak, cmd, tag=""):
     sp = "停" if not (vx or vy or wz) else f"{vx:+.0f}/{vy:+.0f}/{wz:+.2f}"
     return (f"[{head}] {legs}  速 {sp}  {cup_txt}  {tank_txt}  "
             f"{v:.2f}V {c:5.2f}A 峰 {peak:5.2f}A")
-
-
-def release_all(io):
-    """善后：全阀排气（通电位）+ 泵停的再确认，多给 1s 排空窗。地面用；
-    墙上严禁（会坠落）。⚠ 不回地面站姿（08-18 裸删 bot.stand）：退出时机身
-    在爬墙站位（reach≈176 vs 地面 130），glide 唯一做的是把已放气的承重盘
-    沿面硬拖 46mm，还叠上退出期第二个负载高原（18 舵机带重 2s）——启动端
-    早已改为蹲姿直用爬墙 XY，全脚本不再需要地面站姿；终态与 'oo' 取机一致
-    （爬墙站位+舵机撑住），断电后自然趴下，悬空的摆动腿随断电落下（地面无害）。"""
-    for i in range(6):
-        io.set_valve(i, False)
-    io.set_pump(False)
-    time.sleep(1.0)
 
 
 def coils_off(io):
@@ -442,8 +429,9 @@ def main():
             log.event("中断：就位暂停处（未吸附，舵机保持使能）")
             print("\n在就位暂停处中断：未吸附。断电请直接关电源或跑 --release。")
         elif clean_exit:
-            log.event("退出序列：停走 → 停泵 → 放气 → 线圈断电 → 舵机断电（不回站姿）")
-            print("\n退出：停走 -> 停泵 -> 放气 -> 线圈断电 -> 舵机断电（停在爬墙站位）")
+            log.event("退出序列：停走 → 停泵 → 逐足串行放气（通→断，0.2s 间隔）"
+                      " → 舵机断电（不回站姿）")
+            print("\n退出：停走 -> 停泵 -> 逐足串行放气 -> 舵机断电（停在爬墙站位）")
             # 先停泵再放气：无罐模式泵虽会在首个 update 自停，但只先于阀
             # 通电几微秒（电气上等于同时换手）；罐模式滞环更会贯穿退出窗口
             # 给将废弃的罐补压。统一用 pump_inhibit 收口（与 'oo' 取机同
@@ -452,22 +440,25 @@ def main():
             io.set_pump(False)
             if not args.mock:
                 time.sleep(0.3)
-            # 逐足正常放气（VENTING 流程），吸附中的先释放。
-            # ⚠ 本窗口是全程序确定性的最重负载：六阀线圈同一周期一起通电
-            # （通电=排气）经升压板压在电池上——08-18 掉电死机正发生在
-            # ESC×2 之后，退出期必须继续记电压。回站姿 glide（原第二负载
-            # 高原）已裸删，见 release_all 注释
-            for i in range(6):
-                ctl.request_release(i)
+            # 逐足串行放气（08-18 掉电死机对策，事故正发生在 ESC×2 之后）：
+            # 一次只给一个阀通电（通电=排气），压力确认 RELEASED 即断该阀电，
+            # 隔 0.2s 再下一足——阀侧峰值从六线圈同刻阶跃 ~25W 降为单线圈
+            # ~4W，12V 轨不再吃大阶跃。断电后该足翻回通罐位，残余真空可能把
+            # 盘轻微重新吸住（与原 coils_off 终态一致，关 12V 或 --release
+            # 放开）。终态停在爬墙站位（回站姿 glide 已删：拖盘 46mm + 第二
+            # 负载高原，ea46bab）。⚠ 'oo' 取机不适用本法：取机需要排气维持
+            # 态撑到人把整机拿走。退出期继续记电压（TLM）
             t_tlm = 0.0
-            for _ in range(int(3.0 / dt)):
+
+            def _exit_tick():
+                nonlocal t_tlm, peak_a
                 ctl.update(dt)
                 watch.poll()
                 if time.time() - t_tlm > STATUS_S:
                     t_tlm = time.time()
                     try:
                         # 直读不走 check_power：善后期欠压只记录，
-                        # 绝不抛异常打断收尾（线圈还挂着）
+                        # 绝不抛异常打断收尾
                         v, c = drv.read_voltage_v(), drv.read_current_a()
                         peak_a = max(peak_a, c)
                         watch.telemetry(v, c, peak_a, (0, 0, 0), note=" 退出放气")
@@ -476,9 +467,22 @@ def main():
                         t_tlm = float("inf")   # 读不到就别再试，别拖慢善后
                 if not args.mock:
                     time.sleep(dt)
-            log.event("退出：release_all（全阀排气+泵停再确认，不回站姿）")
-            release_all(io)
-            coils_off(io)      # 排气是维持态：退出前必须把线圈全部断电
+
+            for i in range(6):
+                for _ in range(int(1.5 / dt)):   # 单足预算 1.5s（正常 ~0.5s）
+                    # 每周期重发释放请求：ESC 恰逢该足 SUCKING 时，它转成
+                    # ATTACHED 的下一周期也能接上释放（旧流程会漏在吸附态）
+                    ctl.request_release(i)
+                    _exit_tick()
+                    if ctl.state[i] == FootState.RELEASED:
+                        break
+                else:
+                    log.event(f"⚠ {LEG_NAMES[i]} 排气 1.5s 未确认"
+                              "（堵/传感器漂移？），线圈照断继续")
+                io.set_valve(i, True)            # 确认排空即断该阀电（通→断）
+                for _ in range(int(0.2 / dt)):   # 足间 0.2s 间隔
+                    _exit_tick()
+            coils_off(io)      # 幂等收尾：全线圈确认断电 + 泵停
             log.event("退出：阀线圈已断电（coils_off）")
             drv.close()
             print("完成（阀线圈已断电）。")

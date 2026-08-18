@@ -144,6 +144,14 @@ class RobotConfig:
     climb_max_step: float = 40.0    # 爬墙单步步幅上限 mm（CLIMBING-DESIGN §6：
                                     # 站高90+reach≈176 下步幅≤40 → 唇口偏角≤11.5°；
                                     # 也约束支撑相真实位移——吸住的脚不能滑）
+    climb_sag_comp_mm: float = 0.0  # 下滑补偿：每次抬腿事件把全部支撑足沿身体系
+                                    # "下坡"方向（头朝上贴墙=-X，随积分航向旋转）
+                                    # 额外平移的距离 mm，顶回"抬腿弹性下沉+重吸附
+                                    # 锁死"的棘轮（上墙实测每抬一腿被拽下一截，
+                                    # 6 次/周期能吃掉整个步幅=原地踏步）。0=关
+                                    # （地面/架空用不上）。上墙实测下沉量后标定，
+                                    # 取实测值八成以内——超出真实下沉的部分会把
+                                    # 吸附中的盘往下坡拖（climb.py update 4.5 步）
     lift_clearance: float = 15.0    # LIFT 沿面法向退开距离 mm（≥15，吸盘回弹 11~13）
     lift_speed: float = 40.0        # LIFT 抬离速度 mm/s（边放气边走，要跑赢回弹）
     transfer_time: float = 0.6      # TRANSFER 平移段时长 s（沿用 smoothstep+正弦形状）

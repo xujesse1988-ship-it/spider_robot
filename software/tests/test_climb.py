@@ -2,9 +2,11 @@
 ATTACHED 漏气 / 互锁拒抬，外加垂直落地与相位暂停的专项断言）。全部跑在
 MockVacuumIO + MockDriver 上，仿真时间与控制周期同步推进。"""
 import math
+from dataclasses import replace
 
 from hexapod.adhesion import AdhesionController, MockVacuumIO, FootState
-from hexapod.climb import ClimbEngine, LegPhase, TILT_BAND_DEG, _press_tilt
+from hexapod.climb import (ClimbEngine, LegPhase, COMP_TAIL_MAX, TILT_BAND_DEG,
+                           _press_tilt)
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
 from hexapod.driver import MockDriver
 from hexapod.kinematics import leg_ik
@@ -303,6 +305,119 @@ def test_tank_sensor_fault_stops_pump_and_freezes():
     for _ in range(int(1.0 / DT)):
         eng2.update(DT)
     assert eng2.frozen is None
+
+
+def _run_one_comp_event(eng, vx, expect_comp):
+    """跑完一次抬腿事件，断言支撑足位移账目：离面段（LIFT/TRANSFER）=
+    速度场积分（随钟）+ expect_comp 补偿（随真实时间铺完）；贴面段
+    （DESCEND 起）只有速度场——不横拖正在压入的吸盘。y 不受扰、z 恒在
+    压入位。"""
+    vx_eff = eng._clamp_speed(vx, 0.0, 0.0)[0]     # 步幅限幅后的真实速度
+    swing = t0 = f0 = None
+    for _ in range(int(10 / DT)):                  # 等一条腿进摆动
+        t_pre = eng.t
+        feet_pre = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+        eng.update(DT, vx, 0.0, 0.0)
+        lifted = [n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE]
+        if lifted:
+            swing, t0, f0 = lifted[0], t_pre, feet_pre
+            break
+    assert swing is not None
+    obs = next(n for n in LEG_NAMES if n != swing)  # 任取一条支撑腿观察
+    for _ in range(int(10 / DT)):                  # 跑到 DESCEND 入口
+        if eng.phase_of[swing] not in (LegPhase.LIFT, LegPhase.TRANSFER):
+            break
+        eng.update(DT, vx, 0.0, 0.0)
+    assert eng.phase_of[swing] == LegPhase.DESCEND
+    dx = eng.foot[obs][0] - f0[obs][0]
+    exp = -vx_eff * (eng.t - t0) - expect_comp
+    assert math.isclose(dx, exp, abs_tol=1e-6), f"离面段 {dx:.4f} 应 {exp:.4f}"
+    assert math.isclose(eng.foot[obs][1], f0[obs][1], abs_tol=1e-9)
+    t1, x1 = eng.t, eng.foot[obs][0]
+    for _ in range(int(20 / DT)):                  # 跑到摆动腿回支撑
+        if eng.phase_of[swing] == LegPhase.STANCE:
+            break
+        eng.update(DT, vx, 0.0, 0.0)
+    assert eng.phase_of[swing] == LegPhase.STANCE
+    dx2 = eng.foot[obs][0] - x1                    # 贴面段：无补偿注入
+    assert math.isclose(dx2, -vx_eff * (eng.t - t1), abs_tol=1e-6), \
+        f"贴面段被注入了补偿: {dx2:.4f} vs {-vx_eff * (eng.t - t1):.4f}"
+    assert math.isclose(eng.foot[obs][2],
+                        -CFG.stand_height - CFG.leg(obs).press_delta_mm)
+    assert eng.frozen is None
+
+
+def test_sag_comp_injects_during_lift_transfer_only():
+    """满速直行：半步幅 20 → 工作空间限额 (40-20)/5 = 4mm/事件，设定 6
+    被动态截到 4；注入只发生在 LIFT/TRANSFER 离面段。"""
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(replace(CFG, climb_sag_comp_mm=6.0), ctl)
+    start(eng)
+    cap = (COMP_TAIL_MAX - CFG.climb_max_step / 2.0) / 5.0
+    assert math.isclose(cap, 4.0)
+    _run_one_comp_event(eng, vx=30.0, expect_comp=cap)
+
+
+def test_sag_comp_full_delivery_at_low_speed():
+    """低速直行步幅小，限额放宽，设定值全额交付：vx=5 → 半步幅 7.5，
+    限额 (40-7.5)/5 = 6.5 ≥ 设定 6 → 每事件足额 6mm。降速换大补偿的
+    操作口径靠这条成立。"""
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(replace(CFG, climb_sag_comp_mm=6.0), ctl)
+    start(eng)
+    _run_one_comp_event(eng, vx=5.0, expect_comp=6.0)
+
+
+def test_sag_comp_capped_walk_stays_solvable():
+    """补偿顶到 CLI 上限 8mm/事件 + 满速走 60s：动态限额（COMP_TAIL_MAX
+    总账）把每事件截到 4mm，全程 IK 可解（出工作空间 pulses 会抛
+    WorkspaceError 炸控制环）、互锁不破、不冻结。这是把后腿推得最紧的
+    工况：最紧 d 应贴近但不越过 IK 包络（实测 ~201.7 / 边界 204.7）。"""
+    cfg = replace(CFG, climb_sag_comp_mm=8.0)
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(cfg, ctl)
+    start(eng)
+    bot = Hexapod(MockDriver(), cfg)
+    d_max = cfg.femur_len + cfg.tibia_len
+    worst_d = 0.0
+    events = 0
+    prev = dict(eng.phase_of)
+    for _ in range(int(60 / DT)):
+        targets = eng.update(DT, 30.0, 0.0, 0.0)
+        assert eng.frozen is None
+        bot.pulses(targets)
+        assert ctl.attached_count() >= 5
+        for n in LEG_NAMES:
+            if eng.phase_of[n] == LegPhase.STANCE:
+                leg = cfg.leg(n)
+                x, y, z = targets[n]
+                r = math.hypot(x - leg.mount_x, y - leg.mount_y) - cfg.coxa_len
+                worst_d = max(worst_d, math.hypot(r, z))
+            if prev[n] == LegPhase.STANCE and eng.phase_of[n] != LegPhase.STANCE:
+                events += 1
+        prev = dict(eng.phase_of)
+    assert events >= 5, f"60s 只发生 {events} 次抬腿事件，补偿没被反复运用"
+    assert worst_d <= d_max - 1.5, \
+        f"支撑目标 d={worst_d:.1f} 贴死 IK 边界 {d_max:.1f}，限额总账失守"
+    assert worst_d >= d_max - 6.0, \
+        f"最紧 d={worst_d:.1f} 离边界 {d_max:.1f} 太远，工况没压到限额"
+
+
+def test_sag_comp_downhill_rotates_with_heading():
+    """_down（下坡方向）与支撑足同一旋转口径随积分航向转：
+    转过 θ 后应为 (-cosθ, sinθ)——补偿方向不因转向而失准。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    wz_eff = eng._clamp_speed(0.0, 0.0, 0.5)[2]
+    t0 = eng.t
+    run(eng, 12.0, wz=0.5)
+    th = (eng.t - t0) * wz_eff
+    assert th > 0.1                                # 真转了角度才算数
+    assert math.isclose(eng._down[0], -math.cos(th), abs_tol=1e-9)
+    assert math.isclose(eng._down[1], math.sin(th), abs_tol=1e-9)
 
 
 def test_air_mode_keeps_walking_without_adhesion():

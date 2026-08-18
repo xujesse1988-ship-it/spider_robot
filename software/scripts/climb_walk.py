@@ -22,6 +22,10 @@
                                              # 真空——挽救弱、断电不保真空，
                                              # 只在地面做短暂测试，严禁上墙
   python climb_walk.py                       # 地面玻璃板 / 上墙（全链路）
+  python climb_walk.py --sag-comp 3          # 上墙下滑补偿：每次抬腿把支撑足
+                                             # 沿下坡向额外平移 3mm，顶回"每抬
+                                             # 一腿被拽下一截"的棘轮下滑（头朝
+                                             # 上贴墙口径；从小标定，宁欠勿过）
   python climb_walk.py --release             # 善后：全阀放气+回站姿
 
 安全（P4-GUIDE）：
@@ -44,8 +48,9 @@ from dataclasses import replace
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import AdhesionController, MockVacuumIO
-from hexapod.climb import ClimbEngine, LegPhase
+from hexapod.climb import ClimbEngine, LegPhase, COMP_TAIL_MAX
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
+from hexapod.kinematics import WorkspaceError
 
 SPEED = 15.0    # mm/s（爬墙宁慢勿快；跑顺再提）
 TURN = 0.1      # rad/s
@@ -84,6 +89,13 @@ def status_line(eng, ctl, io, v, c, peak, cmd, tag=""):
     legs = " ".join(
         f"{n}{PHASE_CH[ph]}{'!' if leak else ADH_CH[adh]}"
         for n, (ph, adh, leak) in eng.status().items())
+    # 盘差 = 最差（最接近大气）的已吸附盘压 kPa：墙上真正承载的是它，无罐
+    # 模式尤其要盯——泵一直不停 = 盘压压不进 -75 停泵线，法向力和横向刚度
+    # 都打折。只读已吸附足：这些通道控制环每周期都在读，此处走缓存不加
+    # I2C 负担（Pi5VacuumIO CACHE_S/突发限流见 adhesion.py）
+    att = [(io.read_foot_kpa(i), LEG_NAMES[i])
+           for i in range(6) if ctl.is_attached(i)]
+    cup_txt = "盘差 {1}{0:6.1f}".format(*max(att)) if att else "盘差 --"
     if ctl.tankless:
         tank_txt = "罐 无罐"          # 无罐模式不读罐压传感器（读了也是悬空假数）
     else:
@@ -92,7 +104,7 @@ def status_line(eng, ctl, io, v, c, peak, cmd, tag=""):
     head = ("启动" if not eng.started else f"t={eng.t:5.1f}") + tag
     vx, vy, wz = cmd
     sp = "停" if not (vx or vy or wz) else f"{vx:+.0f}/{vy:+.0f}/{wz:+.2f}"
-    return (f"[{head}] {legs}  速 {sp}  {tank_txt}  "
+    return (f"[{head}] {legs}  速 {sp}  {cup_txt}  {tank_txt}  "
             f"{v:.2f}V {c:5.2f}A 峰 {peak:5.2f}A")
 
 
@@ -133,17 +145,32 @@ def main():
                          "（挽救弱/断电不保真空），只在地面短测，严禁上墙")
     ap.add_argument("--cycle", type=float, default=DEFAULT_CONFIG.climb_cycle_time,
                     help="步态周期 s（先慢后提速）")
+    ap.add_argument("--sag-comp", type=float,
+                    default=DEFAULT_CONFIG.climb_sag_comp_mm,
+                    help="下滑补偿 mm/抬腿事件（默认 0=关）：每次抬腿把全部支撑"
+                         "足沿下坡方向额外平移这么多，顶回墙上'每抬一腿被拽下"
+                         "一截'的棘轮下滑。方向按头朝上贴墙（下坡=-X）随转向"
+                         "积分旋转。上墙标定：从 2~3 起步逐次加，盯每周期净位"
+                         "移；只补得回弹性让位，超过实测下沉量会把吸着的盘往"
+                         "下坡拖，宁欠勿过（上限 8）。每事件实际量=min(设定,"
+                         "(40-半步幅)/5)：满速时 4mm 封顶（后腿工作空间总账），"
+                         "设定 >4 想吃满就把 SPEED 降下来走")
     ap.add_argument("--release", action="store_true", help="只做全放气+回站姿")
     args = ap.parse_args()
     if args.cycle < 1.0:
         ap.error(f"--cycle {args.cycle} 非法：步态周期至少 1s（0/负值会在六足"
                  "吸附完成后才除零崩溃，审核发现 #8）")
+    if not 0.0 <= args.sag_comp <= 8.0:
+        ap.error(f"--sag-comp {args.sag_comp} 非法：范围 0~8mm。补偿超过真实"
+                 "下沉量的部分会把吸附中的支撑盘沿面往下坡拖，宁欠勿过；"
+                 "工作空间限额下更大的设定值也吃不满，没有意义")
     if not args.release and not sys.stdin.isatty():
         # TTY 检查必须在碰任何硬件之前：否则真机先上电站立、再在 termios
         # 处崩溃断电瘫倒（审核发现 #5）。--release 无需键盘，放行。
         sys.exit("需要交互终端（ssh 加 -t；勿用 nohup/管道跑本脚本）")
 
-    cfg = replace(DEFAULT_CONFIG, climb_cycle_time=args.cycle)
+    cfg = replace(DEFAULT_CONFIG, climb_cycle_time=args.cycle,
+                  climb_sag_comp_mm=args.sag_comp)
     if args.air:
         cfg = replace(cfg, max_attach_retry=1)   # 架空必 FAULT，少陪跑几轮重试
 
@@ -206,6 +233,15 @@ def main():
     if args.no_tank:
         print("⚠ 无罐模式：泵直抽歧管，没有储备真空——挽救能力弱、断电不保真空。"
               "只做地面短测，时长自己控制，严禁上墙")
+    if cfg.climb_sag_comp_mm > 0:
+        # 本速度直行的每事件实际量（工作空间总账限额，见 climb.COMP_TAIL_MAX）
+        half = min(eng._worst_stance_travel(SPEED, 0.0, 0.0),
+                   cfg.climb_max_step) / 2.0
+        eff = min(cfg.climb_sag_comp_mm, max(0.0, (COMP_TAIL_MAX - half) / 5.0))
+        print(f"下滑补偿开启：设定 {cfg.climb_sag_comp_mm:g}mm/抬腿事件，"
+              f"本速度直行实际 {eff:g}mm（工作空间限额，降速可放宽）。方向口径"
+              "＝机器人头朝上贴墙（下坡=-X，随转向积分旋转），放置朝向不符时勿"
+              "用；标定从小往大，盯每周期净位移与支撑盘有无被拖歪")
 
     old = termios.tcgetattr(sys.stdin)
     tty.setcbreak(sys.stdin.fileno())
@@ -307,7 +343,15 @@ def main():
                         print("\n再按一次 o 确认放开全部吸盘（六足保持站立，"
                               "仅舵机撑住）——墙上严禁（等于坠落）")
 
-            bot.move_feet(eng.update(dt, vx, vy, wz))
+            try:
+                bot.move_feet(eng.update(dt, vx, vy, wz))
+            except WorkspaceError as e:
+                # 降落伞：任何原因（极限速度组合、补偿边角、未来改动）导致
+                # 足端目标出工作空间时，冻结悬停而不是让异常炸掉控制环——
+                # 墙上进程崩溃 = 失控。本帧不下发，舵机保持上一帧姿态；
+                # 冻结后引擎目标全保持，本异常会逐帧重现并被逐帧吞掉
+                if not eng.frozen:
+                    eng.frozen = f"足端目标出工作空间（{e}）——停走后 ESC×2 退出"
 
             if eng.started and not was_started:
                 was_started = True

@@ -13,7 +13,9 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
   WAIT     等 ATTACHED（-30kPa 确认窗）；FAULT -> 抬 retry_lift_mm 重压，
            连续 max_attach_retry 次失败 -> 全机冻结报警
   （支撑）  ATTACHED 后目标保持在压入位，随支撑速度场整体反向平移——
-           吸住的脚不能滑，支撑目标必须连续积分，速度突变不产生跳变
+           吸住的脚不能滑，支撑目标必须连续积分，速度突变不产生跳变；
+           climb_sag_comp_mm > 0 时每次抬腿事件再沿"下坡"方向额外匀速
+           平移一份补偿量，顶回上墙的弹性下滑棘轮（update() 4.5 步）
 
 坐标约定：一切在身体系，z0 = -stand_height 是吸附面，面法向 = ±z。
 身体平行于面时对地面/斜面/竖墙通用（贴墙姿态由 Hexapod.body_rpy 另调）。
@@ -49,6 +51,12 @@ TANKLESS_PRECHARGE_S = 3.0  # 无罐模式首次抽气前的盲抽时长：阀�
 PRECHARGE_TIMEOUT_S = 30.0  # 罐压建立超时 -> 冻结报警（泵坏/大漏不能静默干等）
 VENT_STALL_S = 2.0          # LIFT 抬到位后等放气确认（RELEASED）的额外上限，
                             # 超时冻结报警——排气堵/传感器漂移不能静默停摆
+COMP_TAIL_MAX = 40.0        # 支撑相尾端离默认站位的总外摆上限 mm = 半步幅 +
+                            # 5 次抬腿事件的累计下滑补偿。40 实测（参数扫描）
+                            # 后腿最紧 d≈201.7/204.7，与斜走满速的既有余量同档；
+                            # 再大后腿出 IK 包络、leg_ik 直接抛异常。由此每事件
+                            # 有效补偿 = min(设定, (40-半步幅)/5)：满速(半步幅
+                            # 20)有效上限 4mm，降速走步幅缩小、限额自动放宽
 TILT_BAND_DEG = 12.0        # 落点带：压入位物理吸盘轴偏面法线的许用角。
                             # P1 台架实测容差 ±15°，留余量；CLIMBING-DESIGN §6
                             # 接受的工作带 ≤11.5°。越界步长按半径裁剪（§4.3）
@@ -148,6 +156,13 @@ class ClimbEngine:
         self._tankless_precharged = False   # 无罐盲抽已完成（一次性）
         self._seg_t = {n: 0.0 for n in LEG_NAMES}   # 当前摆动分段停留时长
         self._last_ph = dict(self.phase_of)
+        # 下滑补偿（update() 4.5 步）：_down = 墙面系"下坡"在身体系里的方向，
+        # 开机按机器人头朝上贴墙取 -X，随积分航向一起旋转（与支撑足同一旋转，
+        # 同一套航向推算——打滑造成的航向漂移两边一致）。每次抬腿事件把剩余
+        # 补偿量重置为 climb_sag_comp_mm，在 LIFT+TRANSFER 名义时长内匀速铺完
+        self._down = (-1.0, 0.0)
+        self._comp_left = 0.0
+        self._comp_rate = 0.0
 
     # ---------- 对外 ----------
     def update(self, dt, vx=0.0, vy=0.0, wz=0.0):
@@ -198,6 +213,20 @@ class ClimbEngine:
                 self.ctl.request_release(LEG_NAMES.index(cur))
                 self.phase_of[cur] = LegPhase.LIFT
                 self._slot_active = True
+                if self.cfg.climb_sag_comp_mm > 0.0:
+                    # 下滑补偿按事件装填，量按当前步幅动态限额（COMP_TAIL_MAX
+                    # 总账：支撑尾端 = 半步幅 + 5 次事件累计补偿，不得把后腿
+                    # 推出 IK 包络），在 LIFT+TRANSFER 名义时长内匀速铺完
+                    # （真实时间口径，见 4.5 步）
+                    allow = (COMP_TAIL_MAX - self._worst_stance_travel(
+                        vx, vy, wz) / 2.0) / 5.0
+                    c_eff = min(self.cfg.climb_sag_comp_mm, max(0.0, allow))
+                    self._comp_left = c_eff
+                    if c_eff > 0.0:
+                        lift_t = (self.cfg.leg(cur).press_delta_mm
+                                  + self.cfg.lift_clearance) / self.cfg.lift_speed
+                        self._comp_rate = c_eff \
+                            / (lift_t + self.cfg.transfer_time)
             else:
                 self._block_t += dt
                 if self._block_t > self.cfg.interlock_timeout_s:
@@ -225,12 +254,39 @@ class ClimbEngine:
         if adv > 0.0 and moving:
             dyaw = wz * adv
             c, s = math.cos(dyaw), math.sin(dyaw)
+            dx, dy = self._down          # 下坡方向随航向转（与支撑足同一旋转）
+            self._down = (c * dx + s * dy, -s * dx + c * dy)
             for n in LEG_NAMES:
                 if self.phase_of[n] == LegPhase.STANCE:
                     f = self.foot[n]
                     x, y = f[0] - vx * adv, f[1] - vy * adv
                     f[0], f[1] = c * x + s * y, -s * x + c * y
                     f[2] = self.z0 - self.cfg.leg(n).press_delta_mm
+
+        # 4.5 下滑补偿：每次抬腿事件把全部支撑足沿"下坡"方向额外匀速平移
+        # climb_sag_comp_mm = 把身体往上坡顶回去，抵消"抬腿瞬间载荷重分配的
+        # 弹性下沉被重新吸附锁死"的棘轮（上墙实测：每抬一腿整机被拽下一截，
+        # 6 次/周期能吃掉整个步幅=原地踏步）。
+        # - 只在摆动足离面段（LIFT/TRANSFER）注入：DESCEND 起摆动足 XY 已
+        #   冻结贴面，此时再动支撑系会横拖正在压入的吸盘
+        # - 按真实时间匀速走、不随相位钟停（下沉发生在真实时间里）；位置
+        #   连续、速度小步阶跃，与速度场同一口径
+        # - ⚠ 只补得回弹性让位，且必须 ≤ 实测下沉量：超出部分会真把吸附中
+        #   的支撑盘沿面往下坡拖（等于加大支撑相真实位移、越出落点带）。
+        #   界面滑移型损失（玻璃脏/盘压浅）补不回来，靠清洁与真空度
+        # - 漏气挽救期间（leak_pause）暂停：漏着的盘摩擦余量低，不该被推
+        # - 每事件量已按 COMP_TAIL_MAX 动态限额（装填处）：支撑尾端总外摆
+        #   有硬上限，速度场后半程需要的行程不会被补偿提前花掉——满速时
+        #   有效补偿 4mm/事件，想吃满更大设定值就降速走
+        if (not leak_pause and self._comp_left > 0.0 and self._slot_active
+                and self.phase_of[self._slot_leg] in (LegPhase.LIFT,
+                                                      LegPhase.TRANSFER)):
+            step = min(self._comp_left, self._comp_rate * dt)
+            self._comp_left -= step
+            for n in LEG_NAMES:
+                if self.phase_of[n] == LegPhase.STANCE:
+                    self.foot[n][0] += self._down[0] * step
+                    self.foot[n][1] += self._down[1] * step
 
         # 5. 摆动分段状态机按真实时间推进（钟停时重试/等待照常进行）
         self._run_machines(dt)
@@ -281,16 +337,21 @@ class ClimbEngine:
                  if self._phase(n, t) >= self.gait.duty]
         return max(cands)[1] if cands else self._slot_leg
 
-    def _clamp_speed(self, vx, vy, wz):
-        """把速度指令整体缩放到爬墙步幅上限内。地面步态只截落点、超速部分靠
-        支撑足打滑消化；爬墙吸住的脚不能滑，**支撑相真实位移 = 速度×支撑
-        时长**必须 ≤ climb_max_step，否则支撑足会被拖出工作空间/落点带。"""
+    def _worst_stance_travel(self, vx, vy, wz):
+        """满支撑相时长内单腿最大位移 mm：刚体速度场 v+w×r 在六个默认站位点
+        的最大模 × 支撑时长。限速与下滑补偿限额共用，公式不许漂移。"""
         T_st = self.cfg.climb_cycle_time * self.gait.duty
         worst = 0.0
         for n in LEG_NAMES:
             x0, y0, _ = self.default_feet[n]
             worst = max(worst, math.hypot(vx - wz * y0, vy + wz * x0))
-        worst *= T_st
+        return worst * T_st
+
+    def _clamp_speed(self, vx, vy, wz):
+        """把速度指令整体缩放到爬墙步幅上限内。地面步态只截落点、超速部分靠
+        支撑足打滑消化；爬墙吸住的脚不能滑，**支撑相真实位移 = 速度×支撑
+        时长**必须 ≤ climb_max_step，否则支撑足会被拖出工作空间/落点带。"""
+        worst = self._worst_stance_travel(vx, vy, wz)
         if worst <= self.cfg.climb_max_step:
             return vx, vy, wz
         s = self.cfg.climb_max_step / worst

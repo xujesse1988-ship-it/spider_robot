@@ -5,7 +5,8 @@
 （六足压入、逐足抽气确认）-> 键盘遥控 CLIMB 步态。
   p   就位暂停后开始全吸附启动序列
   w/s 前进/后退   a/d 左移/右移   q/e 左转/右转   空格 停
-  f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->放气->站姿->断电）
+  f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->放气->断电，
+      终态停在爬墙站位；要地面站姿另跑 --release）
   o×2 放开全部吸盘但六足保持站立（地面取机用：全阀排气+泵停，舵机撑住原地，
       整机可直接从玻璃上拿起）。仅站立非走动时允许；墙上严禁（等于坠落）
 
@@ -110,13 +111,17 @@ def status_line(eng, ctl, io, v, c, peak, cmd, tag=""):
             f"{v:.2f}V {c:5.2f}A 峰 {peak:5.2f}A")
 
 
-def release_all(io, ctl, bot):
-    """善后：全阀排气（通电位），回站姿。地面用；墙上严禁（会坠落）。"""
+def release_all(io):
+    """善后：全阀排气（通电位）+ 泵停的再确认，多给 1s 排空窗。地面用；
+    墙上严禁（会坠落）。⚠ 不回地面站姿（08-18 裸删 bot.stand）：退出时机身
+    在爬墙站位（reach≈176 vs 地面 130），glide 唯一做的是把已放气的承重盘
+    沿面硬拖 46mm，还叠上退出期第二个负载高原（18 舵机带重 2s）——启动端
+    早已改为蹲姿直用爬墙 XY，全脚本不再需要地面站姿；终态与 'oo' 取机一致
+    （爬墙站位+舵机撑住），断电后自然趴下，悬空的摆动腿随断电落下（地面无害）。"""
     for i in range(6):
         io.set_valve(i, False)
     io.set_pump(False)
     time.sleep(1.0)
-    bot.stand(2.0)
 
 
 def coils_off(io):
@@ -331,7 +336,7 @@ def main():
                     clean_exit = True
                     break
                 last_esc = time.time()
-                print("\n再按一次 ESC 确认退出（会放气回站姿——墙上禁用！"
+                print("\n再按一次 ESC 确认退出（会放气、停在爬墙站位——墙上禁用！"
                       "墙上悬停 = 保持进程运行什么都不按）")
             elif k in ("w", "s", "a", "d", "q", "e") and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再走动——取下后 ESC×2 退出")
@@ -437,13 +442,14 @@ def main():
             log.event("中断：就位暂停处（未吸附，舵机保持使能）")
             print("\n在就位暂停处中断：未吸附。断电请直接关电源或跑 --release。")
         elif clean_exit:
-            log.event("退出序列：停走 → 放气 → 站姿 → 线圈断电 → 舵机断电")
-            print("\n退出：停走 -> 放气 -> 站姿 -> 线圈断电 -> 舵机断电")
+            log.event("退出序列：停走 → 放气 → 线圈断电 → 舵机断电（不回站姿）")
+            print("\n退出：停走 -> 放气 -> 线圈断电 -> 舵机断电（停在爬墙站位）")
             # 逐足正常放气（VENTING 流程），吸附中的先释放。
             # ⚠ 本窗口是全程序确定性的最重负载：六阀线圈同一周期一起通电
-            # （通电=排气）经升压板压在电池上，随后还压 18 舵机回站姿的
-            # glide；若恰逢泵补抽突发（深真空区是泵电流最大的工况）再叠一层
-            # ——08-18 掉电死机正发生在 ESC×2 之后，退出期必须继续记电压
+            # （通电=排气）经升压板压在电池上，若恰逢泵补抽突发（深真空区
+            # 是泵电流最大的工况）再叠一层——08-18 掉电死机正发生在 ESC×2
+            # 之后，退出期必须继续记电压。回站姿 glide（原第二负载高原）
+            # 已裸删，见 release_all 注释
             for i in range(6):
                 ctl.request_release(i)
             t_tlm = 0.0
@@ -463,8 +469,8 @@ def main():
                         t_tlm = float("inf")   # 读不到就别再试，别拖慢善后
                 if not args.mock:
                     time.sleep(dt)
-            log.event("退出：release_all（全阀排气+泵停+回站姿 glide）")
-            release_all(io, ctl, bot)
+            log.event("退出：release_all（全阀排气+泵停再确认，不回站姿）")
+            release_all(io)
             coils_off(io)      # 排气是维持态：退出前必须把线圈全部断电
             log.event("退出：阀线圈已断电（coils_off）")
             drv.close()

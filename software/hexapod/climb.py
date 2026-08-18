@@ -163,10 +163,16 @@ class ClimbEngine:
         self._down = (-1.0, 0.0)
         self._comp_left = 0.0
         self._comp_rate = 0.0
+        # 本周期实际下发的速度指令（步幅限幅缩放后）。状态行/黑匣子 TLM
+        # 必须取这个而不是用户原始指令：SPEED=15 在默认参数下每帧被隐性
+        # 缩到 ~13.3mm/s，记未缩放值会把 --sag-comp 标定系统性带偏
+        # （按日志推算预期位移，把限幅缺口误当下滑去补）
+        self.cmd = (0.0, 0.0, 0.0)
 
     # ---------- 对外 ----------
     def update(self, dt, vx=0.0, vy=0.0, wz=0.0):
         """推进一个控制周期，返回 {腿名: (x,y,z)} 身体系足端目标。"""
+        self.cmd = (0.0, 0.0, 0.0)   # 冻结/启动期不下发速度；限幅后回填
         self.ctl.update(dt)
         if (getattr(self.ctl, "tank_fault", False)
                 and not self.ignore_tank_fault and not self.frozen):
@@ -194,6 +200,7 @@ class ClimbEngine:
             return self.targets()
 
         vx, vy, wz = self._clamp_speed(vx, vy, wz)
+        self.cmd = (vx, vy, wz)
         moving = abs(vx) > 1e-6 or abs(vy) > 1e-6 or abs(wz) > 1e-6
 
         # 1. 相位窗归属（窗切换时复位窗内一次性标志）
@@ -475,6 +482,10 @@ class ClimbEngine:
                     if self.air_mode:      # 架空空走：放弃本足，当作吸附成功
                         self.air_giveups += 1
                         self.retries[name] = 0
+                        # clear_fault 把阀留在排气位（线圈通电）是**故意的**：
+                        # 断电翻回通罐位后，敞口吸盘会经单向阀（吸盘→歧管
+                        # 恰是导通方向）持续泄罐压，泵整场连转比线圈发热更糟。
+                        # 台架久置的线圈负载由 ESC 退出统一收口，勿"优化"成断电
                         self.ctl.clear_fault(i)
                         if self._attach_queue and self._attach_queue[0] == name:
                             self._attach_queue.pop(0)

@@ -41,6 +41,10 @@ class RunLog:
     def __init__(self, log_dir, tag="climb"):
         os.makedirs(log_dir, exist_ok=True)
         self.t0 = time.time()
+        # 行首 [+秒] 用单调钟：树莓派无 RTC，chrony 联网后阶跃校时会把墙钟
+        # 差出发的相对时间轴撕开一个跳变，验尸时序就乱了。绝对时刻只在
+        # 文件头记一次（用墙钟，校时前可能偏，argv 行旁有 git 版本可交叉）
+        self._t0m = time.monotonic()
         stamp = time.strftime("%Y%m%d_%H%M%S", time.localtime(self.t0))
         self.path = os.path.join(log_dir, f"{tag}_{stamp}.log")
         # 追加模式：同秒重跑不覆盖旧内容
@@ -70,7 +74,7 @@ class RunLog:
             return
         try:
             self._f.write(text + "\n")
-            now = time.time()
+            now = time.monotonic()
             if now - self._last_sync >= FSYNC_S:
                 self._last_sync = now
                 os.fsync(self._f.fileno())
@@ -83,10 +87,10 @@ class RunLog:
         self._line(f"# {text}")
 
     def event(self, text):
-        self._line(f"[{time.time() - self.t0:9.3f}] EVT {text}")
+        self._line(f"[{time.monotonic() - self._t0m:9.3f}] EVT {text}")
 
     def row(self, text):
-        self._line(f"[{time.time() - self.t0:9.3f}] TLM {text}")
+        self._line(f"[{time.monotonic() - self._t0m:9.3f}] TLM {text}")
 
     def exc(self, e=None):
         """记录异常 traceback（整个运行只记第一份，后到的略过）。"""

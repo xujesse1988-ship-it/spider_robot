@@ -127,6 +127,8 @@ class Servo2040Driver:
 class MockDriver:
     """无硬件仿真/测试用：接口与 Servo2040Driver 一致，记录状态。"""
 
+    is_mock = True   # 时序敏感调用方（如 glide_to）据此跳过真实墙钟等待
+
     def __init__(self):
         self.pulses = [1500.0] * NUM_SERVOS
         self.enabled = False

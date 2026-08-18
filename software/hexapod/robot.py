@@ -93,7 +93,9 @@ class Hexapod:
                             zip(start[n], feet_target[n]))
                    for n in feet_target}
             self.move_feet(mix)
-            time.sleep(1.0 / self.cfg.update_hz)
+            if not getattr(self.driver, "is_mock", False):
+                # mock 无实物可等：白睡真实墙钟只会拖慢测试/冒烟（每跑 ~7s）
+                time.sleep(1.0 / self.cfg.update_hz)
 
     def walk(self, vx: float, vy: float, wz: float, duration: float,
              t0: float = 0.0) -> float:

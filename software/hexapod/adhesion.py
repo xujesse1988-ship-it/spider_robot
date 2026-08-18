@@ -136,7 +136,13 @@ class Pi5VacuumIO:
         except Exception:
             self._h = lgpio.gpiochip_open(0)
 
-        for p in self.VALVE_PINS[:n_feet]:
+        for k, p in enumerate(self.VALVE_PINS[:n_feet]):
+            # claim 电平 = 排气位 = 线圈**通电**（隔离吸盘与歧管：单向阀
+            # 只挡罐→盘方向，通罐位下泵预抽会把站在地上的六盘吸住）。
+            # 足间垫 0.2s 把六线圈上电从同刻阶跃摊成串行（与 ESC 退出
+            # 同口径）——12V 轨不再吃 ~25W 阶跃（08-18 掉电疑似扳机）
+            if k:
+                time.sleep(0.2)
             lgpio.gpio_claim_output(self._h, p, 1 - self.VALVE_ON_LEVEL)
         lgpio.gpio_claim_output(self._h, self.PUMP_PIN, 0)
         self._bus = SMBus(1)
@@ -255,6 +261,24 @@ class AdhesionController:
         if self.state[i] == FootState.ATTACHED:
             self._set(i, FootState.VENTING)
 
+    def force_release(self, i):
+        """退出收尾专用：无论当前状态（含 FAULT/SUCKING/PRESSING）一律转入
+        VENTING 走正常放气确认。request_release 只认 ATTACHED——从冻结态
+        （FAULT）或抽气中途（SUCKING）退出的足走不到放气：白等预算、吸盘
+        留在抽空态，无罐模式还会被 SUCKING 超时分支跨时隙反手通电。
+        注：尚未轮到收尾时隙的 SUCKING 足仍可能先自行超时转 FAULT 并翻到
+        排气位（短暂多一路线圈），轮到它时本方法照常接手收口。"""
+        if self.state[i] not in (FootState.VENTING, FootState.RELEASED):
+            self._set(i, FootState.VENTING)
+
+    def abandon_release(self, i):
+        """放气确认超时的弃疗出口：直接记为 RELEASED（压力未确认，调用方
+        自行断阀并留日志）。必须先走这一步再断阀电——否则 VENTING 分支
+        每周期无条件 set_valve(i, False)，会把调用方刚断电的阀反手重新
+        通电，日志"线圈已断"与实际电平相反（审核发现：退出序列超时足）。"""
+        if self.state[i] == FootState.VENTING:
+            self._set(i, FootState.RELEASED)
+
     def is_attached(self, i):
         return self.state[i] == FootState.ATTACHED
 
@@ -298,6 +322,16 @@ class AdhesionController:
         self._now += dt
         if self.pump_inhibit:
             self.io.set_pump(False)
+            if not self.tankless:
+                # 只禁泵不禁采样：退出/取机窗口的 TLM 还在记罐压（正是
+                # 08-18 事故窗口），跳过读取会让黑匣子整段记 ESC 前的陈旧
+                # 值，验尸拿假数据。读失败纯遥测损失，不许打断收尾期状态机
+                # （阀还要靠下面的循环驱动）。tank_fault 仍不刷新（吸盘已
+                # 放，罐压不再是安全条件）
+                try:
+                    self.last_tank_kpa = self.io.read_tank_kpa()
+                except Exception:
+                    pass
         elif self.tankless:
             # 无罐：泵按需求直抽歧管——预抽期/有脚在抽气必开；否则按已吸附
             # 足的最差（最接近大气）压力做滞环维持。罐压传感器完全不参与。

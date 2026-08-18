@@ -420,6 +420,22 @@ def test_sag_comp_downhill_rotates_with_heading():
     assert math.isclose(eng._down[1], math.sin(th), abs_tol=1e-9)
 
 
+def test_cmd_mirror_records_clamped_speed():
+    """状态行/黑匣子 TLM 取 eng.cmd = 步幅限幅后的实际下发速度：记键盘原始
+    指令会让日志速度恒不等于下发速度，--sag-comp 标定按日志推算预期位移
+    时被系统性带偏（审核发现）。冻结/启动期不下发速度，镜像应为零。"""
+    io, ctl, eng = make_engine()
+    assert eng.cmd == (0.0, 0.0, 0.0)
+    start(eng)
+    assert eng.cmd == (0.0, 0.0, 0.0)          # 启动序列期间无速度下发
+    eng.update(DT, 300.0, 0.0, 0.0)
+    assert eng.cmd == eng._clamp_speed(300.0, 0.0, 0.0)
+    assert 0.0 < eng.cmd[0] < 300.0            # 真被限幅了才算数
+    eng.frozen = "测试注入"
+    eng.update(DT, 300.0, 0.0, 0.0)
+    assert eng.cmd == (0.0, 0.0, 0.0)          # 冻结：目标保持，无速度下发
+
+
 def test_air_mode_keeps_walking_without_adhesion():
     """实机架空路径（4.6.3）：全部吸不上也要把步态走下去，统计放弃次数。"""
     io, ctl, eng = make_engine(air_mode=True)

@@ -141,12 +141,18 @@ class Pi5VacuumIO:
         self._cache = {}      # (addr, ch) -> (kpa, 采样时刻)
         self._burst = []      # 最近 BURST_WINDOW 内真实转换的时间戳
         self.read_faults = 0  # 转换超时计数（联调脚本可显示，持续超时会上抛）
+        # 逻辑镜像（True=接通真空 / 泵开）：黑匣子与状态显示用，不回读 GPIO。
+        # 初值与上面 claim 的电平一致（阀=排气位断真空、泵停）
+        self.valve = [False] * n_feet
+        self.pump = False
 
     def set_valve(self, i, on):
+        self.valve[i] = bool(on)
         self._lg.gpio_write(self._h, self.VALVE_PINS[i],
                             self.VALVE_ON_LEVEL if on else 1 - self.VALVE_ON_LEVEL)
 
     def set_pump(self, on):
+        self.pump = bool(on)
         self._lg.gpio_write(self._h, self.PUMP_PIN, 1 if on else 0)
 
     def _read_v(self, addr, ch):
@@ -221,6 +227,13 @@ class AdhesionController:
         # SUCK 超时可调：无罐时没有罐的存量"瞬间咬住"，泵实时抽更慢
         self.suck_timeout_s = suck_timeout_s
         self.state = [FootState.RELEASED] * n_feet
+        # 黑匣子接口（hexapod.runlog）：状态跳变钩子 + 最近读数镜像。
+        # on_event(i, old, new, elapsed_s) 在 _set 内同步调用——订阅方必须轻
+        # 且不抛（RunLog 自带写盘熔断）。last_* 只在状态机真实读过时更新，
+        # 遥测端读镜像即可，零额外传感器 IO（不抢 I2C 突发配额）
+        self.on_event = None
+        self.last_kpa = [None] * n_feet
+        self.last_tank_kpa = None
         # 仲裁位占位（远期双墙面混合足，P4-GUIDE 第 2 步之 6）：本阶段恒为 suction
         self.mode = ["suction"] * n_feet
         self.leaking = [False] * n_feet
@@ -260,10 +273,20 @@ class AdhesionController:
 
     # --- 状态机 ---
     def _set(self, i, st):
+        old = self.state[i]
+        elapsed = self._now - self._t_enter[i]
         self.state[i] = st
         self._t_enter[i] = self._now
         self._good_since[i] = self._bad_since[i] = None
         self.leaking[i] = False
+        if self.on_event is not None and st != old:
+            self.on_event(i, old, st, elapsed)
+
+    def _foot_kpa(self, i):
+        """读足压并留镜像（黑匣子遥测取 last_kpa，不再发起 IO）。"""
+        kpa = self.io.read_foot_kpa(i)
+        self.last_kpa[i] = kpa
+        return kpa
 
     def _held(self, since, window):
         """since 时刻起条件是否已连续保持 window 秒。"""
@@ -280,7 +303,7 @@ class AdhesionController:
                     any(s == FootState.SUCKING for s in self.state):
                 self.io.set_pump(True)
             else:
-                att = [self.io.read_foot_kpa(i) for i in range(self.n)
+                att = [self._foot_kpa(i) for i in range(self.n)
                        if self.state[i] == FootState.ATTACHED]
                 if not att:
                     self.io.set_pump(False)
@@ -292,6 +315,7 @@ class AdhesionController:
             # 泵滞环控制储气罐压力；罐压出合理区间 = 传感器失效/未接，
             # 停泵置 fault 交由步态层报警（假读数 -112kPa 会骗过滞环让泵永不启动）
             tank = self.io.read_tank_kpa()
+            self.last_tank_kpa = tank
             if not (TANK_KPA_MIN <= tank <= TANK_KPA_MAX):
                 self.tank_fault = True
                 if self.pump_without_tank:   # 降级：抽气需求驱动泵，不看罐压
@@ -314,7 +338,7 @@ class AdhesionController:
                     self.io.set_valve(i, True)
                     self._set(i, FootState.SUCKING)
             elif st == FootState.SUCKING:
-                if self.io.read_foot_kpa(i) <= ATTACH_KPA:
+                if self._foot_kpa(i) <= ATTACH_KPA:
                     if self._good_since[i] is None:
                         self._good_since[i] = self._now
                     if self._held(self._good_since[i], ATTACH_CONFIRM_S):
@@ -327,7 +351,7 @@ class AdhesionController:
                         self.io.set_valve(i, False)
                         self._set(i, FootState.FAULT)
             elif st == FootState.ATTACHED:
-                kpa = self.io.read_foot_kpa(i)
+                kpa = self._foot_kpa(i)
                 good = kpa <= ATTACH_KPA
                 bad = kpa > ATTACH_KPA + LEAK_DELTA_KPA
                 if good:
@@ -351,7 +375,7 @@ class AdhesionController:
                     self.io.set_valve(i, True)  # 保持抽气尝试挽救
             elif st == FootState.VENTING:
                 self.io.set_valve(i, False)
-                if el >= VENT_TIME_S and self.io.read_foot_kpa(i) >= RELEASE_KPA:
+                if el >= VENT_TIME_S and self._foot_kpa(i) >= RELEASE_KPA:
                     self._set(i, FootState.RELEASED)
 
         if hasattr(self.io, "step"):

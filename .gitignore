@@ -3,6 +3,9 @@ __pycache__/
 .pytest_cache/
 *.pyc
 
+# 黑匣子运行日志（一跑一文件，只留在本机）
+software/logs/
+
 # macOS
 .DS_Store
 **/.DS_Store

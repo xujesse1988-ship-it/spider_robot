@@ -28,6 +28,11 @@
                                              # 上贴墙口径；从小标定，宁欠勿过）
   python climb_walk.py --release             # 善后：全阀放气+回站姿
 
+黑匣子：每次运行自动写 software/logs/climb_YYYYmmdd_HHMMSS.log（事件 +
+0.5s 遥测混排，含吸附跳变现场盘压/泵阀动作/电压电流/按键/异常栈；行缓冲
++ 每秒 fsync，死机断电最多丢 1s 尾巴——2026-08-18 掉电死机无日志可验尸的
+教训）。验尸先看文件尾：最后一行 TLM 是死亡快照，末尾 EVT 是最后动作。
+
 安全（P4-GUIDE）：
   - Ctrl-C 中断＝不放气退出，善后跑 --release。⚠ 进程退出后六阀翻回"通罐"位：
     六足全吸附时≈保持吸附；**有腿悬空时罐压会经敞口吸盘泄掉**——墙上异常
@@ -47,19 +52,16 @@ from dataclasses import replace
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
-from hexapod.adhesion import AdhesionController, MockVacuumIO
+from hexapod.adhesion import (AdhesionController, MockVacuumIO,
+                              ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import ClimbEngine, LegPhase, COMP_TAIL_MAX
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
+from hexapod.runlog import RunLog, ClimbWatch, PHASE_CH, ADH_CH
 
 SPEED = 15.0    # mm/s（爬墙宁慢勿快；跑顺再提）
 TURN = 0.1      # rad/s
 STATUS_S = 0.5  # 状态行刷新间隔
-
-PHASE_CH = {"stance": "·", "lift": "L", "transfer": "T", "descend": "D",
-            "press": "P", "retry": "R", "wait": "W"}
-ADH_CH = {"released": "r", "pressing": "p", "sucking": "s",
-          "attached": "A", "venting": "v", "fault": "F"}
 
 
 def read_key(timeout):
@@ -174,6 +176,26 @@ def main():
     if args.air:
         cfg = replace(cfg, max_attach_retry=1)   # 架空必 FAULT，少陪跑几轮重试
 
+    # 黑匣子：建在碰任何硬件之前，硬件初始化失败也要留痕（excepthook 兜底）
+    log = RunLog(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs"))
+    print(f"黑匣子日志: {log.path}")
+    mode = ("mock+air" if args.mock and args.air else "mock" if args.mock
+            else "dry" if args.dry else "air" if args.air
+            else "no-tank" if args.no_tank else "实机全链路")
+    log.note(f"模式={mode} port={args.port} release={args.release}")
+    log.note(f"参数: cycle={cfg.climb_cycle_time}s sag_comp={cfg.climb_sag_comp_mm}mm"
+             f" SPEED={SPEED} TURN={TURN} update_hz={cfg.update_hz:g}"
+             f" max_step={cfg.climb_max_step} comp_tail_max={COMP_TAIL_MAX}")
+    _prev_hook = sys.excepthook
+
+    def _crash_hook(tp, val, tb):
+        # 任何未捕获异常（含硬件初始化失败/欠压停机）落盘后再走默认打印
+        log.exc(val)
+        log.close("uncaught")
+        _prev_hook(tp, val, tb)
+    sys.excepthook = _crash_hook
+
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     if args.mock or args.dry:
         # --dry：舵机真走，气路用 Mock 顶替（不碰 GPIO/I2C，阀泵不会动）。
@@ -191,9 +213,15 @@ def main():
     ctl = AdhesionController(io, **ctl_kw)
     bot = Hexapod(drv, cfg)
     eng = ClimbEngine(cfg, ctl, air_mode=args.air)
+    watch = ClimbWatch(log, eng, ctl, io, cfg)   # 挂上吸附钩子 + 跳变轮询
+    log.note(f"阈值: ATTACH={ATTACH_KPA} PUMP_ON={PUMP_ON_KPA}"
+             f" PUMP_OFF={PUMP_OFF_KPA} suck_timeout={ctl.suck_timeout_s}s"
+             f" leak_rescue={cfg.leak_rescue_s}s retry={cfg.max_attach_retry}"
+             f" volt_warn/cutoff={cfg.volt_warn}/{cfg.volt_cutoff}V")
 
     if args.release:
         # 顺序是安全关键：先放气（吸着的脚不能被舵机硬拉），再上舵机回站姿
+        log.event("release 善后：全阀排气 + 泵停")
         for i in range(6):
             io.set_valve(i, False)
         io.set_pump(False)
@@ -207,6 +235,7 @@ def main():
                 time.sleep(0.2)
             else:
                 print("⚠ 5s 后仍有足压未回大气（排气不畅？），继续回站姿需谨慎")
+                log.event("⚠ 5s 后仍有足压未回大气（排气不畅？）")
         # 使能瞬间是硬跳：预置到爬墙站位（离中断时的姿态最近），再缓动回地面站姿
         bot.move_feet(eng.default_feet)
         drv.enable(True)
@@ -215,6 +244,7 @@ def main():
         coils_off(io)          # 排气是维持态：退出前必须把线圈全部断电
         drv.close()
         print("已全放气并回站姿（阀线圈已断电）。")
+        log.close("release 完成")
         return
 
     # 缓慢站起，一步到位进爬墙站位：蹲姿直接用爬墙站位（吸盘轴⊥面的解，
@@ -224,8 +254,10 @@ def main():
     drv.enable(True)
     time.sleep(0 if args.mock else 1.0)
     print("缓慢站起（竖直升至爬墙站位，吸盘轴⊥面）……")
+    log.event("缓慢站起（竖直升至爬墙站位）")
     bot.glide_to(dict(eng.default_feet), 4.0)
     print("爬墙站位就位。")
+    log.event("爬墙站位就位，进入就位暂停")
     if args.air:
         print("⚠ 架空模式：吸附失败不冻结，互锁旁路——上墙严禁本模式")
     if args.dry:
@@ -238,6 +270,8 @@ def main():
         half = min(eng._worst_stance_travel(SPEED, 0.0, 0.0),
                    cfg.climb_max_step) / 2.0
         eff = min(cfg.climb_sag_comp_mm, max(0.0, (COMP_TAIL_MAX - half) / 5.0))
+        log.event(f"下滑补偿开启：设定 {cfg.climb_sag_comp_mm:g}mm/抬腿事件，"
+                  f"本速度直行实际 {eff:g}mm")
         print(f"下滑补偿开启：设定 {cfg.climb_sag_comp_mm:g}mm/抬腿事件，"
               f"本速度直行实际 {eff:g}mm（工作空间限额，降速可放宽）。方向口径"
               "＝机器人头朝上贴墙（下坡=-X，随转向积分旋转），放置朝向不符时勿"
@@ -276,6 +310,7 @@ def main():
             if k == "p":
                 at_pause = False
                 print("开始全吸附启动序列……")
+                log.event("按 p：开始全吸附启动序列")
                 break
             if k == "\x1b":
                 if time.time() - last_esc < 2.0:
@@ -333,6 +368,7 @@ def main():
                     elif time.time() - last_o < 2.0:
                         released_hold = True
                         ctl.pump_inhibit = True   # 罐模式滞环也不许再开泵
+                        log.event("取机窗口：放开全部吸盘（泵禁开），六足舵机撑住")
                         for i in range(6):
                             ctl.request_release(i)
                         print("\n放开吸盘：全阀排气、泵停，六足仅舵机撑住原地。"
@@ -343,6 +379,10 @@ def main():
                         print("\n再按一次 o 确认放开全部吸盘（六足保持站立，"
                               "仅舵机撑住）——墙上严禁（等于坠落）")
 
+            if k is not None:
+                log.event(f"键 {k!r} → 速 {vx:g},{vy:g},{wz:g}"
+                          + ("（已放开）" if released_hold else ""))
+
             try:
                 bot.move_feet(eng.update(dt, vx, vy, wz))
             except WorkspaceError as e:
@@ -352,6 +392,7 @@ def main():
                 # 冻结后引擎目标全保持，本异常会逐帧重现并被逐帧吞掉
                 if not eng.frozen:
                     eng.frozen = f"足端目标出工作空间（{e}）——停走后 ESC×2 退出"
+            watch.poll()   # 状态跳变（相位/吸附/泵阀/冻结/漏气）落黑匣子
 
             if eng.started and not was_started:
                 was_started = True
@@ -378,18 +419,25 @@ def main():
                 print("\r" + status_line(eng, ctl, io, v, c, peak_a,
                                          (vx, vy, wz), tag) + "  ",
                       end="", flush=True)
-            time.sleep(max(0.0, dt - (time.time() - t_wall)))
+                watch.telemetry(v, c, peak_a, (vx, vy, wz), note=tag)
+            lag = time.time() - t_wall
+            if lag > 5 * dt:
+                # 主环卡顿（I2C 拖延/串口超时/系统卡）是死机前兆，必须留痕
+                log.event(f"⚠ 主环卡顿 {lag * 1000:.0f}ms（目标 {dt * 1000:.0f}ms）")
+            time.sleep(max(0.0, dt - lag))
             t_wall = time.time()
     except KeyboardInterrupt:
-        pass
+        log.event("Ctrl-C 中断")
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
         if aborted:
-            pass          # 暂停处确认退出：已断电、已提示，无需善后
+            log.event("退出：就位暂停处确认退出（未吸附，已断电）")
         elif at_pause:
             # 暂停处 Ctrl-C：未吸附，舵机保持使能站立
+            log.event("中断：就位暂停处（未吸附，舵机保持使能）")
             print("\n在就位暂停处中断：未吸附。断电请直接关电源或跑 --release。")
         elif clean_exit:
+            log.event("退出序列：停走 → 放气 → 站姿 → 线圈断电 → 舵机断电")
             print("\n退出：停走 -> 放气 -> 站姿 -> 线圈断电 -> 舵机断电")
             # 逐足正常放气（VENTING 流程），吸附中的先释放
             for i in range(6):
@@ -402,6 +450,7 @@ def main():
             coils_off(io)      # 排气是维持态：退出前必须把线圈全部断电
             drv.close()
             print("完成（阀线圈已断电）。")
+            log.event("退出序列完成（阀线圈已断电，舵机断电）")
         else:
             # Ctrl-C/异常：不主动放气（善后跑 --release）。
             # 进程退出后 GPIO 终态未定论：2026-08-17 实测偏向"保持最后驱动
@@ -409,11 +458,13 @@ def main():
             # 但"释放回默认上下拉"在别的内核/重启后也可能出现。墙上中断
             # 一律按最坏情形对待（可能泄罐压/可能线圈挂着耗电）：优先保持
             # 进程冻结悬停，不到万不得已不杀进程（审核发现 #2，系统级）。
+            log.event(f"中断：不放气退出，冻结={eng.frozen or '无'}")
             print(f"\n中断：不放气退出。冻结: {eng.frozen or '无'}；"
                   f"善后请跑 --release。")
             if not args.no_tank:   # 无罐模式没有罐压可泄、也禁止上墙
                 print("⚠ 若有腿悬空：进程退出后阀终态不可控、罐压可能泄漏"
                       "——墙上请确认安全绳受力。")
+        log.close("正常退出" if (clean_exit or aborted) else "中断退出")
 
 
 if __name__ == "__main__":

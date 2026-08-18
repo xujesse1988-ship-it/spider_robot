@@ -439,18 +439,37 @@ def main():
         elif clean_exit:
             log.event("退出序列：停走 → 放气 → 站姿 → 线圈断电 → 舵机断电")
             print("\n退出：停走 -> 放气 -> 站姿 -> 线圈断电 -> 舵机断电")
-            # 逐足正常放气（VENTING 流程），吸附中的先释放
+            # 逐足正常放气（VENTING 流程），吸附中的先释放。
+            # ⚠ 本窗口是全程序确定性的最重负载：六阀线圈同一周期一起通电
+            # （通电=排气）经升压板压在电池上，随后还压 18 舵机回站姿的
+            # glide；若恰逢泵补抽突发（深真空区是泵电流最大的工况）再叠一层
+            # ——08-18 掉电死机正发生在 ESC×2 之后，退出期必须继续记电压
             for i in range(6):
                 ctl.request_release(i)
+            t_tlm = 0.0
             for _ in range(int(3.0 / dt)):
                 ctl.update(dt)
+                watch.poll()
+                if time.time() - t_tlm > STATUS_S:
+                    t_tlm = time.time()
+                    try:
+                        # 直读不走 check_power：善后期欠压只记录，
+                        # 绝不抛异常打断收尾（线圈还挂着）
+                        v, c = drv.read_voltage_v(), drv.read_current_a()
+                        peak_a = max(peak_a, c)
+                        watch.telemetry(v, c, peak_a, (0, 0, 0), note=" 退出放气")
+                    except Exception as e:
+                        log.event(f"⚠ 退出期电压读取失败，停采: {e}")
+                        t_tlm = float("inf")   # 读不到就别再试，别拖慢善后
                 if not args.mock:
                     time.sleep(dt)
+            log.event("退出：release_all（全阀排气+泵停+回站姿 glide）")
             release_all(io, ctl, bot)
             coils_off(io)      # 排气是维持态：退出前必须把线圈全部断电
+            log.event("退出：阀线圈已断电（coils_off）")
             drv.close()
             print("完成（阀线圈已断电）。")
-            log.event("退出序列完成（阀线圈已断电，舵机断电）")
+            log.event("退出序列完成（舵机断电）")
         else:
             # Ctrl-C/异常：不主动放气（善后跑 --release）。
             # 进程退出后 GPIO 终态未定论：2026-08-17 实测偏向"保持最后驱动

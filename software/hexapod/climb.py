@@ -154,10 +154,13 @@ def max_straight_step(cfg, gait=CLIMB):
 def _press_tilt(cfg, r, z_press):
     """(径向 r, 压入深度 z) 姿态下，物理吸盘轴偏离面法线的带符号角（rad）。
     吸盘轴 = a_t + cup_delta（勿拿 a_t 当吸盘轴，LEG-GEOMETRY §2.13 教训）；
-    倾角只依赖 (r, z)——coxa 偏摆整体旋转腿平面，不改轴线离垂直的角度。"""
+    倾角只依赖 (r, z)——coxa 偏摆整体旋转腿平面，不改轴线离垂直的角度。
+    cup_tilt_trim_deg（整机实测垂直度修正）在此并入：加正修正后同一半径的
+    "轴向角"变大，垂直解/落点带/步幅上限全部自动整体内收。"""
     _, a, th = leg_ik(cfg, r, 0.0, z_press)
     a_t = a + th - math.pi
-    return a_t + math.radians(cfg.cup_delta_deg) + math.pi / 2
+    return a_t + math.radians(cfg.cup_delta_deg + cfg.cup_tilt_trim_deg) \
+        + math.pi / 2
 
 
 def _solve_reach(cfg, z_press, tilt_rad=0.0):

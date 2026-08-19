@@ -70,6 +70,7 @@ CLIMB 步态。
     盲态下纯计时放气）。欠压切断不在此列，照旧立即停机
 """
 import argparse
+import math
 import os
 import select
 import signal
@@ -196,6 +197,13 @@ def main():
     ap.add_argument("--speed", type=float, default=SPEED,
                     help=f"行走/单步速度 mm/s（默认 {SPEED:g}，范围 5~30）："
                          "被步幅上限剪过才下发，实际值见启动时速度口径提示")
+    ap.add_argument("--tilt-trim", type=float,
+                    default=DEFAULT_CONFIG.cup_tilt_trim_deg,
+                    help="吸盘轴垂直度实测修正角°（默认 %(default)g，范围 "
+                         "-8~8）：实机站到压入位后吸盘轴向外倾几度就填几"
+                         "（外倾=落点内收会更垂直的方向）。站位半径/落点带/"
+                         "直行步幅上限随之整体内收，每 1° 约收 2mm。标定：从"
+                         " 1~2 起小步试，盯落地吸附成功率与波纹侧压对称度")
     ap.add_argument("--stand-height", type=float,
                     default=DEFAULT_CONFIG.stand_height,
                     help="站高 mm（默认 %(default)g，范围 55~95）：站矮则唇口"
@@ -240,6 +248,10 @@ def main():
         ap.error(f"--stand-height {args.stand_height} 非法：范围 55~95mm。"
                  "低于 55 机腹/气动舱贴墙风险大且腿链折叠角逼近极限，"
                  "高于 95 唇口角与包络账未核")
+    if not -8.0 <= args.tilt_trim <= 8.0:
+        ap.error(f"--tilt-trim {args.tilt_trim} 非法：范围 -8~8°。超过 8° 的"
+                 "垂直度偏差不该拿软件修正兜——先查装配/标定（cup_delta 口径"
+                 "见 config 注释）")
     if args.lift_gate != 0.0 and not -65.0 <= args.lift_gate <= -35.0:
         ap.error(f"--lift-gate {args.lift_gate} 非法：范围 -65~-35（或 0=关）。"
                  "浅于 -35 与 ATTACHED 判据(-30)没区别形同虚设；深于 -65 贴近"
@@ -251,7 +263,8 @@ def main():
 
     cfg = replace(DEFAULT_CONFIG, climb_cycle_time=args.cycle,
                   climb_sag_comp_mm=args.sag_comp, lift_gate_kpa=args.lift_gate,
-                  climb_max_step=args.max_step, stand_height=args.stand_height)
+                  climb_max_step=args.max_step, stand_height=args.stand_height,
+                  cup_tilt_trim_deg=args.tilt_trim)
     if args.press_delta is not None:
         if not 8.0 <= args.press_delta <= 20.0:
             ap.error(f"--press-delta {args.press_delta} 非法：范围 8~20mm。"
@@ -284,6 +297,7 @@ def main():
     log.note(f"参数: cycle={cfg.climb_cycle_time}s sag_comp={cfg.climb_sag_comp_mm}mm"
              f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
              f" lift_gate={cfg.lift_gate_kpa:g}kPa"
+             f" tilt_trim={cfg.cup_tilt_trim_deg:g}°"
              f" SPEED={speed:g} TURN={TURN} update_hz={cfg.update_hz:g}"
              f" max_step={cfg.climb_max_step}")
     _prev_hook = sys.excepthook
@@ -444,6 +458,17 @@ def main():
         if args.no_tank:
             print("⚠ 无罐模式：泵直抽歧管，没有储备真空——挽救能力弱、断电不保"
                   "真空。只做地面短测，时长自己控制，严禁上墙")
+        if cfg.cup_tilt_trim_deg:
+            base = ClimbEngine(replace(cfg, cup_tilt_trim_deg=0.0), None)
+            leg1 = cfg.leg("L1")
+            r_base = math.hypot(base.default_feet["L1"][0] - leg1.mount_x,
+                                base.default_feet["L1"][1] - leg1.mount_y)
+            r_now = math.hypot(eng.default_feet["L1"][0] - leg1.mount_x,
+                               eng.default_feet["L1"][1] - leg1.mount_y)
+            print(f"吸盘轴垂直度修正 {cfg.cup_tilt_trim_deg:g}°：站位半径 "
+                  f"{r_base:.1f}→{r_now:.1f}mm（落点带/步幅上限同步内收）")
+            log.note(f"tilt_trim={cfg.cup_tilt_trim_deg:g}° "
+                     f"站位半径 {r_base:.1f}→{r_now:.1f}")
         if cfg.climb_max_step > 40.0:
             print(f"⚠ 大步幅实验口径：步幅上限 {cfg.climb_max_step:g}mm"
                   f"（本几何安全上限 {step_cap:.0f}，站高 "

@@ -786,6 +786,31 @@ def test_lift_gate_timeout_freezes_naming_soft_leg():
     assert all(p == LegPhase.STANCE for p in eng.phase_of.values())
 
 
+def test_cup_tilt_trim_pulls_station_inward():
+    """吸盘轴垂直度实测修正（08-19 地面观察：模型垂直站位上实机轴仍外倾，
+    落点内收更垂直）：正修正角把站位半径内收（~2mm/°），修正后模型轴向角
+    在新站位上恰为零（垂直解自洽）；落点带与步幅上限同步内收。"""
+    cfg3 = replace(CFG, cup_tilt_trim_deg=3.0)
+    io = MockVacuumIO(6)
+    eng0 = ClimbEngine(CFG, AdhesionController(io))
+    eng3 = ClimbEngine(cfg3, AdhesionController(io))
+    leg = CFG.leg("L1")
+    r0 = math.hypot(eng0.default_feet["L1"][0] - leg.mount_x,
+                    eng0.default_feet["L1"][1] - leg.mount_y)
+    r3 = math.hypot(eng3.default_feet["L1"][0] - leg.mount_x,
+                    eng3.default_feet["L1"][1] - leg.mount_y)
+    assert r0 - 12.0 < r3 < r0 - 3.0           # 3° 收 ~6mm 量级
+    z_press = -cfg3.stand_height - leg.press_delta_mm
+    assert abs(_press_tilt(cfg3, r3, z_press)) < 1e-4   # 新站位垂直自洽
+    lo0, hi0 = eng0._r_band["L1"]
+    lo3, hi3 = eng3._r_band["L1"]
+    assert hi3 < hi0 and lo3 < lo0             # 落点带整体内移
+    # 步幅上限随正修正微涨而非缩：倾角-半径曲线站位附近平缓（~0.5°/mm）、
+    # 带边陡（~0.63°/mm），同样 -3° 平移下站位内收得比带边多，外摆余量净增
+    cap0, cap3 = max_straight_step(CFG), max_straight_step(cfg3)
+    assert cap0 < cap3 < cap0 + 8.0, (cap0, cap3)
+
+
 def test_max_straight_step_geometry():
     """直行步幅几何上限（--max-step 验证口径，落点唇口 ≤11.5° 工作带 +
     支撑尾端包络双口径联合解）：站高 90 ≈66，站高 62 ≈79——站矮唇口角随

@@ -682,6 +682,43 @@ def test_single_step_hover_survives_freeze():
     assert ctl.is_attached(0) and eng.frozen is None
 
 
+def _first_lifted(eng, vx=30.0, budget=10.0):
+    """按住 w 直到有腿离开支撑相，返回首抬腿名。"""
+    for _ in range(int(budget / DT)):
+        eng.update(DT, vx, 0.0, 0.0)
+        lifted = [n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE]
+        if lifted:
+            return lifted[0]
+    raise AssertionError(f"{budget}s 未抬腿: {eng.status()} frozen={eng.frozen}")
+
+
+def test_go_from_rest_starts_at_turn_pointer():
+    """起步对轮次（修前实锤：静止 0.1/0.8/1.5/2.2/2.9/3.4s 后按 w 首抬分别
+    是 L2/L3/R1/R2/R3/L1——完全随按键时刻在周期里的落点漂移）：任意静止
+    时长后起步，首抬恒为轮次指针 step_leg；单步与连续行走续接同一份轮次
+    （单步走完 L1 再按 w，首抬必是 L2）；单步受理即当拍启动不再等窗。"""
+    for idle in (0.1, 1.5, 2.9):
+        io, ctl, eng = make_engine()
+        start(eng)
+        run(eng, idle)                         # 静止晾着（钟空转过窗）
+        assert _first_lifted(eng) == "L1", f"idle={idle}s 首抬非 L1"
+    # 单步走完 L1 后连续起步：续接轮次，首抬 L2
+    io, ctl, eng = make_engine()
+    start(eng)
+    assert _run_single_step(eng) == {"L1"}
+    run(eng, 2.2)                              # 静止晾着：轮次不许漂
+    assert _first_lifted(eng) == "L2"
+    # 单步受理即当拍启动（旧口径等窗空转最多 ~3.6s）
+    io, ctl, eng = make_engine()
+    start(eng)
+    assert eng.request_step(30.0, 0.0, 0.0) is None
+    for _ in range(int(0.5 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] != LegPhase.STANCE:
+            break
+    assert eng.phase_of["L1"] != LegPhase.STANCE
+
+
 class _ShallowIO(MockVacuumIO):
     """罐压/盘压被钳在 floor 之上的仿真：吸得上（-30 可过、-40 罐压就绪线
     可过）但压不深——复现"唇口微漏/泵弱，盘压压不进门槛"的实机工况。"""

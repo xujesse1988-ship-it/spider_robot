@@ -36,10 +36,14 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
     R2/R3 抬腿整机下坠），超 lift_gate_timeout_s 冻结报警点名软腿
   - 任一支撑足漏气 -> 钟暂停（挽救窗内），超 leak_rescue_s -> 冻结报警
   - 速度指令为零 -> 该窗不抬腿，钟空转过窗（吸住不动，省吸盘寿命）
+  - 静止转起步（速度指令上升沿/单步受理）-> 相位钟快进对齐 step_leg 的
+    窗头：首抬腿从轮次指针开始（新鲜启动=L1，此后 L1..R3 轮转续接，单步
+    与连续互通），不取决于按键时刻落在周期哪个位置；有摆动在途不对齐
+    （收口后的下一窗天然就是轮次下一腿）
   - 单步模式（request_step）：引擎记录"当前轮到哪条腿"（step_leg，窗序
-    L1..R3 轮转，连续行走的抬腿同样推进——两种模式共用一份轮次），受理后
-    整机静止空转过窗，等到该腿的窗以单步速度抬腿、平移到落点上方 HOVER
-    悬停（半步）；step_land() 确认后才落地吸附，回支撑自动停（后半步）
+    L1..R3 轮转，连续行走的抬腿同样推进——两种模式共用一份轮次），受理
+    即对齐该腿窗头当拍以单步速度抬腿、平移到落点上方 HOVER 悬停（半步）；
+    step_land() 确认后才落地吸附，回支撑自动停（后半步）
 
 冻结（frozen）是粘滞报警态：足端目标全部保持、吸附状态机照跑（常闭阀保
 真空，吸附态冻结是安全态），人工处理后 clear_freeze() 继续。
@@ -193,6 +197,7 @@ class ClimbEngine:
         self._slot_skipped = False   # 本窗静止跳过
         self._block_t = 0.0          # 互锁不满足已等待时长
         self._gate_t = 0.0           # 抬腿门槛未达已等待时长（与互锁分开计）
+        self._was_going = False      # 上一拍是否有抬腿需求（起步对轮次的沿检测）
         self.gate_wait = None        # (拒抬腿, (未达门槛腿,...))；窗头等待中
                                      # 置位，climb_walk 状态提示用
         self._precharge_t = 0.0      # 启动序列等罐压建立已耗时长
@@ -263,6 +268,34 @@ class ClimbEngine:
             return self.targets()
 
         vx, vy, wz = self._clamp_speed(vx, vy, wz)
+
+        # 0.9 起步对轮次：整机静止转入"有抬腿需求"（速度指令非零或单步受理）
+        # 的上升沿，把相位钟快进对齐 step_leg 的窗头——首抬腿从轮次指针开始
+        # （新鲜启动=L1，此后按 L1..R3 轮转续接，单步与连续互通），不再取决
+        # 于按键时刻落在周期哪个位置（修前实测静止 0.1~3.4s 后按 w 首抬
+        # L2/L3/R1/R2/R3/L1 各不相同）；单步的等窗空转同时消灭（受理即当拍
+        # 启动）。快进只改相位变量、瞬时完成、不动任何足端目标，仅在全腿
+        # STANCE 且本窗无摆动在途时做；有摆动在途不对齐——收口后的下一窗
+        # 天然就是轮次下一腿，顺序不破
+        # 漏气挽救中不受理起步（也不消费上升沿：挽救结束时 w 还按着照常对
+        # 齐）——挽救窗内对齐会让窗头决策的互锁计时空转误启
+        if not leak_pause:
+            want_go = (abs(vx) > 1e-6 or abs(vy) > 1e-6 or abs(wz) > 1e-6
+                       or self.step_pending)
+            if want_go and not self._was_going and not self._slot_active \
+                    and all(p == LegPhase.STANCE
+                            for p in self.phase_of.values()):
+                head = ((self.gait.duty - self.gait.offsets[self.step_leg])
+                        % 1.0) * self.cfg.climb_cycle_time
+                self.t += (head - self.t) % self.cfg.climb_cycle_time
+                if self._slot(self.t) != self.step_leg:
+                    # 浮点边界把相位落在 duty 线下才补步：无脑 +_EPS 会让
+                    # "钟推进量↔航向积分"的严格账差出 1e-8 级（sag 方向
+                    # 回归测试当场抓获）
+                    self.t += _EPS
+                # 同窗已被标记 skipped 也要重开决策，置 None 强制窗切换记账
+                self._slot_leg = None
+            self._was_going = want_go
 
         # 1. 相位窗归属（窗切换时复位窗内一次性标志）
         cur = self._slot(self.t)
@@ -430,10 +463,9 @@ class ClimbEngine:
                 for n in LEG_NAMES}
 
     def request_step(self, vx, vy=0.0, wz=0.0):
-        """单步第一段（抬半步）：受理后等 step_leg（当前轮到的腿）的相位窗，
-        以给定速度抬腿并平移到落点上方悬停（HOVER；落点/支撑场平移与连续
-        行走同口径），等 step_land()（第二次 i）确认才落地。等窗期间整机
-        静止（其余窗空转跳过，最多约一个周期 ~3.6s）。
+        """单步第一段（抬半步）：受理即把相位钟对齐 step_leg（当前轮到的腿）
+        的窗头当拍启动，以给定速度抬腿并平移到落点上方悬停（HOVER；落点/
+        支撑场平移与连续行走同口径），等 step_land()（第二次 i）确认才落地。
         返回 None=受理；str=拒绝原因。"""
         if not self.started:
             return "启动序列未完成"

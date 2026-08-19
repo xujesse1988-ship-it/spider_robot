@@ -1,0 +1,12 @@
+# P4 整机软件依赖——树莓派与开发机共用一份，按行注释区分谁需要。
+# 安装：python -m venv .venv && .venv/bin/pip install -r requirements.txt
+#   （venv 位置约定：树莓派在 software/.venv，开发机在项目根 .venv）
+# --mock 干跑零三方依赖：MockDriver/MockVacuumIO 不碰下面任何包。
+
+pyserial>=3.5        # Servo2040 舵机板串口（除 --mock 外都要；driver.py 延迟导入）
+matplotlib>=3.8      # scripts/sim_walk.py 步态可视化（开发机用；numpy 随其自带）
+pytest>=8            # tests/ 测试（开发机用）
+
+# —— 树莓派实机专用（开发机可不装，Mock 路径不受影响）——
+lgpio>=0.2           # Pi5 GPIO：6 阀+泵的 MOSFET 板、舵机继电器 GPIO17
+smbus2>=0.4          # I2C：2×ADS1115 读 6 足压 + 1 罐压（XGZP6847A）

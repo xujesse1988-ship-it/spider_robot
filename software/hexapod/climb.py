@@ -10,6 +10,8 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
   LIFT     沿面法向退开 lift_clearance（吸盘回弹 11~13mm 会把脚顶回面上，
            放气已先行 lift_vent_s）；放气未确认（RELEASED）不进 TRANSFER
   TRANSFER 平移到落点上方：沿用 smoothstep + 正弦抬腿形状
+  HOVER    单步专用（连续行走不经过）：TRANSFER 到位后悬停在落点上方
+           （z_lift）等 step_land() 确认才落地；故意无超时——节奏由人定
   DESCEND  落点正上方竖直减速下探：XY 冻结，descend_speed 慢速——消灭拍地
   PRESS    XY 继续冻结，压入该腿 press_delta_mm（§4.2 预压行程），
            到位即 request_attach
@@ -32,7 +34,8 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
   - 速度指令为零 -> 该窗不抬腿，钟空转过窗（吸住不动，省吸盘寿命）
   - 单步模式（request_step）：引擎记录"当前轮到哪条腿"（step_leg，窗序
     L1..R3 轮转，连续行走的抬腿同样推进——两种模式共用一份轮次），受理后
-    整机静止空转过窗，等到该腿的窗以单步速度走一次完整摆动，回支撑自动停
+    整机静止空转过窗，等到该腿的窗以单步速度抬腿、平移到落点上方 HOVER
+    悬停（半步）；step_land() 确认后才落地吸附，回支撑自动停（后半步）
 
 冻结（frozen）是粘滞报警态：足端目标全部保持、吸附状态机照跑（常闭阀保
 真空，吸附态冻结是安全态），人工处理后 clear_freeze() 继续。
@@ -107,6 +110,7 @@ class LegPhase(Enum):
     VENT = "vent"            # 抬腿前先通气：贴面原地保持 lift_vent_s，随支撑场
     LIFT = "lift"
     TRANSFER = "transfer"
+    HOVER = "hover"          # 单步分段：落点上方悬停等 step_land() 确认落地
     DESCEND = "descend"
     PRESS = "press"
     RETRY_LIFT = "retry"
@@ -403,9 +407,10 @@ class ClimbEngine:
                 for n in LEG_NAMES}
 
     def request_step(self, vx, vy=0.0, wz=0.0):
-        """单步行走：受理后等 step_leg（当前轮到的腿）的相位窗，以给定速度
-        让它走一次完整摆动（落点/支撑场平移与连续行走同口径），回支撑即
-        自动停。等窗期间整机静止（其余窗空转跳过，最多约一个周期 ~3.6s）。
+        """单步第一段（抬半步）：受理后等 step_leg（当前轮到的腿）的相位窗，
+        以给定速度抬腿并平移到落点上方悬停（HOVER；落点/支撑场平移与连续
+        行走同口径），等 step_land()（第二次 i）确认才落地。等窗期间整机
+        静止（其余窗空转跳过，最多约一个周期 ~3.6s）。
         返回 None=受理；str=拒绝原因。"""
         if not self.started:
             return "启动序列未完成"
@@ -421,9 +426,27 @@ class ClimbEngine:
         return None
 
     def cancel_step(self):
-        """取消尚未开始的单步；已进入摆动的不打断（几秒内自行走完收口，
-        中途撤速度反而让落点与支撑场口径不一致）。"""
+        """取消尚未开始的单步；已进入摆动的不打断（中途撤速度让落点与支撑
+        场口径不一致），悬停中的也不撤——step_land 落地收口是唯一出路。"""
         self.step_pending = False
+
+    def step_hover_leg(self):
+        """悬停等落地的腿名（单步第一段已完成），无则 None。"""
+        for n in LEG_NAMES:
+            if self.phase_of[n] == LegPhase.HOVER:
+                return n
+        return None
+
+    def step_land(self):
+        """单步第二段（落半步）：悬停中的腿落地（DESCEND→PRESS→吸附确认，
+        回支撑自动停并推进轮次提示）。返回 None=受理；str=拒绝原因。"""
+        if self.frozen:
+            return "冻结中"
+        leg = self.step_hover_leg()
+        if leg is None:
+            return "没有悬停中的腿"
+        self.phase_of[leg] = LegPhase.DESCEND
+        return None
 
     def clear_freeze(self):
         """人工处理后解除冻结；重试/等待计时全部清零，挂着 FAULT 的腿自动
@@ -436,6 +459,7 @@ class ClimbEngine:
         # 挂起未开始的单步一并取消（审核发现 #2）：冻结处理时手在机器旁，
         # 不取消的话解冻后等到窗它会自行抬腿——与"带着冻结前旧速度恢复
         # 行走"同性质的残留。摆动中的 step_active 保留，让该腿走完收口
+        # （悬停中的腿原地保持不自行落地，解冻后按 i 落地收口——无残留动作）
         self.step_pending = False
         for n in LEG_NAMES:
             self.retries[n] = 0
@@ -585,7 +609,12 @@ class ClimbEngine:
             if s >= 1.0:
                 f[0], f[1], f[2] = lx, ly, z_lift
                 self._press_extra[name] = 0.0   # 新落点从名义深度起，重试再加深
-                self.phase_of[name] = LegPhase.DESCEND
+                # 单步分段：抬腿半步到此为止，悬停等 step_land()（第二次 i）
+                # 才落地；连续行走不停顿直接下探
+                self.phase_of[name] = LegPhase.HOVER if self.step_active \
+                    else LegPhase.DESCEND
+        elif ph == LegPhase.HOVER:
+            pass   # 原地悬停等 step_land() 放行；故意无超时——落地节奏由人定
         elif ph == LegPhase.DESCEND:
             f[2] = max(self.z0, f[2] - cfg.descend_speed * dt)
             if f[2] <= self.z0 + _EPS:

@@ -6,9 +6,11 @@
 CLIMB 步态。
   p   就位暂停后开始全吸附启动序列
   w/s 前进/后退   a/d 左移/右移   q/e 左转/右转   空格 停
-  i   单步：只走"当前轮到"的一条腿（轮次记录在引擎里，窗序 L1→L2→L3→
-      R1→R2→R3，连续行走的抬腿同样推进轮次），等到该腿相位窗以 SPEED
-      向前走完整摆动+吸附确认后自动停；未开始的单步可按空格取消
+  i   单步（分半）：第一次按，"当前轮到"的腿（轮次记录在引擎里，窗序
+      L1→L2→L3→R1→R2→R3，连续行走的抬腿同样推进轮次）等到相位窗以
+      SPEED 抬起、平移到落点上方悬停；悬停后再按 i 该腿落地压入+吸附确认
+      后自动停；再按 i 换下一条腿抬。未开始的可按空格取消；悬停中不可
+      取消（按 i 落地收口是唯一出路）
   f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->停泵->逐足
       串行放气->断电，终态停在爬墙站位；要地面站姿另跑 --release）
   o×2 放开全部吸盘但六足保持站立（地面取机用：停泵后逐足串行排气约 1.5s，
@@ -309,6 +311,7 @@ def main():
     last_o = float("-inf")
     released_hold = False   # 'oo' 取机窗口：吸盘已全放开，六足仅舵机撑住
     step_was = False        # 单步在途标志（沿检测"在途→结束"打完成提示）
+    hover_was = None        # 单步悬停腿（沿检测进入悬停打"再按 i 落地"提示）
     was_started = False
     at_pause = True      # 就位暂停中（尚未开始任何吸附动作）
     aborted = False      # 在暂停处确认退出（finally 不再做善后）
@@ -439,8 +442,8 @@ def main():
                 print("\n吸盘已放开（取机窗口），不可再走动——取下后 ESC×2 退出")
             elif k in ("w", "s", "a", "d", "q", "e") \
                     and (eng.step_pending or eng.step_active):
-                print("\n单步在途，走完自动停后再操作"
-                      "（未开始的单步可按空格取消）")
+                print("\n单步在途，收口后再操作（悬停中按 i 落地；"
+                      "未开始的可按空格取消）")
             elif k == "w":
                 vx, vy = SPEED, 0.0
             elif k == "s":
@@ -460,17 +463,29 @@ def main():
                     step_was = False       # 别把取消误报成"单步完成"
                     print("\n已取消未开始的单步（摆动中的单步不可打断）")
                     log.event("单步取消（未开始）")
+                elif eng.step_hover_leg():
+                    print("\n悬停中的腿不可取消——按 i 落地收口")
             elif k == "i":
                 if vx or vy or wz:
                     print("\n单步：先按空格停（连续行走中）")
                 else:
-                    deny = eng.request_step(SPEED, 0.0, 0.0)
-                    if deny:
-                        print(f"\n单步不可用：{deny}")
+                    hover = eng.step_hover_leg()
+                    if hover:
+                        deny = eng.step_land()
+                        if deny:
+                            print(f"\n单步落地不可用：{deny}")
+                        else:
+                            print(f"\n单步：{hover} 落地压入，吸附确认后自动停")
+                            log.event(f"单步落地（后半步）：{hover}")
                     else:
-                        print(f"\n单步：轮到 {eng.step_leg}，等它的相位窗启动"
-                              "（等窗最多一个周期，走完自动停）")
-                        log.event(f"单步受理：{eng.step_leg} v={SPEED:g}")
+                        deny = eng.request_step(SPEED, 0.0, 0.0)
+                        if deny:
+                            print(f"\n单步不可用：{deny}")
+                        else:
+                            print(f"\n单步：轮到 {eng.step_leg}，等它的相位窗"
+                                  "抬腿（等窗最多一个周期，悬停后再按 i 落地）")
+                            log.event(f"单步受理（抬半步）：{eng.step_leg} "
+                                      f"v={SPEED:g}")
             elif k == "f" and eng.frozen:
                 # 解冻同时清零速度：人工处理时手还在机器旁，绝不能带着
                 # 冻结前的旧速度立刻恢复行走（审核发现 #4）
@@ -558,9 +573,14 @@ def main():
                 io_freeze(e)
             watch.poll()   # 状态跳变（相位/吸附/泵阀/冻结/漏气）落黑匣子
 
+            hover_now = eng.step_hover_leg()
+            if hover_now and hover_now != hover_was:
+                print(f"\n单步：{hover_now} 已悬停在落点上方"
+                      f"（离面 {cfg.lift_clearance:g}mm），再按 i 落地")
+            hover_was = hover_now
             step_now = eng.step_pending or eng.step_active
             if step_was and not step_now:
-                print(f"\n单步完成，下一条：{eng.step_leg}（再按 i）")
+                print(f"\n单步完成，下一条：{eng.step_leg}（再按 i 抬它）")
                 log.event(f"单步完成，下一条 {eng.step_leg}")
             step_was = step_now
 
@@ -569,8 +589,8 @@ def main():
                 # 清掉启动期间误触存下的速度：吸附完成瞬间不许自己开走
                 vx = vy = wz = 0.0
                 print("\n✓ 六足吸附完成，遥控就绪：w/s 前后  a/d 左右  "
-                      "q/e 转向  i 单步  空格停  f 解冻  o×2 放吸盘取机  "
-                      "ESC×2 退出\n"
+                      "q/e 转向  i 单步(抬→再按落)  空格停  f 解冻  "
+                      "o×2 放吸盘取机  ESC×2 退出\n"
                       "  （速度指令是 0 时不抬腿——按 w 才开始走；爬墙步态"
                       "宁慢勿快，每步约 4s 属正常）")
 

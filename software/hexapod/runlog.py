@@ -32,7 +32,8 @@ FSYNC_S = 1.0   # 强制落盘周期：死机/断电最多丢这么久
 
 # 状态行/遥测行共用字符表（climb_walk 状态行由此导入，勿两处漂移）
 PHASE_CH = {"stance": "·", "vent": "V", "lift": "L", "transfer": "T",
-            "descend": "D", "press": "P", "retry": "R", "wait": "W"}
+            "hover": "H", "descend": "D", "press": "P", "retry": "R",
+            "wait": "W"}
 ADH_CH = {"released": "r", "pressing": "p", "sucking": "s",
           "attached": "A", "venting": "v", "fault": "F"}
 

@@ -13,8 +13,8 @@ from hexapod.kinematics import leg_ik
 from hexapod.robot import Hexapod
 
 DT = 0.02
-SWING = (LegPhase.VENT, LegPhase.LIFT, LegPhase.TRANSFER, LegPhase.DESCEND,
-         LegPhase.PRESS, LegPhase.RETRY_LIFT, LegPhase.WAIT)
+SWING = (LegPhase.VENT, LegPhase.LIFT, LegPhase.TRANSFER, LegPhase.HOVER,
+         LegPhase.DESCEND, LegPhase.PRESS, LegPhase.RETRY_LIFT, LegPhase.WAIT)
 
 
 def make_engine(**kw):
@@ -579,16 +579,28 @@ def test_cmd_mirror_records_clamped_speed():
     assert eng.cmd == (0.0, 0.0, 0.0)          # 冻结：目标保持，无速度下发
 
 
-def _run_single_step(eng):
-    """受理一次单步并跑到完成，返回本次摆动过的腿集合。主环速度恒 0。"""
+def _run_to_hover(eng):
+    """受理单步第一段并跑到悬停，返回途中摆动过的腿集合。主环速度恒 0。"""
     assert eng.request_step(30.0, 0.0, 0.0) is None
     swung = set()
     for _ in range(int(20 / DT)):
         eng.update(DT)
         swung |= {n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE}
-        if not eng.step_pending and not eng.step_active and swung:
+        if eng.step_hover_leg():
             return swung
-    raise AssertionError(f"单步 20s 未完成: {eng.status()} frozen={eng.frozen}")
+    raise AssertionError(f"单步 20s 未悬停: {eng.status()} frozen={eng.frozen}")
+
+
+def _run_single_step(eng):
+    """跑完一次分段单步（抬→悬停→落地→吸附），返回摆动过的腿集合。"""
+    swung = _run_to_hover(eng)
+    assert eng.step_land() is None
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        swung |= {n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE}
+        if not eng.step_pending and not eng.step_active:
+            return swung
+    raise AssertionError(f"单步落地 20s 未完成: {eng.status()} frozen={eng.frozen}")
 
 
 def test_single_step_walks_one_leg_and_records_turn():
@@ -616,6 +628,58 @@ def test_single_step_walks_one_leg_and_records_turn():
             break
     assert seen is not None
     assert eng.step_leg == LEG_NAMES[(LEG_NAMES.index(seen) + 1) % 6]
+
+
+def test_single_step_hovers_until_land_confirm():
+    """分段单步：第一次 i 抬腿平移到落点上方悬停（HOVER，离面
+    lift_clearance），不落地、无超时；期间支撑足纹丝不动（相位钟停在窗尾）；
+    step_land 才放行落地，落完轮次推进、不能重复落。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    assert eng.step_land() == "没有悬停中的腿"     # 没抬腿不能落
+    assert _run_to_hover(eng) == {"L1"}
+    assert eng.step_hover_leg() == "L1" and eng.step_active
+    lx, ly = eng.landing["L1"]
+    support0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES if n != "L1"}
+    run(eng, 5.0)                                  # 晾着：不自行落地不超时
+    assert eng.step_hover_leg() == "L1" and eng.frozen is None
+    x, y, z = eng.foot["L1"]
+    assert abs(x - lx) < 1e-9 and abs(y - ly) < 1e-9
+    assert math.isclose(z, -CFG.stand_height + CFG.lift_clearance)
+    for n, p in support0.items():                  # 悬停期支撑足纹丝不动
+        assert tuple(eng.foot[n]) == p
+    assert eng.request_step(30.0, 0.0, 0.0) == "已有单步在途"
+    assert eng.step_land() is None                 # 第二段：落地
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if not eng.step_active and eng.phase_of["L1"] == LegPhase.STANCE:
+            break
+    assert ctl.is_attached(0) and ctl.attached_count() == 6
+    assert eng.step_leg == "L2"                    # 轮次已推进
+    assert eng.step_land() == "没有悬停中的腿"     # 落完不能重复落
+
+
+def test_single_step_hover_survives_freeze():
+    """悬停期冻结（如支撑足漏气/罐压）：目标保持、step_land 拒绝；解冻不
+    取消悬停（与 clear_freeze"摆动中的单步保留"同口径，且悬停腿无残留
+    动作），之后 step_land 正常收口。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    _run_to_hover(eng)
+    eng.frozen = "测试注入"
+    run(eng, 1.0)
+    assert eng.step_hover_leg() == "L1"            # 冻结：悬停保持
+    assert eng.step_land() == "冻结中"
+    eng.clear_freeze()
+    assert eng.step_active and eng.step_hover_leg() == "L1"
+    run(eng, 5.0)                                  # 解冻后无残留动作
+    assert eng.step_hover_leg() == "L1"
+    assert eng.step_land() is None
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if not eng.step_active and eng.phase_of["L1"] == LegPhase.STANCE:
+            break
+    assert ctl.is_attached(0) and eng.frozen is None
 
 
 def test_air_mode_keeps_walking_without_adhesion():

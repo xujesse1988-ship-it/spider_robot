@@ -30,8 +30,9 @@ GAITS = {"tripod": TRIPOD, "wave": WAVE, "climb": CLIMB}
 
 CLIMB_COLOR = {LegPhase.STANCE: "steelblue", LegPhase.VENT: "indianred",
                LegPhase.LIFT: "indianred", LegPhase.TRANSFER: "indianred",
-               LegPhase.DESCEND: "darkorange", LegPhase.PRESS: "darkorange",
-               LegPhase.RETRY_LIFT: "darkorange", LegPhase.WAIT: "gold"}
+               LegPhase.HOVER: "gold", LegPhase.DESCEND: "darkorange",
+               LegPhase.PRESS: "darkorange", LegPhase.RETRY_LIFT: "darkorange",
+               LegPhase.WAIT: "gold"}
 
 
 def leg_points_body(bot, name, target_body):

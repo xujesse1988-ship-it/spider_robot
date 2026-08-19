@@ -481,6 +481,54 @@ def test_sag_comp_capped_walk_stays_solvable():
         f"最紧 d={worst_d:.1f} 离边界 {d_max:.1f} 太远，工况没压到限额"
 
 
+def test_deep_attach_plus_sag_comp_stays_in_envelope():
+    """审核发现 #1 回归：R3 启动期 3 次加深（extra=15）才吸上 + --sag-comp 3
+    满速直行——旧账目下支撑尾 ~15s 后 d 出 IK 包络（WorkspaceError 冻结，
+    f 解冻即复冻，墙上死局）。修复 = 补偿平面预算按等 d 圆随深度缩表。"""
+    cfg = replace(CFG, climb_sag_comp_mm=3.0)
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(cfg, ctl)
+    io.sealed[5] = False                      # R3 落脚吸不紧（08-19 症状）
+    for _ in range(int(60 / DT)):
+        eng.update(DT)
+        if eng.retries["R3"] >= 3:
+            io.sealed[5] = True               # 第三级加深后才贴住
+        if eng.started:
+            break
+    assert eng.started
+    assert eng._press_extra["R3"] >= 3 * cfg.retry_deeper_mm - 1e-9
+    bot = Hexapod(MockDriver(), cfg)
+    d_max = cfg.femur_len + cfg.tibia_len
+    worst = 0.0
+    for _ in range(int(60 / DT)):             # 满速直行：全程可解、不冻结
+        targets = eng.update(DT, 30.0, 0.0, 0.0)
+        assert eng.frozen is None, f"冻结: {eng.frozen}"
+        bot.pulses(targets)
+        for n in LEG_NAMES:
+            leg = cfg.leg(n)
+            x, y, z = targets[n]
+            r = math.hypot(x - leg.mount_x, y - leg.mount_y) - cfg.coxa_len
+            worst = max(worst, math.hypot(r, z))
+    assert worst <= d_max - 1.0, f"支撑 d={worst:.1f} 贴死边界 {d_max:.1f}"
+
+
+def test_freeze_cancels_pending_single_step():
+    """审核发现 #2 回归：单步等窗期间冻结，f 解冻后不得自行抬腿
+    （挂起单步与'带旧速度恢复行走'同性质，必须随解冻取消）。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    assert eng.request_step(30.0, 0.0, 0.0) is None
+    eng.frozen = "测试注入"
+    run(eng, 1.0)                             # 冻结期：单步不得启动
+    assert all(p == LegPhase.STANCE for p in eng.phase_of.values())
+    assert eng.step_pending                   # 冻结期挂起保留（可诊断）
+    eng.clear_freeze()
+    assert not eng.step_pending               # 解冻即取消
+    run(eng, 5.0)                             # 速度 0：不得自行抬腿
+    assert all(p == LegPhase.STANCE for p in eng.phase_of.values())
+
+
 def test_sag_comp_downhill_rotates_with_heading():
     """_down（下坡方向）与支撑足同一旋转口径随积分航向转：
     转过 θ 后应为 (-cosθ, sinθ)——补偿方向不因转向而失准。"""

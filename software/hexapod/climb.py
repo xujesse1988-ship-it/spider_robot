@@ -271,9 +271,21 @@ class ClimbEngine:
                     # 下滑补偿按事件装填，量按当前步幅动态限额（COMP_TAIL_MAX
                     # 总账：支撑尾端 = 半步幅 + 5 次事件累计补偿，不得把后腿
                     # 推出 IK 包络），在 LIFT+TRANSFER 名义时长内匀速铺完
-                    # （真实时间口径，见 4.5 步）
-                    allow = (COMP_TAIL_MAX - self._worst_stance_travel(
-                        vx, vy, wz) / 2.0) / 5.0
+                    # （真实时间口径，见 4.5 步）。
+                    # 有腿加深吸附（_press_extra>0）在支撑时本事件**不装填**
+                    # （审核发现 #1）：加深腿整个支撑相停在更深 z，同样平面
+                    # 外摆下 d=hypot(r,z) 更大，名义深度校验的总账不再成立
+                    # ——且账外还有首周期从默认位起拖满步幅（40 而非半步幅
+                    # 20）+VENT 段随场 ~4mm，几何缩表实测兜不住（extra=15 时
+                    # 2mm/事件仍在 R3 的 VENT 段 d=204.8 出包络）。加深是吸
+                    # 不紧的临时抢救态，至多持续到该腿下次摆动落回名义深度，
+                    # 停几轮补偿换不出包络（无补偿实测 d≈200.0，余 4.7mm）
+                    deep = max((self._press_extra[n] for n in LEG_NAMES
+                                if self.phase_of[n] == LegPhase.STANCE),
+                               default=0.0)
+                    allow = 0.0 if deep > 0.0 else \
+                        (COMP_TAIL_MAX - self._worst_stance_travel(
+                            vx, vy, wz) / 2.0) / 5.0
                     c_eff = min(self.cfg.climb_sag_comp_mm, max(0.0, allow))
                     self._comp_left = c_eff
                     if c_eff > 0.0:
@@ -392,6 +404,10 @@ class ClimbEngine:
         self.frozen = None
         self._block_t = 0.0
         self._precharge_t = 0.0
+        # 挂起未开始的单步一并取消（审核发现 #2）：冻结处理时手在机器旁，
+        # 不取消的话解冻后等到窗它会自行抬腿——与"带着冻结前旧速度恢复
+        # 行走"同性质的残留。摆动中的 step_active 保留，让该腿走完收口
+        self.step_pending = False
         for n in LEG_NAMES:
             self.retries[n] = 0
 
@@ -552,7 +568,9 @@ class ClimbEngine:
                 self.phase_of[name] = LegPhase.WAIT
         elif ph == LegPhase.RETRY_LIFT:
             # z_press 已含本次加深量，+retry_deeper_mm 抵回 = 抬到**上次**
-            # 深度上方 retry_lift_mm 处，再压向加深后的新深度
+            # 深度上方 retry_lift_mm 处，再压向加深后的新深度。封顶生效时
+            # （增量为 0，仅 clear_freeze 后复试可达）会多抬 retry_deeper_mm
+            # ——机械无害（top 恒低于 z0），多花 ~0.7s，不为此加分支（审核 #3）
             top = z_press + cfg.retry_lift_mm + cfg.retry_deeper_mm
             f[2] = min(top, f[2] + cfg.press_speed * dt)
             if f[2] >= top - _EPS:

@@ -120,10 +120,14 @@ def status_line(eng, ctl, v, c, peak, cmd, tag=""):
         tf = " 罐压失效!" if ctl.tank_fault else ""
         tank_txt = (f"罐 {ctl.last_tank_kpa:6.1f}kPa{tf}"
                     if ctl.last_tank_kpa is not None else f"罐 --{tf}")
+    # 泵开/停取 io.pump 内存镜像（set_pump 写入，与 TLM 泵字段同源）：
+    # 零传感器 IO。无罐悬停期"泵一直转"要能和盘差对上（最差盘 -60~-75
+    # 区间泵拽向 -75 停泵线是设计行为），不用再靠听声音猜
+    pump_txt = "泵开" if getattr(ctl.io, "pump", False) else "泵停"
     head = ("启动" if not eng.started else f"t={eng.t:5.1f}") + tag
     vx, vy, wz = cmd
     sp = "停" if not (vx or vy or wz) else f"{vx:+.0f}/{vy:+.0f}/{wz:+.2f}"
-    return (f"[{head}] {legs}  速 {sp}  {cup_txt}  {tank_txt}  "
+    return (f"[{head}] {legs}  速 {sp}  {cup_txt}  {tank_txt}  {pump_txt}  "
             f"{v:.2f}V {c:5.2f}A 峰 {peak:5.2f}A")
 
 

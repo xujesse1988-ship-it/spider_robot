@@ -35,6 +35,15 @@ CLIMB 步态。
                                              # 沿下坡向额外平移 3mm，顶回"每抬
                                              # 一腿被拽下一截"的棘轮下滑（头朝
                                              # 上贴墙口径；从小标定，宁欠勿过）
+  python climb_walk.py --stand-height 62 --max-step 78 --speed 27
+                                             # 大步幅直行实验：站高降到 62 后
+                                             # 直行步幅几何上限 ~79mm（coxa 扫
+                                             # ~26°；默认站高 90 时上限 ~66）。
+                                             # 上限按站高/压入几何动态验证
+                                             # （落点唇口 ≤11.5° 工作带 + 尾端
+                                             # 包络双口径）。--max-step>40 时
+                                             # 侧移/转向键被禁用（那两个方向
+                                             # 的账没按大步幅核，直行专用）
   python climb_walk.py --lift-gate -45       # 抬腿门槛：其余支撑盘压全部深于
                                              # 此值才放行抬腿（默认 -50；0=关）。
                                              # ATTACHED 的 -30 只是密封判据，刚
@@ -74,7 +83,7 @@ sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
-from hexapod.climb import ClimbEngine, LegPhase
+from hexapod.climb import ClimbEngine, LegPhase, max_straight_step
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch, PHASE_CH, ADH_CH
@@ -176,6 +185,24 @@ def main():
                          "(平面尾预算-半步幅)/5)，预算随压深自动缩（press 13"
                          " 时≈40、满速封顶 4mm；press 18 时≈37），想吃满就把"
                          " SPEED 降下来走；有腿重试加深吸附时暂停装填")
+    ap.add_argument("--max-step", type=float,
+                    default=DEFAULT_CONFIG.climb_max_step,
+                    help="爬墙步幅上限 mm（默认 %(default)g）。上限按所选站高"
+                         "/压入的几何动态验证（落点唇口 ≤11.5° 设计工作带 + "
+                         "支撑尾端包络双口径；站高 90 约 66、62 约 79）。"
+                         ">40 是直行实验口径：侧移/转向按大步幅会破唇口带与"
+                         "包络账，a/d/q/e 键被禁用。想吃满还需 --speed 提到 "
+                         "max_step/3 以上")
+    ap.add_argument("--speed", type=float, default=SPEED,
+                    help=f"行走/单步速度 mm/s（默认 {SPEED:g}，范围 5~30）："
+                         "被步幅上限剪过才下发，实际值见启动时速度口径提示")
+    ap.add_argument("--stand-height", type=float,
+                    default=DEFAULT_CONFIG.stand_height,
+                    help="站高 mm（默认 %(default)g，范围 55~95）：站矮则唇口"
+                         "角随步幅涨得慢、包络余量大（62 时 --max-step 上限"
+                         "升到 ~79 且大步幅下滑补偿限额恢复满额），重心也更"
+                         "贴墙。下限受机腹/气动舱离墙间隙约束，降之前实机"
+                         "确认间隙")
     ap.add_argument("--lift-gate", type=float,
                     default=DEFAULT_CONFIG.lift_gate_kpa,
                     help="抬腿门槛 kPa（默认 %(default)g；0=关）：窗头放行抬腿前"
@@ -203,6 +230,16 @@ def main():
         ap.error(f"--sag-comp {args.sag_comp} 非法：范围 0~8mm。补偿超过真实"
                  "下沉量的部分会把吸附中的支撑盘沿面往下坡拖，宁欠勿过；"
                  "工作空间限额下更大的设定值也吃不满，没有意义")
+    if not 20.0 <= args.max_step <= 110.0:
+        ap.error(f"--max-step {args.max_step} 非法：范围 20~110mm（几何上限"
+                 "另按站高/压入动态验证）")
+    if not 5.0 <= args.speed <= 30.0:
+        ap.error(f"--speed {args.speed} 非法：范围 5~30mm/s（大于上限的部分"
+                 "反正会被步幅限幅剪掉，没有意义）")
+    if not 55.0 <= args.stand_height <= 95.0:
+        ap.error(f"--stand-height {args.stand_height} 非法：范围 55~95mm。"
+                 "低于 55 机腹/气动舱贴墙风险大且腿链折叠角逼近极限，"
+                 "高于 95 唇口角与包络账未核")
     if args.lift_gate != 0.0 and not -65.0 <= args.lift_gate <= -35.0:
         ap.error(f"--lift-gate {args.lift_gate} 非法：范围 -65~-35（或 0=关）。"
                  "浅于 -35 与 ATTACHED 判据(-30)没区别形同虚设；深于 -65 贴近"
@@ -213,7 +250,8 @@ def main():
         sys.exit("需要交互终端（ssh 加 -t；勿用 nohup/管道跑本脚本）")
 
     cfg = replace(DEFAULT_CONFIG, climb_cycle_time=args.cycle,
-                  climb_sag_comp_mm=args.sag_comp, lift_gate_kpa=args.lift_gate)
+                  climb_sag_comp_mm=args.sag_comp, lift_gate_kpa=args.lift_gate,
+                  climb_max_step=args.max_step, stand_height=args.stand_height)
     if args.press_delta is not None:
         if not 8.0 <= args.press_delta <= 20.0:
             ap.error(f"--press-delta {args.press_delta} 非法：范围 8~20mm。"
@@ -223,6 +261,15 @@ def main():
             replace(l, press_delta_mm=args.press_delta) for l in cfg.legs))
     if args.air:
         cfg = replace(cfg, max_attach_retry=1)   # 架空必 FAULT，少陪跑几轮重试
+    # 步幅几何上限按最终 cfg（站高/压入/补偿/加深封顶全生效后）动态验证：
+    # 落点唇口 ≤11.5° 工作带 + 支撑尾端包络双口径（climb.max_straight_step）
+    step_cap = max_straight_step(cfg)
+    if args.max_step > step_cap + 1e-6:
+        ap.error(f"--max-step {args.max_step:g} 超本几何安全上限 "
+                 f"{step_cap:.0f}mm（站高 {cfg.stand_height:g}/压入 "
+                 f"{cfg.legs[0].press_delta_mm:g} 的联合解）。想更大先降站高："
+                 "--stand-height 62 时上限 ~79")
+    speed = args.speed
 
     # 黑匣子：建在碰任何硬件之前，硬件初始化失败也要留痕（excepthook 兜底）
     log = RunLog(os.path.join(
@@ -237,7 +284,7 @@ def main():
     log.note(f"参数: cycle={cfg.climb_cycle_time}s sag_comp={cfg.climb_sag_comp_mm}mm"
              f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
              f" lift_gate={cfg.lift_gate_kpa:g}kPa"
-             f" SPEED={SPEED} TURN={TURN} update_hz={cfg.update_hz:g}"
+             f" SPEED={speed:g} TURN={TURN} update_hz={cfg.update_hz:g}"
              f" max_step={cfg.climb_max_step}")
     _prev_hook = sys.excepthook
 
@@ -397,15 +444,21 @@ def main():
         if args.no_tank:
             print("⚠ 无罐模式：泵直抽歧管，没有储备真空——挽救能力弱、断电不保"
                   "真空。只做地面短测，时长自己控制，严禁上墙")
-        worst = eng._worst_stance_travel(SPEED, 0.0, 0.0)
+        if cfg.climb_max_step > 40.0:
+            print(f"⚠ 大步幅实验口径：步幅上限 {cfg.climb_max_step:g}mm"
+                  f"（本几何安全上限 {step_cap:.0f}，站高 "
+                  f"{cfg.stand_height:g}），直行专用——侧移/转向键已禁用")
+            log.note(f"大步幅实验：max_step={cfg.climb_max_step:g} "
+                     f"几何上限 {step_cap:.1f} stand={cfg.stand_height:g}")
+        worst = eng._worst_stance_travel(speed, 0.0, 0.0)
         if worst > cfg.climb_max_step:
             # 隐性限幅必须亮明：操作者按未缩放 SPEED 推算预期位移，会把固有
             # 缺口误当下滑/打滑去补，--sag-comp 标定被系统性带偏
-            eff_v = SPEED * cfg.climb_max_step / worst
-            print(f"速度口径：SPEED={SPEED:g}mm/s 直行超步幅上限（支撑相位移 "
+            eff_v = speed * cfg.climb_max_step / worst
+            print(f"速度口径：SPEED={speed:g}mm/s 直行超步幅上限（支撑相位移 "
                   f"{worst:.0f}>{cfg.climb_max_step:g}mm），引擎实际按 "
                   f"≈{eff_v:.1f}mm/s 下发；状态行与黑匣子记的都是限幅后实际值")
-            log.note(f"SPEED={SPEED:g} 被步幅上限缩放：直行实际 ≈{eff_v:.2f}mm/s")
+            log.note(f"SPEED={speed:g} 被步幅上限缩放：直行实际 ≈{eff_v:.2f}mm/s")
         if cfg.climb_sag_comp_mm > 0:
             # 本速度直行的每事件实际量（工作空间总账限额 eng.comp_tail，
             # 随压深在引擎里反解）
@@ -467,14 +520,17 @@ def main():
                     and (eng.step_pending or eng.step_active):
                 print("\n单步在途，收口后再操作（悬停中按 i 落地；"
                       "未开始的可按空格取消）")
+            elif k in ("a", "d", "q", "e") and cfg.climb_max_step > 40.0:
+                print("\n大步幅实验口径（--max-step>40）：侧移/转向已禁用——"
+                      "唇口带与包络账只按直行核过")
             elif k == "w":
-                vx, vy = SPEED, 0.0
+                vx, vy = speed, 0.0
             elif k == "s":
-                vx, vy = -SPEED, 0.0
+                vx, vy = -speed, 0.0
             elif k == "a":
-                vx, vy = 0.0, SPEED
+                vx, vy = 0.0, speed
             elif k == "d":
-                vx, vy = 0.0, -SPEED
+                vx, vy = 0.0, -speed
             elif k == "q":
                 wz = TURN
             elif k == "e":
@@ -501,14 +557,14 @@ def main():
                             print(f"\n单步：{hover} 落地压入，吸附确认后自动停")
                             log.event(f"单步落地（后半步）：{hover}")
                     else:
-                        deny = eng.request_step(SPEED, 0.0, 0.0)
+                        deny = eng.request_step(speed, 0.0, 0.0)
                         if deny:
                             print(f"\n单步不可用：{deny}")
                         else:
                             print(f"\n单步：轮到 {eng.step_leg}，当拍抬腿"
                                   "（悬停后再按 i 落地）")
                             log.event(f"单步受理（抬半步）：{eng.step_leg} "
-                                      f"v={SPEED:g}")
+                                      f"v={speed:g}")
             elif k == "f" and eng.frozen:
                 # 解冻同时清零速度：人工处理时手还在机器旁，绝不能带着
                 # 冻结前的旧速度立刻恢复行走（审核发现 #4）

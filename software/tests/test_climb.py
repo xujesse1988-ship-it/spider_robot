@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from hexapod.adhesion import AdhesionController, MockVacuumIO, FootState
 from hexapod.climb import (ClimbEngine, LegPhase, PRESS_DEPTH_MAX,
-                           TILT_BAND_DEG, _press_tilt)
+                           TILT_BAND_DEG, _press_tilt, max_straight_step)
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
 from hexapod.driver import MockDriver
 from hexapod.kinematics import leg_ik
@@ -784,6 +784,57 @@ def test_lift_gate_timeout_freezes_naming_soft_leg():
     run(eng, 4.0, vx=30.0)
     assert eng.frozen and "门槛" in eng.frozen and "kPa" in eng.frozen
     assert all(p == LegPhase.STANCE for p in eng.phase_of.values())
+
+
+def test_max_straight_step_geometry():
+    """直行步幅几何上限（--max-step 验证口径，落点唇口 ≤11.5° 工作带 +
+    支撑尾端包络双口径联合解）：站高 90 ≈66，站高 62 ≈79——站矮唇口角随
+    步幅涨得慢且包络余量大，上限显著抬高。"""
+    cap90 = max_straight_step(CFG)
+    assert 63.0 <= cap90 <= 68.0, cap90
+    cap62 = max_straight_step(replace(CFG, stand_height=62.0))
+    assert 76.0 <= cap62 <= 82.0, cap62
+    assert cap62 > cap90 + 8.0
+
+
+def test_big_step_low_stand_worst_case_stays_safe():
+    """大步幅实验工况（--stand-height 62 --max-step 78 --sag-comp 4）最坏
+    路径：R3 三级加深启动 + 满速直行 60s——全程不冻结、支撑 d 不贴 IK
+    边界；角腿落点半径越过旧书写上限 190（证明 _R_BRACKET 拓宽真实生效、
+    落点没再被假边界裁短）且不超 12° 裁剪带。"""
+    cfg = replace(CFG, stand_height=62.0, climb_max_step=78.0,
+                  climb_sag_comp_mm=4.0)
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(cfg, ctl)
+    io.sealed[5] = False                      # R3 落脚吸不紧
+    for _ in range(int(60 / DT)):
+        eng.update(DT)
+        if eng.retries["R3"] >= 3:
+            io.sealed[5] = True               # 第三级加深后才贴住
+        if eng.started:
+            break
+    assert eng.started
+    bot = Hexapod(MockDriver(), cfg)
+    d_max = cfg.femur_len + cfg.tibia_len
+    worst_d = worst_land = 0.0
+    for _ in range(int(60 / DT)):
+        targets = eng.update(DT, 30.0, 0.0, 0.0)
+        assert eng.frozen is None, f"冻结: {eng.frozen}"
+        bot.pulses(targets)                   # 全部目标必须可解
+        for n in LEG_NAMES:
+            leg = cfg.leg(n)
+            x, y, z = targets[n]
+            r = math.hypot(x - leg.mount_x, y - leg.mount_y)
+            worst_d = max(worst_d, math.hypot(r - cfg.coxa_len, z))
+            if eng.phase_of[n] == LegPhase.DESCEND:
+                lx, ly = eng.landing[n]
+                worst_land = max(worst_land, math.hypot(lx - leg.mount_x,
+                                                        ly - leg.mount_y))
+    assert worst_d <= d_max - 1.0, f"d={worst_d:.1f} 贴死 {d_max:.1f}"
+    r_lo, r_hi = eng._r_band["L1"]
+    assert worst_land > 190.0, f"落点 r={worst_land:.1f} 没越过旧书写上限"
+    assert worst_land <= r_hi + 1e-6
 
 
 def test_air_mode_keeps_walking_without_adhesion():

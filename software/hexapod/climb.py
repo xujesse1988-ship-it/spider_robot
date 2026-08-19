@@ -86,7 +86,69 @@ PRESS_DEPTH_MAX = 28.0      # press_delta+重试加深的总压入上限 mm（z=
 TILT_BAND_DEG = 12.0        # 落点带：压入位物理吸盘轴偏面法线的许用角。
                             # P1 台架实测容差 ±15°，留余量；CLIMBING-DESIGN §6
                             # 接受的工作带 ≤11.5°。越界步长按半径裁剪（§4.3）
-_R_BRACKET = (110.0, 190.0)  # 站位半径求解区间 mm（区间内倾角随半径单调增）
+_R_BRACKET = (110.0, 210.0)  # 站位半径求解区间 mm（区间内倾角随半径单调增，
+                             # 至 210 数值验证过；z=-108 时 210 仍在 IK 可达
+                             # 内）。原上限 190 会把 +12° 带的真实半径 ~198
+                             # 截在书写边界上——直行步幅 >44 的角腿落点先被
+                             # 这个假边界裁短、尾账随之失真（--max-step 实验
+                             # 暴露）
+
+
+TILT_WORK_DEG = 11.5         # 设计工作带（CLIMBING-DESIGN §6 接受 ≤11.5°）：
+                             # 大步幅直行的落点唇口角验证线。TILT_BAND_DEG=12
+                             # 是落点裁剪硬线，两者故意留 0.5° 台阶
+
+
+def max_straight_step(cfg, gait=CLIMB):
+    """直行（±X）方向的安全步幅上限 mm（--max-step 的验证口径；侧移/转向
+    不适用本账，脚本层在 >40 时禁用那些键）。联合约束逐腿双向查：
+      1. 落点唇口角 ≤ TILT_WORK_DEG（落点越远吸盘轴越斜，斜着压不密封）；
+      2. 支撑尾端距 IK 包络 ≥ D_SAFE_MARGIN，两种不共存的最坏口径都要过：
+         名义深度+满额补偿、加深封顶深度+无补偿（加深时补偿被门控），
+         含 VENT 随场拖尾；后退方向把补偿也计在加重侧（保守）。
+    站高越矮上限越大（90→66、62→79）：z 占用小则同样平面外摆下 d 与唇口
+    角都更小。"""
+    eng = ClimbEngine(cfg, None, gait)   # 只取几何，不跑 update（ctl 不触碰）
+    d_safe = cfg.femur_len + cfg.tibia_len - D_SAFE_MARGIN
+    band = math.radians(TILT_WORK_DEG)
+
+    def ok(S):
+        half = S / 2.0
+        vent_drift = S / (cfg.climb_cycle_time * gait.duty) * cfg.lift_vent_s
+        comp = min(cfg.climb_sag_comp_mm,
+                   max(0.0, (eng.comp_tail - half) / 5.0))
+        for n in LEG_NAMES:
+            leg = cfg.leg(n)
+            z_press = -cfg.stand_height - leg.press_delta_mm
+            z_deep = -cfg.stand_height - min(
+                leg.press_delta_mm
+                + cfg.max_attach_retry * cfg.retry_deeper_mm, PRESS_DEPTH_MAX)
+            x0, y0, _ = eng.default_feet[n]
+            for sgn in (1.0, -1.0):
+                lx = x0 + sgn * half - leg.mount_x
+                ly = y0 - leg.mount_y
+                if abs(_press_tilt(cfg, math.hypot(lx, ly), z_press)) \
+                        > band + 1e-9:
+                    return False
+                for z, c in ((z_press, 5.0 * comp), (z_deep, 0.0)):
+                    tx = lx - sgn * (S + c + vent_drift)
+                    d = math.hypot(math.hypot(tx, ly) - cfg.coxa_len, z)
+                    if d > d_safe:
+                        return False
+        return True
+
+    lo, hi = 20.0, 120.0
+    if not ok(lo):
+        return lo
+    if ok(hi):
+        return hi
+    for _ in range(40):
+        mid = (lo + hi) / 2.0
+        if ok(mid):
+            lo = mid
+        else:
+            hi = mid
+    return lo
 
 
 def _press_tilt(cfg, r, z_press):

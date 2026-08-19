@@ -139,25 +139,89 @@ button.on{background:#c00;color:#fff;border-color:#c00}
 
 <h2 id="s2">2. 走路的本质:支撑相与摆动相</h2>
 
-<p>把走路拆到最底层,只有两件事在轮流发生:</p>
+<p>六条腿永远轮流处在两种角色里:<b>支撑相</b>(吸住,当"地面",把身体送过去)和
+<b>摆动相</b>(松开,去前面找新落点)。看懂走路只需要三步:先统一视角(2.1),
+再看支撑的腿怎么送身体(2.2),最后看排班表怎么排(2.3)。换脚动作本身的细节留到第 3 章。</p>
+
+<h3>2.1 先统一视角,不然怎么看都乱</h3>
+
+<div class="fig">
+<svg id="framefig" width="920" height="300" viewBox="0 0 920 300"></svg>
+<figcaption>同一小段时间里发生的同一件事,两种记账方式。左:站在墙外看到的(墙面系)。
+右:代码眼中的世界(身体系)——引擎的一切计算都在这个坐标系里进行。</figcaption>
+</div>
+
 <ul>
-<li><b>支撑相(stance)</b>:脚吸在墙上<b>一动不动</b>(在墙的坐标系里)。
-身体要前进,唯一的办法是支撑腿的关节慢慢转,把身体<b>从脚上方挪过去</b>。
-换个视角说:在身体坐标系里看,支撑脚在匀速"向后滑"。
+<li><b>墙面系(现实)</b>:吸住的脚钉在墙上,一毫米不动;支撑腿的关节慢慢转,身体被平移过去。
 <b>不是脚蹬墙,是身体爬过脚。</b></li>
-<li><b>摆动相(swing)</b>:某只脚松开、抬起、往前挪一步、重新吸住。
-爬墙时这一步被拆成六段状态机(第 3 节),因为"松开"和"吸住"都不是瞬间的事。</li>
+<li><b>身体系(代码)</b>:身体永远在原点。"身体以 13mm/s 前进"这句话,记在账上就变成
+"每只支撑脚的<b>目标点</b>以 13mm/s 向后移动"。</li>
 </ul>
 
-<p>步态(gait)就是"谁支撑、谁摆动"的排班表。你的机器有两张常用的:</p>
+<p>这两句是同一件事,只差一个坐标系。检验自己有没有看懂的标准,是能不能接受这句话:
+<b>"支撑脚的目标每帧都在动,但脚本身在墙上一毫米都没动。"</b>
+目标动掉的那部分,恰好全部变成了身体的前进。</p>
+
+<div class="box note"><b>为什么代码选身体系记账?</b>因为下一环节 IK 要回答的就是
+"脚<b>相对身体</b>在哪"(第 5 节)——身体系记完账直接送进 IK,墙面系反而每帧要多换算一次。
+代价是初看代码容易被"支撑脚在后退"绕晕:它退的是账,不是墙上的脚。</div>
+
+<h3>2.2 支撑相:身体不是被"蹬"前进的</h3>
+
+<p>五条腿吸住时,它们的 15 个舵机并没有闲着——每帧都在按 IK 重算的角度<b>缓慢协调地转</b>,
+把身体从脚上方匀速平移过去。没有蹬踏、没有发力瞬间,是纯位置控制的几何搬运。
+数字感受一下:满速 13.3mm/s 时,一帧(20ms)身体只挪 <b>0.27mm</b>——
+肉眼看是连续滑动,舵机眼里是一串微小的位置修正。</p>
+
+<p>单看一条腿的一生,它像一节短滑轨上的滑块(步幅 40mm 为例):</p>
+
+<pre>换脚落点:选在站位<b>前方</b> +20mm(半步幅)
+   ↓ 吸住。身体前进,它在身体系里匀速向后"滑"
+经过站位 0
+   ↓ 继续滑
+滑到站位<b>后方</b>约 −20mm ←— 正好轮到它的换脚窗口:起脚,再落回前方 +20,循环</pre>
+
+<p>还有一条硬约束,解释了引擎里很多看似绕的设计:<b>吸住的脚在墙面上绝对不能滑</b>
+(滑动=蹭破密封=掉落风险)。所以支撑目标必须与身体运动严格互补、连续积分——
+速度指令突变,目标位置也不跳变;而所有"暂停"(钟停、漏气挽救、冻结)的实现方式
+都是同一个动作:把支撑目标原地冻住。</p>
+
+<h3>2.3 排班表:步态 = 谁在什么时刻换脚</h3>
+
+<p>三个术语,后面到处要用:<b>周期</b> T(爬墙 3.6s)、<b>duty</b>(支撑相占周期的比例,爬墙 5/6)、
+<b>窗口</b>(每条腿在周期里分到的换脚时段,T×(1−duty)=0.6s)。
+把六条腿的窗口画在一张图上,"步态"这个词就具体了——它就是一张排班表:</p>
+
+<div class="fig">
+<svg id="ganttfig" width="920" height="400" viewBox="0 0 920 400"></svg>
+<figcaption>上:爬墙步态——窗口首尾相接、任意时刻只开一个。
+下:地面三角步态——三腿一组、两组对开,每条腿一半时间在空中。
+注意横轴是<b>相位钟时间</b>:爬墙换一只脚实际要 ≈4.1s,远超 0.6s 窗口,
+钟走到窗尾就停下等吸牢,所以真实时间里每个橙色窗都被"拉宽"到 4 秒多。</figcaption>
+</div>
+
+<ul>
+<li><b>为什么爬墙一次只挪一条腿</b>:5 个吸盘扛整机是安全底线。窗头还有两道关卡:
+互锁(其余 5 脚必须全部 ATTACHED)和抬腿门槛(所有支撑盘压深于 −50kPa——
+刚吸上的邻腿是"软肩膀",立刻抬下一条会压垮它),不满足就停在窗头等。</li>
+<li><b>为什么顺序是 R3→L1→R2→L3→R1→L2</b>:相邻两次抬腿全在对角/交叉位,扰动分散两侧。
+旧顺序左三连再右三连,半个周期的扰动集中在一侧——08-19 实测 R2/R3 抬腿整机下坠的结构性根源。</li>
+<li><b>钟时间 vs 真实时间</b>:身体只在钟走时前进。每个窗口 = 钟走 0.6s、然后停 ≈3.5s
+等换脚的腿收口。真机"走一小段、停一会儿、再走一小段",就是这张排班表叠加钟停规则的
+直接结果,不是卡顿。</li>
+</ul>
+
+<p>两张排班表的参数对比:</p>
 
 <table>
 <tr><th></th><th>三角步态 TRIPOD(地面)</th><th>爬墙步态 CLIMB</th></tr>
 <tr><td>同时摆动</td><td>3 条腿一组(L1+R2+L3 / R1+L2+R3 交替)</td><td><b>一次只有 1 条</b>,其余 5 条吸着</td></tr>
 <tr><td>支撑占比 duty</td><td>1/2</td><td>5/6</td></tr>
 <tr><td>换腿顺序</td><td>两组交替</td><td>R3→L1→R2→L3→R1→L2(对角交叉,避免同侧连抬)</td></tr>
-<tr><td>周期</td><td>1.5&nbsp;s</td><td>3.6&nbsp;s 起步,吸不牢时相位钟会暂停,实际更长</td></tr>
+<tr><td>周期</td><td>1.5&nbsp;s</td><td>3.6&nbsp;s(钟时间;因钟停,真实时间更长)</td></tr>
 </table>
+
+<h3>2.4 动起来看</h3>
 
 <div class="fig">
 <div class="ctl">
@@ -171,24 +235,21 @@ button.on{background:#c00;color:#fff;border-color:#c00}
 <div class="readout" id="gaitout"></div>
 <div class="legend">
  <span><span class="dot" style="background:#1565c0;box-shadow:0 0 0 2px #fff inset"></span>吸附支撑</span>
- <span><span class="dot" style="background:#e65100"></span>VENT 放气中(仍贴面)</span>
- <span><span class="dot" style="background:#fff;border-color:#999"></span>腾空(LIFT/TRANSFER/DESCEND)</span>
+ <span><span class="dot" style="background:#e65100"></span>贴面未吸(VENT 放气 / LIFT 拔出中 / DESCEND 触面)</span>
+ <span><span class="dot" style="background:#fff;border-color:#999"></span>腾空(已离面)</span>
  <span><span class="dot" style="background:#c62828"></span>PRESS 压入</span>
  <span><span class="dot" style="background:#6a1b9a"></span>抽气等吸牢</span>
 </div>
-<figcaption>视角:<b>贴在墙外看机器人背面</b>,画面上方=前进方向(往墙上方爬)。
-镜头跟着身体走,所以吸住的脚(蓝点)和背景网格一起向下流过——它们在墙上其实没动,
-是身体在往上爬。爬墙模式下注意两件事:①一次只离墙一只脚;
-②<b>身体走走停停</b>——状态行里"相位钟:▶走 / ⏸停"就是 climb.py 的核心机制:
-摆动腿的排班窗口只有 0.6s,但放气+抬+挪+压+吸一整套要三秒多,
-钟就停在窗尾等它吸牢,支撑腿(=身体)随之冻结。你在真机上看到的"一顿一顿",
-就是这个,不是卡顿。三角步态则是流水线式的连续节奏,对比明显。</figcaption>
+<figcaption>视角:<b>贴在墙外看机器人背面</b>,画面上方=前进方向,镜头跟着身体走。看点四条:<br>
+① <b>蓝点(吸住的脚)和背景网格完全同步向下流</b>——它们在墙上没动,
+是镜头跟着身体在爬(2.1 的两个视角,这里选了身体系)。<br>
+② 任意时刻最多一个非蓝点,顺序 R3→L1→R2→L3→R1→L2 循环(2.3 的排班表)。<br>
+③ 盯状态行的<b>相位钟</b>:▶走时蓝点整体下流=身体在爬;⏸停时全画面只有换脚那只在动。
+注意钟停得很早——换脚的腿还在把吸盘从面下拔出来(LIFT 早期,脚仍在压入位以下)时,
+支撑就已经先冻结了,与真机口径一致。<br>
+④ 切到三角步态对比:三腿一起抬、节奏连续不停顿——但放到墙上等于任意时刻只有
+3 个吸盘扛整机、抬落还有冲击,爬墙不敢用。</figcaption>
 </div>
-
-<div class="box ok"><b>为什么支撑脚在身体系里"匀速后滑"这么重要?</b>
-因为吸住的脚在墙上绝对不能滑,所以引擎给支撑腿的目标必须与身体运动严格互补:
-身体想以 15mm/s 前进,就把支撑脚目标以 15mm/s 后移,两者相减,脚在墙上速度恰好为零。
-目标是连续积分的,速度突变也不会跳变(climb.py 支撑目标的设计要求)。</div>
 
 <h2 id="s3">3. 爬墙摆动相:一只脚换位的六段状态机</h2>
 
@@ -206,7 +267,7 @@ button.on{background:#c00;color:#fff;border-color:#c00}
 <table>
 <tr><th>段</th><th>干什么</th><th>为什么必须有这段(都是实爬教训)</th></tr>
 <tr><td><b>VENT</b> 0.3s</td><td>原地不动,只开排气阀</td><td>边放气边抬,排气建立比抬离慢,腿会被残余真空"拽起"(08-19 实机)</td></tr>
-<tr><td><b>LIFT</b></td><td>沿墙法向退开 15mm(40mm/s)</td><td>吸盘自身回弹 11~13mm,退少了脚还蹭在墙上</td></tr>
+<tr><td><b>LIFT</b> ≈0.83s</td><td>从压入位 −18 沿墙法向拔出、退到面上 +15,总行程 33mm(40mm/s)</td><td>吸盘自身回弹 11~13mm,退少了脚还蹭在墙上。<b>相位钟在 LIFT 进行 0.3s 时到窗尾停住(此刻脚还在面下 −6mm)</b>——支撑腿比摆动脚离面更早冻结</td></tr>
 <tr><td><b>TRANSFER</b> 0.6s</td><td>平移到落点正上方(smoothstep 平滑)</td><td>先到"正上方"再下,落地才没有横向速度,不拖脚</td></tr>
 <tr><td><b>DESCEND</b></td><td>竖直慢速下探(30mm/s),XY 冻结</td><td>消灭"拍地"——撞上去的瞬间速度会破坏密封</td></tr>
 <tr><td><b>PRESS</b></td><td>继续压入 18mm(15mm/s)</td><td>波纹盘要压扁才密封;13mm 被腿链让位吃掉大半,实测加深到 18</td></tr>
@@ -464,7 +525,8 @@ const LEGS=[{n:"L1",mx:83.5,my:63,ang:55},{n:"L2",mx:0,my:81.5,ang:90},
             {n:"R2",mx:0,my:-81.5,ang:-90},{n:"R3",mx:-83.5,my:-63,ang:-125}];
 const ORDER=["R3","L1","R2","L3","R1","L2"];
 // 爬墙摆动分段(真机默认参数):时长 s
-const PH=[["VENT",0.3],["LIFT",0.375],["TRANSFER",0.6],["DESCEND",0.5],["PRESS",1.2],["WAIT",0.7]];
+// LIFT 从压入位 z=-18 拔出到面上 +15:行程 (press_delta+lift_clearance)=33mm @40mm/s
+const PH=[["VENT",0.3],["LIFT",0.825],["TRANSFER",0.6],["DESCEND",0.5],["PRESS",1.2],["WAIT",0.7]];
 const SLOT=PH.reduce((s,p)=>s+p[1],0);          // 3.675s 一腿
 const CLOCK_WIN=0.6;                            // 每腿窗口的相位钟时长
 const U=40, V=U/3.0;                            // 爬墙步幅40mm,v=13.3mm/s
@@ -488,15 +550,15 @@ function climbState(t){
     let jl=-1;
     if(j>s) jl=s+6*Math.floor((j-1-s)/6);
     const landW = jl<0 ? d.x : V*(jl+1)*CLOCK_WIN + d.x + U/2;   // 世界x
-    let st="STANCE", wx=landW, z=0;
+    let st="STANCE", wx=landW, z=-18;    // 支撑保持在压入位深度
     if(j%6===s && j>=0 && ORDER[j%6]===l.n && true){
       // 本槽正是这条腿:按 tau 分段
       let acc=0, seg="WAIT", f=0;
       for(const [nm,dur] of PH){ if(tau<acc+dur){ seg=nm; f=(tau-acc)/dur; break;} acc+=dur; }
       const targetW=V*(j+1)*CLOCK_WIN + d.x + U/2;
       st=seg;
-      if(seg==="VENT"){ z=0; wx=landW; }
-      else if(seg==="LIFT"){ z=15*f; wx=landW; }
+      if(seg==="VENT"){ z=-18; wx=landW; }
+      else if(seg==="LIFT"){ z=-18+33*f; wx=landW; }
       else if(seg==="TRANSFER"){ z=15; const ss=f*f*(3-2*f); wx=landW+(targetW-landW)*ss; }
       else if(seg==="DESCEND"){ z=15*(1-f); wx=targetW; }
       else if(seg==="PRESS"){ z=-18*f; wx=targetW; }
@@ -523,7 +585,7 @@ function tripodState(t){
 }
 const PHCOL={STANCE:"#1565c0",VENT:"#e65100",LIFT:"#fff",TRANSFER:"#fff",DESCEND:"#fff",
              PRESS:"#c62828",WAIT:"#6a1b9a",SWING:"#fff"};
-const PHNAME={VENT:"VENT 放气",LIFT:"LIFT 抬离",TRANSFER:"TRANSFER 平移",
+const PHNAME={VENT:"VENT 放气",LIFT:"LIFT 拔出/抬离",TRANSFER:"TRANSFER 平移",
               DESCEND:"DESCEND 下探",PRESS:"PRESS 压入",WAIT:"WAIT 抽气吸牢"};
 function drawGait(stt){
   gv.innerHTML="";
@@ -551,7 +613,9 @@ function drawGait(stt){
     mk("line",{x1:hx,y1:hy,x2:fx,y2:fy2,stroke: air?"#bbb":"#78909c",
       "stroke-width":3.5, "stroke-dasharray":air?"5 4":"none","stroke-linecap":"round"},gv);
     mk("circle",{cx:hx,cy:hy,r:4,fill:"#78909c"},gv);
-    const col=PHCOL[f.st]||"#999";
+    let col=PHCOL[f.st]||"#999";
+    // 拔出中(LIFT 未出面)/触面瞬间(DESCEND 末):贴面未吸,与 VENT 同色
+    if(!air && (f.st==="LIFT"||f.st==="TRANSFER"||f.st==="DESCEND")) col="#e65100";
     if(air){ // 腾空:空心圈,半径随高度
       mk("circle",{cx:fx,cy:fy2,r:7+f.z*0.22,fill:"#fff",stroke:"#888","stroke-width":2.5,
         "stroke-dasharray":"4 3"},gv);
@@ -584,8 +648,10 @@ function stepAnim(ts){
   drawGait(stt); drawPhasebar(stt);
   const out=document.getElementById("gaitout");
   if(mode==="climb"){
+    const az=stt.feet[stt.active].z;
+    const sub=(stt.phase[0]==="LIFT"&&az<0)?`(脚仍在面下 ${az.toFixed(0)}mm)`:"";
     out.innerHTML=`换腿顺序 R3→L1→R2→L3→R1→L2 | 当前摆动:<b>${stt.active}</b> — `+
-      `<b>${PHNAME[stt.phase[0]]||stt.phase[0]}</b> | 相位钟:`+
+      `<b>${PHNAME[stt.phase[0]]||stt.phase[0]}${sub}</b> | 相位钟:`+
       (stt.running?`<b style="color:#2e7d32">▶ 走(身体前进中)</b>`
                   :`<b style="color:#c62828">⏸ 停(等 ${stt.active} 吸牢,支撑腿冻结)</b>`)+
       ` | 已爬 ${(stt.bodyX).toFixed(0)} mm`;
@@ -618,25 +684,116 @@ requestAnimationFrame(stepAnim);
     txt(svg,x+w/2,Y_BAR+35,dur+"s",{fill:"#fff","text-anchor":"middle","font-size":11});
     acc+=dur;
   });
-  txt(svg,X0,20,"一条腿换位全程 ≈ "+SLOT.toFixed(2)+"s(而排班窗口只有 0.6s → 相位钟停在窗尾等)",{fill:"#333","font-weight":"bold"});
-  // z 轨迹
-  const Y0=200, ZS=3.2;   // z=0 基线,mm→px
+  txt(svg,X0,20,"一条腿换位全程 ≈ "+SLOT.toFixed(2)+"s;排班窗口只有 0.6s → 相位钟在 LIFT 早期就停,其余全部在钟停中完成",{fill:"#333","font-weight":"bold"});
+  // z 轨迹(脚离墙高度;支撑/VENT 保持在压入位 −18,不是 0)
+  const Y0=192, ZS=2.9;
   const zy=z=>Y0-z*ZS;
-  mk("line",{x1:X0-10,y1:zy(0),x2:X0+W,y2:zy(0),stroke:"#888","stroke-dasharray":"6 4"},svg);
-  txt(svg,X0+W-160,zy(0)-8,"吸附面 z=0",{fill:"#888"});
-  txt(svg,8,zy(15)+4,"z 抬离",{fill:"#666"});
-  // 分段折线: VENT 0 | LIFT 0→15 | TRANSFER 15 | DESCEND 15→0 | PRESS 0→-18 | WAIT -18
   const t2x=t=>X0+t/SLOT*W;
-  let d=`M${t2x(0)},${zy(0)} L${t2x(0.3)},${zy(0)} L${t2x(0.675)},${zy(15)} `+
-        `L${t2x(1.275)},${zy(15)} L${t2x(1.775)},${zy(0)} L${t2x(2.975)},${zy(-18)} L${t2x(SLOT)},${zy(-18)}`;
+  mk("line",{x1:X0-10,y1:zy(0),x2:X0+W,y2:zy(0),stroke:"#888","stroke-dasharray":"6 4"},svg);
+  txt(svg,X0+W-118,zy(0)-6,"吸附面 z=0",{fill:"#888"});
+  mk("line",{x1:X0-10,y1:zy(-18),x2:X0+W,y2:zy(-18),stroke:"#cc99aa","stroke-dasharray":"2 4"},svg);
+  txt(svg,X0+W-230,zy(-18)+14,"压入位 −18(支撑就保持在这个深度)",{fill:"#a66","font-size":11});
+  txt(svg,8,zy(15)+4,"z 抬离",{fill:"#666"});
+  // 分段折线: VENT −18 | LIFT −18→15 | TRANSFER 15 | DESCEND 15→0 | PRESS 0→−18 | WAIT −18
+  let d=`M${t2x(0)},${zy(-18)} L${t2x(0.3)},${zy(-18)} L${t2x(1.125)},${zy(15)} `+
+        `L${t2x(1.725)},${zy(15)} L${t2x(2.225)},${zy(0)} L${t2x(3.425)},${zy(-18)} L${t2x(SLOT)},${zy(-18)}`;
   mk("path",{d,stroke:"#1565c0","stroke-width":3,fill:"none","stroke-linejoin":"round"},svg);
+  // 相位钟停点:0.6s(VENT 0.3 + LIFT 前 0.3,脚在 −6 还没出面)
+  mk("line",{x1:t2x(0.6),y1:zy(22),x2:t2x(0.6),y2:zy(-23),stroke:"#c00","stroke-width":2,
+     "stroke-dasharray":"5 3"},svg);
+  mk("circle",{cx:t2x(0.6),cy:zy(-6),r:5,fill:"#c00"},svg);
+  txt(svg,t2x(0.6)+8,zy(20),"0.6s:钟到窗尾停——脚还在面下 −6,支撑腿已先冻结",
+     {fill:"#c00","font-size":11,"font-weight":"bold"});
   // 标注
-  txt(svg,t2x(0.42)+4,zy(8)-6,"退开15mm(盘回弹11~13)",{fill:"#555","font-size":11});
-  txt(svg,t2x(1.28),zy(15)-10,"平移到落点正上方",{fill:"#555","font-size":11});
-  txt(svg,t2x(2.0)+6,zy(-10),"压入18mm=press_delta",{fill:"#c62828","font-size":11});
-  txt(svg,t2x(3.05),zy(-18)+18,"抽气到 −30kPa 才算吸牢",{fill:"#6a1b9a","font-size":11});
-  mk("rect",{x:t2x(0),y:zy(-24),width:t2x(0.3)-t2x(0),height:6,fill:"#e65100",opacity:.5},svg);
-  txt(svg,t2x(0)-2,zy(-24)+22,"贴面随支撑场平移(不划墙)",{fill:"#e65100","font-size":11});
+  txt(svg,t2x(0.72),zy(-13),"LIFT:从压入位拔出+抬离,共 33mm(盘回弹 11~13)",{fill:"#555","font-size":11});
+  txt(svg,t2x(1.15),zy(15)-8,"平移到落点正上方",{fill:"#555","font-size":11});
+  txt(svg,t2x(2.38),zy(-7),"压入18mm=press_delta",{fill:"#c62828","font-size":11});
+  txt(svg,t2x(3.45),zy(-18)-8,"抽气到 −30kPa 才算吸牢",{fill:"#6a1b9a","font-size":11});
+  mk("rect",{x:t2x(0),y:zy(-18)+6,width:t2x(0.3)-t2x(0),height:5,fill:"#e65100",opacity:.6},svg);
+  txt(svg,t2x(0)-2,zy(-18)+30,"VENT:贴压入位随支撑场平移(不划墙)",{fill:"#e65100","font-size":11});
+})();
+
+/* ============ 2.1 两个视角对照图 ============ */
+(function(){
+  const svg=document.getElementById("framefig");
+  txt(svg,30,26,"墙面系(现实):脚钉住,身体被送过去",{"font-weight":"bold","font-size":14});
+  txt(svg,30,44,"站在墙外看到的",{fill:"#666","font-size":11});
+  txt(svg,490,26,"身体系(代码):身体不动,足端目标后移",{"font-weight":"bold","font-size":14});
+  txt(svg,490,44,"引擎记账用的坐标系,算完直接进 IK",{fill:"#666","font-size":11});
+  mk("line",{x1:460,y1:15,x2:460,y2:290,stroke:"#ddd"},svg);
+  const gy=240;
+  // ---- 左:墙面系 ----
+  mk("line",{x1:40,y1:gy,x2:440,y2:gy,stroke:"#666","stroke-width":2},svg);
+  txt(svg,398,gy+18,"吸附面",{fill:"#888","font-size":11});
+  const fx=300;   // 脚:世界系固定
+  function bodyLeg(cx,dash,op){
+    const hy=126, hx=cx+40;
+    mk("rect",{x:cx-60,y:82,width:120,height:44,rx:8,fill:dash?"none":"#e3e7ec",
+      stroke:"#78909c","stroke-width":2,"stroke-dasharray":dash?"6 4":"none",opacity:op},svg);
+    const kx=(hx+fx)/2+12, ky=(hy+gy)/2+6;
+    mk("path",{d:`M${hx},${hy} L${kx},${ky} L${fx},${gy}`,fill:"none",stroke:"#78909c",
+      "stroke-width":4,"stroke-dasharray":dash?"6 4":"none","stroke-linecap":"round",opacity:op},svg);
+    mk("circle",{cx:hx,cy:hy,r:5,fill:"#78909c",opacity:op},svg);
+  }
+  bodyLeg(140,true,0.5);   // 前一时刻(虚)
+  bodyLeg(215,false,1);    // 当前(实)
+  mk("circle",{cx:fx,cy:gy,r:9,fill:"#1565c0"},svg);
+  txt(svg,fx-30,gy+22,"脚:钉死不动",{fill:"#1565c0","font-size":11,"font-weight":"bold"});
+  mk("path",{d:"M140,64 L205,64 m-10,-6 l10,6 l-10,6",stroke:"#c00","stroke-width":2.5,fill:"none"},svg);
+  txt(svg,120,54,"身体前移(支撑腿关节慢慢转)",{fill:"#c00","font-size":12,"font-weight":"bold"});
+  // ---- 右:身体系 ----
+  mk("line",{x1:500,y1:gy,x2:900,y2:gy,stroke:"#666","stroke-width":2},svg);
+  const bcx=640, hx2=bcx+40, hy2=126;
+  mk("rect",{x:bcx-60,y:82,width:120,height:44,rx:8,fill:"#e3e7ec",stroke:"#78909c","stroke-width":2},svg);
+  txt(svg,bcx-26,108,"身体不动",{fill:"#78909c","font-size":11});
+  mk("circle",{cx:hx2,cy:hy2,r:5,fill:"#78909c"},svg);
+  function leg2(footx,dash,op,col){
+    const kx=(hx2+footx)/2+12, ky=(hy2+gy)/2+6;
+    mk("path",{d:`M${hx2},${hy2} L${kx},${ky} L${footx},${gy}`,fill:"none",stroke:"#78909c",
+      "stroke-width":4,"stroke-dasharray":dash?"6 4":"none","stroke-linecap":"round",opacity:op},svg);
+    mk("circle",{cx:footx,cy:gy,r:9,fill:col,opacity:op},svg);
+  }
+  leg2(810,true,0.5,"#90caf9");   // 前一时刻的目标(虚)
+  leg2(745,false,1,"#1565c0");    // 当前目标(实)
+  mk("path",{d:"M810,266 L750,266 m10,-6 l-10,6 l10,6",stroke:"#c00","stroke-width":2.5,fill:"none"},svg);
+  txt(svg,590,286,"足端目标以 −v 后移(动的是账,不是墙上的脚)",{fill:"#c00","font-size":12,"font-weight":"bold"});
+})();
+
+/* ============ 2.3 排班甘特图 ============ */
+(function(){
+  const svg=document.getElementById("ganttfig");
+  const X0=110, W=620, RH=24, GAP=9, Y0=58;
+  txt(svg,30,24,"爬墙 CLIMB:duty=5/6,每腿窗口 0.6s,首尾相接、一次只开一个",{"font-weight":"bold","font-size":13});
+  const T=3.6, rows=[["R3",0],["L1",0.6],["R2",1.2],["L3",1.8],["R1",2.4],["L2",3.0]];
+  rows.forEach(([n,st],i)=>{
+    const y=Y0+i*(RH+GAP);
+    mk("rect",{x:X0,y,width:W,height:RH,rx:4,fill:"#dbe7f5"},svg);
+    mk("rect",{x:X0+st/T*W,y,width:0.6/T*W,height:RH,rx:4,fill:"#e65100"},svg);
+    txt(svg,X0-64,y+16,n,{"font-weight":"bold"});
+    if(i===0) txt(svg,X0+st/T*W+6,y+16,"换脚窗",{fill:"#fff","font-size":10});
+  });
+  const yax=Y0+6*(RH+GAP)+2;
+  for(let k=0;k<=6;k++){ const x=X0+k*0.6/T*W;
+    mk("line",{x1:x,y1:Y0-4,x2:x,y2:yax-6,stroke:"#00000014"},svg);
+    txt(svg,x-11,yax+10,(k*0.6).toFixed(1)+"s",{fill:"#888","font-size":10});
+  }
+  txt(svg,X0+W+14,Y0+34,"蓝=支撑(吸住,目标随场后移)",{fill:"#4a6fa5","font-size":11});
+  txt(svg,X0+W+14,Y0+54,"橙=换脚窗(第 3 章状态机)",{fill:"#e65100","font-size":11});
+  txt(svg,X0+W+14,Y0+80,"横轴是相位钟时间:",{fill:"#888","font-size":11});
+  txt(svg,X0+W+14,Y0+96,"真实时间里每个橙窗",{fill:"#888","font-size":11});
+  txt(svg,X0+W+14,Y0+112,"被钟停拉宽到 ≈4.1s",{fill:"#888","font-size":11});
+  // 地面三角步态
+  const Y2=yax+52;
+  txt(svg,30,Y2-12,"地面 TRIPOD:duty=1/2,三腿一组、两组对开,周期 1.5s",{"font-weight":"bold","font-size":13});
+  const T2=1.5, rows2=[["L1+R2+L3",0.75],["R1+L2+R3",0]];
+  rows2.forEach(([n,st],i)=>{
+    const y=Y2+i*(RH+GAP);
+    mk("rect",{x:X0,y,width:W,height:RH,rx:4,fill:"#dbe7f5"},svg);
+    mk("rect",{x:X0+st/T2*W,y,width:0.75/T2*W,height:RH,rx:4,fill:"#e65100"},svg);
+    txt(svg,X0-92,y+16,n,{"font-size":11,"font-weight":"bold"});
+  });
+  txt(svg,X0+W+14,Y2+16,"任意时刻 3 条腿在空中",{fill:"#888","font-size":11});
+  txt(svg,X0+W+14,Y2+32,"——爬墙不敢用",{fill:"#888","font-size":11});
 })();
 
 /* ============ 5. IK 图 ============ */

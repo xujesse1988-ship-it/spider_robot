@@ -11,8 +11,9 @@ CLIMB 步态。
       向前走完整摆动+吸附确认后自动停；未开始的单步可按空格取消
   f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->停泵->逐足
       串行放气->断电，终态停在爬墙站位；要地面站姿另跑 --release）
-  o×2 放开全部吸盘但六足保持站立（地面取机用：全阀排气+泵停，舵机撑住原地，
-      整机可直接从玻璃上拿起）。仅站立非走动时允许；墙上严禁（等于坠落）
+  o×2 放开全部吸盘但六足保持站立（地面取机用：停泵后逐足串行排气约 1.5s，
+      舵机撑住原地，整机可直接从玻璃上拿起）。仅站立非走动时允许；墙上严禁
+      （等于坠落）
 
 用法:
   python climb_walk.py --mock                # 无硬件干跑（Mock 吸盘必吸上）
@@ -47,6 +48,9 @@ CLIMB 步态。
   - 上墙全程安全绳；--air 旁路只用于架空，上墙严禁
   - 电压/电流状态行常显：墙上五足持续剪切载荷 ~3A 级是常态，盯"吸附后总电流
     回落基线"判据（不回落 = 该腿 press_delta 没吃干净，舵机在和真空对抗）
+  - 气路 I2C / 舵机串口持续失败不再炸退进程：主环冻结悬停（舵机保持末姿态、
+    泵一次性停），恢复后按 f 继续；不恢复 ESC×2 退出（退出序列可在传感器
+    盲态下纯计时放气）。欠压切断不在此列，照旧立即停机
 """
 import argparse
 import os
@@ -321,6 +325,31 @@ def main():
         if any(p != LegPhase.STANCE for p in eng.phase_of.values()):
             return "有腿未回支撑相（等本步收尾再按）"
         return None
+
+    def io_freeze(e):
+        """IO 持续失败的第二把降落伞（审核发现）：气路 I2C 持续超时
+        （Pi5VacuumIO 陈旧 >0.5s 上抛 IOError）或舵机串口读写失败同为
+        OSError——此前主环不接，异常炸穿 = 进程死亡 → lgpio 句柄释放 →
+        GPIO17 继电器跳开 → 舵机断电，墙上等于瘫挂在吸盘上，与文件头
+        "优先保持进程+冻结悬停"的纪律相反。改为冻结悬停：舵机固件保持
+        末次脉宽，吸盘靠单向阀+通罐位被动保真空。传感恢复后按 f 继续；
+        不恢复就 ESC×2——退出序列已为传感器盲态加固（_exit_tick 退化
+        纯计时放气），链路闭合。故障未恢复时异常会逐帧重现并被逐帧
+        吞掉（ctl.update 先于冻结检查执行，与工作空间冻结同口径）。"""
+        if not eng.frozen:
+            eng.frozen = (f"IO 持续失败（{e}）——恢复后按 f，"
+                          "或停走后 ESC×2 退出（盲态纯计时放气）")
+            log.event(f"⚠ IO 降落伞：{e!r}")
+            try:
+                # 一次性停泵：泵引脚是 GPIO 不依赖 I2C。I2C 死时 ctl.update
+                # 在读传感处炸、走不到泵控制，泵会冻在末电平上整场连转；
+                # 传感若还活着（串口侧故障），滞环下帧照常接管。⚠ 只许
+                # 一次性——反复写会跟 ctl.update 的滞环抢泵（0.5s 节拍
+                # 强关 vs 每帧 set_pump(True)＝MOSFET 抖振），恰是本轮
+                # 审核要消灭的那类打架
+                io.set_pump(False)
+            except Exception:
+                pass
     try:
         # 缓慢站起，一步到位进爬墙站位：蹲姿直接用爬墙站位（吸盘轴⊥面的解，
         # 约 reach 176）的 XY，从蹲到站是纯竖直上升——吸盘落地后不横拖。
@@ -464,11 +493,45 @@ def main():
                         print(f"\n不允许放开：{deny}")
                     elif time.monotonic() - last_o < 2.0:
                         released_hold = True
+                        # 逐足串行通电（审核发现）：六足同帧 request_release 会
+                        # 让下一次 ctl.update 把六个阀线圈同刻通电——~25W 阶跃
+                        # 正是 08-18 掉电疑似扳机，claim/ESC 退出/--release 全
+                        # 已串行化，本路径原先是唯一漏网。口径对齐退出序列：
+                        # 先停泵垫 0.3s 让母线缓过来，再一足一足转 VENTING、
+                        # 足间 0.2s——通电在 request 后首个 ctl.update 生效，
+                        # 所以间隔里必须照跑状态机，光 sleep 错不开。期间键盘
+                        # 不响应（整机静止，双击确认后的 1.5s 阻塞可接受）；
+                        # TLM 照记——电气阶跃恰是黑匣子最该盯的窗口。终态
+                        # 不变：全阀排气维持通电，等人拿机
                         ctl.pump_inhibit = True   # 罐模式滞环也不许再开泵
-                        log.event("取机窗口：放开全部吸盘（泵禁开），六足舵机撑住")
+                        io.set_pump(False)
+                        log.event("取机窗口：停泵 → 逐足串行排气（0.2s 间隔）"
+                                  "→ 六足舵机撑住（泵禁开）")
+                        print("\n放开吸盘：停泵 → 逐足串行排气（约 1.5s）……")
+
+                        def _pickup_tick():
+                            nonlocal last_status, peak_a
+                            ctl.update(dt)
+                            watch.poll()
+                            t_now = time.monotonic()
+                            if t_now - last_status > STATUS_S:
+                                last_status = t_now
+                                pv, pc = (drv.read_voltage_v(),
+                                          drv.read_current_a()) \
+                                    if args.mock else bot.check_power()
+                                peak_a = max(peak_a, pc)
+                                watch.telemetry(pv, pc, peak_a, (0, 0, 0),
+                                                note=" 取机放气")
+                            if not args.mock:
+                                time.sleep(dt)
+
+                        for _ in range(int(0.3 / dt)):   # 停泵垫场
+                            _pickup_tick()
                         for i in range(6):
                             ctl.request_release(i)
-                        print("\n放开吸盘：全阀排气、泵停，六足仅舵机撑住原地。"
+                            for _ in range(int(0.2 / dt)):   # 足间错峰
+                                _pickup_tick()
+                        print("已放开：全阀排气、泵停，六足仅舵机撑住原地。"
                               "可整机拿起；取下后 ESC×2 退出"
                               "（排气是维持态，阀线圈通电中，勿久放）")
                     else:
@@ -489,6 +552,10 @@ def main():
                 # 冻结后引擎目标全保持，本异常会逐帧重现并被逐帧吞掉
                 if not eng.frozen:
                     eng.frozen = f"足端目标出工作空间（{e}）——停走后 ESC×2 退出"
+            except OSError as e:
+                # 第二把降落伞：I2C/串口持续失败冻结悬停而不是炸退进程
+                # （WorkspaceError 是 ValueError 子类，两把伞无交集）
+                io_freeze(e)
             watch.poll()   # 状态跳变（相位/吸附/泵阀/冻结/漏气）落黑匣子
 
             step_now = eng.step_pending or eng.step_active
@@ -515,17 +582,24 @@ def main():
             now = time.monotonic()
             if now - last_status > STATUS_S:
                 last_status = now
-                v, c = (drv.read_voltage_v(), drv.read_current_a()) \
-                    if args.mock else bot.check_power()   # 欠压直接抛异常停机
-                peak_a = max(peak_a, c)
-                tag = (" 干跑" if args.dry else "") + \
-                      (" 已放开" if released_hold else "")
-                # 显示/落盘用 eng.cmd = 步幅限幅后的实际下发速度，不是键盘
-                # 原始指令——日志速度必须等于下发速度（--sag-comp 标定口径）
-                print("\r" + status_line(eng, ctl, v, c, peak_a,
-                                         eng.cmd, tag) + "  ",
-                      end="", flush=True)
-                watch.telemetry(v, c, peak_a, eng.cmd, note=tag)
+                try:
+                    v, c = (drv.read_voltage_v(), drv.read_current_a()) \
+                        if args.mock else bot.check_power()   # 欠压直接抛异常停机
+                except OSError as e:
+                    # 串口读失败同走 IO 降落伞（冻结悬停），本拍状态行/TLM
+                    # 跳过——不能拿陈旧 v/c 当真。欠压 RuntimeError 不在此列，
+                    # 照旧炸出停机（BMS 保护优先于悬停）
+                    io_freeze(e)
+                else:
+                    peak_a = max(peak_a, c)
+                    tag = (" 干跑" if args.dry else "") + \
+                          (" 已放开" if released_hold else "")
+                    # 显示/落盘用 eng.cmd = 步幅限幅后的实际下发速度，不是键盘
+                    # 原始指令——日志速度必须等于下发速度（--sag-comp 标定口径）
+                    print("\r" + status_line(eng, ctl, v, c, peak_a,
+                                             eng.cmd, tag) + "  ",
+                          end="", flush=True)
+                    watch.telemetry(v, c, peak_a, eng.cmd, note=tag)
             lag = time.monotonic() - t_wall
             if lag > 5 * dt:
                 # 主环卡顿（I2C 拖延/串口超时/系统卡）是死机前兆，必须留痕

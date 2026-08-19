@@ -86,6 +86,10 @@ PRESS_DEPTH_MAX = 28.0      # press_delta+重试加深的总压入上限 mm（z=
 TILT_BAND_DEG = 12.0        # 落点带：压入位物理吸盘轴偏面法线的许用角。
                             # P1 台架实测容差 ±15°，留余量；CLIMBING-DESIGN §6
                             # 接受的工作带 ≤11.5°。越界步长按半径裁剪（§4.3）
+LEAN_SPEED_MMS = 10.0        # 倾身平移速率 mm/s（body_lean 实验）：吸住的
+                             # 支撑足不能滑，身体平移=支撑目标连续重解，与
+                             # 支撑场同量级的慢速率；按键请求排队后按此匀速
+                             # 铺完（update() 4.6 步），不做阶跃
 _R_BRACKET = (110.0, 210.0)  # 站位半径求解区间 mm（区间内倾角随半径单调增，
                              # 至 210 数值验证过；z=-108 时 210 仍在 IK 可达
                              # 内）。原上限 190 会把 +12° 带的真实半径 ~198
@@ -295,6 +299,11 @@ class ClimbEngine:
         self.step_pending = False
         self.step_active = False
         self._step_v = (0.0, 0.0, 0.0)
+        # 倾身（body_lean 实验脚本）：请求量入队（_lean_left，带符号，+X=
+        # 前进方向），update() 4.6 步按 LEAN_SPEED_MMS 匀速铺完；lean_mm =
+        # 已执行的身体累计前移（显示用；重新落脚不清零——身体没有回去）
+        self.lean_mm = 0.0
+        self._lean_left = 0.0
         # 本周期实际下发的速度指令（步幅限幅缩放后）。状态行/黑匣子 TLM
         # 必须取这个而不是用户原始指令：SPEED=15 在默认参数下每帧被隐性
         # 缩到 ~13.3mm/s，记未缩放值会把 --sag-comp 标定系统性带偏
@@ -395,7 +404,11 @@ class ClimbEngine:
         #    漏气挽救期间（leak_pause）绝不放行新的抬腿——漏着的脚不算可靠支撑
         self.gate_wait = None
         if not self._slot_active and not self._slot_skipped:
-            if not moving:
+            # 原地抬起（request_lift 的零速单步，body_lean 实验）：速度为零
+            # 但轮到 step_leg 的窗挂着抬起请求，照走互锁/门槛决策；零速下
+            # _landing_xy 落点=默认站位（倾身后的腿重新落回站位=复位几何）
+            lift0 = self.step_pending and cur == self.step_leg
+            if not moving and not lift0:
                 self._slot_skipped = True
             elif leak_pause or not self._interlock_ok(cur):
                 self._block_t += dt
@@ -521,6 +534,22 @@ class ClimbEngine:
                     self.foot[n][0] += self._down[0] * step
                     self.foot[n][1] += self._down[1] * step
 
+        # 4.6 倾身（request_lean，body_lean 实验）：排队量按真实时间匀速铺完。
+        # 只在全腿 STANCE/HOVER 时推进——摆动/落压期间平移支撑系会横拖
+        # 离面/压入中的脚（与下滑补偿同禁区），暂停不丢；漏气挽救期同停。
+        # 身体系里支撑足 -X = 身体 +X（前进方向）；HOVER 腿不平移（在空中
+        # 随身体走，落点已定为站位）
+        if (not leak_pause and abs(self._lean_left) > _EPS
+                and all(p in (LegPhase.STANCE, LegPhase.HOVER)
+                        for p in self.phase_of.values())):
+            step = math.copysign(min(abs(self._lean_left),
+                                     LEAN_SPEED_MMS * dt), self._lean_left)
+            self._lean_left -= step
+            self.lean_mm += step
+            for n in LEG_NAMES:
+                if self.phase_of[n] == LegPhase.STANCE:
+                    self.foot[n][0] -= step
+
         # 5. 摆动分段状态机按真实时间推进（钟停时重试/等待照常进行）
         self._run_machines(dt)
         return self.targets()
@@ -576,6 +605,91 @@ class ClimbEngine:
         self.phase_of[leg] = LegPhase.DESCEND
         return None
 
+    def select_step_leg(self, name):
+        """指定下一个单步/原地抬起用哪条腿（body_lean 的 1~6 键）。轮次指针
+        直接改写——本脚本无连续行走，不存在轮次账被打乱的问题。
+        返回 None=成功；str=拒绝原因。"""
+        if self.step_pending or self.step_active:
+            return "已有单步在途"
+        if name not in LEG_NAMES:
+            return f"未知腿 {name}"
+        if self.phase_of[name] != LegPhase.STANCE:
+            return f"{name} 不在支撑相"
+        self.step_leg = name
+        return None
+
+    def request_lift(self, name=None):
+        """原地抬起（body_lean 实验）：step_leg（或指定腿）以零速单步抬到
+        HOVER 悬停——互锁/抬腿门槛/VENT 先通气全套照走，落点=默认站位
+        （倾身后的腿落回站位=该腿几何复位，身体保持已倾量）。
+        step_land() 落地。返回 None=受理；str=拒绝原因。"""
+        if not self.started:
+            return "启动序列未完成"
+        if self.frozen:
+            return "冻结中"
+        if self.step_pending or self.step_active:
+            return "已有单步在途"
+        if name is not None:
+            deny = self.select_step_leg(name)
+            if deny:
+                return deny
+        self._step_v = (0.0, 0.0, 0.0)
+        self.step_pending = True
+        return None
+
+    @property
+    def lean_pending(self):
+        """尚未铺完的倾身量 mm（带符号，+ = 向前进方向）。"""
+        return self._lean_left
+
+    def request_lean(self, dmm):
+        """倾身（body_lean 实验）：身体沿 +X（前进方向）平移 dmm（负=向后），
+        请求入队后 update() 按 LEAN_SPEED_MMS 匀速铺完（摆动/落压期间暂停
+        不丢）。授予量按当前支撑足几何截短：每足平移后距 IK 包络
+        ≥ D_SAFE_MARGIN 且平面半径 ≥ 求解区间下限（与支撑尾预算同口径，
+        按实际压深逐足实算）。返回 (授予 mm, 拒绝原因|None)。"""
+        if not self.started:
+            return 0.0, "启动序列未完成"
+        if self.frozen:
+            return 0.0, "冻结中"
+        if any(self.phase_of[n] == LegPhase.STANCE
+               and self.ctl.is_leaking(LEG_NAMES.index(n)) for n in LEG_NAMES):
+            return 0.0, "支撑足漏气挽救中"
+        sign = 1.0 if dmm > 0 else -1.0
+        granted = sign * max(0.0, min(abs(dmm), self._lean_room(sign)))
+        if abs(granted) < 1e-9:
+            return 0.0, "已到工作空间边界"
+        self._lean_left += granted
+        return granted, None
+
+    def cancel_lean(self):
+        """取消尚未铺完的倾身量（已执行部分不回退——身体已经移过去了）。"""
+        self._lean_left = 0.0
+
+    def _lean_room(self, sign):
+        """当前支撑足在 sign 方向（+1=身体向前）还能再倾多少 mm。从"当前
+        足位＋已排队量"起算，1mm 步进扫描到某足越界为止：外界=IK 包络留
+        D_SAFE_MARGIN（同 comp_tail 口径，z 取该足实际压深），内界=站位
+        半径求解区间下限（更近的半径没验证过唇口/IK 账）。"""
+        d_safe = self.cfg.femur_len + self.cfg.tibia_len - D_SAFE_MARGIN
+        room = 80.0
+        for n in LEG_NAMES:
+            if self.phase_of[n] != LegPhase.STANCE:
+                continue
+            leg = self.cfg.leg(n)
+            x = self.foot[n][0] - self._lean_left   # 排队量先记账
+            y, z = self.foot[n][1], self.foot[n][2]
+            ok = 0.0
+            while ok < room:
+                nx = x - sign * (ok + 1.0)
+                r = math.hypot(nx - leg.mount_x, y - leg.mount_y)
+                if r < _R_BRACKET[0] \
+                        or math.hypot(r - self.cfg.coxa_len, z) > d_safe:
+                    break
+                ok += 1.0
+            room = min(room, ok)
+        return room
+
     def clear_freeze(self):
         """人工处理后解除冻结；重试/等待计时全部清零，挂着 FAULT 的腿自动
         重新压附（罐压计时不清会导致解冻后一帧不就绪立刻复冻）。
@@ -590,6 +704,9 @@ class ClimbEngine:
         # 行走"同性质的残留。摆动中的 step_active 保留，让该腿走完收口
         # （悬停中的腿原地保持不自行落地，解冻后按 i 落地收口——无残留动作）
         self.step_pending = False
+        # 未铺完的倾身量同理取消（已执行部分不回退）：解冻后自行续倾与
+        # "带旧速度恢复行走"同性质
+        self._lean_left = 0.0
         for n in LEG_NAMES:
             self.retries[n] = 0
 

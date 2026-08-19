@@ -874,3 +874,127 @@ def test_air_mode_keeps_walking_without_adhesion():
     assert eng.frozen is None
     assert eng.started and eng.air_giveups >= 6
     assert eng.t > 1.0
+
+
+def test_lean_moves_body_and_respects_envelope():
+    """倾身（body_lean）：请求量匀速铺完（LEAN_SPEED_MMS），支撑足整体
+    -X 平移=身体前移；授予量按 IK 包络（D_SAFE_MARGIN 同口径）截短，
+    到边拒绝；极限位形全部 IK 可解；反向仍可退回。"""
+    from hexapod.climb import LEAN_SPEED_MMS
+    io, ctl, eng = make_engine()
+    start(eng)
+    x0 = {n: eng.foot[n][0] for n in LEG_NAMES}
+    granted, deny = eng.request_lean(30.0)
+    assert deny is None and granted == 30.0
+    # 匀速铺设：半程时刻应约走一半（不是阶跃）
+    run(eng, 15.0 / LEAN_SPEED_MMS)
+    assert abs(eng.lean_mm - 15.0) < 2.0
+    run(eng, 15.0 / LEAN_SPEED_MMS + 1.0)
+    assert math.isclose(eng.lean_mm, 30.0, abs_tol=1e-6)
+    assert abs(eng.lean_pending) < 1e-9
+    for n in LEG_NAMES:
+        assert math.isclose(eng.foot[n][0], x0[n] - 30.0, abs_tol=1e-6)
+    # 贪心要一大截：授予到包络余量为止，铺完后全部在包络内且 IK 可解
+    g2, d2 = eng.request_lean(500.0)
+    assert d2 is None and 0.0 < g2 < 500.0
+    run(eng, g2 / LEAN_SPEED_MMS + 1.0)
+    d_safe = CFG.femur_len + CFG.tibia_len - 3.0
+    for n in LEG_NAMES:
+        leg = CFG.leg(n)
+        r = math.hypot(eng.foot[n][0] - leg.mount_x,
+                       eng.foot[n][1] - leg.mount_y)
+        assert math.hypot(r - CFG.coxa_len, eng.foot[n][2]) <= d_safe + 1e-6
+    Hexapod(MockDriver(), CFG).pulses(eng.targets())   # 极限位形可解
+    g3, d3 = eng.request_lean(5.0)
+    assert g3 == 0.0 and d3                            # 到边拒绝
+    g4, d4 = eng.request_lean(-20.0)                   # 反向仍可
+    assert d4 is None and g4 == -20.0
+    run(eng, 20.0 / LEAN_SPEED_MMS + 1.0)
+    assert math.isclose(eng.lean_mm, 30.0 + g2 - 20.0, abs_tol=1e-6)
+
+
+def test_lift_in_place_hover_and_land_back():
+    """原地抬起（request_lift 零速单步）：互锁照走、VENT 先通气、落点=
+    默认站位、其余支撑足纹丝不动（零速无支撑场平移）；step_land 落回
+    压入位并重新吸附。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    others0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES if n != "L2"}
+    assert eng.request_lift("L2") is None
+    assert eng.request_lift("L1") == "已有单步在途"
+    seen_vent = False
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        seen_vent = seen_vent or eng.phase_of["L2"] == LegPhase.VENT
+        if eng.phase_of["L2"] == LegPhase.HOVER:
+            break
+    assert eng.phase_of["L2"] == LegPhase.HOVER and seen_vent
+    x0, y0, _ = eng.default_feet["L2"]
+    assert math.isclose(eng.foot["L2"][0], x0, abs_tol=1e-6)
+    assert math.isclose(eng.foot["L2"][1], y0, abs_tol=1e-6)
+    assert math.isclose(eng.foot["L2"][2], -CFG.stand_height + CFG.lift_clearance,
+                        abs_tol=1e-6)
+    for n, p in others0.items():                     # 零速：支撑足不动
+        assert all(math.isclose(a, b, abs_tol=1e-9)
+                   for a, b in zip(eng.foot[n], p)), n
+    assert eng.step_land() is None
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L2"] == LegPhase.STANCE and not eng.step_active:
+            break
+    assert ctl.is_attached(LEG_NAMES.index("L2"))
+    assert math.isclose(eng.foot["L2"][2],
+                        -CFG.stand_height - CFG.leg("L2").press_delta_mm)
+    assert eng.select_step_leg("L9") == "未知腿 L9"
+
+
+def test_lean_pauses_during_swing_resumes_after():
+    """倾身×抬落互斥：摆动/落压期间（非 STANCE/HOVER）倾身暂停不丢，
+    悬停中恢复铺设（悬停腿不平移），落回支撑后铺完剩余量。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    assert eng.request_lift("R1") is None
+    g, d = eng.request_lean(20.0)
+    assert d is None and g == 20.0
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["R1"] == LegPhase.HOVER:
+            break
+        assert eng.lean_mm == 0.0            # 摆动中倾身冻结
+    assert eng.phase_of["R1"] == LegPhase.HOVER
+    hover_xy = tuple(eng.foot["R1"][:2])
+    run(eng, 1.0)                            # 悬停中恢复铺设 ~10mm
+    h = eng.lean_mm
+    assert h > 5.0
+    assert tuple(eng.foot["R1"][:2]) == hover_xy   # 悬停腿不随支撑平移
+    assert eng.step_land() is None
+    while eng.phase_of["R1"] != LegPhase.STANCE:
+        assert math.isclose(eng.lean_mm, h, abs_tol=1e-9)  # 落压期间冻结
+        eng.update(DT)
+    run(eng, 3.0)
+    assert math.isclose(eng.lean_mm, 20.0, abs_tol=1e-6)
+    # R1 落回站位后只吃到后半段倾身，其余腿吃满 20
+    assert eng.foot["R1"][0] > eng.default_feet["R1"][0] - 20.0
+    assert math.isclose(eng.foot["L2"][0], eng.default_feet["L2"][0] - 20.0,
+                        abs_tol=1e-6)
+
+
+def test_clear_freeze_cancels_pending_lean():
+    """冻结解除时未铺完的倾身必须取消（与挂起单步同口径）：解冻后不许
+    自行续倾。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    eng.request_lean(30.0)
+    run(eng, 0.5)
+    done = eng.lean_mm
+    assert 0.0 < done < 30.0
+    eng.frozen = "测试注入"
+    run(eng, 1.0)                            # 冻结中不推进
+    assert eng.lean_mm == done
+    eng.clear_freeze()
+    assert eng.lean_pending == 0.0
+    before = {n: eng.foot[n][0] for n in LEG_NAMES}
+    run(eng, 2.0)
+    assert all(math.isclose(eng.foot[n][0], before[n]) for n in LEG_NAMES)
+    g, d = eng.request_lean(-10.0)           # 解冻后新请求照常受理
+    assert d is None and g == -10.0

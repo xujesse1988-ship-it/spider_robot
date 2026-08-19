@@ -1,0 +1,738 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>从走路指令到 18 路舵机</title>
+<style>
+body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+ max-width:1080px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#222;background:#fafafa}
+h1{font-size:1.5rem;border-bottom:2px solid #c00;padding-bottom:.4rem}
+h2{font-size:1.2rem;margin-top:2.4rem;border-left:4px solid #c00;padding-left:.5rem}
+h3{font-size:1.02rem;margin-top:1.6rem}
+table{border-collapse:collapse;margin:.8rem 0}
+td,th{border:1px solid #bbb;padding:.35rem .7rem;font-size:.92rem}
+th{background:#eee}
+.box{background:#fff3f0;border:1px solid #e0b0a0;border-radius:6px;padding:.8rem 1rem;margin:1rem 0}
+.ok{background:#f0f8f0;border-color:#a0c0a0}
+.note{background:#f0f4fa;border-color:#a0b4d0}
+code{background:#eee;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+pre{background:#f4f4f4;border:1px solid #ddd;border-radius:6px;padding:.7rem .9rem;overflow-x:auto;font-size:.88rem;line-height:1.5}
+small{color:#666}
+.fig{background:#fff;border:1px solid #ddd;border-radius:8px;padding:1rem;margin:1rem 0;overflow-x:auto}
+.fig figcaption{font-size:.88rem;color:#666;margin-top:.5rem;line-height:1.5}
+svg{display:block;margin:0 auto}
+/* 流水线 */
+.pipe{display:flex;flex-wrap:wrap;align-items:stretch;gap:.3rem;margin:1rem 0}
+.pipe .st{background:#fff;border:1.5px solid #888;border-radius:8px;padding:.45rem .6rem;
+ font-size:.83rem;text-align:center;flex:1 1 100px;min-width:96px;display:flex;flex-direction:column;justify-content:center}
+.pipe .st b{font-size:.9rem}
+.pipe .st small{display:block;color:#888;font-size:.74rem;line-height:1.3;margin-top:.15rem}
+.pipe .ar{align-self:center;color:#c00;font-weight:bold;font-size:1.1rem}
+.hl{border-color:#c00 !important;background:#fff8f6 !important}
+/* 控件 */
+.ctl{display:flex;flex-wrap:wrap;gap:.8rem;align-items:center;margin:.6rem 0;font-size:.9rem}
+.ctl label{display:flex;align-items:center;gap:.4rem}
+.ctl input[type=range]{width:150px}
+button{font:inherit;font-size:.86rem;padding:.25rem .8rem;border:1px solid #999;border-radius:6px;
+ background:#fff;cursor:pointer}
+button.on{background:#c00;color:#fff;border-color:#c00}
+.readout{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.86rem;background:#f4f4f4;
+ border-radius:6px;padding:.5rem .8rem;margin:.5rem 0;line-height:1.7}
+.legend{display:flex;flex-wrap:wrap;gap:.9rem;font-size:.82rem;margin:.5rem 0;color:#444}
+.legend span{display:flex;align-items:center;gap:.3rem}
+.dot{width:13px;height:13px;border-radius:50%;display:inline-block;border:2px solid transparent}
+.toc{font-size:.9rem;background:#fff;border:1px solid #ddd;border-radius:8px;padding:.7rem 1.2rem}
+.toc a{color:#c00;text-decoration:none}
+.phasebar{display:flex;height:34px;border-radius:6px;overflow:hidden;border:1px solid #bbb;margin:.5rem 0;font-size:.74rem}
+.phasebar div{display:flex;align-items:center;justify-content:center;color:#fff;white-space:nowrap;overflow:hidden}
+</style></head><body>
+
+<h1>从"走路指令"到 18 路舵机 — climb_walk 全链路图解</h1>
+<p><small>依据本仓库真实代码:<code>gait.py / climb.py / robot.py / kinematics.py / config.py / driver.py</code>。
+所有数字(连杆长、标定值、时序参数)都是你机器上正在跑的值,不是教科书示意值。</small></p>
+
+<div class="toc">
+目录:
+<a href="#s0">0 总览</a> ·
+<a href="#s1">1 一条腿的三个关节(可动手玩)</a> ·
+<a href="#s2">2 走路的本质:支撑相与摆动相(动画)</a> ·
+<a href="#s3">3 爬墙摆动相:六段状态机</a> ·
+<a href="#s4">4 支撑相的数学:每帧挪 0.3mm</a> ·
+<a href="#s5">5 逆运动学:从"脚在哪"到三个角</a> ·
+<a href="#s6">6 标定表:从角度到脉宽 µs</a> ·
+<a href="#s7">7 最后一跳:串口包与 PWM</a> ·
+<a href="#s8">8 一帧清单与代码对照</a>
+</div>
+
+<h2 id="s0">0. 总览:每 20 毫秒重演一遍的旅程</h2>
+
+<p>最容易先建立的一个观念:<b>程序里没有任何地方直接说"某个舵机转多少度"来走路</b>。
+上层永远只回答一个问题——"<b>此刻,六只脚应该在身体坐标系的哪个位置</b>"。
+然后一条固定流水线把 6 个位置换算成 18 个角度、再换算成 18 个脉宽发出去。
+这条流水线每秒跑 50 遍(每 20ms 一帧),走路就是这 50 帧/秒的"位置快照流",
+舵机那头根本没有"迈一步"的概念。</p>
+
+<div class="pipe">
+ <div class="st"><b>按键</b><small>w → vx=15mm/s<br>速度指令</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>相位钟</b><small>gait.py / climb.py<br>谁支撑·谁摆动</small></div>
+ <div class="ar">→</div>
+ <div class="st hl"><b>足端目标 ×6</b><small>身体系 (x,y,z) mm<br>本帧脚该在哪</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>坐标变换</b><small>robot.py<br>身体系→各腿腿系</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>逆运动学 IK</b><small>kinematics.py<br>位置→γ,α,θ</small></div>
+ <div class="ar">→</div>
+ <div class="st hl"><b>关节角 ×18</b><small>度</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>标定表</b><small>config.py<br>角度→脉宽</small></div>
+ <div class="ar">→</div>
+ <div class="st hl"><b>脉宽 ×18</b><small>约 1000~2000 µs</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>串口包</b><small>driver.py 0xD3<br>39 字节 ≈3.4ms</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>Servo2040</b><small>18 路 PWM</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>舵机 ×18</b><small>内部自己闭环<br>转到脉宽对应角</small></div>
+</div>
+
+<p>下面按"先物理、后数学、最后电气"的顺序,把每一环拆开讲。</p>
+
+<h2 id="s1">1. 硬件:一条腿的三个关节(动手转转看)</h2>
+
+<p>每条腿 3 个舵机、3 段连杆,从身体往外依次是:</p>
+
+<table>
+<tr><th>关节</th><th>俗名</th><th>转轴方向</th><th>干什么</th><th>代码符号</th><th>连杆长</th></tr>
+<tr><td>coxa</td><td>髋</td><td><b>竖直</b>(垂直于吸附面)</td><td>整条腿在水平面里<b>前后扫</b></td><td>γ(gamma),0=腿的中性朝向</td><td>43&nbsp;mm</td></tr>
+<tr><td>femur</td><td>大腿</td><td><b>水平</b></td><td>腿在竖直面里<b>抬起/放下</b></td><td>α(alpha),水平=0,抬起为正</td><td>81&nbsp;mm</td></tr>
+<tr><td>tibia</td><td>小腿/膝</td><td><b>水平</b></td><td>膝盖<b>屈伸</b>,决定脚离髋多远</td><td>θ(theta)=大小腿夹角,伸直=180°</td><td>123.7&nbsp;mm</td></tr>
+</table>
+
+<p>直觉版:<b>coxa 管前后,femur 管高低,femur+tibia 一起管远近</b>。
+走路时脚要沿直线匀速移动,而三个关节都是转的——所以三个角必须同时按曲线变化,
+互相配合才能"转出直线"。这正是为什么需要每帧重算(第 5 节的逆运动学)。</p>
+
+<div class="fig">
+<div class="ctl">
+ <label>γ 髋摆 <input type="range" id="sg" min="-45" max="45" value="0" step="0.5"><span id="vg">0°</span></label>
+ <label>α 大腿 <input type="range" id="sa" min="-70" max="70" value="24" step="0.5"><span id="va">24°</span></label>
+ <label>θ 膝角 <input type="range" id="st" min="45" max="178" value="72" step="0.5"><span id="vt">72°</span></label>
+ <button onclick="preset(0,24.1,72.0)">站姿</button>
+ <button onclick="preset(0,2.8,112.4)">爬墙压入位</button>
+ <button onclick="preset(0,24.3,94.6)">抬离 15mm(摆动中)</button>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:1rem;justify-content:center">
+ <svg id="sideview" width="430" height="330" viewBox="0 0 430 330"></svg>
+ <svg id="topview" width="300" height="330" viewBox="0 0 300 330"></svg>
+</div>
+<div class="readout" id="fkout"></div>
+<figcaption>左:<b>侧视</b>(腿所在竖直平面,横轴 r=离髋轴水平距离,纵轴 z,虚线是吸附面)。
+右:<b>俯视</b>(γ 让整条腿绕髋轴扫)。下方实时显示:脚的位置(腿坐标系)、
+三个关节角,以及按 <b>L2 腿真实标定表</b>换算出的三路脉宽——你拖动滑块,
+看到的 µs 数就是真机会收到的数。试试"站姿"和"爬墙压入位"两个按钮,
+注意压入位只是 α 放平、膝更弯,脚就"沉"到了吸附面下方 18mm(=press_delta 压入量)。</figcaption>
+</div>
+
+<div class="box note"><b>六条腿的编号与朝向:</b>左侧从前到后 L1/L2/L3,右侧 R1/R2/R3。
+每条腿有个"中性朝向"(装配决定,如 L1 朝前外侧 55°、L2 朝正左 90°),
+γ=0 就是指着这个方向。后面所有"腿坐标系"的计算,x 轴都沿着各自的中性朝向——
+这样六条腿能共用同一套 IK 公式。</div>
+
+<h2 id="s2">2. 走路的本质:支撑相与摆动相</h2>
+
+<p>把走路拆到最底层,只有两件事在轮流发生:</p>
+<ul>
+<li><b>支撑相(stance)</b>:脚吸在墙上<b>一动不动</b>(在墙的坐标系里)。
+身体要前进,唯一的办法是支撑腿的关节慢慢转,把身体<b>从脚上方挪过去</b>。
+换个视角说:在身体坐标系里看,支撑脚在匀速"向后滑"。
+<b>不是脚蹬墙,是身体爬过脚。</b></li>
+<li><b>摆动相(swing)</b>:某只脚松开、抬起、往前挪一步、重新吸住。
+爬墙时这一步被拆成六段状态机(第 3 节),因为"松开"和"吸住"都不是瞬间的事。</li>
+</ul>
+
+<p>步态(gait)就是"谁支撑、谁摆动"的排班表。你的机器有两张常用的:</p>
+
+<table>
+<tr><th></th><th>三角步态 TRIPOD(地面)</th><th>爬墙步态 CLIMB</th></tr>
+<tr><td>同时摆动</td><td>3 条腿一组(L1+R2+L3 / R1+L2+R3 交替)</td><td><b>一次只有 1 条</b>,其余 5 条吸着</td></tr>
+<tr><td>支撑占比 duty</td><td>1/2</td><td>5/6</td></tr>
+<tr><td>换腿顺序</td><td>两组交替</td><td>R3→L1→R2→L3→R1→L2(对角交叉,避免同侧连抬)</td></tr>
+<tr><td>周期</td><td>1.5&nbsp;s</td><td>3.6&nbsp;s 起步,吸不牢时相位钟会暂停,实际更长</td></tr>
+</table>
+
+<div class="fig">
+<div class="ctl">
+ <button id="btnClimb" class="on" onclick="setMode('climb')">爬墙步态(贴真机时序)</button>
+ <button id="btnTripod" onclick="setMode('tripod')">地面三角步态</button>
+ <button id="btnPause" onclick="togglePause()">⏸ 暂停</button>
+ <label>速度 <input type="range" id="simSpeed" min="0.5" max="4" value="2" step="0.5"><span id="simSpeedV">2×</span></label>
+</div>
+<svg id="gaitview" width="470" height="560" viewBox="0 0 470 560"></svg>
+<div class="phasebar" id="phasebar"></div>
+<div class="readout" id="gaitout"></div>
+<div class="legend">
+ <span><span class="dot" style="background:#1565c0;box-shadow:0 0 0 2px #fff inset"></span>吸附支撑</span>
+ <span><span class="dot" style="background:#e65100"></span>VENT 放气中(仍贴面)</span>
+ <span><span class="dot" style="background:#fff;border-color:#999"></span>腾空(LIFT/TRANSFER/DESCEND)</span>
+ <span><span class="dot" style="background:#c62828"></span>PRESS 压入</span>
+ <span><span class="dot" style="background:#6a1b9a"></span>抽气等吸牢</span>
+</div>
+<figcaption>视角:<b>贴在墙外看机器人背面</b>,画面上方=前进方向(往墙上方爬)。
+镜头跟着身体走,所以吸住的脚(蓝点)和背景网格一起向下流过——它们在墙上其实没动,
+是身体在往上爬。爬墙模式下注意两件事:①一次只离墙一只脚;
+②<b>身体走走停停</b>——状态行里"相位钟:▶走 / ⏸停"就是 climb.py 的核心机制:
+摆动腿的排班窗口只有 0.6s,但放气+抬+挪+压+吸一整套要三秒多,
+钟就停在窗尾等它吸牢,支撑腿(=身体)随之冻结。你在真机上看到的"一顿一顿",
+就是这个,不是卡顿。三角步态则是流水线式的连续节奏,对比明显。</figcaption>
+</div>
+
+<div class="box ok"><b>为什么支撑脚在身体系里"匀速后滑"这么重要?</b>
+因为吸住的脚在墙上绝对不能滑,所以引擎给支撑腿的目标必须与身体运动严格互补:
+身体想以 15mm/s 前进,就把支撑脚目标以 15mm/s 后移,两者相减,脚在墙上速度恰好为零。
+目标是连续积分的,速度突变也不会跳变(climb.py 支撑目标的设计要求)。</div>
+
+<h2 id="s3">3. 爬墙摆动相:一只脚换位的六段状态机</h2>
+
+<p>地面步态的摆动就是"抬起-前挪-放下"一条正弦弧线。爬墙不行:吸盘的释放和密封
+都有物理过程,拍地、拖脚、带真空硬拔都会出事。所以 climb.py 把摆动拆成状态机,
+每段只干一件事:</p>
+
+<div class="fig">
+<svg id="swingtl" width="960" height="300" viewBox="0 0 960 300"></svg>
+<figcaption>上:各段时长(真机默认参数)。下:脚离墙高度 z 的轨迹。
+注意两端的"墙下"部分:VENT 时脚还贴着墙随支撑场平移;PRESS 则压到吸附面
+<b>以下</b> 18mm——不是把墙压塌,是把波纹吸盘压扁到密封圈贴实(press_delta)。</figcaption>
+</div>
+
+<table>
+<tr><th>段</th><th>干什么</th><th>为什么必须有这段(都是实爬教训)</th></tr>
+<tr><td><b>VENT</b> 0.3s</td><td>原地不动,只开排气阀</td><td>边放气边抬,排气建立比抬离慢,腿会被残余真空"拽起"(08-19 实机)</td></tr>
+<tr><td><b>LIFT</b></td><td>沿墙法向退开 15mm(40mm/s)</td><td>吸盘自身回弹 11~13mm,退少了脚还蹭在墙上</td></tr>
+<tr><td><b>TRANSFER</b> 0.6s</td><td>平移到落点正上方(smoothstep 平滑)</td><td>先到"正上方"再下,落地才没有横向速度,不拖脚</td></tr>
+<tr><td><b>DESCEND</b></td><td>竖直慢速下探(30mm/s),XY 冻结</td><td>消灭"拍地"——撞上去的瞬间速度会破坏密封</td></tr>
+<tr><td><b>PRESS</b></td><td>继续压入 18mm(15mm/s)</td><td>波纹盘要压扁才密封;13mm 被腿链让位吃掉大半,实测加深到 18</td></tr>
+<tr><td><b>WAIT</b></td><td>抽气,等盘压过 -30kPa 确认吸牢</td><td>吸不牢就回抬 5mm、<b>比上次再深压 5mm</b> 重试(原深度重压必然同败),3 次失败全机冻结报警</td></tr>
+</table>
+
+<div class="box"><b>相位钟会在这些地方暂停(你日志里各种"等"的来源):</b>
+① 窗尾摆动腿还没吸牢——钟停,全身冻结等它;
+② 窗头互锁:其余 5 脚没全部 ATTACHED 不准抬;
+③ 窗头门槛:有支撑盘压还浅于 -50kPa(刚吸上的邻腿是"软肩膀"),等泵拽深,超 15s 报警;
+④ 任一支撑脚漏气——2s 挽救窗内钟暂停,超时冻结。
+这套"能停的钟"就是 climb 引擎和 P3 纯开环步态的本质区别。</div>
+
+<h2 id="s4">4. 支撑相的数学:每帧挪 0.3 毫米</h2>
+
+<p>速度指令怎么变成支撑脚的目标?三步(gait.py):</p>
+
+<pre>① 步幅向量 u = 速度 × 支撑时长        (爬墙:T_stance = 3.6s × 5/6 = 3s)
+   例:vx=13mm/s 直行 → u ≈ 40mm(正好是爬墙单步上限 climb_max_step)
+
+② 转向时每条腿的 u 不一样:u = (v + ω×r) × T_stance
+   ——刚体速度场:离转轴远的腿要走更长的弧,原地转时六条腿的 u 方向各不相同
+
+③ 支撑相内,目标从 站位+u/2 匀速滑到 站位−u/2:
+   target = 站位 + u × (0.5 − 相位进度)</pre>
+
+<p>在 50Hz 循环里,15mm/s 的速度意味着<b>每帧目标只挪 0.3mm</b>。
+舵机收到的是一串间隔极小的位置指令,看起来就是连续运动。
+"走路"在舵机眼里,只是 1500µs → 1499.7µs → 1499.4µs…这样的脉宽微调流。</p>
+
+<h2 id="s5">5. 逆运动学:从"脚该在哪"到三个关节角</h2>
+
+<p>现在每条腿有了一个目标点(身体系)。变成角度分两步走(robot.py → kinematics.py):</p>
+
+<h3>第一步:换到腿自己的坐标系</h3>
+<pre>身体系 (X,Y,Z)
+  → 减去该腿髋轴的安装位置 (mount_x, mount_y)     # 如 L2 装在 (0, 81.5)
+  → 反转该腿的中性朝向角 mount_angle              # 如 L2 转 −90°
+  → 得腿系 (x,y,z):x 沿腿中性朝外,z 向上</pre>
+<p>(若爬墙时身体还有姿态微调 body_shift / 俯仰滚转,先做一次逆变换,同在此步。)</p>
+
+<h3>第二步:三个角,两道几何题</h3>
+
+<div class="fig">
+<svg id="ikfig" width="920" height="360" viewBox="0 0 920 360"></svg>
+<figcaption>左(俯视):γ 一眼可得——目标点在水平面里的方位角。
+右(腿平面侧视):剩下就是一道初中几何:femur(81)和 tibia(123.7)两根定长杆,
+要够到平面点 (r,z),三边长全知道 → 余弦定理解三角形。</figcaption>
+</div>
+
+<pre>γ = atan2(y, x)                       # 俯视方位角,coxa 直接对准目标
+r = √(x²+y²) − 43                     # 减掉 coxa 平段,剩下二连杆问题
+d = √(r²+z²)                          # 髋(femur轴)到脚的直线距离
+
+θ = acos( (81² + 123.7² − d²) / (2·81·123.7) )      # 三角形顶角=膝角
+α = atan2(z,r) + acos( (81² + d² − 123.7²) / (2·81·d) )  # 视线角+抬角</pre>
+
+<div class="box"><b>WorkspaceError 从哪来:</b>三角形要成立,必须
+42.7&nbsp;mm &lt; d &lt; 204.7&nbsp;mm(两杆长之差与之和)。目标太远/太近,余弦定理里的
+acos 就无解——代码抛 WorkspaceError,爬墙脚本捕获后<b>全机冻结悬停</b>(双降落伞之一)。
+climb.py 里各种"离包络留 3mm 余量""补偿尾预算"的账,全是在保证支撑目标
+被身体运动越拖越远时,永远到不了 d=204.7 这堵墙。</div>
+
+<p>膝盖有"内扣/外翻"两个镜像解,公式固定取一支(你的装配方向);
+IK 每帧独立重算,同一目标永远得同一组角,所以不会"跳解"。</p>
+
+<h2 id="s6">6. 标定表:从关节角到脉宽 µs</h2>
+
+<p>舵机不认识"度"。它只认<b>脉宽</b>:每 20ms 给它一个 500~2500µs 的高电平脉冲,
+脉冲多宽,舵盘停在哪个角,内部电位器自己闭环。所以最后一步是查每个舵机的标定表
+(config.py 里 18 份 ServoCal,2026-08-08 全部实测拟合):</p>
+
+<pre>servo_deg = sign × (关节角 − attach_deg)          # 先换算成"舵机自己的度数"
+us = 1500附近的中点 + servo_deg × (us_p45 − us_m45) / 90   # 线性映射,再夹到 500~2500</pre>
+
+<div class="fig">
+<svg id="calfig" width="920" height="190" viewBox="0 0 920 190"></svg>
+<figcaption>以 L2 大腿舵机(通道 10)实测标定为例:两端点是实测的 ±45° 脉宽,
+中间线性内插。注意 <b>attach_deg=47.81°</b>:舵机发 1500µs(机械中位)时,
+关节实际是 47.8°——这是装舵盘时的机械偏置+装配公差,每个舵机都不同,全靠实测回填。</figcaption>
+</div>
+
+<p>三个容易迷糊的点:</p>
+<ul>
+<li><b>attach_deg(零位偏置)</b>:舵盘是花键插上去的,插的位置决定"舵机中位=关节几度"。
+官方给设计值(coxa −8°/femur 35°/tibia 68°),你的表里是逐个实测值(如 L2 femur 47.81°)。</li>
+<li><b>左右镜像</b>:右腿是左腿的镜像装配,femur/tibia 舵机转向与关节约定相反——
+不改公式,把 ±45° 两个脉宽<b>对调</b>就行(表里 R 腿是 1045/1955,L 腿是 1955/1045)。</li>
+<li><b>膝关节送的不是 θ</b>:标定表用弯曲角 <b>k = 180° − θ</b>(伸直=0),
+所以代码里是 <code>tibia.joint_deg_to_us(180 − θ)</code>。</li>
+</ul>
+
+<h3>完整算例:L2 腿站姿(每个数都可在真机复现)</h3>
+<table>
+<tr><th></th><th>目标/中间量</th><th>结果</th></tr>
+<tr><td>足端目标(腿系)</td><td>x=130, y=0, z=−90(站高 90、伸距 130)</td><td></td></tr>
+<tr><td>IK</td><td>r=87, d=√(87²+90²)=125.2</td><td>γ=0°, α=24.05°, θ=72.0°(k=108.0°)</td></tr>
+<tr><td>coxa 通道9</td><td>(0 − 1.55°) × 斜率</td><td><b>1515.7 µs</b></td></tr>
+<tr><td>femur 通道10</td><td>(24.05 − 47.81°) × 斜率</td><td><b>1738.9 µs</b></td></tr>
+<tr><td>tibia 通道11</td><td>(108.0 − 94.04°) × 斜率</td><td><b>1360.5 µs</b></td></tr>
+</table>
+<p><small>config.py 注释里写的"行走工作点 α≈24°(≈1735µs)"就是这一格。
+第 1 节的滑块模拟器用的正是这套算法和这份标定,可对照。</small></p>
+
+<h2 id="s7">7. 最后一跳:串口包与 PWM</h2>
+
+<p>18 个脉宽算好后,树莓派把它们打成<b>一个</b>串口包发给 Servo2040 驱动板:</p>
+
+<div class="fig">
+<svg id="pktfig" width="920" height="150" viewBox="0 0 920 150"></svg>
+<figcaption>SET 包:命令字 0xD3 + 起始通道 + 数量 + 每个值拆成两个 7 位字节。
+39 字节 @115200 波特 ≈ 3.4ms,必须一次 write 发完(固件逐字节超时只有 100µs)。</figcaption>
+</div>
+
+<p>Servo2040 收到后,把 18 路 PWM 引脚的脉宽寄存器一改,硬件持续输出。
+每个舵机拿到自己的脉冲,<b>内部</b>电位器+电机自成闭环转到目标角。
+两个 50Hz 是巧合但独立:控制循环 50Hz 是软件节拍,PWM 50Hz 是舵机信号规范。</p>
+
+<div class="box"><b>全链路最重要的一个坑:开环。</b>
+舵机没有位置回读——树莓派只知道"脉宽发出去了",<b>不知道关节真转到没有</b>。
+带载时齿隙+结构弹性会让实际角度差出去,足端差好几毫米:
+这就是 08-19 视频里 press 反力把支撑腿链压弯 13~27mm、
+press_delta 名义 13mm 实际只压进几毫米要加深到 18 的物理根源。
+代码里所有"实测回填""判据靠气压/电流不靠指令位置"的做法,都是在绕开这个盲区。
+(气路那边有反馈:盘压传感器 → -30kPa 吸牢判据 → 才敢抬下一条腿。
+<b>运动是开环的,吸附是闭环的</b>,爬墙的安全全押在后者。)</div>
+
+<h2 id="s8">8. 收个尾:一帧(20ms)里到底发生了什么</h2>
+
+<pre>1. 读键盘:得到速度指令 (vx, vy, wz)
+2. eng.update(dt, vx, vy, wz)                        # climb.py
+   ├ 相位钟推进(或因互锁/门槛/未吸牢/漏气而暂停)
+   ├ 摆动腿:按状态机(VENT→…→WAIT)算本帧位置,驱动气阀
+   └ 支撑腿:目标反向平移 v·dt(≈0.3mm),含下滑补偿
+   → 返回 6 个足端目标(身体系)
+3. bot.move_feet(targets)                            # robot.py
+   ├ 每腿:身体系→腿系(减安装位、转中性角)
+   ├ 每腿:leg_ik → γ, α, θ                          # kinematics.py
+   ├ 每关节:标定表 joint_deg_to_us → 脉宽            # config.py
+   └ 18 路脉宽按通道号排好
+4. driver.set_all_pulses_us(...)                     # driver.py
+   → 0xD3 串口包 → Servo2040 → 18 路 PWM → 舵机转动
+5. 另一线程/节拍:气路状态机 ctl.update(dt) 管阀和泵,读盘压
+6. sleep 到下一个 20ms</pre>
+
+<table>
+<tr><th>想看哪一环</th><th>去哪个文件</th></tr>
+<tr><td>谁支撑谁摆动、相位偏移表</td><td><code>hexapod/gait.py</code>(TRIPOD/WAVE/CLIMB 三张表)</td></tr>
+<tr><td>爬墙状态机、相位钟暂停规则、下滑补偿</td><td><code>hexapod/climb.py</code>(文件头注释就是设计文档)</td></tr>
+<tr><td>坐标变换、IK 调用、18 路脉宽组装</td><td><code>hexapod/robot.py</code></td></tr>
+<tr><td>IK/FK 公式本体(52 行)</td><td><code>hexapod/kinematics.py</code></td></tr>
+<tr><td>连杆长、18 份舵机标定、全部时序参数</td><td><code>hexapod/config.py</code></td></tr>
+<tr><td>串口协议、继电器急停</td><td><code>hexapod/driver.py</code></td></tr>
+</table>
+
+<p><small>页面生成:2026-08-19。参数快照:站高 90 / 伸距 130(地面)、爬墙站位半径 176.6(压入位垂直解)、
+press_delta 18、周期 3.6s、步幅上限 40、50Hz。若 config 改动,以代码为准。</small></p>
+
+<script>
+"use strict";
+/* ============ 共用:运动学与标定(与 python 逐式对应) ============ */
+const LC=43, LF=81, LT=123.7, D2R=Math.PI/180;
+function fk(g,a,th){            // 角度(度)→ 腿系坐标与关节点
+  const gr=g*D2R, ar=a*D2R, at=(a+th-180)*D2R;
+  const elbow={r:LC, z:0};
+  const knee={r:LC+LF*Math.cos(ar), z:LF*Math.sin(ar)};
+  const foot={r:knee.r+LT*Math.cos(at), z:knee.z+LT*Math.sin(at)};
+  return {elbow,knee,foot, x:foot.r*Math.cos(gr), y:foot.r*Math.sin(gr), z:foot.z};
+}
+const CAL_L2={ coxa:{ch:9, attach:1.55, m45:1955.8, p45:1044.2},
+               femur:{ch:10, attach:47.81, m45:1952.5, p45:1047.5},
+               tibia:{ch:11, attach:94.04, m45:1949.5, p45:1050.5} };
+function toUs(cal,deg){
+  const us=(cal.m45+cal.p45)/2 + (deg-cal.attach)*(cal.p45-cal.m45)/90;
+  return Math.min(2500,Math.max(500,us));
+}
+function S(el,attrs){ for(const k in attrs) el.setAttribute(k,attrs[k]); return el; }
+function mk(tag,attrs,parent){ const e=document.createElementNS("http://www.w3.org/2000/svg",tag);
+  if(attrs) S(e,attrs); if(parent) parent.appendChild(e); return e; }
+function txt(parent,x,y,s,attrs){ const e=mk("text",Object.assign({x,y,"font-size":12,fill:"#444"},attrs||{}),parent);
+  e.textContent=s; return e; }
+
+/* ============ 1. 关节模拟器 ============ */
+const sv=document.getElementById("sideview"), tv=document.getElementById("topview");
+// 侧视映射:r∈[-30,230] z∈[-135,110] → 430x330
+function sx(r){ return 30+(r+45)*1.45; }  function sz(z){ return 175-z*1.28; }
+function drawSide(g,a,th){
+  sv.innerHTML="";
+  // 吸附面
+  mk("line",{x1:sx(-15),y1:sz(-90),x2:sx(225),y2:sz(-90),stroke:"#888","stroke-dasharray":"6 4"},sv);
+  txt(sv,sx(150),sz(-90)+16,"吸附面 z=−90(站高)",{fill:"#888"});
+  mk("line",{x1:sx(-15),y1:sz(0),x2:sx(225),y2:sz(0),stroke:"#ddd"},sv);
+  txt(sv,sx(196),sz(0)-6,"髋轴平面 z=0",{fill:"#bbb","font-size":11});
+  const p=fk(g,a,th), E=p.elbow,K=p.knee,F=p.foot;
+  // 身体块
+  mk("rect",{x:sx(-18),y:sz(12),width:36,height:30,rx:5,fill:"#e8e8e8",stroke:"#999"},sv);
+  txt(sv,sx(-16),sz(20),"身体",{fill:"#777","font-size":11});
+  // 连杆
+  const seg=(a1,b1,c,w)=>mk("line",{x1:sx(a1.r),y1:sz(a1.z),x2:sx(b1.r),y2:sz(b1.z),
+    stroke:c,"stroke-width":w,"stroke-linecap":"round"},sv);
+  seg({r:0,z:0},E,"#607d8b",9); seg(E,K,"#c62828",7); seg(K,F,"#1565c0",5.5);
+  // 关节点
+  [[0,0,"#37474f"],[E.r,E.z,"#607d8b"],[K.r,K.z,"#c62828"]].forEach(([r,z,c])=>
+    mk("circle",{cx:sx(r),cy:sz(z),r:6,fill:"#fff",stroke:c,"stroke-width":3},sv));
+  // 吸盘
+  mk("circle",{cx:sx(F.r),cy:sz(F.z),r:7,fill:"#1565c0"},sv);
+  txt(sv,sx(LC/2)-14,sz(0)-12,"coxa 43",{fill:"#607d8b","font-weight":"bold"});
+  txt(sv,sx((E.r+K.r)/2)+8,sz((E.z+K.z)/2),"femur 81",{fill:"#c62828","font-weight":"bold"});
+  txt(sv,sx((K.r+F.r)/2)+8,sz((K.z+F.z)/2),"tibia 123.7",{fill:"#1565c0","font-weight":"bold"});
+  txt(sv,sx(K.r)+10,sz(K.z)-10,"θ 膝",{fill:"#333"});
+  txt(sv,sx(E.r)+2,sz(E.z)-12,"α",{fill:"#333"});
+}
+function drawTop(g,a,th){
+  tv.innerHTML="";
+  const cx=90, cy=165, sc=0.9, p=fk(g,a,th), R=p.foot.r*sc;
+  txt(tv,10,20,"俯视",{fill:"#888"});
+  // 扫掠范围
+  const arc=(ang)=>[cx+200*sc*Math.cos(-ang*D2R), cy+200*sc*Math.sin(-ang*D2R)];
+  const [ax1,ay1]=arc(45),[ax2,ay2]=arc(-45);
+  mk("path",{d:`M${cx},${cy} L${ax1},${ay1} A${200*sc},${200*sc} 0 0 1 ${ax2},${ay2} Z`,
+    fill:"#f2f6fb",stroke:"none"},tv);
+  mk("line",{x1:cx,y1:cy,x2:cx+205*sc,y2:cy,stroke:"#bbb","stroke-dasharray":"5 4"},tv);
+  txt(tv,cx+95,cy+16,"γ=0 中性朝向",{fill:"#999","font-size":11});
+  mk("rect",{x:cx-42,y:cy-30,width:34,height:60,rx:6,fill:"#e8e8e8",stroke:"#999"},tv);
+  const fx=cx+R*Math.cos(-g*D2R), fy=cy+R*Math.sin(-g*D2R);
+  mk("line",{x1:cx,y1:cy,x2:fx,y2:fy,stroke:"#455a64","stroke-width":6,"stroke-linecap":"round"},tv);
+  mk("circle",{cx:cx,cy:cy,r:6,fill:"#fff",stroke:"#37474f","stroke-width":3},tv);
+  mk("circle",{cx:fx,cy:fy,r:7,fill:"#1565c0"},tv);
+  txt(tv,cx+30,cy-40,"γ="+g.toFixed(1)+"°",{fill:"#333","font-weight":"bold"});
+}
+function refreshFK(){
+  const g=+document.getElementById("sg").value,
+        a=+document.getElementById("sa").value,
+        t=+document.getElementById("st").value;
+  document.getElementById("vg").textContent=g+"°";
+  document.getElementById("va").textContent=a+"°";
+  document.getElementById("vt").textContent=t+"°";
+  drawSide(g,a,t); drawTop(g,a,t);
+  const p=fk(g,a,t), k=180-t;
+  document.getElementById("fkout").innerHTML=
+    `脚(腿系): x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}, z=${p.z.toFixed(1)} mm`+
+    ` &nbsp;|&nbsp; 关节角: γ=${g.toFixed(1)}° α=${a.toFixed(1)}° θ=${t.toFixed(1)}° (k=${k.toFixed(1)}°)<br>`+
+    `→ L2 真实脉宽: coxa(ch9)=<b>${toUs(CAL_L2.coxa,g).toFixed(1)}µs</b>`+
+    ` &nbsp;femur(ch10)=<b>${toUs(CAL_L2.femur,a).toFixed(1)}µs</b>`+
+    ` &nbsp;tibia(ch11)=<b>${toUs(CAL_L2.tibia,k).toFixed(1)}µs</b>`;
+}
+function preset(g,a,t){ document.getElementById("sg").value=g;
+  document.getElementById("sa").value=a; document.getElementById("st").value=t; refreshFK(); }
+["sg","sa","st"].forEach(id=>document.getElementById(id).addEventListener("input",refreshFK));
+refreshFK();
+
+/* ============ 2. 步态动画 ============ */
+const LEGS=[{n:"L1",mx:83.5,my:63,ang:55},{n:"L2",mx:0,my:81.5,ang:90},
+            {n:"L3",mx:-83.5,my:63,ang:125},{n:"R1",mx:83.5,my:-63,ang:-55},
+            {n:"R2",mx:0,my:-81.5,ang:-90},{n:"R3",mx:-83.5,my:-63,ang:-125}];
+const ORDER=["R3","L1","R2","L3","R1","L2"];
+// 爬墙摆动分段(真机默认参数):时长 s
+const PH=[["VENT",0.3],["LIFT",0.375],["TRANSFER",0.6],["DESCEND",0.5],["PRESS",1.2],["WAIT",0.7]];
+const SLOT=PH.reduce((s,p)=>s+p[1],0);          // 3.675s 一腿
+const CLOCK_WIN=0.6;                            // 每腿窗口的相位钟时长
+const U=40, V=U/3.0;                            // 爬墙步幅40mm,v=13.3mm/s
+const REACH_CLIMB=176.6, REACH_GND=130;
+let mode="climb", paused=false, tSim=0, lastRaf=null;
+const gv=document.getElementById("gaitview");
+const GCX=235, GCY=300, GS=0.82;                // 世界mm→屏幕
+function gpos(bx,by){ return [GCX-by*GS, GCY-bx*GS]; }  // 身体系(x前,y左)→屏(上=前)
+
+function defFoot(l,reach){ const a=l.ang*D2R;
+  return {x:l.mx+reach*Math.cos(a), y:l.my+reach*Math.sin(a)}; }
+
+function climbState(t){
+  const j=Math.floor(t/SLOT), tau=t-j*SLOT;
+  const clock=j*CLOCK_WIN+Math.min(tau,CLOCK_WIN);
+  const bodyX=V*clock, running=tau<CLOCK_WIN;
+  const feet={};
+  LEGS.forEach(l=>{
+    const s=ORDER.indexOf(l.n), d=defFoot(l,REACH_CLIMB);
+    // 该腿最近一次完成的槽
+    let jl=-1;
+    if(j>s) jl=s+6*Math.floor((j-1-s)/6);
+    const landW = jl<0 ? d.x : V*(jl+1)*CLOCK_WIN + d.x + U/2;   // 世界x
+    let st="STANCE", wx=landW, z=0;
+    if(j%6===s && j>=0 && ORDER[j%6]===l.n && true){
+      // 本槽正是这条腿:按 tau 分段
+      let acc=0, seg="WAIT", f=0;
+      for(const [nm,dur] of PH){ if(tau<acc+dur){ seg=nm; f=(tau-acc)/dur; break;} acc+=dur; }
+      const targetW=V*(j+1)*CLOCK_WIN + d.x + U/2;
+      st=seg;
+      if(seg==="VENT"){ z=0; wx=landW; }
+      else if(seg==="LIFT"){ z=15*f; wx=landW; }
+      else if(seg==="TRANSFER"){ z=15; const ss=f*f*(3-2*f); wx=landW+(targetW-landW)*ss; }
+      else if(seg==="DESCEND"){ z=15*(1-f); wx=targetW; }
+      else if(seg==="PRESS"){ z=-18*f; wx=targetW; }
+      else { z=-18; wx=targetW; }
+    }
+    feet[l.n]={wx, wy:d.y, z, st};
+  });
+  return {bodyX, running, feet, active:ORDER[j%6],
+          phase: (()=>{ let acc=0; for(const [nm,dur] of PH){ if(tau<acc+dur) return [nm,(tau-acc)/dur]; acc+=dur;} return ["WAIT",1];})()};
+}
+function tripodState(t){
+  const CYC=1.5, DUTY=0.5, v=40, u=v*CYC*DUTY, bodyX=v*t;
+  const OFF={L1:0,R2:0,L3:0,R1:.5,L2:.5,R3:.5};
+  const feet={};
+  LEGS.forEach(l=>{
+    const d=defFoot(l,REACH_GND), p=(t/CYC+OFF[l.n])%1;
+    let bx,z,st;
+    if(p<DUTY){ const s=p/DUTY; bx=d.x+u*(0.5-s); z=0; st="STANCE"; }
+    else { const s=(p-DUTY)/(1-DUTY), ss=s*s*(3-2*s);
+      bx=d.x+u*(ss-0.5); z=40*Math.sin(Math.PI*s); st="SWING"; }
+    feet[l.n]={wx:bx+bodyX, wy:d.y, z, st};
+  });
+  return {bodyX, running:true, feet, active:"—", phase:["",0]};
+}
+const PHCOL={STANCE:"#1565c0",VENT:"#e65100",LIFT:"#fff",TRANSFER:"#fff",DESCEND:"#fff",
+             PRESS:"#c62828",WAIT:"#6a1b9a",SWING:"#fff"};
+const PHNAME={VENT:"VENT 放气",LIFT:"LIFT 抬离",TRANSFER:"TRANSFER 平移",
+              DESCEND:"DESCEND 下探",PRESS:"PRESS 压入",WAIT:"WAIT 抽气吸牢"};
+function drawGait(stt){
+  gv.innerHTML="";
+  // 墙面网格(世界系,随身体前进向下流)
+  const sp=40*GS;
+  for(let k=-8;k<10;k++){
+    const wy=GCY-( (k*40 - (stt.bodyX%40)) )*GS;
+    if(wy>0&&wy<560) mk("line",{x1:10,y1:wy,x2:460,y2:wy,stroke:"#eee"},gv);
+  }
+  for(let x=35;x<470;x+=sp) mk("line",{x1:x,y1:0,x2:x,y2:560,stroke:"#f3f3f3"},gv);
+  // 前进方向
+  mk("path",{d:"M440,60 l0,-34 m-8,10 l8,-10 l8,10",stroke:"#c00","stroke-width":2.5,fill:"none"},gv);
+  txt(gv,414,78,"前进(爬升)",{fill:"#c00","font-size":11});
+  // 身体(镜头跟随,固定屏幕中央)
+  const bodyPts=[[100,45],[20,90],[-100,73],[-100,-73],[20,-90],[100,-45]]
+    .map(([x,y])=>gpos(x,y).join(",")).join(" ");
+  mk("polygon",{points:bodyPts,fill:"#e3e7ec",stroke:"#78909c","stroke-width":2},gv);
+  txt(gv,GCX-14,GCY+4,"身体",{fill:"#78909c"});
+  // 腿与脚
+  LEGS.forEach(l=>{
+    const f=stt.feet[l.n];
+    const bx=f.wx-stt.bodyX, by=f.wy;             // 身体系
+    const [hx,hy]=gpos(l.mx,l.my), [fx,fy2]=gpos(bx,by);
+    const air=f.z>0.5;
+    mk("line",{x1:hx,y1:hy,x2:fx,y2:fy2,stroke: air?"#bbb":"#78909c",
+      "stroke-width":3.5, "stroke-dasharray":air?"5 4":"none","stroke-linecap":"round"},gv);
+    mk("circle",{cx:hx,cy:hy,r:4,fill:"#78909c"},gv);
+    const col=PHCOL[f.st]||"#999";
+    if(air){ // 腾空:空心圈,半径随高度
+      mk("circle",{cx:fx,cy:fy2,r:7+f.z*0.22,fill:"#fff",stroke:"#888","stroke-width":2.5,
+        "stroke-dasharray":"4 3"},gv);
+    } else {
+      mk("circle",{cx:fx,cy:fy2,r: f.z<-1?10:9, fill:col},gv);
+      if(f.st==="STANCE") mk("circle",{cx:fx,cy:fy2,r:4.5,fill:"none",stroke:"#fff","stroke-width":1.8},gv);
+    }
+    txt(gv,fx+12,fy2+4,l.n,{fill:"#666","font-size":11,"font-weight":"bold"});
+  });
+}
+function drawPhasebar(stt){
+  const bar=document.getElementById("phasebar"); bar.innerHTML="";
+  if(mode!=="climb"){ bar.style.display="none"; return; }
+  bar.style.display="flex";
+  const colors={VENT:"#e65100",LIFT:"#90a4ae",TRANSFER:"#78909c",DESCEND:"#607d8b",
+                PRESS:"#c62828",WAIT:"#6a1b9a"};
+  PH.forEach(([nm,dur])=>{
+    const d=document.createElement("div");
+    d.style.flex=dur; d.style.background=colors[nm];
+    d.style.opacity=(stt.phase[0]===nm)?1:0.32;
+    d.textContent=nm+" "+dur+"s";
+    bar.appendChild(d);
+  });
+}
+function stepAnim(ts){
+  if(lastRaf===null) lastRaf=ts;
+  const dt=Math.min(0.05,(ts-lastRaf)/1000); lastRaf=ts;
+  if(!paused) tSim+=dt*(+document.getElementById("simSpeed").value);
+  const stt=(mode==="climb")?climbState(tSim):tripodState(tSim);
+  drawGait(stt); drawPhasebar(stt);
+  const out=document.getElementById("gaitout");
+  if(mode==="climb"){
+    out.innerHTML=`换腿顺序 R3→L1→R2→L3→R1→L2 | 当前摆动:<b>${stt.active}</b> — `+
+      `<b>${PHNAME[stt.phase[0]]||stt.phase[0]}</b> | 相位钟:`+
+      (stt.running?`<b style="color:#2e7d32">▶ 走(身体前进中)</b>`
+                  :`<b style="color:#c62828">⏸ 停(等 ${stt.active} 吸牢,支撑腿冻结)</b>`)+
+      ` | 已爬 ${(stt.bodyX).toFixed(0)} mm`;
+  } else {
+    out.innerHTML=`三角步态:L1+R2+L3 与 R1+L2+R3 两组交替,duty=1/2,身体连续匀速前进 `+
+      `| 已走 ${(stt.bodyX).toFixed(0)} mm <small>(演示速度 40mm/s,便于观察)</small>`;
+  }
+  requestAnimationFrame(stepAnim);
+}
+function setMode(m){ mode=m; tSim=0;
+  document.getElementById("btnClimb").classList.toggle("on",m==="climb");
+  document.getElementById("btnTripod").classList.toggle("on",m==="tripod"); }
+function togglePause(){ paused=!paused;
+  document.getElementById("btnPause").textContent=paused?"▶ 播放":"⏸ 暂停"; }
+document.getElementById("simSpeed").addEventListener("input",e=>{
+  document.getElementById("simSpeedV").textContent=e.target.value+"×"; });
+requestAnimationFrame(stepAnim);
+
+/* ============ 3. 摆动相时间轴静态图 ============ */
+(function(){
+  const svg=document.getElementById("swingtl");
+  const X0=70, W=830, H_BAR=44, Y_BAR=30;
+  const colors={VENT:"#e65100",LIFT:"#90a4ae",TRANSFER:"#78909c",DESCEND:"#607d8b",
+                PRESS:"#c62828",WAIT:"#6a1b9a"};
+  let acc=0;
+  PH.forEach(([nm,dur])=>{
+    const x=X0+acc/SLOT*W, w=dur/SLOT*W;
+    mk("rect",{x,y:Y_BAR,width:w-2,height:H_BAR,rx:5,fill:colors[nm]},svg);
+    txt(svg,x+w/2,Y_BAR+19,nm,{fill:"#fff","text-anchor":"middle","font-weight":"bold","font-size":12});
+    txt(svg,x+w/2,Y_BAR+35,dur+"s",{fill:"#fff","text-anchor":"middle","font-size":11});
+    acc+=dur;
+  });
+  txt(svg,X0,20,"一条腿换位全程 ≈ "+SLOT.toFixed(2)+"s(而排班窗口只有 0.6s → 相位钟停在窗尾等)",{fill:"#333","font-weight":"bold"});
+  // z 轨迹
+  const Y0=200, ZS=3.2;   // z=0 基线,mm→px
+  const zy=z=>Y0-z*ZS;
+  mk("line",{x1:X0-10,y1:zy(0),x2:X0+W,y2:zy(0),stroke:"#888","stroke-dasharray":"6 4"},svg);
+  txt(svg,X0+W-160,zy(0)-8,"吸附面 z=0",{fill:"#888"});
+  txt(svg,8,zy(15)+4,"z 抬离",{fill:"#666"});
+  // 分段折线: VENT 0 | LIFT 0→15 | TRANSFER 15 | DESCEND 15→0 | PRESS 0→-18 | WAIT -18
+  const t2x=t=>X0+t/SLOT*W;
+  let d=`M${t2x(0)},${zy(0)} L${t2x(0.3)},${zy(0)} L${t2x(0.675)},${zy(15)} `+
+        `L${t2x(1.275)},${zy(15)} L${t2x(1.775)},${zy(0)} L${t2x(2.975)},${zy(-18)} L${t2x(SLOT)},${zy(-18)}`;
+  mk("path",{d,stroke:"#1565c0","stroke-width":3,fill:"none","stroke-linejoin":"round"},svg);
+  // 标注
+  txt(svg,t2x(0.42)+4,zy(8)-6,"退开15mm(盘回弹11~13)",{fill:"#555","font-size":11});
+  txt(svg,t2x(1.28),zy(15)-10,"平移到落点正上方",{fill:"#555","font-size":11});
+  txt(svg,t2x(2.0)+6,zy(-10),"压入18mm=press_delta",{fill:"#c62828","font-size":11});
+  txt(svg,t2x(3.05),zy(-18)+18,"抽气到 −30kPa 才算吸牢",{fill:"#6a1b9a","font-size":11});
+  mk("rect",{x:t2x(0),y:zy(-24),width:t2x(0.3)-t2x(0),height:6,fill:"#e65100",opacity:.5},svg);
+  txt(svg,t2x(0)-2,zy(-24)+22,"贴面随支撑场平移(不划墙)",{fill:"#e65100","font-size":11});
+})();
+
+/* ============ 5. IK 图 ============ */
+(function(){
+  const svg=document.getElementById("ikfig");
+  // 左:俯视 γ
+  txt(svg,30,24,"① 俯视:γ = atan2(y, x)",{"font-weight":"bold","font-size":14});
+  const cx=150,cy=210;
+  mk("line",{x1:cx,y1:cy,x2:cx+180,y2:cy,stroke:"#bbb"},svg);
+  txt(svg,cx+150,cy+18,"x(中性朝向)",{fill:"#999","font-size":11});
+  mk("line",{x1:cx,y1:cy,x2:cx,y2:cy-150,stroke:"#bbb"},svg);
+  txt(svg,cx-24,cy-135,"y",{fill:"#999","font-size":11});
+  const gx=cx+150*Math.cos(-35*D2R), gy=cy+150*Math.sin(-35*D2R);
+  mk("line",{x1:cx,y1:cy,x2:gx,y2:gy,stroke:"#455a64","stroke-width":5,"stroke-linecap":"round"},svg);
+  mk("circle",{cx:gx,cy:gy,r:7,fill:"#1565c0"},svg);
+  txt(svg,gx+10,gy,"目标 (x,y)",{fill:"#1565c0"});
+  mk("path",{d:`M${cx+55},${cy} A55,55 0 0 0 ${cx+55*Math.cos(-35*D2R)},${cy+55*Math.sin(-35*D2R)}`,
+    stroke:"#c00",fill:"none","stroke-width":2},svg);
+  txt(svg,cx+62,cy-16,"γ",{fill:"#c00","font-weight":"bold","font-size":15});
+  mk("circle",{cx,cy,r:5,fill:"#37474f"},svg);
+  txt(svg,cx-40,cy+20,"髋轴",{fill:"#37474f"});
+  txt(svg,40,300,"coxa 对准目标后,问题只剩",{fill:"#555","font-size":12});
+  txt(svg,40,318,"竖直平面里的 (r, z) 两维",{fill:"#555","font-size":12});
+  // 右:侧视三角形
+  txt(svg,480,24,"② 侧视:femur+tibia 解三角形(余弦定理)",{"font-weight":"bold","font-size":14});
+  const hx=560,hy=120;                      // femur 轴
+  // 实际形状:r=87,z=-90 站姿 → α24°,θ72°
+  const p=fk(0,24.05,72.0);
+  const kx=hx+(p.knee.r-LC)*1.35, ky=hy-(p.knee.z)*1.35;
+  const fx2=hx+(p.foot.r-LC)*1.35, fy2=hy-(p.foot.z)*1.35;
+  mk("line",{x1:hx-70,y1:hy,x2:hx+330,y2:hy,stroke:"#ddd"},svg);
+  txt(svg,hx+270,hy-6,"水平线",{fill:"#bbb","font-size":11});
+  mk("line",{x1:hx,y1:hy,x2:kx,y2:ky,stroke:"#c62828","stroke-width":6,"stroke-linecap":"round"},svg);
+  mk("line",{x1:kx,y1:ky,x2:fx2,y2:fy2,stroke:"#1565c0","stroke-width":5,"stroke-linecap":"round"},svg);
+  mk("line",{x1:hx,y1:hy,x2:fx2,y2:fy2,stroke:"#888","stroke-width":2,"stroke-dasharray":"6 4"},svg);
+  mk("circle",{cx:hx,cy:hy,r:6,fill:"#fff",stroke:"#c62828","stroke-width":3},svg);
+  mk("circle",{cx:kx,cy:ky,r:6,fill:"#fff",stroke:"#c62828","stroke-width":3},svg);
+  mk("circle",{cx:fx2,cy:fy2,r:7,fill:"#1565c0"},svg);
+  txt(svg,(hx+kx)/2-10,(hy+ky)/2-12,"femur 81",{fill:"#c62828","font-weight":"bold"});
+  txt(svg,(kx+fx2)/2+12,(ky+fy2)/2,"tibia 123.7",{fill:"#1565c0","font-weight":"bold"});
+  txt(svg,(hx+fx2)/2-70,(hy+fy2)/2+30,"d=√(r²+z²)",{fill:"#666"});
+  txt(svg,kx+4,ky-14,"θ",{fill:"#333","font-weight":"bold","font-size":15});
+  txt(svg,hx-20,hy+22,"α 从这里量",{fill:"#333","font-size":11});
+  txt(svg,fx2-56,fy2+24,"目标 (r,z)",{fill:"#1565c0"});
+  txt(svg,480,320,"三边全知道(81、123.7、d)→ 三个内角随手可解;θ 即膝角,α = 视线角 + 上侧内角",
+     {fill:"#555","font-size":12});
+})();
+
+/* ============ 6. 标定映射图 ============ */
+(function(){
+  const svg=document.getElementById("calfig");
+  const X0=90, W=740, Y=95;
+  // µs 轴(L2 femur: -45°→1952.5, +45°→1047.5, attach 47.81)
+  const us2x=us=>X0+ (2100-us)/1200*W;    // 2100µs 左 → 900µs 右,让"+角度在右"
+  mk("line",{x1:us2x(2050),y1:Y,x2:us2x(980),y2:Y,stroke:"#666","stroke-width":2},svg);
+  [[1952.5,"−45°"],[1500,"中位"],[1047.5,"+45°"]].forEach(([us,lab])=>{
+    const x=us2x(us);
+    mk("line",{x1:x,y1:Y-8,x2:x,y2:Y+8,stroke:"#666","stroke-width":2},svg);
+    txt(svg,x-18,Y+26,us.toFixed(1)+"µs",{fill:"#333","font-size":12});
+    txt(svg,x-14,Y-14,lab,{fill:"#c00","font-weight":"bold"});
+  });
+  txt(svg,X0-60,Y+4,"脉宽",{fill:"#666"});
+  txt(svg,X0,30,"L2 femur(通道10)实测标定:关节角 → 脉宽 线性映射",{"font-weight":"bold","font-size":14});
+  // 站姿工作点
+  const usw=1738.9, xw=us2x(usw);
+  mk("line",{x1:xw,y1:Y-30,x2:xw,y2:Y+8,stroke:"#1565c0","stroke-width":2.5},svg);
+  mk("circle",{cx:xw,cy:Y,r:6,fill:"#1565c0"},svg);
+  txt(svg,xw-88,Y-38,"站姿 α=24.05° → 1738.9µs",{fill:"#1565c0","font-weight":"bold","font-size":12});
+  // attach 标注
+  const x15=us2x(1500);
+  txt(svg,x15-140,Y+50,"⚠ 中位1500µs ≠ 关节0°:此舵机中位时关节实际 47.81°(attach_deg,装配偏置,逐个实测)",
+     {fill:"#a33","font-size":12});
+  txt(svg,X0,Y+80,"斜率 ≈ −10.06 µs/°(负号:该舵机反装,角度增大脉宽减小;右腿则整体镜像,±45 两端对调)",
+     {fill:"#555","font-size":12});
+})();
+
+/* ============ 7. 串口包图 ============ */
+(function(){
+  const svg=document.getElementById("pktfig");
+  const cells=[["0xD3","命令:SET",70,"#c62828"],["0","起始通道",60,"#607d8b"],
+    ["18","数量",55,"#607d8b"],
+    ["低7位","值1",60,"#1565c0"],["高7位","值1",60,"#1565c0"],
+    ["低7位","值2",60,"#5e92f3"],["高7位","值2",60,"#5e92f3"],
+    ["…","",50,"#9e9e9e"],
+    ["低7位","值18",62,"#1565c0"],["高7位","值18",62,"#1565c0"]];
+  let x=30;
+  cells.forEach(([t,sub,w,c])=>{
+    mk("rect",{x,y:40,width:w-4,height:46,rx:5,fill:c},svg);
+    txt(svg,x+(w-4)/2,60,t,{fill:"#fff","text-anchor":"middle","font-weight":"bold","font-size":12});
+    if(sub) txt(svg,x+(w-4)/2,77,sub,{fill:"#fff","text-anchor":"middle","font-size":10});
+    x+=w;
+  });
+  txt(svg,30,26,"一帧 SET 包 = 3+18×2 = 39 字节,值=脉宽µs(14位拆两个7位字节)",{"font-weight":"bold","font-size":13});
+  txt(svg,30,115,"115200 波特 ≈ 3.4ms 发完 → Servo2040 改 18 路 PWM 寄存器 → 每路 50Hz 脉冲持续输出,舵机各自转到位",
+     {fill:"#555","font-size":12});
+  txt(svg,640,26,"(driver.py encode_set,必须一次 write)",{fill:"#888","font-size":11});
+})();
+</script>
+</body></html>

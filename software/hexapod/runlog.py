@@ -164,7 +164,14 @@ class ClimbWatch:
         for n in LEG_NAMES:
             ph = eng.phase_of[n]
             if ph != self._ph[n]:
-                log.event(f"相位 {n} {self._ph[n].value}→{ph.value}")
+                extra = ""
+                if ph.value == "vent":
+                    # 抬腿事件附本步落点相对默认位的指令偏移：验尸能分清
+                    # "指令没往前"还是"指令对了腿没走到"（舵机/机械/被拽）
+                    lx, ly = eng.landing[n]
+                    x0, y0, _ = eng.default_feet[n]
+                    extra = f" 落点Δ({lx - x0:+.1f},{ly - y0:+.1f})"
+                log.event(f"相位 {n} {self._ph[n].value}→{ph.value}{extra}")
                 self._ph[n] = ph
         for i, n in enumerate(LEG_NAMES):
             lk = ctl.leaking[i]

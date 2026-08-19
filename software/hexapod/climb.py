@@ -30,6 +30,10 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
   - 摆动腿在其相位窗结束时还没吸牢 -> 钟停在窗尾等它（支撑腿随之冻结）
   - 抬腿前互锁不满足（其余 5 足没全 ATTACHED，比 adhesion 注释的 >=4 严，
     首爬用严的）-> 钟停在窗头；相邻足不同时释放由一次一腿天然保证
+  - 互锁通过但有支撑盘压未深于 lift_gate_kpa -> 钟停在窗头等泵把它拽深
+    （ATTACHED 的 -30 只是密封判据，窗序首尾相接、每腿都在前一腿刚过线的
+    瞬间开抬，刚吸上的邻腿是软肩膀——08-19 实测 R2 刚过线 R3 就抬，
+    R2/R3 抬腿整机下坠），超 lift_gate_timeout_s 冻结报警点名软腿
   - 任一支撑足漏气 -> 钟暂停（挽救窗内），超 leak_rescue_s -> 冻结报警
   - 速度指令为零 -> 该窗不抬腿，钟空转过窗（吸住不动，省吸盘寿命）
   - 单步模式（request_step）：引擎记录"当前轮到哪条腿"（step_leg，窗序
@@ -188,6 +192,9 @@ class ClimbEngine:
         self._slot_active = False    # 本窗摆动已启动
         self._slot_skipped = False   # 本窗静止跳过
         self._block_t = 0.0          # 互锁不满足已等待时长
+        self._gate_t = 0.0           # 抬腿门槛未达已等待时长（与互锁分开计）
+        self.gate_wait = None        # (拒抬腿, (未达门槛腿,...))；窗头等待中
+                                     # 置位，climb_walk 状态提示用
         self._precharge_t = 0.0      # 启动序列等罐压建立已耗时长
         self._tankless_precharged = False   # 无罐盲抽已完成（一次性）
         self._seg_t = {n: 0.0 for n in LEG_NAMES}   # 当前摆动分段停留时长
@@ -262,7 +269,7 @@ class ClimbEngine:
         if cur != self._slot_leg:
             self._slot_leg = cur
             self._slot_active = self._slot_skipped = False
-            self._block_t = 0.0
+            self._block_t = self._gate_t = 0.0
 
         # 1.5 单步速度顶替：摆动中/轮到本窗用单步速度（request_step 已限幅），
         #     等轮次期间强制静止——其余腿的窗照常空转跳过，直到 step_leg 的
@@ -280,12 +287,36 @@ class ClimbEngine:
         if not moving:
             self._swung_since_go.clear()   # 停走：补偿过渡期重新计账（见装填处）
 
-        # 2. 窗头决策：跳过 / 启动摆动 / 互锁等待。
+        # 2. 窗头决策：跳过 / 启动摆动 / 互锁等待 / 抬腿门槛等待。
         #    漏气挽救期间（leak_pause）绝不放行新的抬腿——漏着的脚不算可靠支撑
+        self.gate_wait = None
         if not self._slot_active and not self._slot_skipped:
             if not moving:
                 self._slot_skipped = True
-            elif not leak_pause and self._interlock_ok(cur):
+            elif leak_pause or not self._interlock_ok(cur):
+                self._block_t += dt
+                if self._block_t > self.cfg.interlock_timeout_s:
+                    bad = [n for n in LEG_NAMES if n != cur and
+                           (not self.ctl.is_attached(LEG_NAMES.index(n))
+                            or self.ctl.is_leaking(LEG_NAMES.index(n)))]
+                    self.frozen = (f"互锁失败：{'/'.join(bad) or '?'} 不可靠，"
+                                   f"{cur} 拒抬")
+            elif (shallow := self._lift_gate_shallow(cur)):
+                # 互锁过了但有支撑盘还软（刚过 -30 密封线）：钟停在窗头等
+                # 泵把它拽深再抬——立刻抬会把载荷压上软肩膀（08-19 实测
+                # R2 刚过线 R3 就抬，R2/R3 抬腿整机下坠）。等待与互锁分开
+                # 计时：这不是故障是常态等待，2s 上限太紧
+                self.gate_wait = (cur, tuple(n for n, _ in shallow))
+                self._gate_t += dt
+                if self._gate_t > self.cfg.lift_gate_timeout_s:
+                    txt = "/".join(f"{n}({k:.0f}kPa)" if k is not None
+                                   else f"{n}(--)" for n, k in shallow)
+                    self.frozen = (
+                        f"抬腿门槛超时：{txt} 等 "
+                        f"{self.cfg.lift_gate_timeout_s:.0f}s 未深于 "
+                        f"{self.cfg.lift_gate_kpa:.0f}kPa，{cur} 拒抬"
+                        "（唇口漏/泵弱？）")
+            else:
                 self.landing[cur] = self._landing_xy(cur, vx, vy, wz)
                 self.ctl.request_release(LEG_NAMES.index(cur))
                 # 先通气 lift_vent_s 再抬（VENT 段贴面原地，随支撑场平移）
@@ -326,14 +357,6 @@ class ClimbEngine:
                                   + self.cfg.lift_clearance) / self.cfg.lift_speed
                         self._comp_rate = c_eff \
                             / (lift_t + self.cfg.transfer_time)
-            else:
-                self._block_t += dt
-                if self._block_t > self.cfg.interlock_timeout_s:
-                    bad = [n for n in LEG_NAMES if n != cur and
-                           (not self.ctl.is_attached(LEG_NAMES.index(n))
-                            or self.ctl.is_leaking(LEG_NAMES.index(n)))]
-                    self.frozen = (f"互锁失败：{'/'.join(bad) or '?'} 不可靠，"
-                                   f"{cur} 拒抬")
 
         # 3. 相位钟推进量：摆动落后于相位窗时钟停在窗尾等吸附事件
         if leak_pause:
@@ -341,7 +364,7 @@ class ClimbEngine:
         elif self._slot_skipped:
             adv = dt                                   # 静止：空转过窗
         elif not self._slot_active:
-            adv = 0.0                                  # 互锁等待：停在窗头
+            adv = 0.0                                  # 互锁/门槛等待：停在窗头
         elif self.phase_of[cur] == LegPhase.STANCE:
             adv = dt                                   # 本窗摆动已完成
         else:
@@ -455,6 +478,7 @@ class ClimbEngine:
         重压从加深后的深度继续（增量处有封顶，不会越加越深出包络）。"""
         self.frozen = None
         self._block_t = 0.0
+        self._gate_t = 0.0           # 门槛超时冻结后重看一个完整等待窗
         self._precharge_t = 0.0
         # 挂起未开始的单步一并取消（审核发现 #2）：冻结处理时手在机器旁，
         # 不取消的话解冻后等到窗它会自行抬腿——与"带着冻结前旧速度恢复
@@ -517,6 +541,22 @@ class ClimbEngine:
         return all(self.ctl.is_attached(LEG_NAMES.index(n))
                    and not self.ctl.is_leaking(LEG_NAMES.index(n))
                    for n in LEG_NAMES if n != name)
+
+    def _lift_gate_shallow(self, name):
+        """抬腿门槛未达标的支撑腿 [(腿, kPa)]：其余 5 足盘压须全部深于
+        lift_gate_kpa 才许抬 name。读数取 last_kpa 镜像（ATTACHED 控制环每
+        周期都在读，不陈旧、零额外 IO）；镜像缺失按未达标计（保守）。
+        air 模式吸不上属预期，旁路；lift_gate_kpa=0 关闭本门槛。"""
+        if self.air_mode or self.cfg.lift_gate_kpa >= 0.0:
+            return []
+        out = []
+        for n in LEG_NAMES:
+            if n == name:
+                continue
+            k = self.ctl.last_kpa[LEG_NAMES.index(n)]
+            if k is None or k > self.cfg.lift_gate_kpa:
+                out.append((n, k))
+        return out
 
     def _leak_watch(self):
         """支撑足漏气监护（启动序列与行走共用）：挽救窗内返回 True

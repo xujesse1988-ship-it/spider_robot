@@ -34,6 +34,11 @@ CLIMB 步态。
                                              # 沿下坡向额外平移 3mm，顶回"每抬
                                              # 一腿被拽下一截"的棘轮下滑（头朝
                                              # 上贴墙口径；从小标定，宁欠勿过）
+  python climb_walk.py --lift-gate -45       # 抬腿门槛：其余支撑盘压全部深于
+                                             # 此值才放行抬腿（默认 -50；0=关）。
+                                             # ATTACHED 的 -30 只是密封判据，刚
+                                             # 吸上的邻腿是软肩膀，立刻抬下一腿
+                                             # 整机被拽下坠（08-19 实测 R2/R3）
   python climb_walk.py --release             # 善后：逐足串行放气+回站姿
 
 黑匣子：每次运行自动写 software/logs/climb_YYYYmmdd_HHMMSS.log（事件 +
@@ -170,6 +175,13 @@ def main():
                          "(平面尾预算-半步幅)/5)，预算随压深自动缩（press 13"
                          " 时≈40、满速封顶 4mm；press 18 时≈37），想吃满就把"
                          " SPEED 降下来走；有腿重试加深吸附时暂停装填")
+    ap.add_argument("--lift-gate", type=float,
+                    default=DEFAULT_CONFIG.lift_gate_kpa,
+                    help="抬腿门槛 kPa（默认 %(default)g；0=关）：窗头放行抬腿前"
+                         "其余 5 支撑盘压须全部深于此值——ATTACHED 的 -30 只是"
+                         "密封判据，刚吸上的邻腿还软，立刻抬下一腿整机被拽下坠"
+                         "（08-19 实测 R2/R3）。等待超时冻结报警点名软腿。"
+                         "范围 -65~-35")
     ap.add_argument("--press-delta", type=float, default=None,
                     help="预压行程 mm，覆盖全部腿（默认用 config 值 "
                          f"{DEFAULT_CONFIG.legs[0].press_delta_mm:g}）。08-19："
@@ -190,13 +202,17 @@ def main():
         ap.error(f"--sag-comp {args.sag_comp} 非法：范围 0~8mm。补偿超过真实"
                  "下沉量的部分会把吸附中的支撑盘沿面往下坡拖，宁欠勿过；"
                  "工作空间限额下更大的设定值也吃不满，没有意义")
+    if args.lift_gate != 0.0 and not -65.0 <= args.lift_gate <= -35.0:
+        ap.error(f"--lift-gate {args.lift_gate} 非法：范围 -65~-35（或 0=关）。"
+                 "浅于 -35 与 ATTACHED 判据(-30)没区别形同虚设；深于 -65 贴近"
+                 " -75 停泵线，唇口稍有微漏就永远到不了门槛、必然超时冻结")
     if not args.release and not sys.stdin.isatty():
         # TTY 检查必须在碰任何硬件之前：否则真机先上电站立、再在 termios
         # 处崩溃断电瘫倒（审核发现 #5）。--release 无需键盘，放行。
         sys.exit("需要交互终端（ssh 加 -t；勿用 nohup/管道跑本脚本）")
 
     cfg = replace(DEFAULT_CONFIG, climb_cycle_time=args.cycle,
-                  climb_sag_comp_mm=args.sag_comp)
+                  climb_sag_comp_mm=args.sag_comp, lift_gate_kpa=args.lift_gate)
     if args.press_delta is not None:
         if not 8.0 <= args.press_delta <= 20.0:
             ap.error(f"--press-delta {args.press_delta} 非法：范围 8~20mm。"
@@ -219,6 +235,7 @@ def main():
     log.note(f"模式={mode} port={args.port} release={args.release}")
     log.note(f"参数: cycle={cfg.climb_cycle_time}s sag_comp={cfg.climb_sag_comp_mm}mm"
              f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
+             f" lift_gate={cfg.lift_gate_kpa:g}kPa"
              f" SPEED={SPEED} TURN={TURN} update_hz={cfg.update_hz:g}"
              f" max_step={cfg.climb_max_step}")
     _prev_hook = sys.excepthook
@@ -316,6 +333,7 @@ def main():
     released_hold = False   # 'oo' 取机窗口：吸盘已全放开，六足仅舵机撑住
     step_was = False        # 单步在途标志（沿检测"在途→结束"打完成提示）
     hover_was = None        # 单步悬停腿（沿检测进入悬停打"再按 i 落地"提示）
+    gate_was = None         # 抬腿门槛等待（沿检测打"等泵压实"提示，按拒抬腿）
     was_started = False
     at_pause = True      # 就位暂停中（尚未开始任何吸附动作）
     aborted = False      # 在暂停处确认退出（finally 不再做善后）
@@ -577,6 +595,18 @@ def main():
                 io_freeze(e)
             watch.poll()   # 状态跳变（相位/吸附/泵阀/冻结/漏气）落黑匣子
 
+            gate_now = eng.gate_wait
+            if gate_now and (gate_was is None or gate_now[0] != gate_was[0]):
+                leg, soft = gate_now
+                kp = " ".join(
+                    (f"{n}{ctl.last_kpa[LEG_NAMES.index(n)]:.0f}"
+                     if ctl.last_kpa[LEG_NAMES.index(n)] is not None
+                     else f"{n}--") for n in soft)
+                print(f"\n抬腿门槛：{kp} 未深于 {cfg.lift_gate_kpa:g}kPa，"
+                      f"{leg} 等泵压实再抬（超 {cfg.lift_gate_timeout_s:g}s "
+                      "冻结报警）")
+                log.event(f"抬腿门槛等待：{leg} 等 {kp}")
+            gate_was = gate_now
             hover_now = eng.step_hover_leg()
             if hover_now and hover_now != hover_was:
                 print(f"\n单步：{hover_now} 已悬停在落点上方"

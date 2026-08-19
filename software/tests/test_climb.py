@@ -682,6 +682,55 @@ def test_single_step_hover_survives_freeze():
     assert ctl.is_attached(0) and eng.frozen is None
 
 
+class _ShallowIO(MockVacuumIO):
+    """罐压/盘压被钳在 floor 之上的仿真：吸得上（-30 可过、-40 罐压就绪线
+    可过）但压不深——复现"唇口微漏/泵弱，盘压压不进门槛"的实机工况。"""
+
+    def __init__(self, n, floor):
+        super().__init__(n)
+        self.floor = floor
+
+    def step(self, dt):
+        super().step(dt)
+        self.tank_kpa = max(self.tank_kpa, self.floor)
+        for i in range(self.n):
+            self.foot_kpa[i] = max(self.foot_kpa[i], self.floor)
+
+
+def test_lift_gate_holds_until_supports_deep():
+    """抬腿门槛（08-19 实测 R2 刚过 -30 R3 就抬、R2/R3 抬腿整机下坠的回归）：
+    互锁（ATTACHED）过了但支撑盘压未深于 lift_gate_kpa 时窗头不放行、整机
+    静止等泵，gate_wait 外显；压深后当即放行抬腿，全程不冻结。"""
+    io = _ShallowIO(6, -41.0)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(CFG, ctl)
+    start(eng)
+    run(eng, 3.0, vx=30.0)
+    assert all(p == LegPhase.STANCE for p in eng.phase_of.values())   # 拒抬
+    assert eng.gate_wait is not None and eng.frozen is None
+    lifted_by = eng.gate_wait[0]
+    assert eng.gate_wait[1]                    # 点名软腿非空
+    io.floor = -100.0                          # 泵拽下去了
+    for _ in range(int(5 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        if any(p != LegPhase.STANCE for p in eng.phase_of.values()):
+            break
+    swinging = [n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE]
+    assert swinging == [lifted_by]             # 压深后放行的正是被拦的那条
+    assert eng.frozen is None and eng.gate_wait is None
+
+
+def test_lift_gate_timeout_freezes_naming_soft_leg():
+    """门槛等待超时 -> 冻结报警点名压不下去的腿（不能静默停摆）。"""
+    io = _ShallowIO(6, -41.0)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(replace(CFG, lift_gate_timeout_s=2.0), ctl)
+    start(eng)
+    run(eng, 4.0, vx=30.0)
+    assert eng.frozen and "门槛" in eng.frozen and "kPa" in eng.frozen
+    assert all(p == LegPhase.STANCE for p in eng.phase_of.values())
+
+
 def test_air_mode_keeps_walking_without_adhesion():
     """实机架空路径（4.6.3）：全部吸不上也要把步态走下去，统计放弃次数。
     预算 120s：逐足启动 + 每腿 3 次加深重试（穷尽才放弃）本身就要 ~50s。"""

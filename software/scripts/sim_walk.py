@@ -28,7 +28,7 @@ from hexapod.kinematics import leg_joint_points
 
 GAITS = {"tripod": TRIPOD, "wave": WAVE, "climb": CLIMB}
 
-CLIMB_COLOR = {LegPhase.STANCE: "steelblue",
+CLIMB_COLOR = {LegPhase.STANCE: "steelblue", LegPhase.VENT: "indianred",
                LegPhase.LIFT: "indianred", LegPhase.TRANSFER: "indianred",
                LegPhase.DESCEND: "darkorange", LegPhase.PRESS: "darkorange",
                LegPhase.RETRY_LIFT: "darkorange", LegPhase.WAIT: "gold"}

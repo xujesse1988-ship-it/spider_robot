@@ -152,12 +152,20 @@ class RobotConfig:
                                     # （地面/架空用不上）。上墙实测下沉量后标定，
                                     # 取实测值八成以内——超出真实下沉的部分会把
                                     # 吸附中的盘往下坡拖（climb.py update 4.5 步）
+    lift_vent_s: float = 0.3        # 抬腿前先通气时长 s：原地保持、只开排气阀，
+                                    # 到时才进 LIFT。08-19 实机：边放气边抬时排气
+                                    # 建立慢于抬离，腿是被残余真空"拽起"的
     lift_clearance: float = 15.0    # LIFT 沿面法向退开距离 mm（≥15，吸盘回弹 11~13）
-    lift_speed: float = 40.0        # LIFT 抬离速度 mm/s（边放气边走，要跑赢回弹）
+    lift_speed: float = 40.0        # LIFT 抬离速度 mm/s（放气已先行 lift_vent_s）
     transfer_time: float = 0.6      # TRANSFER 平移段时长 s（沿用 smoothstep+正弦形状）
     descend_speed: float = 30.0     # DESCEND 竖直下探速度 mm/s（消灭"拍地"）
     press_speed: float = 15.0       # PRESS 压入速度 mm/s
     retry_lift_mm: float = 5.0      # SUCKING 超时重试的回抬量
+    retry_deeper_mm: float = 5.0    # 每次重试比上次再加深的压入量 mm：原深度重压
+                                    # 几何缺口不变必然同败（08-19 墙上实测落脚压
+                                    # 不到位吸不紧）。累计封顶 max_attach_retry×
+                                    # 本值（=15mm，IK 验证过 z=-118 可解）；吸上
+                                    # 后保持段停在加深后的实际深度
     max_attach_retry: int = 3       # 连续失败次数上限，超过全机冻结报警
     leak_rescue_s: float = 2.0      # ATTACHED 漏气挽救窗口 s，超时全机冻结
     interlock_timeout_s: float = 2.0  # 抬腿互锁不满足的等待上限 s，超时冻结报警

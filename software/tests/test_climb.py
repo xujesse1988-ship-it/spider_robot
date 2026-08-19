@@ -13,7 +13,7 @@ from hexapod.kinematics import leg_ik
 from hexapod.robot import Hexapod
 
 DT = 0.02
-SWING = (LegPhase.LIFT, LegPhase.TRANSFER, LegPhase.DESCEND,
+SWING = (LegPhase.VENT, LegPhase.LIFT, LegPhase.TRANSFER, LegPhase.DESCEND,
          LegPhase.PRESS, LegPhase.RETRY_LIFT, LegPhase.WAIT)
 
 
@@ -47,6 +47,80 @@ def test_startup_attaches_all_before_clock_runs():
     for n in LEG_NAMES:
         assert math.isclose(eng.foot[n][2],
                             -CFG.stand_height - CFG.leg(n).press_delta_mm)
+
+
+def test_vent_before_lift():
+    """抬腿先通气（08-19 实机：边放气边抬会被残余真空拽起）：窗头进 VENT
+    原地保持 lift_vent_s——z 不抬、XY 随支撑场平移（贴面的脚在墙面系不动），
+    期间放气已在进行（VENTING+阀断真空），到时才进 LIFT。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    for _ in range(int(5 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        if eng.phase_of["L1"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["L1"] == LegPhase.VENT
+    vx_eff = eng._clamp_speed(30.0, 0.0, 0.0)[0]
+    z0, x0 = eng.foot["L1"][2], eng.foot["L1"][0]
+    t_vent = 0.0
+    valve_vented = False
+    while eng.phase_of["L1"] == LegPhase.VENT:
+        assert ctl.state[0] == FootState.VENTING       # 放气先行于抬腿
+        assert math.isclose(eng.foot["L1"][2], z0)     # 原地：z 不抬
+        valve_vented = valve_vented or not io.valve[0]
+        eng.update(DT, 30.0, 0.0, 0.0)
+        t_vent += DT
+    assert valve_vented                                # 阀真断了真空
+    assert eng.phase_of["L1"] == LegPhase.LIFT
+    assert abs(t_vent - CFG.lift_vent_s) < 3 * DT
+    # 贴面段随支撑场：XY 跟着整体平移（不随场 = 墙面系被拖着划）
+    dx = eng.foot["L1"][0] - x0
+    assert abs(dx + vx_eff * t_vent) <= 2 * vx_eff * DT + 1e-9
+
+
+def test_startup_sequential_press():
+    """启动逐足压入（08-19 实机：六腿同时压没有反力座，机身被整体顶起，
+    杯压不实）：任意时刻至多一腿离开等待位，按队列顺序逐足"压入->吸住->
+    下一腿"，未轮到的腿 z 停在站位不预压。"""
+    io, ctl, eng = make_engine()
+    order = []
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        moving = [n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE]
+        assert len(moving) <= 1, f"同时压入: {moving}"
+        for n in moving:
+            if n not in order:
+                order.append(n)
+        for n in eng._attach_queue[1:]:        # 未轮到：不预压
+            assert math.isclose(eng.foot[n][2], -CFG.stand_height)
+        if eng.started:
+            break
+    assert eng.started and ctl.attached_count() == 6
+    assert order == list(LEG_NAMES)
+
+
+def test_retry_presses_deeper_each_time():
+    """重试加深：FAULT 后不是原深度重压（几何缺口不变必然同败），每次比
+    上次加深 retry_deeper_mm；吸上后保持段停在实际深度不回弹。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    io.sealed[0] = False
+    min_z, deep = 0.0, False
+    for _ in range(int(30 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        if eng.phase_of["L1"] in (LegPhase.PRESS, LegPhase.WAIT):
+            min_z = min(min_z, eng.foot["L1"][2])
+        if eng.retries["L1"] >= 2:
+            deep = True
+            io.sealed[0] = True                # 第二次加深后"贴好了"
+        if deep and ctl.is_attached(0) \
+                and eng.phase_of["L1"] == LegPhase.STANCE:
+            break
+    assert ctl.is_attached(0) and eng.frozen is None
+    z_nom = -CFG.stand_height - CFG.leg("L1").press_delta_mm
+    assert min_z <= z_nom - 2 * CFG.retry_deeper_mm + 1e-6   # 真压深了
+    # 保持段 = 实际吸附深度（回名义深度会把刚吸上的盘拔回去）
+    assert eng.foot["L1"][2] <= z_nom - 2 * CFG.retry_deeper_mm + 1e-6
 
 
 def test_press_posture_cup_axis_perpendicular():
@@ -325,7 +399,8 @@ def _run_one_comp_event(eng, vx, expect_comp):
     assert swing is not None
     obs = next(n for n in LEG_NAMES if n != swing)  # 任取一条支撑腿观察
     for _ in range(int(10 / DT)):                  # 跑到 DESCEND 入口
-        if eng.phase_of[swing] not in (LegPhase.LIFT, LegPhase.TRANSFER):
+        if eng.phase_of[swing] not in (LegPhase.VENT, LegPhase.LIFT,
+                                       LegPhase.TRANSFER):
             break
         eng.update(DT, vx, 0.0, 0.0)
     assert eng.phase_of[swing] == LegPhase.DESCEND
@@ -436,11 +511,51 @@ def test_cmd_mirror_records_clamped_speed():
     assert eng.cmd == (0.0, 0.0, 0.0)          # 冻结：目标保持，无速度下发
 
 
+def _run_single_step(eng):
+    """受理一次单步并跑到完成，返回本次摆动过的腿集合。主环速度恒 0。"""
+    assert eng.request_step(30.0, 0.0, 0.0) is None
+    swung = set()
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        swung |= {n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE}
+        if not eng.step_pending and not eng.step_active and swung:
+            return swung
+    raise AssertionError(f"单步 20s 未完成: {eng.status()} frozen={eng.frozen}")
+
+
+def test_single_step_walks_one_leg_and_records_turn():
+    """单步：只走"当前轮到"的一条腿，走完自动停；轮次按窗序推进且持久
+    （中间静止多久都不乱），连续行走的抬腿同样推进轮次（两模式互通）。"""
+    io, ctl, eng = make_engine()
+    start(eng)
+    assert eng.step_leg == "L1"                # 首窗轮到 L1
+    assert eng.request_step(0.0, 0.0, 0.0) == "单步速度为零"
+    assert _run_single_step(eng) == {"L1"}
+    assert eng.step_leg == "L2" and ctl.attached_count() == 6
+    eng.update(DT)
+    assert eng.cmd == (0.0, 0.0, 0.0)          # 完成自动停，无残留速度
+    run(eng, 3.0)                              # 静止晾一段：轮次不许漂
+    assert eng.step_leg == "L2"
+    assert _run_single_step(eng) == {"L2"}     # 第二步轮到 L2
+    assert eng.step_leg == "L3"
+    # 连续行走也推进同一份轮次记录
+    seen = None
+    for _ in range(int(10 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        lifted = [n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE]
+        if lifted:
+            seen = lifted[0]
+            break
+    assert seen is not None
+    assert eng.step_leg == LEG_NAMES[(LEG_NAMES.index(seen) + 1) % 6]
+
+
 def test_air_mode_keeps_walking_without_adhesion():
-    """实机架空路径（4.6.3）：全部吸不上也要把步态走下去，统计放弃次数。"""
+    """实机架空路径（4.6.3）：全部吸不上也要把步态走下去，统计放弃次数。
+    预算 120s：逐足启动 + 每腿 3 次加深重试（穷尽才放弃）本身就要 ~50s。"""
     io, ctl, eng = make_engine(air_mode=True)
     io.sealed = [False] * 6                    # 吸盘悬空
-    for _ in range(int(60 / DT)):
+    for _ in range(int(120 / DT)):
         eng.update(DT, 30.0, 0.0, 0.0)
         if eng.started and eng.t > 1.0:
             break

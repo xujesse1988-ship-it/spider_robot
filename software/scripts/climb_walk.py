@@ -2,9 +2,13 @@
 """P4 步态-吸附联调：Mock 干跑 / 实机架空 / 地面玻璃板 / 上墙 共用入口。
 
 流程：缓慢站起（直达爬墙站位）-> 就位暂停（按 p 继续）-> 全吸附启动序列
-（六足压入、逐足抽气确认）-> 键盘遥控 CLIMB 步态。
+（逐足"压入->抽气确认->下一腿"；六腿同时压没有反力座压不实）-> 键盘遥控
+CLIMB 步态。
   p   就位暂停后开始全吸附启动序列
   w/s 前进/后退   a/d 左移/右移   q/e 左转/右转   空格 停
+  i   单步：只走"当前轮到"的一条腿（轮次记录在引擎里，窗序 L1→L2→L3→
+      R1→R2→R3，连续行走的抬腿同样推进轮次），等到该腿相位窗以 SPEED
+      向前走完整摆动+吸附确认后自动停；未开始的单步可按空格取消
   f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->停泵->逐足
       串行放气->断电，终态停在爬墙站位；要地面站姿另跑 --release）
   o×2 放开全部吸盘但六足保持站立（地面取机用：全阀排气+泵停，舵机撑住原地，
@@ -284,6 +288,7 @@ def main():
     last_esc = float("-inf")
     last_o = float("-inf")
     released_hold = False   # 'oo' 取机窗口：吸盘已全放开，六足仅舵机撑住
+    step_was = False        # 单步在途标志（沿检测"在途→结束"打完成提示）
     was_started = False
     at_pause = True      # 就位暂停中（尚未开始任何吸附动作）
     aborted = False      # 在暂停处确认退出（finally 不再做善后）
@@ -295,6 +300,8 @@ def main():
             return "启动序列未完成"
         if vx or vy or wz:
             return "尚在走动（先按空格停）"
+        if eng.step_pending or eng.step_active:
+            return "单步在途（等它走完，或未开始的按空格取消）"
         if any(p != LegPhase.STANCE for p in eng.phase_of.values()):
             return "有腿未回支撑相（等本步收尾再按）"
         return None
@@ -382,8 +389,12 @@ def main():
                 last_esc = time.monotonic()
                 print("\n再按一次 ESC 确认退出（会放气、停在爬墙站位——墙上禁用！"
                       "墙上悬停 = 保持进程运行什么都不按）")
-            elif k in ("w", "s", "a", "d", "q", "e") and released_hold:
+            elif k in ("w", "s", "a", "d", "q", "e", "i") and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再走动——取下后 ESC×2 退出")
+            elif k in ("w", "s", "a", "d", "q", "e") \
+                    and (eng.step_pending or eng.step_active):
+                print("\n单步在途，走完自动停后再操作"
+                      "（未开始的单步可按空格取消）")
             elif k == "w":
                 vx, vy = SPEED, 0.0
             elif k == "s":
@@ -398,6 +409,22 @@ def main():
                 wz = -TURN
             elif k == " ":
                 vx = vy = wz = 0.0
+                if eng.step_pending:
+                    eng.cancel_step()
+                    step_was = False       # 别把取消误报成"单步完成"
+                    print("\n已取消未开始的单步（摆动中的单步不可打断）")
+                    log.event("单步取消（未开始）")
+            elif k == "i":
+                if vx or vy or wz:
+                    print("\n单步：先按空格停（连续行走中）")
+                else:
+                    deny = eng.request_step(SPEED, 0.0, 0.0)
+                    if deny:
+                        print(f"\n单步不可用：{deny}")
+                    else:
+                        print(f"\n单步：轮到 {eng.step_leg}，等它的相位窗启动"
+                              "（等窗最多一个周期，走完自动停）")
+                        log.event(f"单步受理：{eng.step_leg} v={SPEED:g}")
             elif k == "f" and eng.frozen:
                 # 解冻同时清零速度：人工处理时手还在机器旁，绝不能带着
                 # 冻结前的旧速度立刻恢复行走（审核发现 #4）
@@ -447,12 +474,19 @@ def main():
                     eng.frozen = f"足端目标出工作空间（{e}）——停走后 ESC×2 退出"
             watch.poll()   # 状态跳变（相位/吸附/泵阀/冻结/漏气）落黑匣子
 
+            step_now = eng.step_pending or eng.step_active
+            if step_was and not step_now:
+                print(f"\n单步完成，下一条：{eng.step_leg}（再按 i）")
+                log.event(f"单步完成，下一条 {eng.step_leg}")
+            step_was = step_now
+
             if eng.started and not was_started:
                 was_started = True
                 # 清掉启动期间误触存下的速度：吸附完成瞬间不许自己开走
                 vx = vy = wz = 0.0
                 print("\n✓ 六足吸附完成，遥控就绪：w/s 前后  a/d 左右  "
-                      "q/e 转向  空格停  f 解冻  o×2 放吸盘取机  ESC×2 退出\n"
+                      "q/e 转向  i 单步  空格停  f 解冻  o×2 放吸盘取机  "
+                      "ESC×2 退出\n"
                       "  （速度指令是 0 时不抬腿——按 w 才开始走；爬墙步态"
                       "宁慢勿快，每步约 4s 属正常）")
 

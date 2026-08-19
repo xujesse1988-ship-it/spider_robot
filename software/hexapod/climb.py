@@ -4,13 +4,17 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
 垂直速度最大（"拍地"）、一过边界立刻横向拖脚，对"落脚即密封"全是反的
 （P4-GUIDE 第 0 步）。本引擎把摆动相拆成分段状态机（§4.1）：
 
-  LIFT     请求放气并沿面法向退开 lift_clearance（吸盘回弹 11~13mm 会把脚
-           顶回面上，必须边放气边走）；放气未确认（RELEASED）不进 TRANSFER
+  VENT     先通气再抬（08-19 实机：边放气边抬时排气建立慢于抬离，腿被残余
+           真空"拽起"）：原地保持 lift_vent_s 只开排气；本足仍贴面，须随
+           支撑场平移（不随场 = 在墙面系被拖着划）
+  LIFT     沿面法向退开 lift_clearance（吸盘回弹 11~13mm 会把脚顶回面上，
+           放气已先行 lift_vent_s）；放气未确认（RELEASED）不进 TRANSFER
   TRANSFER 平移到落点上方：沿用 smoothstep + 正弦抬腿形状
   DESCEND  落点正上方竖直减速下探：XY 冻结，descend_speed 慢速——消灭拍地
   PRESS    XY 继续冻结，压入该腿 press_delta_mm（§4.2 预压行程），
            到位即 request_attach
-  WAIT     等 ATTACHED（-30kPa 确认窗）；FAULT -> 抬 retry_lift_mm 重压，
+  WAIT     等 ATTACHED（-30kPa 确认窗）；FAULT -> 抬 retry_lift_mm 且比上次
+           加深 retry_deeper_mm 重压（原深度重压几何缺口不变必然同败），
            连续 max_attach_retry 次失败 -> 全机冻结报警
   （支撑）  ATTACHED 后目标保持在压入位，随支撑速度场整体反向平移——
            吸住的脚不能滑，支撑目标必须连续积分，速度突变不产生跳变；
@@ -26,13 +30,18 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
     首爬用严的）-> 钟停在窗头；相邻足不同时释放由一次一腿天然保证
   - 任一支撑足漏气 -> 钟暂停（挽救窗内），超 leak_rescue_s -> 冻结报警
   - 速度指令为零 -> 该窗不抬腿，钟空转过窗（吸住不动，省吸盘寿命）
+  - 单步模式（request_step）：引擎记录"当前轮到哪条腿"（step_leg，窗序
+    L1..R3 轮转，连续行走的抬腿同样推进——两种模式共用一份轮次），受理后
+    整机静止空转过窗，等到该腿的窗以单步速度走一次完整摆动，回支撑自动停
 
 冻结（frozen）是粘滞报警态：足端目标全部保持、吸附状态机照跑（常闭阀保
 真空，吸附态冻结是安全态），人工处理后 clear_freeze() 继续。
 
-启动序列：调用方先让机器人 stand() 到默认站姿，引擎首个阶段把六足同时
-压入、按腿序逐足抽气确认（六阀同开会把罐抽垮），全部 ATTACHED 后相位钟
-才开始走（started=True）。
+启动序列：调用方先让机器人 stand() 到默认站姿，引擎逐足"压入->抽气确认->
+下一腿"（08-19 实机结论：六足同时压入没有反力座——机身被整体顶起/顶离墙，
+杯压不实；逐足压时其余腿还站着当反力座，压紧力=体重/扶持力的分摊。逐足
+抽气原本也是防六阀同开抽垮罐），全部 ATTACHED 后相位钟才开始走
+（started=True）。
 """
 import math
 from dataclasses import replace
@@ -90,6 +99,7 @@ def _solve_reach(cfg, z_press, tilt_rad=0.0):
 
 class LegPhase(Enum):
     STANCE = "stance"        # 支撑（含启动前的等待）：目标在压入位，随速度场平移
+    VENT = "vent"            # 抬腿前先通气：贴面原地保持 lift_vent_s，随支撑场
     LIFT = "lift"
     TRANSFER = "transfer"
     DESCEND = "descend"
@@ -140,8 +150,13 @@ class ClimbEngine:
         self._geom.default_feet = dict(self.default_feet)  # 速度场用同一站位
         # 当前指令足端目标（唯一事实源，机内所有分段都直接改它）
         self.foot = {n: list(p) for n, p in self.default_feet.items()}
-        self.phase_of = {n: LegPhase.PRESS for n in LEG_NAMES}  # 启动即全压入
+        # 启动逐足压入：全部先留在 STANCE 等待，启动分支按队列一次放行一腿
+        # （六腿同时压没有反力座，机身被整体顶起/顶离面，杯压不实——08-19）
+        self.phase_of = {n: LegPhase.STANCE for n in LEG_NAMES}
         self.retries = {n: 0 for n in LEG_NAMES}
+        # 重试加深的当前附加压入量 mm（吸附保持段也停在加深后的实际深度；
+        # 新落点在 DESCEND 入口清零，从名义深度重新起算）
+        self._press_extra = {n: 0.0 for n in LEG_NAMES}
         self.landing = {n: self.default_feet[n][:2] for n in LEG_NAMES}
         self._transfer = {}          # 腿名 -> (进度 s, 起点 xyz)
         self.frozen = None           # 冻结原因；None = 正常
@@ -163,6 +178,13 @@ class ClimbEngine:
         self._down = (-1.0, 0.0)
         self._comp_left = 0.0
         self._comp_rate = 0.0
+        # 单步模式（climb_walk 'i' 键）：step_leg = 当前轮到的腿（窗序
+        # L1..R3；任何模式的抬腿事件都推进它，单步与连续行走轮次互通）。
+        # pending = 已受理等相位窗（期间整机静止），active = 摆动进行中
+        self.step_leg = LEG_NAMES[0]
+        self.step_pending = False
+        self.step_active = False
+        self._step_v = (0.0, 0.0, 0.0)
         # 本周期实际下发的速度指令（步幅限幅缩放后）。状态行/黑匣子 TLM
         # 必须取这个而不是用户原始指令：SPEED=15 在默认参数下每帧被隐性
         # 缩到 ~13.3mm/s，记未缩放值会把 --sag-comp 标定系统性带偏
@@ -193,6 +215,13 @@ class ClimbEngine:
                     return self.targets()
             else:
                 self._precharge_t = 0.0
+            # 逐足压入：队首腿从等待（STANCE）放行进 PRESS，其余腿站着当
+            # 反力座；上一腿 ATTACHED 出队后下一腿才开始压。压入是纯机械
+            # 动作不等罐压（与预抽并行省时），抽气仍由 _may_attach 把关
+            if self._attach_queue:
+                head = self._attach_queue[0]
+                if self.phase_of[head] == LegPhase.STANCE:
+                    self.phase_of[head] = LegPhase.PRESS
             self._run_machines(dt)
             if not self._attach_queue and all(
                     p == LegPhase.STANCE for p in self.phase_of.values()):
@@ -200,8 +229,6 @@ class ClimbEngine:
             return self.targets()
 
         vx, vy, wz = self._clamp_speed(vx, vy, wz)
-        self.cmd = (vx, vy, wz)
-        moving = abs(vx) > 1e-6 or abs(vy) > 1e-6 or abs(wz) > 1e-6
 
         # 1. 相位窗归属（窗切换时复位窗内一次性标志）
         cur = self._slot(self.t)
@@ -209,6 +236,20 @@ class ClimbEngine:
             self._slot_leg = cur
             self._slot_active = self._slot_skipped = False
             self._block_t = 0.0
+
+        # 1.5 单步速度顶替：摆动中/轮到本窗用单步速度（request_step 已限幅），
+        #     等轮次期间强制静止——其余腿的窗照常空转跳过，直到 step_leg 的
+        #     窗到来（最多约一个周期）。cmd 镜像随之取真实下发值
+        if self.step_active:
+            vx, vy, wz = self._step_v
+        elif self.step_pending:
+            if cur == self.step_leg and not self._slot_active \
+                    and not self._slot_skipped:
+                vx, vy, wz = self._step_v
+            else:
+                vx = vy = wz = 0.0
+        self.cmd = (vx, vy, wz)
+        moving = abs(vx) > 1e-6 or abs(vy) > 1e-6 or abs(wz) > 1e-6
 
         # 2. 窗头决策：跳过 / 启动摆动 / 互锁等待。
         #    漏气挽救期间（leak_pause）绝不放行新的抬腿——漏着的脚不算可靠支撑
@@ -218,8 +259,14 @@ class ClimbEngine:
             elif not leak_pause and self._interlock_ok(cur):
                 self.landing[cur] = self._landing_xy(cur, vx, vy, wz)
                 self.ctl.request_release(LEG_NAMES.index(cur))
-                self.phase_of[cur] = LegPhase.LIFT
+                # 先通气 lift_vent_s 再抬（VENT 段贴面原地，随支撑场平移）
+                self.phase_of[cur] = LegPhase.VENT
                 self._slot_active = True
+                if self.step_pending and cur == self.step_leg:
+                    self.step_pending = False
+                    self.step_active = True     # 单步：本窗归它，回支撑即停
+                # 轮次推进：任何模式的抬腿事件都算数（单步与连续行走互通）
+                self.step_leg = LEG_NAMES[(LEG_NAMES.index(cur) + 1) % 6]
                 if self.cfg.climb_sag_comp_mm > 0.0:
                     # 下滑补偿按事件装填，量按当前步幅动态限额（COMP_TAIL_MAX
                     # 总账：支撑尾端 = 半步幅 + 5 次事件累计补偿，不得把后腿
@@ -264,11 +311,16 @@ class ClimbEngine:
             dx, dy = self._down          # 下坡方向随航向转（与支撑足同一旋转）
             self._down = (c * dx + s * dy, -s * dx + c * dy)
             for n in LEG_NAMES:
-                if self.phase_of[n] == LegPhase.STANCE:
+                # VENT 足仍贴面（先通气后抬），必须跟随支撑场：身体在动，
+                # 不随场 = 该足在墙面系被拖着划、蹭移正在排气的唇口
+                if self.phase_of[n] in (LegPhase.STANCE, LegPhase.VENT):
                     f = self.foot[n]
                     x, y = f[0] - vx * adv, f[1] - vy * adv
                     f[0], f[1] = c * x + s * y, -s * x + c * y
-                    f[2] = self.z0 - self.cfg.leg(n).press_delta_mm
+                    # 保持段深度含重试加深量：吸上多深就停多深，回名义深度
+                    # 会把刚吸上的盘拔回去
+                    f[2] = self.z0 - self.cfg.leg(n).press_delta_mm \
+                        - self._press_extra[n]
 
         # 4.5 下滑补偿：每次抬腿事件把全部支撑足沿"下坡"方向额外匀速平移
         # climb_sag_comp_mm = 把身体往上坡顶回去，抵消"抬腿瞬间载荷重分配的
@@ -309,9 +361,34 @@ class ClimbEngine:
                     self.ctl.is_leaking(LEG_NAMES.index(n)))
                 for n in LEG_NAMES}
 
+    def request_step(self, vx, vy=0.0, wz=0.0):
+        """单步行走：受理后等 step_leg（当前轮到的腿）的相位窗，以给定速度
+        让它走一次完整摆动（落点/支撑场平移与连续行走同口径），回支撑即
+        自动停。等窗期间整机静止（其余窗空转跳过，最多约一个周期 ~3.6s）。
+        返回 None=受理；str=拒绝原因。"""
+        if not self.started:
+            return "启动序列未完成"
+        if self.frozen:
+            return "冻结中"
+        if self.step_pending or self.step_active:
+            return "已有单步在途"
+        v = self._clamp_speed(vx, vy, wz)
+        if not any(abs(x) > 1e-6 for x in v):
+            return "单步速度为零"
+        self._step_v = v
+        self.step_pending = True
+        return None
+
+    def cancel_step(self):
+        """取消尚未开始的单步；已进入摆动的不打断（几秒内自行走完收口，
+        中途撤速度反而让落点与支撑场口径不一致）。"""
+        self.step_pending = False
+
     def clear_freeze(self):
         """人工处理后解除冻结；重试/等待计时全部清零，挂着 FAULT 的腿自动
-        重新压附（罐压计时不清会导致解冻后一帧不就绪立刻复冻）。"""
+        重新压附（罐压计时不清会导致解冻后一帧不就绪立刻复冻）。
+        _press_extra 故意不清：冻结前试过的浅深度重来一遍没有意义，解冻
+        重压从加深后的深度继续（增量处有封顶，不会越加越深出包络）。"""
         self.frozen = None
         self._block_t = 0.0
         self._precharge_t = 0.0
@@ -427,10 +504,17 @@ class ClimbEngine:
         i = LEG_NAMES.index(name)
         f = self.foot[name]
         ph = self.phase_of[name]
-        z_press = self.z0 - cfg.leg(name).press_delta_mm
+        # 压入深度含重试加深量（每次 FAULT 重试 +retry_deeper_mm，新落点清零）
+        z_press = self.z0 - cfg.leg(name).press_delta_mm - self._press_extra[name]
         z_lift = self.z0 + cfg.lift_clearance
 
-        if ph == LegPhase.LIFT:
+        if ph == LegPhase.VENT:
+            # 先通气：原地保持等排气建立（阀通电在下周期 ctl.update 生效，
+            # 时长里已含），到时才抬——边放气边抬会被残余真空拽起（08-19）。
+            # XY 由支撑场分支代管（本足贴面随场），这里只管计时切段
+            if self._seg_t[name] >= cfg.lift_vent_s:
+                self.phase_of[name] = LegPhase.LIFT
+        elif ph == LegPhase.LIFT:
             f[2] = min(z_lift, f[2] + cfg.lift_speed * dt)
             if f[2] >= z_lift - _EPS:
                 if self.ctl.state[i] == FootState.RELEASED:
@@ -438,8 +522,9 @@ class ClimbEngine:
                     self.phase_of[name] = LegPhase.TRANSFER
                 else:
                     # 抬到位还没等到放气确认：排气堵/传感器漂移不能静默停摆
-                    lift_t = (cfg.lift_clearance + cfg.leg(name).press_delta_mm) \
-                        / cfg.lift_speed
+                    # （行程含上一步的加深量——从多深抬起就多算多少预算）
+                    lift_t = (cfg.lift_clearance + cfg.leg(name).press_delta_mm
+                              + self._press_extra[name]) / cfg.lift_speed
                     if self._seg_t[name] > lift_t + VENT_STALL_S:
                         self.frozen = f"{name} 放气确认超时（排气堵/传感器漂移？）"
         elif ph == LegPhase.TRANSFER:
@@ -454,6 +539,7 @@ class ClimbEngine:
             f[2] = z_lift + arc * math.sin(math.pi * s)
             if s >= 1.0:
                 f[0], f[1], f[2] = lx, ly, z_lift
+                self._press_extra[name] = 0.0   # 新落点从名义深度起，重试再加深
                 self.phase_of[name] = LegPhase.DESCEND
         elif ph == LegPhase.DESCEND:
             f[2] = max(self.z0, f[2] - cfg.descend_speed * dt)
@@ -465,7 +551,9 @@ class ClimbEngine:
                 self.ctl.request_attach(i)
                 self.phase_of[name] = LegPhase.WAIT
         elif ph == LegPhase.RETRY_LIFT:
-            top = z_press + cfg.retry_lift_mm
+            # z_press 已含本次加深量，+retry_deeper_mm 抵回 = 抬到**上次**
+            # 深度上方 retry_lift_mm 处，再压向加深后的新深度
+            top = z_press + cfg.retry_lift_mm + cfg.retry_deeper_mm
             f[2] = min(top, f[2] + cfg.press_speed * dt)
             if f[2] >= top - _EPS:
                 self.phase_of[name] = LegPhase.PRESS
@@ -476,6 +564,8 @@ class ClimbEngine:
                 if self._attach_queue and self._attach_queue[0] == name:
                     self._attach_queue.pop(0)
                 self.phase_of[name] = LegPhase.STANCE
+                if self.step_active:
+                    self.step_active = False    # 单步完成：速度顶替停，自动停
             elif st == FootState.FAULT:
                 self.retries[name] += 1
                 if self.retries[name] > cfg.max_attach_retry:
@@ -490,9 +580,17 @@ class ClimbEngine:
                         if self._attach_queue and self._attach_queue[0] == name:
                             self._attach_queue.pop(0)
                         self.phase_of[name] = LegPhase.STANCE
+                        if self.step_active:
+                            self.step_active = False   # 架空放弃也算单步完成
                     else:
                         self.frozen = (f"{name} 连续 {cfg.max_attach_retry} 次"
                                        "吸附失败，全机冻结")
                 else:
                     self.ctl.clear_fault(i)
+                    # 重试加深：原深度重压几何缺口不变必然同败（08-19 墙上
+                    # 实测）。封顶 max_attach_retry×retry_deeper_mm，冻结-
+                    # 解冻反复重压也不会无界加深出工作空间
+                    self._press_extra[name] = min(
+                        self._press_extra[name] + cfg.retry_deeper_mm,
+                        cfg.max_attach_retry * cfg.retry_deeper_mm)
                     self.phase_of[name] = LegPhase.RETRY_LIFT

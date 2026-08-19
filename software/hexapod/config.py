@@ -40,9 +40,13 @@ class LegConfig:
     tibia: ServoCal
     touch_idx: int          # chica 协议 GET 索引（18..23）
     # 吸盘预压行程 mm（P4-GUIDE §4.2）：触面后沿法向再压入这么多才密封。
-    # 默认 = L1 口径 (h_cup 自由 19 − 密封 7.5) + 预载 1.5；杯批次差 2mm，
-    # 其余腿待逐腿实测 h_cup 回填（P4 第 7 步）。判据：吸附后总电流回落基线。
-    press_delta_mm: float = 13.0
+    # 几何口径 = L1 实测 (h_cup 自由 19 − 密封 7.5) + 预载 1.5 = 13；但 08-19
+    # 实机发现指令行程被腿链让差（舵机带载位置误差+齿隙）吃掉大半，13 只压
+    # 进波纹几 mm，"踩住"靠抽气后真空收尾。默认加深到 18 用指令超程换真实
+    # 压缩（climb_walk --press-delta 可在线对比 13/18）。代价：唇口密封后多
+    # 余指令量变成舵机对抗——盯"吸附后总电流回落"判据，不回落就是白烧。
+    # 杯批次差 2mm，各腿 h_cup 逐腿实测回填仍欠账（P4 第 7 步）。
+    press_delta_mm: float = 18.0
 
 
 # 官方安装偏角
@@ -163,9 +167,11 @@ class RobotConfig:
     retry_lift_mm: float = 5.0      # SUCKING 超时重试的回抬量
     retry_deeper_mm: float = 5.0    # 每次重试比上次再加深的压入量 mm：原深度重压
                                     # 几何缺口不变必然同败（08-19 墙上实测落脚压
-                                    # 不到位吸不紧）。累计封顶 max_attach_retry×
-                                    # 本值（=15mm，IK 验证过 z=-118 可解）；吸上
-                                    # 后保持段停在加深后的实际深度
+                                    # 不到位吸不紧）。双封顶：max_attach_retry×
+                                    # 本值 与 总压入 ≤climb.PRESS_DEPTH_MAX=28
+                                    # （实测校验点 z=-118；press 18 时深度封顶
+                                    # 先到=加深至多 10）；吸上后保持段停在加深
+                                    # 后的实际深度
     max_attach_retry: int = 3       # 连续失败次数上限，超过全机冻结报警
     leak_rescue_s: float = 2.0      # ATTACHED 漏气挽救窗口 s，超时全机冻结
     interlock_timeout_s: float = 2.0  # 抬腿互锁不满足的等待上限 s，超时冻结报警

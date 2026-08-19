@@ -5,8 +5,8 @@ import math
 from dataclasses import replace
 
 from hexapod.adhesion import AdhesionController, MockVacuumIO, FootState
-from hexapod.climb import (ClimbEngine, LegPhase, COMP_TAIL_MAX, TILT_BAND_DEG,
-                           _press_tilt)
+from hexapod.climb import (ClimbEngine, LegPhase, PRESS_DEPTH_MAX,
+                           TILT_BAND_DEG, _press_tilt)
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
 from hexapod.driver import MockDriver
 from hexapod.kinematics import leg_ik
@@ -387,6 +387,15 @@ def _run_one_comp_event(eng, vx, expect_comp):
     （DESCEND 起）只有速度场——不横拖正在压入的吸盘。y 不受扰、z 恒在
     压入位。"""
     vx_eff = eng._clamp_speed(vx, 0.0, 0.0)[0]     # 步幅限幅后的真实速度
+    # 起步过渡周期不装填补偿（稳态账未建立）：先走满一轮六腿都摆过、
+    # 且当前摆动收尾，再量下一个稳态事件
+    for _ in range(int(90 / DT)):
+        eng.update(DT, vx, 0.0, 0.0)
+        if len(eng._swung_since_go) >= 6 and all(
+                p == LegPhase.STANCE for p in eng.phase_of.values()):
+            break
+    else:
+        raise AssertionError("90s 未完成首轮热身")
     swing = t0 = f0 = None
     for _ in range(int(10 / DT)):                  # 等一条腿进摆动
         t_pre = eng.t
@@ -423,33 +432,36 @@ def _run_one_comp_event(eng, vx, expect_comp):
 
 
 def test_sag_comp_injects_during_lift_transfer_only():
-    """满速直行：半步幅 20 → 工作空间限额 (40-20)/5 = 4mm/事件，设定 6
-    被动态截到 4；注入只发生在 LIFT/TRANSFER 离面段。"""
+    """满速直行：半步幅 20，平面尾预算随压深反解（press 18 ≈36.8 →
+    限额 ≈3.4mm/事件），设定 6 被动态截住；注入只在 LIFT/TRANSFER 离面段。"""
     io = MockVacuumIO(6)
     ctl = AdhesionController(io)
     eng = ClimbEngine(replace(CFG, climb_sag_comp_mm=6.0), ctl)
     start(eng)
-    cap = (COMP_TAIL_MAX - CFG.climb_max_step / 2.0) / 5.0
-    assert math.isclose(cap, 4.0)
+    cap = (eng.comp_tail - CFG.climb_max_step / 2.0) / 5.0
+    assert 0.0 < cap < 6.0                 # 设定 6 真被限额截住才算数
     _run_one_comp_event(eng, vx=30.0, expect_comp=cap)
 
 
 def test_sag_comp_full_delivery_at_low_speed():
     """低速直行步幅小，限额放宽，设定值全额交付：vx=5 → 半步幅 7.5，
-    限额 (40-7.5)/5 = 6.5 ≥ 设定 6 → 每事件足额 6mm。降速换大补偿的
-    操作口径靠这条成立。"""
+    限额 (comp_tail-7.5)/5（press 18 ≈5.9）≥ 设定 5 → 每事件足额 5mm。
+    降速换大补偿的操作口径靠这条成立。"""
     io = MockVacuumIO(6)
     ctl = AdhesionController(io)
-    eng = ClimbEngine(replace(CFG, climb_sag_comp_mm=6.0), ctl)
+    eng = ClimbEngine(replace(CFG, climb_sag_comp_mm=5.0), ctl)
     start(eng)
-    _run_one_comp_event(eng, vx=5.0, expect_comp=6.0)
+    assert (eng.comp_tail - 7.5) / 5.0 >= 5.0   # 前提：低速限额确实放得下
+    _run_one_comp_event(eng, vx=5.0, expect_comp=5.0)
 
 
 def test_sag_comp_capped_walk_stays_solvable():
-    """补偿顶到 CLI 上限 8mm/事件 + 满速走 60s：动态限额（COMP_TAIL_MAX
-    总账）把每事件截到 4mm，全程 IK 可解（出工作空间 pulses 会抛
-    WorkspaceError 炸控制环）、互锁不破、不冻结。这是把后腿推得最紧的
-    工况：最紧 d 应贴近但不越过 IK 包络（实测 ~201.7 / 边界 204.7）。"""
+    """补偿顶到 CLI 上限 8mm/事件 + 满速走 60s：动态限额（comp_tail 总账，
+    随压深反解）截住每事件量，全程 IK 可解（出工作空间 pulses 会抛
+    WorkspaceError 炸控制环）、互锁不破、不冻结。贴边界的原最紧工况
+    （起步过渡瞬态，press 13 时实测 d≈201.7）已被过渡期门控消灭——直行
+    稳态最紧 d 离边界 ~12mm，贴边工况由 deep-attach 回归+上界断言看护；
+    这里另断言热身后补偿确实被反复装填（门控没把补偿整个关死）。"""
     cfg = replace(CFG, climb_sag_comp_mm=8.0)
     io = MockVacuumIO(6)
     ctl = AdhesionController(io)
@@ -459,12 +471,17 @@ def test_sag_comp_capped_walk_stays_solvable():
     d_max = cfg.femur_len + cfg.tibia_len
     worst_d = 0.0
     events = 0
+    comp_loads = 0
     prev = dict(eng.phase_of)
+    prev_left = 0.0
     for _ in range(int(60 / DT)):
         targets = eng.update(DT, 30.0, 0.0, 0.0)
         assert eng.frozen is None
         bot.pulses(targets)
         assert ctl.attached_count() >= 5
+        if eng._comp_left > prev_left + 1e-9:   # 本窗装填了非零补偿
+            comp_loads += 1
+        prev_left = eng._comp_left
         for n in LEG_NAMES:
             if eng.phase_of[n] == LegPhase.STANCE:
                 leg = cfg.leg(n)
@@ -475,10 +492,10 @@ def test_sag_comp_capped_walk_stays_solvable():
                 events += 1
         prev = dict(eng.phase_of)
     assert events >= 5, f"60s 只发生 {events} 次抬腿事件，补偿没被反复运用"
+    assert comp_loads >= 5, \
+        f"热身后仅 {comp_loads} 次装填补偿，过渡门控疑似把补偿关死"
     assert worst_d <= d_max - 1.5, \
         f"支撑目标 d={worst_d:.1f} 贴死 IK 边界 {d_max:.1f}，限额总账失守"
-    assert worst_d >= d_max - 6.0, \
-        f"最紧 d={worst_d:.1f} 离边界 {d_max:.1f} 太远，工况没压到限额"
 
 
 def test_deep_attach_plus_sag_comp_stays_in_envelope():
@@ -497,7 +514,10 @@ def test_deep_attach_plus_sag_comp_stays_in_envelope():
         if eng.started:
             break
     assert eng.started
-    assert eng._press_extra["R3"] >= 3 * cfg.retry_deeper_mm - 1e-9
+    # 双封顶：press 18 时深度封顶(28-18=10)先于数量封顶(15)生效
+    assert eng._press_extra["R3"] == min(
+        3 * cfg.retry_deeper_mm,
+        PRESS_DEPTH_MAX - cfg.legs[0].press_delta_mm)
     bot = Hexapod(MockDriver(), cfg)
     d_max = cfg.femur_len + cfg.tibia_len
     worst = 0.0
@@ -536,7 +556,7 @@ def test_sag_comp_downhill_rotates_with_heading():
     start(eng)
     wz_eff = eng._clamp_speed(0.0, 0.0, 0.5)[2]
     t0 = eng.t
-    run(eng, 12.0, wz=0.5)
+    run(eng, 15.0, wz=0.5)                         # press 18 摆动更长，多跑一会
     th = (eng.t - t0) * wz_eff
     assert th > 0.1                                # 真转了角度才算数
     assert math.isclose(eng._down[0], -math.cos(th), abs_tol=1e-9)

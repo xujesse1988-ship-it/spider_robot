@@ -62,7 +62,7 @@ sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
-from hexapod.climb import ClimbEngine, LegPhase, COMP_TAIL_MAX
+from hexapod.climb import ClimbEngine, LegPhase
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch, PHASE_CH, ADH_CH
@@ -157,8 +157,15 @@ def main():
                          "积分旋转。上墙标定：从 2~3 起步逐次加，盯每周期净位"
                          "移；只补得回弹性让位，超过实测下沉量会把吸着的盘往"
                          "下坡拖，宁欠勿过（上限 8）。每事件实际量=min(设定,"
-                         "(40-半步幅)/5)：满速时 4mm 封顶（后腿工作空间总账），"
-                         "设定 >4 想吃满就把 SPEED 降下来走")
+                         "(平面尾预算-半步幅)/5)，预算随压深自动缩（press 13"
+                         " 时≈40、满速封顶 4mm；press 18 时≈37），想吃满就把"
+                         " SPEED 降下来走；有腿重试加深吸附时暂停装填")
+    ap.add_argument("--press-delta", type=float, default=None,
+                    help="预压行程 mm，覆盖全部腿（默认用 config 值 "
+                         f"{DEFAULT_CONFIG.legs[0].press_delta_mm:g}）。08-19："
+                         "指令行程被腿链让差吃掉大半，加深换真实压缩；对比实验"
+                         "用 13（几何口径）vs 18。盯吸附后总电流回落，不回落="
+                         "多余行程在烧舵机")
     ap.add_argument("--release", action="store_true",
                     help="只做逐足串行放气+回站姿")
     args = ap.parse_args()
@@ -180,6 +187,13 @@ def main():
 
     cfg = replace(DEFAULT_CONFIG, climb_cycle_time=args.cycle,
                   climb_sag_comp_mm=args.sag_comp)
+    if args.press_delta is not None:
+        if not 8.0 <= args.press_delta <= 20.0:
+            ap.error(f"--press-delta {args.press_delta} 非法：范围 8~20mm。"
+                     "浅于 8 唇口压不到密封线；深于 20 叠加重试加深(+15)后"
+                     "支撑目标逼近 IK 包络")
+        cfg = replace(cfg, legs=tuple(
+            replace(l, press_delta_mm=args.press_delta) for l in cfg.legs))
     if args.air:
         cfg = replace(cfg, max_attach_retry=1)   # 架空必 FAULT，少陪跑几轮重试
 
@@ -194,8 +208,9 @@ def main():
                     if on) or "实机全链路"
     log.note(f"模式={mode} port={args.port} release={args.release}")
     log.note(f"参数: cycle={cfg.climb_cycle_time}s sag_comp={cfg.climb_sag_comp_mm}mm"
+             f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
              f" SPEED={SPEED} TURN={TURN} update_hz={cfg.update_hz:g}"
-             f" max_step={cfg.climb_max_step} comp_tail_max={COMP_TAIL_MAX}")
+             f" max_step={cfg.climb_max_step}")
     _prev_hook = sys.excepthook
 
     def _crash_hook(tp, val, tb):
@@ -224,7 +239,8 @@ def main():
     eng = ClimbEngine(cfg, ctl, air_mode=args.air)
     watch = ClimbWatch(log, eng, ctl, io, cfg)   # 挂上吸附钩子 + 跳变轮询
     log.note(f"阈值: ATTACH={ATTACH_KPA} PUMP_ON={PUMP_ON_KPA}"
-             f" PUMP_OFF={PUMP_OFF_KPA} suck_timeout={ctl.suck_timeout_s}s"
+             f" PUMP_OFF={PUMP_OFF_KPA} comp_tail={eng.comp_tail:.1f}mm"
+             f" suck_timeout={ctl.suck_timeout_s}s"
              f" leak_rescue={cfg.leak_rescue_s}s retry={cfg.max_attach_retry}"
              f" volt_warn/cutoff={cfg.volt_warn}/{cfg.volt_cutoff}V")
 
@@ -336,10 +352,11 @@ def main():
                   f"≈{eff_v:.1f}mm/s 下发；状态行与黑匣子记的都是限幅后实际值")
             log.note(f"SPEED={SPEED:g} 被步幅上限缩放：直行实际 ≈{eff_v:.2f}mm/s")
         if cfg.climb_sag_comp_mm > 0:
-            # 本速度直行的每事件实际量（工作空间总账限额，见 climb.COMP_TAIL_MAX）
+            # 本速度直行的每事件实际量（工作空间总账限额 eng.comp_tail，
+            # 随压深在引擎里反解）
             half = min(worst, cfg.climb_max_step) / 2.0
             eff = min(cfg.climb_sag_comp_mm,
-                      max(0.0, (COMP_TAIL_MAX - half) / 5.0))
+                      max(0.0, (eng.comp_tail - half) / 5.0))
             log.event(f"下滑补偿开启：设定 {cfg.climb_sag_comp_mm:g}mm/抬腿事件，"
                       f"本速度直行实际 {eff:g}mm")
             print(f"下滑补偿开启：设定 {cfg.climb_sag_comp_mm:g}mm/抬腿事件，"

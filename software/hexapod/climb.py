@@ -60,12 +60,17 @@ TANKLESS_PRECHARGE_S = 3.0  # 无罐模式首次抽气前的盲抽时长：阀�
 PRECHARGE_TIMEOUT_S = 30.0  # 罐压建立超时 -> 冻结报警（泵坏/大漏不能静默干等）
 VENT_STALL_S = 2.0          # LIFT 抬到位后等放气确认（RELEASED）的额外上限，
                             # 超时冻结报警——排气堵/传感器漂移不能静默停摆
-COMP_TAIL_MAX = 40.0        # 支撑相尾端离默认站位的总外摆上限 mm = 半步幅 +
-                            # 5 次抬腿事件的累计下滑补偿。40 实测（参数扫描）
-                            # 后腿最紧 d≈201.7/204.7，与斜走满速的既有余量同档；
-                            # 再大后腿出 IK 包络、leg_ik 直接抛异常。由此每事件
-                            # 有效补偿 = min(设定, (40-半步幅)/5)：满速(半步幅
-                            # 20)有效上限 4mm，降速走步幅缩小、限额自动放宽
+D_SAFE_MARGIN = 3.0         # 支撑目标离 IK 包络的最小预留 mm。原硬编码
+                            # COMP_TAIL_MAX=40 即 press 13 口径下按本预留反解的
+                            # 平面尾预算（tail 40 时后腿最紧 d≈201.7=204.7−3）；
+                            # 现预算随压深由引擎计算（__init__ 的 comp_tail），
+                            # press 18 时 ≈36.8——总账必须跟 z 走，不能锚死名义
+                            # 深度（--press-delta 实验暴露，审核 #1 的延伸）
+PRESS_DEPTH_MAX = 28.0      # press_delta+重试加深的总压入上限 mm（z=-118）：
+                            # 实测校验点——满速+满拖尾下最紧 d≈200.4、余 4.3mm；
+                            # 更深实测贴死包络（press18+extra15=z-123 时 d=203.7
+                            # 只余 1mm）。press 13 时数量封顶（3×5=15）先生效，
+                            # 行为与旧口径完全一致；press 18 时深度封顶 10 先到
 TILT_BAND_DEG = 12.0        # 落点带：压入位物理吸盘轴偏面法线的许用角。
                             # P1 台架实测容差 ±15°，留余量；CLIMBING-DESIGN §6
                             # 接受的工作带 ≤11.5°。越界步长按半径裁剪（§4.3）
@@ -148,6 +153,18 @@ class ClimbEngine:
                                            leg.mount_y + r0 * math.sin(a),
                                            self.z0)
         self._geom.default_feet = dict(self.default_feet)  # 速度场用同一站位
+        # 支撑尾平面预算（原 COMP_TAIL_MAX=40 的按压深泛化）：支撑目标距 IK
+        # 包络至少留 D_SAFE_MARGIN，安全平面半径 sqrt(d_safe²−z_press²) 减
+        # 默认站位平面半径 = 允许的外摆总量（半步幅+5 次补偿共用）。
+        # press 13 时 ≈40.2 与原标定 40 咬合
+        d_safe = cfg.femur_len + cfg.tibia_len - D_SAFE_MARGIN
+        self.comp_tail = min(
+            math.sqrt(d_safe ** 2
+                      - (self.z0 - cfg.leg(n).press_delta_mm) ** 2)
+            - (math.hypot(self.default_feet[n][0] - cfg.leg(n).mount_x,
+                          self.default_feet[n][1] - cfg.leg(n).mount_y)
+               - cfg.coxa_len)
+            for n in LEG_NAMES)
         # 当前指令足端目标（唯一事实源，机内所有分段都直接改它）
         self.foot = {n: list(p) for n, p in self.default_feet.items()}
         # 启动逐足压入：全部先留在 STANCE 等待，启动分支按队列一次放行一腿
@@ -178,6 +195,12 @@ class ClimbEngine:
         self._down = (-1.0, 0.0)
         self._comp_left = 0.0
         self._comp_rate = 0.0
+        # 起步过渡记账：comp_tail 稳态账假设"支撑从 +半步幅落点起"，只在连续
+        # 行走成立——起步/停走再起步的过渡周期里，窗序靠后的腿从默认位/停点
+        # 起被拖满步幅+VENT 随场，账外多 ~20mm（实测 press18 满速满额补偿在
+        # R3 首摆 VENT 段 d=204.8 出包络）。六腿都摆过一轮才允许装填补偿；
+        # 停走清空重新计账。代价：每次起步头一个周期（~20s）无补偿
+        self._swung_since_go = set()
         # 单步模式（climb_walk 'i' 键）：step_leg = 当前轮到的腿（窗序
         # L1..R3；任何模式的抬腿事件都推进它，单步与连续行走轮次互通）。
         # pending = 已受理等相位窗（期间整机静止），active = 摆动进行中
@@ -250,6 +273,8 @@ class ClimbEngine:
                 vx = vy = wz = 0.0
         self.cmd = (vx, vy, wz)
         moving = abs(vx) > 1e-6 or abs(vy) > 1e-6 or abs(wz) > 1e-6
+        if not moving:
+            self._swung_since_go.clear()   # 停走：补偿过渡期重新计账（见装填处）
 
         # 2. 窗头决策：跳过 / 启动摆动 / 互锁等待。
         #    漏气挽救期间（leak_pause）绝不放行新的抬腿——漏着的脚不算可靠支撑
@@ -267,11 +292,12 @@ class ClimbEngine:
                     self.step_active = True     # 单步：本窗归它，回支撑即停
                 # 轮次推进：任何模式的抬腿事件都算数（单步与连续行走互通）
                 self.step_leg = LEG_NAMES[(LEG_NAMES.index(cur) + 1) % 6]
+                self._swung_since_go.add(cur)   # 补偿过渡期计账
                 if self.cfg.climb_sag_comp_mm > 0.0:
-                    # 下滑补偿按事件装填，量按当前步幅动态限额（COMP_TAIL_MAX
+                    # 下滑补偿按事件装填，量按当前步幅动态限额（comp_tail
                     # 总账：支撑尾端 = 半步幅 + 5 次事件累计补偿，不得把后腿
-                    # 推出 IK 包络），在 LIFT+TRANSFER 名义时长内匀速铺完
-                    # （真实时间口径，见 4.5 步）。
+                    # 推出 IK 包络；预算随压深在 __init__ 反解），在
+                    # LIFT+TRANSFER 名义时长内匀速铺完（真实时间口径，4.5 步）。
                     # 有腿加深吸附（_press_extra>0）在支撑时本事件**不装填**
                     # （审核发现 #1）：加深腿整个支撑相停在更深 z，同样平面
                     # 外摆下 d=hypot(r,z) 更大，名义深度校验的总账不再成立
@@ -283,8 +309,11 @@ class ClimbEngine:
                     deep = max((self._press_extra[n] for n in LEG_NAMES
                                 if self.phase_of[n] == LegPhase.STANCE),
                                default=0.0)
-                    allow = 0.0 if deep > 0.0 else \
-                        (COMP_TAIL_MAX - self._worst_stance_travel(
+                    # 起步过渡周期（六腿未都摆过一轮）同样不装填：稳态账的
+                    # "+半步幅起点"假设未建立（见 _swung_since_go 注释）
+                    warm = len(self._swung_since_go) >= 6
+                    allow = 0.0 if (deep > 0.0 or not warm) else \
+                        (self.comp_tail - self._worst_stance_travel(
                             vx, vy, wz) / 2.0) / 5.0
                     c_eff = min(self.cfg.climb_sag_comp_mm, max(0.0, allow))
                     self._comp_left = c_eff
@@ -606,9 +635,12 @@ class ClimbEngine:
                 else:
                     self.ctl.clear_fault(i)
                     # 重试加深：原深度重压几何缺口不变必然同败（08-19 墙上
-                    # 实测）。封顶 max_attach_retry×retry_deeper_mm，冻结-
-                    # 解冻反复重压也不会无界加深出工作空间
+                    # 实测）。双封顶：数量（max_attach_retry×retry_deeper_mm）
+                    # 与总深（PRESS_DEPTH_MAX，含 press_delta——压深加大时
+                    # 深度封顶先到），冻结-解冻反复重压也不会加深出工作空间
                     self._press_extra[name] = min(
                         self._press_extra[name] + cfg.retry_deeper_mm,
-                        cfg.max_attach_retry * cfg.retry_deeper_mm)
+                        cfg.max_attach_retry * cfg.retry_deeper_mm,
+                        max(0.0, PRESS_DEPTH_MAX
+                            - cfg.leg(name).press_delta_mm))
                     self.phase_of[name] = LegPhase.RETRY_LIFT

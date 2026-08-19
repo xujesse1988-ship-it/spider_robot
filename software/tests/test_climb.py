@@ -55,26 +55,28 @@ def test_vent_before_lift():
     期间放气已在进行（VENTING+阀断真空），到时才进 LIFT。"""
     io, ctl, eng = make_engine()
     start(eng)
+    leg = eng.slot_order[0]                            # 首窗腿（现 R3）
+    fi = LEG_NAMES.index(leg)
     for _ in range(int(5 / DT)):
         eng.update(DT, 30.0, 0.0, 0.0)
-        if eng.phase_of["L1"] == LegPhase.VENT:
+        if eng.phase_of[leg] == LegPhase.VENT:
             break
-    assert eng.phase_of["L1"] == LegPhase.VENT
+    assert eng.phase_of[leg] == LegPhase.VENT
     vx_eff = eng._clamp_speed(30.0, 0.0, 0.0)[0]
-    z0, x0 = eng.foot["L1"][2], eng.foot["L1"][0]
+    z0, x0 = eng.foot[leg][2], eng.foot[leg][0]
     t_vent = 0.0
     valve_vented = False
-    while eng.phase_of["L1"] == LegPhase.VENT:
-        assert ctl.state[0] == FootState.VENTING       # 放气先行于抬腿
-        assert math.isclose(eng.foot["L1"][2], z0)     # 原地：z 不抬
-        valve_vented = valve_vented or not io.valve[0]
+    while eng.phase_of[leg] == LegPhase.VENT:
+        assert ctl.state[fi] == FootState.VENTING      # 放气先行于抬腿
+        assert math.isclose(eng.foot[leg][2], z0)      # 原地：z 不抬
+        valve_vented = valve_vented or not io.valve[fi]
         eng.update(DT, 30.0, 0.0, 0.0)
         t_vent += DT
     assert valve_vented                                # 阀真断了真空
-    assert eng.phase_of["L1"] == LegPhase.LIFT
+    assert eng.phase_of[leg] == LegPhase.LIFT
     assert abs(t_vent - CFG.lift_vent_s) < 3 * DT
     # 贴面段随支撑场：XY 跟着整体平移（不随场 = 墙面系被拖着划）
-    dx = eng.foot["L1"][0] - x0
+    dx = eng.foot[leg][0] - x0
     assert abs(dx + vx_eff * t_vent) <= 2 * vx_eff * DT + 1e-9
 
 
@@ -104,23 +106,25 @@ def test_retry_presses_deeper_each_time():
     上次加深 retry_deeper_mm；吸上后保持段停在实际深度不回弹。"""
     io, ctl, eng = make_engine()
     start(eng)
-    io.sealed[0] = False
+    leg = eng.slot_order[0]                    # 首窗腿（现 R3）
+    fi = LEG_NAMES.index(leg)
+    io.sealed[fi] = False
     min_z, deep = 0.0, False
     for _ in range(int(30 / DT)):
         eng.update(DT, 30.0, 0.0, 0.0)
-        if eng.phase_of["L1"] in (LegPhase.PRESS, LegPhase.WAIT):
-            min_z = min(min_z, eng.foot["L1"][2])
-        if eng.retries["L1"] >= 2:
+        if eng.phase_of[leg] in (LegPhase.PRESS, LegPhase.WAIT):
+            min_z = min(min_z, eng.foot[leg][2])
+        if eng.retries[leg] >= 2:
             deep = True
-            io.sealed[0] = True                # 第二次加深后"贴好了"
-        if deep and ctl.is_attached(0) \
-                and eng.phase_of["L1"] == LegPhase.STANCE:
+            io.sealed[fi] = True               # 第二次加深后"贴好了"
+        if deep and ctl.is_attached(fi) \
+                and eng.phase_of[leg] == LegPhase.STANCE:
             break
-    assert ctl.is_attached(0) and eng.frozen is None
-    z_nom = -CFG.stand_height - CFG.leg("L1").press_delta_mm
+    assert ctl.is_attached(fi) and eng.frozen is None
+    z_nom = -CFG.stand_height - CFG.leg(leg).press_delta_mm
     assert min_z <= z_nom - 2 * CFG.retry_deeper_mm + 1e-6   # 真压深了
     # 保持段 = 实际吸附深度（回名义深度会把刚吸上的盘拔回去）
-    assert eng.foot["L1"][2] <= z_nom - 2 * CFG.retry_deeper_mm + 1e-6
+    assert eng.foot[leg][2] <= z_nom - 2 * CFG.retry_deeper_mm + 1e-6
 
 
 def test_press_posture_cup_axis_perpendicular():
@@ -220,36 +224,40 @@ def test_walk_cycle_invariants():
 def test_suck_timeout_retries_then_succeeds():
     io, ctl, eng = make_engine()
     start(eng)
-    io.sealed[0] = False                       # L1 下一步落脚必然吸不上
+    leg = eng.slot_order[0]                    # 首窗腿（现 R3）
+    fi = LEG_NAMES.index(leg)
+    io.sealed[fi] = False                      # 它下一步落脚必然吸不上
     saw_retry = False
     for _ in range(int(30 / DT)):
         eng.update(DT, 30.0, 0.0, 0.0)
-        if eng.retries["L1"] >= 1:
+        if eng.retries[leg] >= 1:
             saw_retry = True
-            io.sealed[0] = True                # 重试时"贴好了"
-        if saw_retry and eng.phase_of["L1"] == LegPhase.STANCE \
-                and ctl.is_attached(0):
+            io.sealed[fi] = True               # 重试时"贴好了"
+        if saw_retry and eng.phase_of[leg] == LegPhase.STANCE \
+                and ctl.is_attached(fi):
             break
-    assert saw_retry and ctl.is_attached(0)
+    assert saw_retry and ctl.is_attached(fi)
     assert eng.frozen is None
 
 
 def test_retry_exhausted_freezes_then_clear_resumes():
     io, ctl, eng = make_engine()
     start(eng)
-    io.sealed[0] = False
+    leg = eng.slot_order[0]
+    fi = LEG_NAMES.index(leg)
+    io.sealed[fi] = False
     run(eng, 30.0, vx=30.0)
-    assert eng.frozen is not None and "L1" in eng.frozen
+    assert eng.frozen is not None and leg in eng.frozen
     t_frozen = eng.t
     run(eng, 2.0, vx=30.0)                     # 冻结态：目标与钟都不动
     assert eng.t == t_frozen
-    io.sealed[0] = True                        # 人工处理（擦唇口/挪落点）后解除
+    io.sealed[fi] = True                       # 人工处理（擦唇口/挪落点）后解除
     eng.clear_freeze()
     for _ in range(int(20 / DT)):
         eng.update(DT, 30.0, 0.0, 0.0)
-        if ctl.is_attached(0) and eng.phase_of["L1"] == LegPhase.STANCE:
+        if ctl.is_attached(fi) and eng.phase_of[leg] == LegPhase.STANCE:
             break
-    assert eng.frozen is None and ctl.is_attached(0)
+    assert eng.frozen is None and ctl.is_attached(fi)
 
 
 def test_leak_pauses_clock_and_recovers():
@@ -605,19 +613,23 @@ def _run_single_step(eng):
 
 def test_single_step_walks_one_leg_and_records_turn():
     """单步：只走"当前轮到"的一条腿，走完自动停；轮次按窗序推进且持久
-    （中间静止多久都不乱），连续行走的抬腿同样推进轮次（两模式互通）。"""
+    （中间静止多久都不乱），连续行走的抬腿同样推进轮次（两模式互通）。
+    窗序规格 = 对角交替波浪 R3→L1→R2→L3→R1→L2（每侧后->前、两侧错
+    半周期：相邻抬腿全对角/交叉，同排搭档间隔恒半周期）。"""
     io, ctl, eng = make_engine()
+    assert eng.slot_order == ("R3", "L1", "R2", "L3", "R1", "L2")
     start(eng)
-    assert eng.step_leg == "L1"                # 首窗轮到 L1
+    o = eng.slot_order
+    assert eng.step_leg == o[0]                # 首窗轮到窗序首腿
     assert eng.request_step(0.0, 0.0, 0.0) == "单步速度为零"
-    assert _run_single_step(eng) == {"L1"}
-    assert eng.step_leg == "L2" and ctl.attached_count() == 6
+    assert _run_single_step(eng) == {o[0]}
+    assert eng.step_leg == o[1] and ctl.attached_count() == 6
     eng.update(DT)
     assert eng.cmd == (0.0, 0.0, 0.0)          # 完成自动停，无残留速度
     run(eng, 3.0)                              # 静止晾一段：轮次不许漂
-    assert eng.step_leg == "L2"
-    assert _run_single_step(eng) == {"L2"}     # 第二步轮到 L2
-    assert eng.step_leg == "L3"
+    assert eng.step_leg == o[1]
+    assert _run_single_step(eng) == {o[1]}     # 第二步轮到窗序第二腿
+    assert eng.step_leg == o[2]
     # 连续行走也推进同一份轮次记录
     seen = None
     for _ in range(int(10 / DT)):
@@ -627,7 +639,7 @@ def test_single_step_walks_one_leg_and_records_turn():
             seen = lifted[0]
             break
     assert seen is not None
-    assert eng.step_leg == LEG_NAMES[(LEG_NAMES.index(seen) + 1) % 6]
+    assert eng.step_leg == o[(o.index(seen) + 1) % 6]
 
 
 def test_single_step_hovers_until_land_confirm():
@@ -636,14 +648,16 @@ def test_single_step_hovers_until_land_confirm():
     step_land 才放行落地，落完轮次推进、不能重复落。"""
     io, ctl, eng = make_engine()
     start(eng)
+    leg = eng.slot_order[0]                        # 首窗腿（现 R3）
+    fi = LEG_NAMES.index(leg)
     assert eng.step_land() == "没有悬停中的腿"     # 没抬腿不能落
-    assert _run_to_hover(eng) == {"L1"}
-    assert eng.step_hover_leg() == "L1" and eng.step_active
-    lx, ly = eng.landing["L1"]
-    support0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES if n != "L1"}
+    assert _run_to_hover(eng) == {leg}
+    assert eng.step_hover_leg() == leg and eng.step_active
+    lx, ly = eng.landing[leg]
+    support0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES if n != leg}
     run(eng, 5.0)                                  # 晾着：不自行落地不超时
-    assert eng.step_hover_leg() == "L1" and eng.frozen is None
-    x, y, z = eng.foot["L1"]
+    assert eng.step_hover_leg() == leg and eng.frozen is None
+    x, y, z = eng.foot[leg]
     assert abs(x - lx) < 1e-9 and abs(y - ly) < 1e-9
     assert math.isclose(z, -CFG.stand_height + CFG.lift_clearance)
     for n, p in support0.items():                  # 悬停期支撑足纹丝不动
@@ -652,10 +666,10 @@ def test_single_step_hovers_until_land_confirm():
     assert eng.step_land() is None                 # 第二段：落地
     for _ in range(int(20 / DT)):
         eng.update(DT)
-        if not eng.step_active and eng.phase_of["L1"] == LegPhase.STANCE:
+        if not eng.step_active and eng.phase_of[leg] == LegPhase.STANCE:
             break
-    assert ctl.is_attached(0) and ctl.attached_count() == 6
-    assert eng.step_leg == "L2"                    # 轮次已推进
+    assert ctl.is_attached(fi) and ctl.attached_count() == 6
+    assert eng.step_leg == eng.slot_order[1]       # 轮次已推进
     assert eng.step_land() == "没有悬停中的腿"     # 落完不能重复落
 
 
@@ -665,21 +679,23 @@ def test_single_step_hover_survives_freeze():
     动作），之后 step_land 正常收口。"""
     io, ctl, eng = make_engine()
     start(eng)
+    leg = eng.slot_order[0]                        # 首窗腿（现 R3）
+    fi = LEG_NAMES.index(leg)
     _run_to_hover(eng)
     eng.frozen = "测试注入"
     run(eng, 1.0)
-    assert eng.step_hover_leg() == "L1"            # 冻结：悬停保持
+    assert eng.step_hover_leg() == leg             # 冻结：悬停保持
     assert eng.step_land() == "冻结中"
     eng.clear_freeze()
-    assert eng.step_active and eng.step_hover_leg() == "L1"
+    assert eng.step_active and eng.step_hover_leg() == leg
     run(eng, 5.0)                                  # 解冻后无残留动作
-    assert eng.step_hover_leg() == "L1"
+    assert eng.step_hover_leg() == leg
     assert eng.step_land() is None
     for _ in range(int(20 / DT)):
         eng.update(DT)
-        if not eng.step_active and eng.phase_of["L1"] == LegPhase.STANCE:
+        if not eng.step_active and eng.phase_of[leg] == LegPhase.STANCE:
             break
-    assert ctl.is_attached(0) and eng.frozen is None
+    assert ctl.is_attached(fi) and eng.frozen is None
 
 
 def _first_lifted(eng, vx=30.0, budget=10.0):
@@ -701,22 +717,24 @@ def test_go_from_rest_starts_at_turn_pointer():
         io, ctl, eng = make_engine()
         start(eng)
         run(eng, idle)                         # 静止晾着（钟空转过窗）
-        assert _first_lifted(eng) == "L1", f"idle={idle}s 首抬非 L1"
-    # 单步走完 L1 后连续起步：续接轮次，首抬 L2
+        first = eng.slot_order[0]
+        assert _first_lifted(eng) == first, f"idle={idle}s 首抬非 {first}"
+    # 单步走完首腿后连续起步：续接轮次，首抬窗序第二腿
     io, ctl, eng = make_engine()
     start(eng)
-    assert _run_single_step(eng) == {"L1"}
+    assert _run_single_step(eng) == {eng.slot_order[0]}
     run(eng, 2.2)                              # 静止晾着：轮次不许漂
-    assert _first_lifted(eng) == "L2"
+    assert _first_lifted(eng) == eng.slot_order[1]
     # 单步受理即当拍启动（旧口径等窗空转最多 ~3.6s）
     io, ctl, eng = make_engine()
     start(eng)
+    leg = eng.slot_order[0]
     assert eng.request_step(30.0, 0.0, 0.0) is None
     for _ in range(int(0.5 / DT)):
         eng.update(DT)
-        if eng.phase_of["L1"] != LegPhase.STANCE:
+        if eng.phase_of[leg] != LegPhase.STANCE:
             break
-    assert eng.phase_of["L1"] != LegPhase.STANCE
+    assert eng.phase_of[leg] != LegPhase.STANCE
 
 
 class _ShallowIO(MockVacuumIO):

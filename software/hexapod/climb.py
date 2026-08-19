@@ -37,11 +37,12 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
   - 任一支撑足漏气 -> 钟暂停（挽救窗内），超 leak_rescue_s -> 冻结报警
   - 速度指令为零 -> 该窗不抬腿，钟空转过窗（吸住不动，省吸盘寿命）
   - 静止转起步（速度指令上升沿/单步受理）-> 相位钟快进对齐 step_leg 的
-    窗头：首抬腿从轮次指针开始（新鲜启动=L1，此后 L1..R3 轮转续接，单步
+    窗头：首抬腿从轮次指针开始（新鲜启动=窗序首腿 R3，此后按窗序续接，单步
     与连续互通），不取决于按键时刻落在周期哪个位置；有摆动在途不对齐
     （收口后的下一窗天然就是轮次下一腿）
   - 单步模式（request_step）：引擎记录"当前轮到哪条腿"（step_leg，窗序
-    L1..R3 轮转，连续行走的抬腿同样推进——两种模式共用一份轮次），受理
+    slot_order＝R3→L1→R2→L3→R1→L2 轮转，连续行走的抬腿同样推进——
+    两种模式共用一份轮次），受理
     即对齐该腿窗头当拍以单步速度抬腿、平移到落点上方 HOVER 悬停（半步）；
     step_land() 确认后才落地吸附，回支撑自动停（后半步）
 
@@ -149,6 +150,11 @@ class ClimbEngine:
         # 避免公式漂移
         self._geom = GaitEngine(replace(cfg, cycle_time=cfg.climb_cycle_time,
                                         max_step=cfg.climb_max_step), gait)
+        # 窗序（抬腿轮转顺序）由步态相位表导出：窗头时刻 = (duty-offset) mod 1
+        # 升序，CLIMB 现为 R3→L1→R2→L3→R1→L2（对角交替波浪）。轮次推进
+        # 与起步对轮次全按它走，不许再拿 LEG_NAMES 的排列当窗序硬编码
+        self.slot_order = tuple(sorted(
+            LEG_NAMES, key=lambda n: (gait.duty - gait.offsets[n]) % 1.0))
         # 爬墙站位 ≠ 地面站位（foot_reach=130 时吸盘轴偏法线 ~19°，超 ±15°
         # 容差，唇口斜着接面吸不住）：逐腿解"压入位吸盘轴 ⊥ 吸附面"的半径
         # （默认参数约 176mm），落点带按 ±TILT_BAND_DEG 换算成半径区间裁剪。
@@ -217,10 +223,10 @@ class ClimbEngine:
         # R3 首摆 VENT 段 d=204.8 出包络）。六腿都摆过一轮才允许装填补偿；
         # 停走清空重新计账。代价：每次起步头一个周期（~20s）无补偿
         self._swung_since_go = set()
-        # 单步模式（climb_walk 'i' 键）：step_leg = 当前轮到的腿（窗序
-        # L1..R3；任何模式的抬腿事件都推进它，单步与连续行走轮次互通）。
-        # pending = 已受理等相位窗（期间整机静止），active = 摆动进行中
-        self.step_leg = LEG_NAMES[0]
+        # 单步模式（climb_walk 'i' 键）：step_leg = 当前轮到的腿（按窗序
+        # slot_order 轮转；任何模式的抬腿事件都推进它，单步与连续行走轮次
+        # 互通）。pending = 已受理，active = 摆动进行中
+        self.step_leg = self.slot_order[0]
         self.step_pending = False
         self.step_active = False
         self._step_v = (0.0, 0.0, 0.0)
@@ -271,7 +277,7 @@ class ClimbEngine:
 
         # 0.9 起步对轮次：整机静止转入"有抬腿需求"（速度指令非零或单步受理）
         # 的上升沿，把相位钟快进对齐 step_leg 的窗头——首抬腿从轮次指针开始
-        # （新鲜启动=L1，此后按 L1..R3 轮转续接，单步与连续互通），不再取决
+        # （新鲜启动=窗序首腿 R3，此后按窗序续接，单步与连续互通），不再取决
         # 于按键时刻落在周期哪个位置（修前实测静止 0.1~3.4s 后按 w 首抬
         # L2/L3/R1/R2/R3/L1 各不相同）；单步的等窗空转同时消灭（受理即当拍
         # 启动）。快进只改相位变量、瞬时完成、不动任何足端目标，仅在全腿
@@ -358,8 +364,10 @@ class ClimbEngine:
                 if self.step_pending and cur == self.step_leg:
                     self.step_pending = False
                     self.step_active = True     # 单步：本窗归它，回支撑即停
-                # 轮次推进：任何模式的抬腿事件都算数（单步与连续行走互通）
-                self.step_leg = LEG_NAMES[(LEG_NAMES.index(cur) + 1) % 6]
+                # 轮次推进：任何模式的抬腿事件都算数（单步与连续行走互通），
+                # 按窗序 slot_order 数而非 LEG_NAMES 排列
+                self.step_leg = self.slot_order[
+                    (self.slot_order.index(cur) + 1) % 6]
                 self._swung_since_go.add(cur)   # 补偿过渡期计账
                 if self.cfg.climb_sag_comp_mm > 0.0:
                     # 下滑补偿按事件装填，量按当前步幅动态限额（comp_tail

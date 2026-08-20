@@ -35,6 +35,14 @@ CLIMB 步态。
                                              # 沿下坡向额外平移 3mm，顶回"每抬
                                              # 一腿被拽下一截"的棘轮下滑（头朝
                                              # 上贴墙口径；从小标定，宁欠勿过）
+  python climb_walk.py --handover L1:17,R1:15,L3:11,R3:9,R2:5,L2:5
+                                             # vent 前零力交接：窗头决策后被抬
+                                             # 腿先沿上坡还 δ 卸载、其余支撑腿
+                                             # 各沿下坡接 δ/5（身体不动），铺完
+                                             # 才放气——治 08-20 实测"83% 下滑
+                                             # 在密封破裂瞬间"的弹跳棘轮。起标
+                                             # =实测单次弹跳×0.8，宁欠勿过
+                                             # （docs/HANDOVER-DESIGN.md）
   python climb_walk.py --stand-height 62 --max-step 78 --speed 27
                                              # 大步幅直行实验：站高降到 62 后
                                              # 直行步幅几何上限 ~79mm（coxa 扫
@@ -84,7 +92,8 @@ sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
-from hexapod.climb import ClimbEngine, LegPhase, max_straight_step
+from hexapod.climb import (ClimbEngine, LegPhase, max_straight_step,
+                           parse_handover, HANDOVER_SPEED_MMS)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch, PHASE_CH, ADH_CH
@@ -224,6 +233,14 @@ def main():
                          "指令行程被腿链让差吃掉大半，加深换真实压缩；对比实验"
                          "用 13（几何口径）vs 18。盯吸附后总电流回落，不回落="
                          "多余行程在烧舵机")
+    ap.add_argument("--handover", default=None,
+                    help="vent 前零力交接 δ mm（默认关）：统一值如 8，或逐腿 "
+                         "L1:17,R1:15,L3:11,R3:9,R2:5,L2:5（未给的腿 0）。"
+                         "窗头决策后被抬腿先沿上坡还 δ 卸载、其余支撑腿各沿"
+                         "下坡接 δ/5（身体指令不动），铺完才放气——治 08-20 "
+                         "实测'83%% 下滑在密封破裂瞬间'的弹跳棘轮。起标=实测"
+                         "单次弹跳×0.8 宁欠勿过；与 --sag-comp 建议 A/B 期"
+                         "只开一个（同开双份推挤支撑系）。范围 0~25")
     ap.add_argument("--release", action="store_true",
                     help="只做逐足串行放气+回站姿")
     args = ap.parse_args()
@@ -256,6 +273,12 @@ def main():
         ap.error(f"--lift-gate {args.lift_gate} 非法：范围 -65~-35（或 0=关）。"
                  "浅于 -35 与 ATTACHED 判据(-30)没区别形同虚设；深于 -65 贴近"
                  " -75 停泵线，唇口稍有微漏就永远到不了门槛、必然超时冻结")
+    handover = None
+    if args.handover is not None:
+        try:
+            handover = parse_handover(args.handover)
+        except ValueError as e:
+            ap.error(str(e))
     if not args.release and not sys.stdin.isatty():
         # TTY 检查必须在碰任何硬件之前：否则真机先上电站立、再在 termios
         # 处崩溃断电瘫倒（审核发现 #5）。--release 无需键盘，放行。
@@ -272,6 +295,9 @@ def main():
                      "支撑目标逼近 IK 包络")
         cfg = replace(cfg, legs=tuple(
             replace(l, press_delta_mm=args.press_delta) for l in cfg.legs))
+    if handover is not None:
+        cfg = replace(cfg, legs=tuple(
+            replace(l, handover_mm=handover[l.name]) for l in cfg.legs))
     if args.air:
         cfg = replace(cfg, max_attach_retry=1)   # 架空必 FAULT，少陪跑几轮重试
     # 步幅几何上限按最终 cfg（站高/压入/补偿/加深封顶全生效后）动态验证：
@@ -294,10 +320,14 @@ def main():
                                     ("air", args.air), ("no-tank", args.no_tank))
                     if on) or "实机全链路"
     log.note(f"模式={mode} port={args.port} release={args.release}")
+    ho_txt = ("关" if all(l.handover_mm <= 0.0 for l in cfg.legs) else
+              ",".join(f"{l.name}:{l.handover_mm:g}" for l in cfg.legs
+                       if l.handover_mm > 0.0))
     log.note(f"参数: cycle={cfg.climb_cycle_time}s sag_comp={cfg.climb_sag_comp_mm}mm"
              f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
              f" lift_gate={cfg.lift_gate_kpa:g}kPa"
              f" tilt_trim={cfg.cup_tilt_trim_deg:g}°"
+             f" handover={ho_txt}"
              f" SPEED={speed:g} TURN={TURN} update_hz={cfg.update_hz:g}"
              f" max_step={cfg.climb_max_step}")
     _prev_hook = sys.excepthook
@@ -496,6 +526,26 @@ def main():
                   f"本速度直行实际 {eff:g}mm（工作空间限额，降速可放宽）。方向口径"
                   "＝机器人头朝上贴墙（下坡=-X，随转向积分旋转），放置朝向不符时勿"
                   "用；标定从小往大，盯每周期净位移与支撑盘有无被拖歪")
+        ho_max = max(cfg.leg(n).handover_mm for n in LEG_NAMES)
+        if ho_max > 0.0:
+            # 工作空间账（HANDOVER-DESIGN §4.7）：支撑腿因交接的最大额外
+            # 下坡外摆 ≈ δ（一个周期攒 5 次 δ/5，轮到自己抬时才抵回），要
+            # 与支撑尾余量并排亮出来——δ 尚未计进 max_straight_step 总账
+            # （留到实验站住后再做），v1 纪律 = 大步幅与大 δ 不同开
+            room = eng.comp_tail - min(worst, cfg.climb_max_step) / 2.0
+            print("零力交接开启：δ "
+                  + " ".join(f"{n}={cfg.leg(n).handover_mm:g}"
+                             for n in LEG_NAMES if cfg.leg(n).handover_mm > 0)
+                  + f"mm，铺设 {HANDOVER_SPEED_MMS:g}mm/s"
+                  f"（最长 {ho_max / HANDOVER_SPEED_MMS:.1f}s/步，周期拉宽）；"
+                  f"支撑尾余量 comp_tail−半步幅 = {room:.0f}mm vs δmax "
+                  f"{ho_max:g}——δ 未计进步幅总账，大步幅与大 δ 不同开"
+                  + ("" if room >= ho_max else "（⚠ 余量不足，先降速/减步幅）"))
+            log.note(f"handover δmax={ho_max:g}mm 支撑尾余量={room:.1f}mm")
+            if cfg.climb_sag_comp_mm > 0:
+                print("⚠ --sag-comp 与 --handover 同开：交接治坠源、补偿是"
+                      "坠后追补，同开双份推挤支撑系白吃工作空间——A/B 标定"
+                      "期建议只开一个")
 
         # —— 就位暂停：给操作者检查站位/气路/场地的窗口，按 p 才碰气路 ——
         print("就位暂停：确认无异常后按 p 开始全吸附启动序列（ESC×2 断电退出）")

@@ -12,7 +12,10 @@
        匀速铺完，摆动/落压期间自动暂停不丢；授予量按支撑足对 IK 包络
        实算截短（到边会拒绝并提示）
   1~6  选腿（1=L1 2=L2 3=L3 4=R1 5=R2 6=R3），选完按 i 抬它
-  i    原地抬起所选腿到悬停（互锁/抬腿门槛/先通气全套照走）；悬停中
+  i    原地抬起所选腿到悬停（互锁/抬腿门槛/先通气全套照走；--handover
+       开启时抬起前自动先做零力交接：被抬腿沿上坡还 δ 卸载、其余支撑腿
+       各沿下坡接 δ/5，铺完才放气——治 08-20 实测"83% 下滑在密封破裂
+       瞬间"的弹跳棘轮，docs/HANDOVER-DESIGN.md）；悬停中
        再按 i 落地压入+吸附确认。落点=默认站位——倾身后落回站位等于
        该腿几何复位（身体保持已倾量），逐腿轮流可以"蠕动"前移
   空格 取消未铺完的倾身 + 未开始的抬起（悬停中的腿按 i 落地收口）
@@ -25,6 +28,9 @@
 
 用法:
   python body_lean.py --mock                 # 无硬件干跑
+  python body_lean.py --handover L1:17,R1:15,L3:11,R3:9,R2:5,L2:5
+                                             # 零力交接 A/B 标定（重跑 08-20
+                                             # 原地踏步实验对照下滑量）
   python body_lean.py --dry                  # 真舵机 + 仿真气路（不碰阀泵）
   python body_lean.py --no-tank              # 无罐：泵直抽歧管（地面/上墙均可）
   python body_lean.py                        # 全链路
@@ -49,7 +55,8 @@ sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
-from hexapod.climb import ClimbEngine, LegPhase, LEAN_SPEED_MMS
+from hexapod.climb import (ClimbEngine, LegPhase, LEAN_SPEED_MMS,
+                           parse_handover, HANDOVER_SPEED_MMS)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
@@ -105,6 +112,15 @@ def main():
     ap.add_argument("--press-delta", type=float, default=None,
                     help="预压行程 mm，覆盖全部腿（默认用 config 值 "
                          f"{DEFAULT_CONFIG.legs[0].press_delta_mm:g}）")
+    ap.add_argument("--handover", default=None,
+                    help="vent 前零力交接 δ mm（默认关）：统一值如 8，或逐腿 "
+                         "L1:17,R1:15,L3:11,R3:9,R2:5,L2:5（未给的腿 0）。"
+                         "i 抬起前自动先交接（被抬腿沿上坡还 δ 卸载、支撑腿"
+                         "各接 δ/5，铺完才放气）。本脚本是 δ 的 A/B 标定"
+                         "入口：起标=实测单次弹跳×0.8，宁欠勿过。范围 0~25。"
+                         "注意：反复抬同一条腿时支撑指令每次多漂下坡 δ/5、"
+                         "轮抬一圈才互相抵回——单腿连标 ~10 次后换腿或重启，"
+                         "越界由工作空间冻结兜底")
     ap.add_argument("--stand-height", type=float,
                     default=DEFAULT_CONFIG.stand_height,
                     help="站高 mm（默认 %(default)g，范围 55~95）")
@@ -119,6 +135,12 @@ def main():
         ap.error(f"--stand-height {args.stand_height} 非法：范围 55~95mm")
     if not -8.0 <= args.tilt_trim <= 8.0:
         ap.error(f"--tilt-trim {args.tilt_trim} 非法：范围 -8~8°")
+    handover = None
+    if args.handover is not None:
+        try:
+            handover = parse_handover(args.handover)
+        except ValueError as e:
+            ap.error(str(e))
     if not sys.stdin.isatty():
         sys.exit("需要交互终端（ssh 加 -t；勿用 nohup/管道跑本脚本）")
 
@@ -129,6 +151,9 @@ def main():
             ap.error(f"--press-delta {args.press_delta} 非法：范围 8~20mm")
         cfg = replace(cfg, legs=tuple(
             replace(l, press_delta_mm=args.press_delta) for l in cfg.legs))
+    if handover is not None:
+        cfg = replace(cfg, legs=tuple(
+            replace(l, handover_mm=handover[l.name]) for l in cfg.legs))
 
     log = RunLog(os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs"),
@@ -138,9 +163,13 @@ def main():
                                     ("no-tank", args.no_tank)) if on) \
         or "实机全链路"
     log.note(f"模式={mode} port={args.port}")
+    ho_txt = ("关" if all(l.handover_mm <= 0.0 for l in cfg.legs) else
+              ",".join(f"{l.name}:{l.handover_mm:g}" for l in cfg.legs
+                       if l.handover_mm > 0.0))
     log.note(f"参数: lean_step={args.lean_step:g}mm lean_speed={LEAN_SPEED_MMS:g}mm/s"
              f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
-             f" stand={cfg.stand_height:g} tilt_trim={cfg.cup_tilt_trim_deg:g}°")
+             f" stand={cfg.stand_height:g} tilt_trim={cfg.cup_tilt_trim_deg:g}°"
+             f" handover={ho_txt}")
     _prev_hook = sys.excepthook
 
     def _crash_hook(tp, val, tb):
@@ -221,6 +250,14 @@ def main():
         print(f"倾身几何余量（站位起算）：前 ~{fwd_room:.0f}mm / "
               f"后 ~{eng._lean_room(-1.0):.0f}mm，每档 {args.lean_step:g}mm，"
               f"铺设速率 {LEAN_SPEED_MMS:g}mm/s")
+        ho_max = max(cfg.leg(n).handover_mm for n in LEG_NAMES)
+        if ho_max > 0.0:
+            print("零力交接开启：δ "
+                  + " ".join(f"{n}={cfg.leg(n).handover_mm:g}"
+                             for n in LEG_NAMES if cfg.leg(n).handover_mm > 0)
+                  + f"mm，铺设 {HANDOVER_SPEED_MMS:g}mm/s"
+                  f"（最长 {ho_max / HANDOVER_SPEED_MMS:.1f}s/次抬起）。"
+                  "A/B 判据：vent 无可见弹跳、每轮下滑 <10mm、电流不再爬升")
 
         print("就位暂停：确认无异常后按 p 开始全吸附启动序列（ESC×2 断电退出）")
         while True:

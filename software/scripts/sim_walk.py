@@ -32,7 +32,9 @@ CLIMB_COLOR = {LegPhase.STANCE: "steelblue", LegPhase.VENT: "indianred",
                LegPhase.LIFT: "indianred", LegPhase.TRANSFER: "indianred",
                LegPhase.HOVER: "gold", LegPhase.DESCEND: "darkorange",
                LegPhase.PRESS: "darkorange", LegPhase.RETRY_LIFT: "darkorange",
-               LegPhase.WAIT: "gold"}
+               LegPhase.WAIT: "gold",
+               LegPhase.HANDOVER: "mediumpurple"}  # 零力交接（默认配置不出现，
+                                                   # 缺键=KeyError 炸动画）
 
 
 def leg_points_body(bot, name, target_body):

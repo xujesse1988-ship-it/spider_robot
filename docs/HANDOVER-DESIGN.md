@@ -1,6 +1,11 @@
 # vent 前零力交接（zero-force handover）· 实现设计
 
-状态：**设计定稿，待实现**（2026-08-20；实现排在下一个会话）。
+状态：**已实现**（2026-08-20 定稿并同日实现：`hexapod/climb.py` update() 4.7 步
++ `LegConfig.handover_mm` + 两脚本 `--handover`；测试 §7 全部 8 项 + mock 冒烟
+通过。实现时的设计外补充：`scripts/sim_walk.py` 的 CLIMB_COLOR 也按相位取色，
+已补 HANDOVER 键——与 §3.2 PHASE_CH 同族的 KeyError 隐患，设计漏列。
+**待办：§9.3 实机 A/B 验收**——实验方案与量化工具已备好：
+`docs/HANDOVER-AB-PROTOCOL.md` + `software/logs_analysis/ab_quant.py`）。
 实测依据：`html/vent-snap-20260820.html`（08-20 原地踏步实验量化报告）、
 `software/logs_analysis/lean_20260820_102117.log`、`images/lean_20260820.mp4`。
 

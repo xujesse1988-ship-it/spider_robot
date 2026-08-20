@@ -6,7 +6,8 @@ from dataclasses import replace
 
 from hexapod.adhesion import AdhesionController, MockVacuumIO, FootState
 from hexapod.climb import (ClimbEngine, LegPhase, PRESS_DEPTH_MAX,
-                           TILT_BAND_DEG, _press_tilt, max_straight_step)
+                           TILT_BAND_DEG, _press_tilt, max_straight_step,
+                           parse_handover, HANDOVER_SPEED_MMS)
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
 from hexapod.driver import MockDriver
 from hexapod.kinematics import leg_ik
@@ -998,3 +999,257 @@ def test_clear_freeze_cancels_pending_lean():
     assert all(math.isclose(eng.foot[n][0], before[n]) for n in LEG_NAMES)
     g, d = eng.request_lean(-10.0)           # 解冻后新请求照常受理
     assert d is None and g == -10.0
+
+
+# ---------- vent 前零力交接（docs/HANDOVER-DESIGN.md，08-20 弹跳棘轮治法） ----------
+
+HO = {"L1": 17.0, "R1": 15.0, "L3": 11.0, "R3": 9.0, "R2": 5.0, "L2": 5.0}
+
+
+def make_ho_engine(deltas=None):
+    """带零力交接的引擎（默认 δ=HANDOVER-DESIGN §5 起标表）。"""
+    cfg = replace(CFG, legs=tuple(
+        replace(l, handover_mm=(deltas or HO).get(l.name, 0.0))
+        for l in CFG.legs))
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    return cfg, io, ctl, ClimbEngine(cfg, ctl)
+
+
+def test_handover_holds_attached_then_vents_on_schedule():
+    """相位序列（§7.2）：δ>0 时窗头决策后进 HANDOVER，期间吸附保持
+    ATTACHED、阀不动（通罐位）；δ/HANDOVER_SPEED_MMS 秒（±3 DT）铺完
+    才 request_release 进 VENT（照抄 test_vent_before_lift 的结构）。"""
+    cfg, io, ctl, eng = make_ho_engine()
+    start(eng)
+    leg = eng.slot_order[0]                            # 首窗腿（现 R3）
+    fi = LEG_NAMES.index(leg)
+    for _ in range(int(5 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        if eng.phase_of[leg] == LegPhase.HANDOVER:
+            break
+    assert eng.phase_of[leg] == LegPhase.HANDOVER
+    t_ho = 0.0
+    while eng.phase_of[leg] == LegPhase.HANDOVER:
+        assert ctl.state[fi] == FootState.ATTACHED     # 交接期保持密封吸附
+        assert io.valve[fi]                            # 阀不动（通罐位）
+        eng.update(DT, 30.0, 0.0, 0.0)
+        t_ho += DT
+    assert eng.phase_of[leg] == LegPhase.VENT          # 铺完才放气
+    assert ctl.state[fi] == FootState.VENTING
+    assert abs(t_ho - HO[leg] / HANDOVER_SPEED_MMS) < 3 * DT
+
+
+def test_handover_displacement_account_zero_sum():
+    """位移账（§7.3）：交接完成时被抬腿 = 起点 + 上坡 δ，每条支撑腿 =
+    起点 + 下坡 δ/5（头朝上贴墙 _down=(-1,0)：上坡=+X），y 不受扰、z 恒在
+    压入位；六腿位移矢量和 = 0（均值不变 = 身体指令不动的代数断言）。"""
+    cfg, io, ctl, eng = make_ho_engine()
+    start(eng)
+    f0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    assert eng.request_lift("L1") is None              # δ=17，零速原地
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["L1"] == LegPhase.VENT         # 交接刚完成、还没抬
+    d = HO["L1"]
+    assert math.isclose(eng.foot["L1"][0], f0["L1"][0] + d, abs_tol=1e-6)
+    assert math.isclose(eng.foot["L1"][1], f0["L1"][1], abs_tol=1e-9)
+    assert math.isclose(eng.foot["L1"][2], f0["L1"][2], abs_tol=1e-9)
+    vec = [eng.foot["L1"][0] - f0["L1"][0], eng.foot["L1"][1] - f0["L1"][1]]
+    for n in LEG_NAMES:
+        if n == "L1":
+            continue
+        assert math.isclose(eng.foot[n][0], f0[n][0] - d / 5, abs_tol=1e-6)
+        assert math.isclose(eng.foot[n][1], f0[n][1], abs_tol=1e-9)
+        assert math.isclose(eng.foot[n][2], f0[n][2], abs_tol=1e-9)  # z 恒压入位
+        vec[0] += eng.foot[n][0] - f0[n][0]
+        vec[1] += eng.foot[n][1] - f0[n][1]
+    assert abs(vec[0]) < 1e-6 and abs(vec[1]) < 1e-9
+
+
+def test_handover_follows_support_field_while_walking():
+    """行走叠加（§7.4）：带速度走时 HANDOVER 期间被抬腿跟随支撑场（不随
+    场 = 墙面系被拖着划、蹭移还密封着的唇口），交接分量叠加在场平移之上：
+    被抬腿 = 随场 −vΔt + 上坡 δ；支撑腿 = 随场 −vΔt + 下坡 δ/5。"""
+    cfg, io, ctl, eng = make_ho_engine()
+    start(eng)
+    leg = eng.slot_order[0]                            # R3，δ=9
+    vx_eff = eng._clamp_speed(30.0, 0.0, 0.0)[0]
+    t0 = f0 = None
+    for _ in range(int(10 / DT)):
+        t_pre = eng.t
+        feet_pre = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+        eng.update(DT, 30.0, 0.0, 0.0)
+        if eng.phase_of[leg] == LegPhase.HANDOVER:
+            t0, f0 = t_pre, feet_pre
+            break
+    assert t0 is not None
+    obs = next(n for n in LEG_NAMES if n != leg)
+    for _ in range(int(10 / DT)):
+        if eng.phase_of[leg] != LegPhase.HANDOVER:
+            break
+        eng.update(DT, 30.0, 0.0, 0.0)
+    assert eng.phase_of[leg] == LegPhase.VENT
+    d = HO[leg]
+    dt_clock = eng.t - t0                              # 场只随钟走（钟停在窗尾）
+    assert dt_clock > 0.0
+    assert math.isclose(eng.foot[leg][0] - f0[leg][0],
+                        -vx_eff * dt_clock + d, abs_tol=1e-6)
+    assert math.isclose(eng.foot[obs][0] - f0[obs][0],
+                        -vx_eff * dt_clock - d / 5, abs_tol=1e-6)
+    assert math.isclose(eng.foot[obs][1], f0[obs][1], abs_tol=1e-9)
+
+
+def test_handover_pauses_on_support_leak_and_resumes():
+    """漏气暂停（§7.5）：交接中支撑腿漏气，_ho_left 冻结不推进、目标全
+    保持、不放气（漏着的盘摩擦余量低不该被推）；挽救成功后续铺完成。"""
+    cfg, io, ctl, eng = make_ho_engine()
+    start(eng)
+    assert eng.request_lift("L1") is None
+    for _ in range(int(10 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.HANDOVER:
+            break
+    assert eng.phase_of["L1"] == LegPhase.HANDOVER
+    run(eng, 0.3)                                      # 先铺一小段
+    ri = LEG_NAMES.index("R2")
+    io.sealed[ri] = False                              # 支撑腿漏气
+    for _ in range(int(3 / DT)):
+        eng.update(DT)
+        if ctl.is_leaking(ri):
+            break
+    assert ctl.is_leaking(ri)
+    left0 = eng._ho_left
+    assert 0.0 < left0 < HO["L1"]
+    feet0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    run(eng, 0.5)                                      # 挽救窗（2s）内
+    assert eng.frozen is None
+    assert eng._ho_left == left0                       # 交接暂停不丢
+    assert eng.phase_of["L1"] == LegPhase.HANDOVER
+    assert ctl.state[LEG_NAMES.index("L1")] == FootState.ATTACHED  # 没放气
+    assert all(tuple(eng.foot[n]) == feet0[n] for n in LEG_NAMES)
+    io.sealed[ri] = True                               # 挽救成功
+    for _ in range(int(3 / DT)):
+        eng.update(DT)
+        if not ctl.is_leaking(ri):
+            break
+    assert not ctl.is_leaking(ri)
+    for _ in range(int(30 / DT)):                      # 续铺完成、走到悬停
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.HOVER:
+            break
+    assert eng.phase_of["L1"] == LegPhase.HOVER and eng.frozen is None
+
+
+def test_handover_survives_freeze_and_resumes():
+    """冻结恢复（§7.6）：交接中 frozen 注入，目标与 _ho_left 保持；
+    clear_freeze 不取消在途交接（与摆动中 step_active 保留同口径），解冻
+    续铺、完成、正常走完抬落（对比 test_single_step_hover_survives_freeze）。"""
+    cfg, io, ctl, eng = make_ho_engine()
+    start(eng)
+    assert eng.request_lift("L1") is None
+    for _ in range(int(10 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.HANDOVER:
+            break
+    run(eng, 0.4)
+    assert eng.phase_of["L1"] == LegPhase.HANDOVER
+    left0 = eng._ho_left
+    assert 0.0 < left0 < HO["L1"]
+    eng.frozen = "测试注入"
+    feet0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    run(eng, 1.0)
+    assert eng._ho_left == left0                       # 冻结：交接保持不丢
+    assert all(tuple(eng.foot[n]) == feet0[n] for n in LEG_NAMES)
+    eng.clear_freeze()
+    assert eng.step_active                             # 在途抬起不被取消
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.HOVER:
+            break
+    assert eng.phase_of["L1"] == LegPhase.HOVER
+    assert eng.step_land() is None
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.STANCE and not eng.step_active:
+            break
+    assert ctl.is_attached(LEG_NAMES.index("L1")) and eng.frozen is None
+
+
+def test_handover_direction_rotates_with_heading():
+    """航向旋转（§7.7）：wz 转过 θ 后交接方向随 _down 旋转（与 sag_comp
+    同一套航向推算）——被抬腿沿 −_down（上坡）δ、支撑沿 +_down δ/5，
+    照抄 test_sag_comp_downhill_rotates_with_heading 的口径。"""
+    cfg, io, ctl, eng = make_ho_engine()
+    start(eng)
+    run(eng, 15.0, wz=0.5)                             # 步步带交接地转航向
+    for _ in range(int(15 / DT)):                      # 停走，等在途摆动收口
+        eng.update(DT)
+        if all(p == LegPhase.STANCE for p in eng.phase_of.values()):
+            break
+    assert all(p == LegPhase.STANCE for p in eng.phase_of.values())
+    dxn, dyn = eng._down
+    assert abs(dyn) > 0.03                             # 真转了角度才算数
+    f0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    assert eng.request_lift("L1") is None
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["L1"] == LegPhase.VENT
+    d = HO["L1"]
+    assert math.isclose(eng.foot["L1"][0] - f0["L1"][0], -dxn * d, abs_tol=1e-6)
+    assert math.isclose(eng.foot["L1"][1] - f0["L1"][1], -dyn * d, abs_tol=1e-6)
+    obs = "R2"
+    assert math.isclose(eng.foot[obs][0] - f0[obs][0], dxn * d / 5, abs_tol=1e-6)
+    assert math.isclose(eng.foot[obs][1] - f0[obs][1], dyn * d / 5, abs_tol=1e-6)
+
+
+def test_handover_lift_in_place_solvable_at_max_delta():
+    """极限 δ 全程 IK 可解（§7.8）：request_lift + δ=20（>21 实测封顶前的
+    最大标定值）走完整抬落，全程 pulses 可解、支撑足除交接分量（下坡 δ/5）
+    外纹丝不动（对比 test_lift_in_place_hover_and_land_back）。"""
+    cfg, io, ctl, eng = make_ho_engine({n: 20.0 for n in LEG_NAMES})
+    start(eng)
+    bot = Hexapod(MockDriver(), cfg)
+    others0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES if n != "L2"}
+    assert eng.request_lift("L2") is None
+    for _ in range(int(30 / DT)):
+        bot.pulses(eng.update(DT))                     # 全程可解
+        assert eng.frozen is None
+        if eng.phase_of["L2"] == LegPhase.HOVER:
+            break
+    assert eng.phase_of["L2"] == LegPhase.HOVER
+    x0, y0, _ = eng.default_feet["L2"]                 # 落点=默认站位
+    assert math.isclose(eng.foot["L2"][0], x0, abs_tol=1e-6)
+    assert math.isclose(eng.foot["L2"][1], y0, abs_tol=1e-6)
+    for n, p in others0.items():                       # 支撑足只动交接分量
+        assert math.isclose(eng.foot[n][0], p[0] - 20.0 / 5, abs_tol=1e-6), n
+        assert math.isclose(eng.foot[n][1], p[1], abs_tol=1e-9)
+        assert math.isclose(eng.foot[n][2], p[2], abs_tol=1e-9)
+    assert eng.step_land() is None
+    for _ in range(int(20 / DT)):
+        bot.pulses(eng.update(DT))
+        if eng.phase_of["L2"] == LegPhase.STANCE and not eng.step_active:
+            break
+    assert ctl.is_attached(LEG_NAMES.index("L2"))
+    assert math.isclose(eng.foot["L2"][2],
+                        -CFG.stand_height - CFG.leg("L2").press_delta_mm)
+
+
+def test_parse_handover_formats_and_bounds():
+    """δ 解析（§7.9）：统一值/逐腿两种格式（腿名不分大小写、未给的腿 0）、
+    越界与非法输入拒绝。"""
+    assert parse_handover("8") == {n: 8.0 for n in LEG_NAMES}
+    got = parse_handover("L1:17, r3:9")
+    assert got["L1"] == 17.0 and got["R3"] == 9.0
+    assert all(got[n] == 0.0 for n in LEG_NAMES if n not in ("L1", "R3"))
+    assert parse_handover("0") == {n: 0.0 for n in LEG_NAMES}   # 0=关，合法
+    for bad in ("26", "-1", "L1:26", "L1:-1", "X9:5", "L1:x", "L1:", "abc", ""):
+        try:
+            parse_handover(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"{bad!r} 应被拒绝")

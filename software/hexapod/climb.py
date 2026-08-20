@@ -4,6 +4,14 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
 垂直速度最大（"拍地"）、一过边界立刻横向拖脚，对"落脚即密封"全是反的
 （P4-GUIDE 第 0 步）。本引擎把摆动相拆成分段状态机（§4.1）：
 
+  HANDOVER vent 前零力交接（handover_mm>0 时插在窗头决策与 VENT 之间，
+           docs/HANDOVER-DESIGN.md）：08-20 原地踏步量化显示 83% 的下滑
+           发生在放气密封破裂一瞬——被抬腿吸附以来攒的弹性势能一步释放，
+           慢放气无效（力的释放不随泄压渐进）。吸住的脚不能滑 ⇒ 改指令=
+           改力不改位：本腿指令沿"上坡"还 δ（卸载自己），其余支撑腿各沿
+           "下坡"接 δ/5（均值不变=身体指令不动），HANDOVER_SPEED_MMS
+           匀速铺完才放气进 VENT——密封破裂时无能量可释放。本足全程仍
+           吸附贴面，须随支撑场平移（update() 4.7 步驱动交接位移）
   VENT     先通气再抬（08-19 实机：边放气边抬时排气建立慢于抬离，腿被残余
            真空"拽起"）：原地保持 lift_vent_s 只开排气；本足仍贴面，须随
            支撑场平移（不随场 = 在墙面系被拖着划）
@@ -90,6 +98,10 @@ LEAN_SPEED_MMS = 10.0        # 倾身平移速率 mm/s（body_lean 实验）：�
                              # 支撑足不能滑，身体平移=支撑目标连续重解，与
                              # 支撑场同量级的慢速率；按键请求排队后按此匀速
                              # 铺完（update() 4.6 步），不做阶跃
+HANDOVER_SPEED_MMS = 10.0    # 零力交接铺设速率 mm/s（update() 4.7 步）：
+                             # 吸住的脚改指令=改力，载荷重分配要留准静态
+                             # 时间，与 LEAN_SPEED_MMS 同量级；δ=17 时
+                             # 交接段 ~1.7s（docs/HANDOVER-DESIGN.md §3.1）
 _R_BRACKET = (110.0, 210.0)  # 站位半径求解区间 mm（区间内倾角随半径单调增，
                              # 至 210 数值验证过；z=-108 时 210 仍在 IK 可达
                              # 内）。原上限 190 会把 +12° 带的真实半径 ~198
@@ -155,6 +167,32 @@ def max_straight_step(cfg, gait=CLIMB):
     return lo
 
 
+def parse_handover(spec):
+    """解析 --handover 参数为 {腿名: δmm}（未给的腿 0）。两种格式：
+    "8" = 六腿统一；"L1:17,R3:9" = 逐腿设（可只给部分腿，腿名不分大小写）。
+    范围 0~25mm（>21 超实测单腿弹跳封顶——舵机扭矩饱和限储能，再大没意义，
+    HANDOVER-DESIGN §6）。非法格式/腿名/越界抛 ValueError（脚本层转 ap.error）。"""
+    out = {n: 0.0 for n in LEG_NAMES}
+    try:
+        if ":" in spec:
+            for tok in spec.split(","):
+                name, _, val = tok.strip().partition(":")
+                name = name.strip().upper()
+                if name not in LEG_NAMES:
+                    raise ValueError(f"未知腿 {name}")
+                out[name] = float(val)
+        else:
+            out = {n: float(spec) for n in LEG_NAMES}
+    except ValueError as e:
+        raise ValueError(f"--handover 格式错（{spec!r}）：统一值如 8，或逐腿 "
+                         f"L1:17,R3:9——{e}") from None
+    for n, v in out.items():
+        if not 0.0 <= v <= 25.0:
+            raise ValueError(f"--handover {n}={v:g} 越界：范围 0~25mm"
+                             "（>21 超实测单腿弹跳封顶，没有意义）")
+    return out
+
+
 def _press_tilt(cfg, r, z_press):
     """(径向 r, 压入深度 z) 姿态下，物理吸盘轴偏离面法线的带符号角（rad）。
     吸盘轴 = a_t + cup_delta（勿拿 a_t 当吸盘轴，LEG-GEOMETRY §2.13 教训）；
@@ -185,6 +223,8 @@ def _solve_reach(cfg, z_press, tilt_rad=0.0):
 
 class LegPhase(Enum):
     STANCE = "stance"        # 支撑（含启动前的等待）：目标在压入位，随速度场平移
+    HANDOVER = "handover"    # vent 前零力交接（handover_mm>0）：仍吸附贴面，
+                             # 指令沿上坡还 δ 卸载、支撑腿各接 δ/5，铺完才放气
     VENT = "vent"            # 抬腿前先通气：贴面原地保持 lift_vent_s，随支撑场
     LIFT = "lift"
     TRANSFER = "transfer"
@@ -286,6 +326,9 @@ class ClimbEngine:
         self._down = (-1.0, 0.0)
         self._comp_left = 0.0
         self._comp_rate = 0.0
+        # 零力交接（update() 4.7 步）：当前在途交接的剩余铺设量 mm。
+        # 一次一腿的窗序保证同时至多一个交接在途，不需要按腿存
+        self._ho_left = 0.0
         # 起步过渡记账：comp_tail 稳态账假设"支撑从 +半步幅落点起"，只在连续
         # 行走成立——起步/停走再起步的过渡周期里，窗序靠后的腿从默认位/停点
         # 起被拖满步幅+VENT 随场，账外多 ~20mm（实测 press18 满速满额补偿在
@@ -435,9 +478,16 @@ class ClimbEngine:
                         "（唇口漏/泵弱？）")
             else:
                 self.landing[cur] = self._landing_xy(cur, vx, vy, wz)
-                self.ctl.request_release(LEG_NAMES.index(cur))
-                # 先通气 lift_vent_s 再抬（VENT 段贴面原地，随支撑场平移）
-                self.phase_of[cur] = LegPhase.VENT
+                if self.cfg.leg(cur).handover_mm > 0.0:
+                    # 零力交接先行（4.7 步铺设），request_release 推迟到交接
+                    # 完成：交接期间吸盘必须保持密封吸附（ATTACHED 控制环
+                    # 照跑，互锁/漏气监护对它照常成立）
+                    self._ho_left = self.cfg.leg(cur).handover_mm
+                    self.phase_of[cur] = LegPhase.HANDOVER
+                else:
+                    self.ctl.request_release(LEG_NAMES.index(cur))
+                    # 先通气 lift_vent_s 再抬（VENT 段贴面原地，随支撑场平移）
+                    self.phase_of[cur] = LegPhase.VENT
                 self._slot_active = True
                 if self.step_pending and cur == self.step_leg:
                     self.step_pending = False
@@ -498,9 +548,12 @@ class ClimbEngine:
             dx, dy = self._down          # 下坡方向随航向转（与支撑足同一旋转）
             self._down = (c * dx + s * dy, -s * dx + c * dy)
             for n in LEG_NAMES:
-                # VENT 足仍贴面（先通气后抬），必须跟随支撑场：身体在动，
-                # 不随场 = 该足在墙面系被拖着划、蹭移正在排气的唇口
-                if self.phase_of[n] in (LegPhase.STANCE, LegPhase.VENT):
+                # VENT/HANDOVER 足仍贴面（交接中还密封吸着、通气中在排气），
+                # 必须跟随支撑场：身体在动，不随场 = 该足在墙面系被拖着划、
+                # 蹭移唇口；交接位移（4.7 步）叠加在场平移之上，与 sag_comp
+                # 同口径
+                if self.phase_of[n] in (LegPhase.STANCE, LegPhase.VENT,
+                                        LegPhase.HANDOVER):
                     f = self.foot[n]
                     x, y = f[0] - vx * adv, f[1] - vy * adv
                     f[0], f[1] = c * x + s * y, -s * x + c * y
@@ -549,6 +602,30 @@ class ClimbEngine:
             for n in LEG_NAMES:
                 if self.phase_of[n] == LegPhase.STANCE:
                     self.foot[n][0] -= step
+
+        # 4.7 零力交接（docs/HANDOVER-DESIGN.md；08-20 量化：83% 下滑发生在
+        # 放气密封破裂瞬间）：被抬腿指令沿"上坡"还 δ（卸载自己），其余支撑
+        # 腿各沿"下坡"接 δ/n（接住载荷）——六腿指令均值不变 = 身体指令不动，
+        # f→0 后放气无能量可释放。按真实时间匀速铺（载荷重分配是准静态
+        # 过程，不随相位钟停），漏气挽救期暂停（漏着的盘摩擦余量低，不该
+        # 被推，与 4.5/4.6 同禁区）。铺完才 request_release 进 VENT。
+        # 无独立超时：速率固定必然铺完，唯一能拖住它的 leak_pause 自己有
+        # leak_rescue_s 冻结兜底
+        if (not leak_pause and self._slot_active and self._slot_leg is not None
+                and self.phase_of[self._slot_leg] == LegPhase.HANDOVER):
+            cur = self._slot_leg
+            step = min(self._ho_left, HANDOVER_SPEED_MMS * dt)
+            self._ho_left -= step
+            dx, dy = self._down
+            sup = [n for n in LEG_NAMES if self.phase_of[n] == LegPhase.STANCE]
+            self.foot[cur][0] -= dx * step      # 反下坡 = 上坡 = 卸载方向
+            self.foot[cur][1] -= dy * step
+            for n in sup:                       # 实际支撑数（一次一腿下恒 5）
+                self.foot[n][0] += dx * step / len(sup)
+                self.foot[n][1] += dy * step / len(sup)
+            if self._ho_left <= _EPS:
+                self.ctl.request_release(LEG_NAMES.index(cur))
+                self.phase_of[cur] = LegPhase.VENT
 
         # 5. 摆动分段状态机按真实时间推进（钟停时重试/等待照常进行）
         self._run_machines(dt)
@@ -839,7 +916,12 @@ class ClimbEngine:
         z_press = self.z0 - cfg.leg(name).press_delta_mm - self._press_extra[name]
         z_lift = self.z0 + cfg.lift_clearance
 
-        if ph == LegPhase.VENT:
+        if ph == LegPhase.HANDOVER:
+            # 零力交接：运动由 update() 4.7 步驱动（XY = 卸载铺设 + 随场，
+            # z 由第 4 步保持压入深度），铺完在那里放气切 VENT；
+            # 本分支只留 _seg_t 照常计时备诊断
+            pass
+        elif ph == LegPhase.VENT:
             # 先通气：原地保持等排气建立（阀通电在下周期 ctl.update 生效，
             # 时长里已含），到时才抬——边放气边抬会被残余真空拽起（08-19）。
             # XY 由支撑场分支代管（本足贴面随场），这里只管计时切段

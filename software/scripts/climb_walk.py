@@ -26,10 +26,10 @@ CLIMB 步态。
                                              # 仍占用），纯排练步态动作（气动舱
                                              # 未接全时用；吸附确认是假的）
   python climb_walk.py --air                 # 实机架空：阀/泵真动作，吸不上不停走
-  python climb_walk.py --no-tank             # 无罐短测（储气罐未装）：泵直抽
-                                             # 歧管，罐压传感器不参与；没有储备
-                                             # 真空——挽救弱、断电不保真空，
-                                             # 只在地面做短暂测试，严禁上墙
+  python climb_walk.py --no-tank             # 无罐（储气罐未装）：泵直抽歧管，
+                                             # 罐压传感器不参与；没有储备真空
+                                             # ——挽救弱、断电不保真空（地面/
+                                             # 上墙均已多次实测可用）
   python climb_walk.py                       # 地面玻璃板 / 上墙（全链路）
   python climb_walk.py --sag-comp 3          # 上墙下滑补偿：每次抬腿把支撑足
                                              # 沿下坡向额外平移 3mm，顶回"每抬
@@ -170,9 +170,9 @@ def main():
                          "不动（舵机继电器 GPIO17 仍由 driver 占用），吸附确认"
                          "由 Mock 假装成功；纯验证步态动作，上墙严禁")
     ap.add_argument("--no-tank", action="store_true",
-                    help="无罐短测：泵按'抽气需求+吸附足压滞环'直抽歧管，"
+                    help="无罐：泵按'抽气需求+吸附足压滞环'直抽歧管，"
                          "罐压传感器不参与，SUCK 超时放宽到 2.5s；没有储备真空"
-                         "（挽救弱/断电不保真空），只在地面短测，严禁上墙")
+                         "（挽救弱/断电不保真空），地面/上墙均已多次实测可用")
     ap.add_argument("--cycle", type=float, default=DEFAULT_CONFIG.climb_cycle_time,
                     help="步态周期 s（先慢后提速）")
     ap.add_argument("--sag-comp", type=float,
@@ -457,7 +457,7 @@ def main():
                   "——上墙严禁")
         if args.no_tank:
             print("⚠ 无罐模式：泵直抽歧管，没有储备真空——挽救能力弱、断电不保"
-                  "真空。只做地面短测，时长自己控制，严禁上墙")
+                  "真空")
         if cfg.cup_tilt_trim_deg:
             base = ClimbEngine(replace(cfg, cup_tilt_trim_deg=0.0), None)
             leg1 = cfg.leg("L1")
@@ -855,9 +855,10 @@ def main():
             log.event(f"中断：不放气退出，冻结={eng.frozen or '无'}")
             print(f"\n中断：不放气退出。冻结: {eng.frozen or '无'}；"
                   f"善后请跑 --release。")
-            if not args.no_tank:   # 无罐模式没有罐压可泄、也禁止上墙
-                print("⚠ 若有腿悬空：进程退出后阀终态不可控、罐压可能泄漏"
-                      "——墙上请确认安全绳受力。")
+            # 无罐模式没有罐压可泄，但阀/泵终态同样不可控（真空只剩唇口
+            # 密封慢漏撑着），墙上口径一致，不分模式都提示
+            print("⚠ 若有腿悬空：进程退出后阀/泵终态不可控、真空可能流失"
+                  "——墙上请确认安全绳受力。")
         log.close("正常退出" if (clean_exit or aborted) else "中断退出")
 
 

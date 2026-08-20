@@ -26,7 +26,7 @@
 用法:
   python body_lean.py --mock                 # 无硬件干跑
   python body_lean.py --dry                  # 真舵机 + 仿真气路（不碰阀泵）
-  python body_lean.py --no-tank              # 无罐短测（地面，严禁上墙）
+  python body_lean.py --no-tank              # 无罐：泵直抽歧管（地面/上墙均可）
   python body_lean.py                        # 全链路
   善后（放气+回地面站姿）：python climb_walk.py --release
 
@@ -97,8 +97,8 @@ def main():
                     help="真舵机 + 仿真气路：不碰气路 GPIO/I2C，吸附确认是假的"
                          "——纯排练动作，上墙严禁")
     ap.add_argument("--no-tank", action="store_true",
-                    help="无罐短测：泵直抽歧管；没有储备真空，只在地面短测，"
-                         "严禁上墙")
+                    help="无罐：泵直抽歧管；没有储备真空（挽救弱/断电不保"
+                         "真空），地面/上墙均已多次实测可用")
     ap.add_argument("--lean-step", type=float, default=5.0,
                     help="每按一次 ↑/↓ 的倾身量 mm（默认 %(default)g，范围 "
                          "1~15）。授予量另按支撑足几何截短")
@@ -216,7 +216,7 @@ def main():
         if args.dry:
             print("⚠ 干跑模式：气路是仿真的，阀泵不会动——上墙严禁")
         if args.no_tank:
-            print("⚠ 无罐模式：没有储备真空，只做地面短测，严禁上墙")
+            print("⚠ 无罐模式：泵直抽歧管，没有储备真空——断电不保真空")
         fwd_room = eng._lean_room(1.0)
         print(f"倾身几何余量（站位起算）：前 ~{fwd_room:.0f}mm / "
               f"后 ~{eng._lean_room(-1.0):.0f}mm，每档 {args.lean_step:g}mm，"

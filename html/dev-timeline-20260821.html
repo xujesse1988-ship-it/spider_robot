@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>开发时间线：P2 收口到零力交接（2026-07-21 ~ 08-21）</title>
+<style>
+  body { font-family: "Noto Sans SC", "PingFang SC", sans-serif; margin: 0;
+         color: #1c2733; background: #f6f8fa; line-height: 1.75; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 20px; margin-top: 44px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  .card { background: #fff; border: 1px solid #e3e8ee; border-radius: 10px;
+          padding: 18px 20px; margin: 18px 0; }
+  .tldr { border-left: 4px solid #c0392b; }
+  .day { border-left: 4px solid #b9c4d0; }
+  .day.big { border-left-color: #c0392b; }
+  .dayhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .dayhead b { font-size: 16px; }
+  .chip { font-size: 12px; color: #556; background: #eef2f6; border-radius: 10px; padding: 0 8px; white-space: nowrap; }
+  .theme { color: #35506e; font-weight: 700; }
+  ul { margin: 6px 0 2px; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 4px;
+         padding: 0 6px; margin-right: 4px; vertical-align: 1px; white-space: nowrap; }
+  .t-wt  { background: #fdeeee; color: #c0392b; }  /* 问题 */
+  .t-ask { background: #e8f0fb; color: #2a5da8; }  /* 提问 */
+  .t-dec { background: #e9f6ec; color: #1e7a3c; }  /* 决定 */
+  .t-acc { background: #4a1414; color: #ffd9d9; }  /* 事故 */
+  .t-brk { background: #fff3e0; color: #b05c00; }  /* 破局 */
+  .t-fix { background: #f0eafa; color: #6b3fa0; }  /* 纠偏（用户纠正 AI） */
+  .num { font-weight: 700; color: #c0392b; }
+  .tm { font-size: 12px; color: #8896a5; font-variant-numeric: tabular-nums; margin-right: 2px; }
+  .quote { border-left: 3px solid #b9c4d0; background: #f2f5f8; border-radius: 0 8px 8px 0;
+           padding: 8px 14px; margin: 10px 0; font-size: 14px; color: #3a4a5a; }
+  .quote b { color: #1c2733; }
+  code { background: #eef2f6; border-radius: 4px; padding: 1px 5px; font-size: 0.92em; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #dfe5ec; padding: 5px 9px; }
+  th { background: #eef2f6; text-align: left; }
+  td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .cap { font-size: 13px; color: #556; margin: 2px 0 0; }
+  .warn { background: #fff8e6; border: 1px solid #e8d9a0; border-radius: 8px;
+          padding: 10px 14px; font-size: 14px; }
+  .tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>开发时间线：P2 收口 → 上墙攻坚 → 零力交接</h1>
+<p>2026-07-21 ~ 08-21 · 整理自本项目 28 个 Claude Code 会话记录（JSONL），
+抽取用户手输消息共 <b>403 条</b>（已滤除工具输出与系统消息），按天归并、按事件展开。
+标签含义：<span class="tag t-wt">问题</span>遇到的故障/异常
+<span class="tag t-ask">提问</span>认知型问题
+<span class="tag t-dec">决定</span>当天拍板
+<span class="tag t-acc">事故</span>硬件级事件
+<span class="tag t-brk">破局</span>扭转方向的关键动作
+<span class="tag t-fix">纠偏</span>用户纠正 AI 的错误。灰色小字为当天发问时刻（HH:MM）。</p>
+
+<div class="card tldr">
+<b>TL;DR</b>：一个月走完 <b>P2 单腿吸附验收 → P3 装配与 18 路标定 → P4 气路电气 →
+首次上墙</b>。上墙后卡在"原地踏步"四天（08-17 ~ 08-20），最终由
+08-19 用户自己点破根因——<b>被抬腿的弹性势能在脱吸瞬间释放、把身体拉下去</b>——
+08-20 实验量化实锤（<span class="num">83%</span> 下滑发生在放气密封破裂瞬间），
+当天定下"vent 前零力交接"方案并完成实现（<code>--handover</code>）。
+三次关键破局全是<b>用实物照片/实测数据把错误假设顶回去</b>：
+tibia 三视图纠偏（08-07）、USB3.0 欠压规律（08-16）、弹性势能根因（08-19）。
+</div>
+
+<div class="tablewrap"><table>
+<tr><th>日期</th><th>条数</th><th>当天主线</th></tr>
+<tr><td>07-21</td><td class="r">14</td><td>P2 单腿吸附验证；发现 attach 瞬间拽墙现象</td></tr>
+<tr><td>07-22</td><td class="r">43</td><td>P2 验收通过、进 P3；气路整体方案集中问答</td></tr>
+<tr><td>07-23~26</td><td class="r">10</td><td>连线图、继电器/MOSFET 选型、气动舱固定件设计</td></tr>
+<tr><td>08-02</td><td class="r">7</td><td>开始装配（左腿），确定装配顺序</td></tr>
+<tr><td>08-05</td><td class="r">4</td><td>六腿装齐；右腿 tibia 方向反了</td></tr>
+<tr><td>08-06</td><td class="r">16</td><td>±45° 脉宽标定开跑，测量方法逐项确认</td></tr>
+<tr><td>08-07</td><td class="r">46</td><td>"L3 之争"：tibia 三视图纠偏，l3=123.7 定案</td></tr>
+<tr><td>08-08</td><td class="r">15</td><td>18/18 路标定收口，站立+走路成功</td></tr>
+<tr><td>08-09</td><td class="r">12</td><td>R1 舵盘滑丝更换；走路左偏遗留</td></tr>
+<tr><td>08-11</td><td class="r">33</td><td>分压板联调；S7 瞬断排查；功率电路问答</td></tr>
+<tr><td>08-13~14</td><td class="r">17</td><td>SS34/电容焊接；MOSFET+阀+泵点动全过；发现保压掉压</td></tr>
+<tr><td>08-15~16</td><td class="r">31</td><td>继电器接入；0x50000 欠压定位到 USB3.0 口；垂直站立纠偏</td></tr>
+<tr><td>08-17</td><td class="r">42</td><td>无罐模式+单向阀装机；首次上墙→原地踏步</td></tr>
+<tr><td>08-18</td><td class="r">35</td><td>树莓派红灯"疑似烧毁"，实为电源；退出流程重做</td></tr>
+<tr><td>08-19</td><td class="r">67</td><td>攻坚日：落地吸附链连修；用户点破弹性势能根因</td></tr>
+<tr><td>08-20</td><td class="r">9</td><td>棘轮量化实锤；零力交接设计+实现</td></tr>
+<tr><td>08-21</td><td class="r">2</td><td>历史会话检索与本时间线</td></tr>
+</table></div>
+
+<h2>7 月下旬 · P2 收口与 P4 预研</h2>
+
+<div class="card day">
+<div class="dayhead"><b>07-21 周二</b><span class="chip">14 条</span>
+<span class="theme">P2 单腿吸附验证</span></div>
+<ul>
+<li><span class="tm">04:01</span>看 <code>wall_suck_new.mp4</code> 找问题；
+<span class="tm">06:42</span>给 <code>single_leg_wall.py</code> 加每秒气压打印
+（顺带说明树莓派 venv 在 <code>software/.venv</code>）。</li>
+<li><span class="tm">06:57</span><span class="tag t-wt">问题</span>实测 hold 期气压
+-69.60 → -68.15 kPa 缓慢衰减，但报告写"保持期最差 -57.2kPa"——质疑统计口径不准，当天修掉。</li>
+<li><span class="tm">08:58</span><span class="tag t-ask">提问</span>吸住时吸盘轴不完全垂直墙面，
+是不是因为计算按"吸盘未被吸扁"的几何、吸扁后产生了位移？</li>
+<li><span class="tm">09:29</span><span class="tag t-wt">问题</span>吸住瞬间脚被吸力明显拽向墙几毫米。
+<span class="tm">09:34</span>拍板"先忽略"——此现象（attach-lurch）成为长期背景观察项，
+后在 08-19 被 AI 错误引用时遭纠正。</li>
+</ul>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>07-22 周三</b><span class="chip">43 条</span>
+<span class="theme">P2 验收通过、转 P3，气路方案集中问答</span></div>
+<ul>
+<li><span class="tm">02:28</span><span class="tag t-ask">提问</span>当前补抽阈值是多少？
+<span class="tm">02:30</span>先改 -50/-60；<span class="tm">02:41</span>贴 hold 段日志
+（气压从 -60.67 缓慢滑穿阈值）后<span class="tag t-dec">决定</span>再改 -55 触发 / -65 停。</li>
+<li><span class="tm">04:51</span><span class="tag t-dec">决定</span>P2 全部验证通过：
+1.5kg 悬挂 300s 不脱落（<code>p2_1_5_kg_hold300s.csv</code>）、50 循环
+（<code>p2_50cycles.csv</code>）。<span class="tm">05:01</span>追问"2.5kg÷3 承力足=1.5kg"
+是否已含余量。<span class="tm">05:03</span>正式进 P3。</li>
+<li><span class="tm">06:19-06:43</span><span class="tag t-ask">提问</span>连环前瞻问答：
+①以后能不能加视觉，识别到墙就走到墙角往上爬；②不平滑/粗糙墙面是不是要全重改；
+③微刺爪能不能走光滑面；④明确"我希望的进阶路线是都要"且要<b>自动切换</b>而非换腿
+（此目标后定为 P5 后启动，P4 只留仲裁接口）；⑤P4 需要几个气泵；
+⑥墙上一次走一只脚还是三只脚；⑦储气罐是干嘛的（当时还没买）。</li>
+<li><span class="tm">07:33-08:03</span><span class="tag t-ask">提问</span>气路器件落地问题：
+XGZP6847A 传感器一个还是每脚一个；一个泵怎么连六腿的"阀+吸盘+传感"组件
+→ 补歧管进清单 → 6 路歧管进口都是 8mm，确认要 8 转 4 宝塔变径，
+且实际找到的进出口都是宝塔头。</li>
+<li><span class="tm">08:06-08:14</span>储气罐细节讨论，瓶盖工艺太麻烦，问有没有现成方案。</li>
+<li><span class="tm">08:53</span>确认 P3 采购已基本覆盖 P4、P4 基本不用再买。</li>
+<li><span class="tm">08:56-09:49</span>启动子 agent 生成整机连接示意图 HTML；
+指出分压电路当时还在面包板上 → 让把"7 通道分压汇接板（洞洞板）"的线路画成
+<code>p4-divider-board.html</code>。</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>07-23 ~ 07-26</b><span class="chip">10 条</span>
+<span class="theme">连线图与选型</span></div>
+<ul>
+<li>23：<span class="tm">03:01</span>子 agent 生成树莓派连线图 <code>p4-pi-wiring.html</code>；
+<span class="tm">04:59</span><span class="tag t-ask">提问</span>以后还用杜邦线连树莓派吗；
+<span class="tm">08:35</span>电池与 servo2040 之间的继电器购买要注意什么。</li>
+<li>24：<span class="tm">03:45</span><span class="tag t-wt">问题</span>选型卡壳——
+找不到 ≥30A、3.3V 能驱动的大电流 MOSFET 模块，D4184 只支持到 5A。</li>
+<li>25：<span class="tm">16:50</span>拍 <code>dianqi.jpg</code>（电气+气动舱组件全家福），
+启动子 agent 设计固定这些器件的 3D 打印件（产出 P4-BAY-DESIGN 文档）。26：仅提交。</li>
+</ul>
+</div>
+
+<h2>8 月上旬 · P3 装配与标定</h2>
+
+<div class="card day">
+<div class="dayhead"><b>08-02 周日</b><span class="chip">7 条</span>
+<span class="theme">开始装配</span></div>
+<ul>
+<li><span class="tm">12:35</span>先让整体过一遍项目（隔了一周回来）。</li>
+<li><span class="tm">12:47</span><span class="tag t-wt">问题</span>舵机和打印件到货准备装配，
+但官方 YouTube（MakeYourPet 频道）装配视频找不到。
+<span class="tag t-ask">提问</span>自己拟的装配顺序对不对：先装六腿 femur/tibia 舵机
+（角度六腿一致），coxa 角度依赖分腿——确认可行。</li>
+<li><span class="tm">13:57</span>确认通道 15/16/17 中 15 是 coxa；
+<span class="tm">16:03</span>左腿（15/16/17）上架后让写单腿走路/站立模拟脚本；
+<span class="tm">16:38</span><span class="tag t-ask">提问</span>frame 和 bottom-cover
+怎么固定、小孔用什么螺丝。</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-05 周三</b><span class="chip">4 条</span>
+<span class="theme">六腿装齐</span></div>
+<ul>
+<li><span class="tm">13:39</span><span class="tag t-wt">问题</span><code>leg_exercise.py</code>
+左腿正常、右腿 tibia 朝前上方走而不是朝下（左右镜像问题），当天修好。</li>
+<li><span class="tm">13:59</span>六腿装配完成，servo center 姿态拍照存档
+（<code>P3_servo_center_20260805.jpg</code>）；
+<span class="tm">14:19</span><span class="tag t-ask">提问</span>coxa γ 基线法具体怎么测。</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-06 周四</b><span class="chip">16 条</span>
+<span class="theme">±45° 脉宽标定开跑</span></div>
+<ul>
+<li><span class="tm">02:22</span><span class="tag t-dec">决定</span>先测每关节 ±45° 脉宽；
+入库 <code>calib_fit.py</code>。</li>
+<li><span class="tag t-ask">提问</span>测量方法逐项过：<span class="tm">02:41</span>"建议 k≈50/90/120"
+是角度、要自己换算成脉宽对吧；<span class="tm">03:01</span>只有基线+唇口圆心投影真能算出 γ 吗；
+<span class="tm">03:07</span>coxa 不动、转 tibia 时，唇口投影和 hip 投影一定共线吗；
+<span class="tm">13:03</span>tibia/femur/coxa 都用这个脚本吗、要一次测完吗；
+<span class="tm">13:09</span>单舵机要三个角都测完才能 save 吗。</li>
+<li><span class="tm">13:55-14:00</span>femur 高差法实操：确认符号方向（1750 时高差 28、
+1500 时 60，敲 28 还是 -28）；实测 L2.femur 拟合 attach=49.43°、us_m45=1923，
+<span class="tag t-wt">问题</span>最大残差 2.35° 超 1.5° 阈值——问复测是不是要退出重进。</li>
+<li><span class="tm">14:03-14:15</span>确认"髋轴螺丝心=femur 舵机螺丝中心"；
+<span class="tag t-dec">决定</span>髋膝螺丝心距复测定为 <b>81mm</b>（之前量的有误差）。</li>
+<li><span class="tm">14:20-14:25</span><span class="tag t-wt">问题</span>tibia 舵盘螺丝心到
+吸盘唇口的距离"不在一个平面、不太好测"——次日大分歧的伏笔。</li>
+</ul>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>08-07 周五</b><span class="chip">46 条</span>
+<span class="theme">"L3 之争"：本月最大的一次认知纠偏</span></div>
+<ul>
+<li><span class="tm">04:21</span><span class="tag t-ask">提问</span>K 螺丝心、femur 螺丝心、
+唇口三者的铅垂投点不共线（螺丝在腿侧面）——对测量计算有影响吗？</li>
+<li><span class="tm">05:01</span>实测垂距 Δy=30mm，算出 l3=<b>123.7</b>；
+<span class="tm">05:13</span>上传 <code>leg_side_view.jpg</code>/<code>leg_top_view.jpg</code>
+佐证（femur 宽 60mm → Δy=30 合理）。</li>
+<li><span class="tm">05:26-05:50</span><span class="tag t-wt">问题</span>与设计模型对不上，
+连续追问 AI 使用的每个数：h_cup 是什么、46.5/85.4 从哪来、"tibia 平背面"是什么。
+<span class="tm">05:53</span>沟通崩溃：</li>
+</ul>
+<div class="quote">"你把几点疑问写到一个临时文档，我开新的会话来沟通吧。<b>我现在完全不知道你在说什么</b>。"
+→ 产出 L3-DISPUTE-OPEN.md，开新会话。</div>
+<ul>
+<li><span class="tm">05:56</span><span class="tag t-brk">破局</span>新会话第一件事：
+让按打印件 STL 画 tibia 三视图 HTML。<span class="tm">07:27</span>看图即发现
+"你对 tibia 舵盘的螺丝位置<b>错得离谱</b>"，上传 <code>k.jpg</code> 紫色标记实际舵盘位置。</li>
+<li><span class="tm">08:10-08:21</span><span class="tag t-fix">纠偏</span>逐步给出正确几何：
+舵机体在 y=-18~+26mm、舵盘在 y=32mm、femur 杆夹住两侧；让把 femur 组件也画进三视图便于讨论。</li>
+<li><span class="tm">08:54-10:31</span>卷尺逐项复核：K 螺丝到折痕面落差 92mm、
+紫盘中心向髋偏 ~10mm 确认、h_cup 复测 <b>19mm</b>、K 到平背面 <b>32mm</b>（y=-32）、
+第二条腿复测一致——<span class="tag t-dec">决定</span><b>l3=123.7 定案</b>。</li>
+<li><span class="tm">10:45-11:13</span>收尾：下游 <code>workspace_analysis.py</code> 的
+CUP_DELTA 同步修正；给 <code>calib_fit.py</code> 加 recz 高差法；开新会话审核该脚本
+（发现帮助文案缺 recz 说明等，改掉）。</li>
+<li><span class="tm">11:47-16:09</span>回到实测：L2 femur 四样本拟合通过；
+<span class="tm">12:47</span><span class="tag t-wt">问题</span>选了 L3 femur 结果动的是 coxa
+——自查是插错线；<span class="tm">13:47</span>确认 L/R 侧 1800µs 方向镜像（左降右抬）是正常的；
+6/18 路存档，接着问 tibia、coxa 怎么测。</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-08 周六</b><span class="chip">15 条</span>
+<span class="theme">标定收口，机器人站起来了</span></div>
+<ul>
+<li><span class="tm">08:22</span><b>18/18 路标定全部完成</b>，粘贴块进
+<code>config.py</code>，JSON 入库 <code>docs/data/calib_pm45.json</code>；
+<span class="tm">10:33</span>发现 L3 tibia 数据有问题，复测更新。</li>
+<li><span class="tm">10:56</span><span class="tag t-wt">问题</span>触地打印六腿全 True 不合理——
+脚已换吸盘，官方足底开关没接，<code>touch_states()</code> 读数无意义
+（触地判据此后用纸条法/电流差）。</li>
+<li><span class="tm">11:07-11:21</span>站立验证通过；<code>walk_teleop.py</code> 开走，
+加实时电流打印。</li>
+<li><span class="tm">12:55-13:45</span><span class="tag t-ask">提问</span>P4 前置认知：
+舵机指令→输出力→电流的关系、超过一定力会怎样、能否读单舵机电流；
+下阶段吸盘压缩时整腿被外力踩向地面怎么处理 → 结论"踩地要接近垂直"；
+追问 walk_teleop 是否已是垂直下落步态；让生成 P4-GUIDE。</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-09 周日</b><span class="chip">12 条</span>
+<span class="theme">第一次硬件损坏</span></div>
+<ul>
+<li><span class="tm">01:55-02:53</span><span class="tag t-ask">提问</span>walk_teleop
+速度上限；走路电流 2~4A 合理吗。</li>
+<li><span class="tm">06:58</span>让设计一段六足舞蹈（身体可垫高）。</li>
+<li><span class="tm">07:31</span><span class="tag t-wt">问题</span>R1 femur 回中角度变了
+→ <span class="tm">07:58</span>自诊断为舵盘齿轮滑丝，要换舵盘；
+<span class="tm">08:27-09:59</span>复核 R1/R2 的 rech 数据，发现各腿差两三毫米，
+接受"身体倾斜导致的微小误差，可忽略"的解释；<span class="tm">10:00</span>换好舵盘。</li>
+<li><span class="tm">10:03</span><span class="tag t-wt">问题</span>遗留：走路稍微向左偏（另开会话）。</li>
+</ul>
+</div>
+
+<h2>8 月中旬 · P4 电气与气路</h2>
+
+<div class="card day">
+<div class="dayhead"><b>08-11 周二</b><span class="chip">33 条</span>
+<span class="theme">分压板联调 + S7 瞬断排查 + 功率电路问答</span></div>
+<ul>
+<li><span class="tm">03:34</span>分压板按图焊好、Pi 连好、传感器接好（罐压未接——储气罐还没买），
+要求给出检查清单并写读气压脚本（吸气造负压验证）→ <code>p4_sensor_check.py</code>。
+<span class="tm">04:57</span><span class="tag t-ask">提问</span>5V-GND 间用 106M 独石电容可以吗。</li>
+<li><span class="tm">05:09</span>自检通过：两片 ADS1115（0x48/0x49）在线、
+六路足压 0.0 kPa 正常、S1 罐压正确判"未接"。</li>
+<li><span class="tm">05:32</span><span class="tag t-wt">问题</span>S7（足 R3）晃动传感器时
+读数波动。排查链：<span class="tm">08:47</span>--wiggle 七步逐点定位（采样 ≈1929Hz，
+抓到 ±2kPa、6~7ms 的瞬断 4 次）→ <span class="tm">10:10</span>--scope 频谱
+（主峰 50Hz 仅占峰峰 3%，判宽带孤立脉冲）→ <span class="tm">10:24</span>结论：
+<b>静电/耦合，不是接触不良</b>（S7 与 S2 表现一致）。
+<span class="tm">10:33</span>把"装泵阀后跑泵启停+逐阀通断的污染测试"记进 P4-GUIDE。</li>
+<li><span class="tm">10:36</span>--zero 大气点标定入库：各路 V_ATM 4.481~4.498V，
+偏离标称最大 +0.31kPa。</li>
+<li><span class="tm">10:43-14:23</span><span class="tag t-ask">提问</span>功率电路刨根问底：
+单泵+六阀能否只用一个 XL6009（先只分析再改文档）；SS34 是否必须 → 实测 YYNMOS-8
+板载二极管（OUT7 二极管档 0.591V）+ 三项导通确认（DC+ 与 OUT+ 通、IN− 互不通、
+IN− 与 DC− 不通）；"别用 16 根线把 8 个 IN− 拉回 Pi"为什么是 16 根；
+公共地为什么要两根线、一根行不行、"绕远是会慢吗"——连问四轮，最后要求：</li>
+</ul>
+<div class="quote">"我还是没听太懂接两根地的必要性。<b>如果没有必要，你回复没有必要；
+如果有必要，再简短说明一下</b>。"——对模糊解释零容忍的典型一幕。</div>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-13 ~ 08-14</b><span class="chip">17 条</span>
+<span class="theme">焊接细节与 MOSFET/气路联调</span></div>
+<ul>
+<li>13：<span class="tm">12:59</span><span class="tag t-ask">提问</span>手头没 10k 电阻，
+15k 行吗？6.2k 行吗？改完顺带让文档注明当前是单泵方案。</li>
+<li>14：<span class="tm">04:32-05:12</span>SS34 怎么接泵的正负极；
+<span class="tag t-wt">问题</span>接上 100nF 后万用表显示泵两端"短路"是否正常；
+SS34 焊接时很烫、怕已焊上的管子烧坏，问怎么检测。</li>
+<li><span class="tm">05:21-07:03</span>接好 Pi + YYNMOS-8 + 六阀 + 泵，写线路检查脚本：
+六阀（GPIO5/6/13/16/19/21）+ 泵（GPIO20）点动全过，get_throttled=0x0，
+断电万用表补测"泵+对板 DC+ 不导通"也过。</li>
+<li><span class="tm">07:31-07:37</span><span class="tag t-ask">提问</span>阀通电+泵同时抽气会怎样；
+--hold 是一直抽还是抽一会。</li>
+<li><span class="tm">07:43</span><span class="tag t-wt">问题</span>抽气停止后几秒负压就归零——
+第一次直面保压/漏气问题（当时单腿测试）。</li>
+<li><span class="tm">09:40</span><span class="tag t-dec">决定</span>气路快装完，启动软件改造：
+腿垂直落地 + 走路与气路配合；跑 /code-review high。</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-15 ~ 08-16</b><span class="chip">31 条</span>
+<span class="theme">继电器接入与树莓派欠压定位</span></div>
+<ul>
+<li>15：<span class="tm">06:49-08:34</span>电池-servo2040 间继电器接线
+（对照 <code>relay_A/B.jpg</code>）：IN1 能不能接 Pi → 改用 GPIO17（调文档和代码）、
+控制侧 5V/地从 Pi 引出、连线示意图补进 <code>p4-system-diagram.html</code>。</li>
+<li><span class="tm">15:35</span><span class="tag t-wt">问题</span>Pi 启动即
+<code>get_throttled=0x50000</code>（欠压历史标志）。</li>
+<li>16：<span class="tm">03:01</span><span class="tag t-brk">破局</span>用户自己测出规律：
+servo2040 连 Pi 的 <b>USB3.0（蓝口）就报 0x50000，USB2.0（黑口）不报</b>。
+<span class="tm">03:12</span>追问：割了"Separate USB &amp; Ext. Power"跳线后，
+板子还会拿 USB 5V 喂舵机轨吗；<span class="tm">03:18-03:45</span>四核拉满 +
+<code>pmic_read_adc</code> 压测：EXT5V 4.81→4.94V、throttled=0x0，收口。</li>
+<li><span class="tm">04:38</span><span class="tag t-wt">问题</span>接好继电器后
+<code>read_voltage_v()</code> 只有 0.055V → 自己改脚本先吸合继电器再读，8.06V 正常
+——确认逻辑没错，是读数时机问题。</li>
+<li><span class="tm">08:36-08:54</span><span class="tag t-ask">提问</span>climb_walk --air
+具体流程、悬空状态下全吸附序列会怎样、"罐压门"是不是指储气罐。</li>
+<li><span class="tm">09:16</span><span class="tag t-fix">纠偏</span>发现"垂直站立"实现错了：
+现在是"K→唇心连线"垂直于地面，正确应是<b>吸盘轴线</b>垂直（对照 tibia-three-view.html）
+——修正并同步 walk_teleop 步态；<span class="tm">09:34</span>让 climb_walk 支持不启动
+气路纯行走；<span class="tm">09:42</span><span class="tag t-wt">问题</span>--dry 没走起来（修）；
+<span class="tm">09:47</span>子 agent 审核 climb_walk 功能。</li>
+</ul>
+</div>
+
+<h2>8 月下旬 · 上墙攻坚与根因定位</h2>
+
+<div class="card day big">
+<div class="dayhead"><b>08-17 周一</b><span class="chip">42 条</span>
+<span class="theme">无罐模式+单向阀装机，首次上墙暴露"原地踏步"</span></div>
+<ul>
+<li><span class="tm">05:24</span>摆动相中杀进程会泄罐压——拍板按操作纪律处理（退出时留意）。</li>
+<li><span class="tm">05:26-05:33</span><span class="tag t-ask">提问</span>行走时已吸住的脚
+气压不足会触发补抽吗？无罐时呢？→ <span class="tag t-dec">决定</span>改支持
+<code>--no-tank</code>（当时定位：只做地面短测）。子 agent 审核该调整。</li>
+<li><span class="tm">06:54-07:23</span>体验打磨：初始化站起改缓慢（stand_up/walk_teleop 一并改）；
+<span class="tag t-wt">问题</span>站起后转吸盘垂直的过程会拖着吸盘划地面 → 蹲姿到吸盘垂直一步到位。</li>
+<li><span class="tm">07:57-08:12</span>缓慢站起与全吸附序列之间加 p 键暂停确认；
+<span class="tag t-wt">问题</span>ESC×2 干净退出后六个电磁阀居然是通电状态（查退出逻辑）。</li>
+<li><span class="tm">09:13</span><span class="tag t-wt">问题</span>首跑 --no-tank：
+t=37.2s R2 漏气挽救超 2s → 全机冻结（提示先查落地中的 L2 吸盘不密封连带掉压）。
+<span class="tm">09:28</span>追问这种情况泵会不会一直抽。</li>
+<li><span class="tm">09:33</span><span class="tag t-brk">破局</span>用户观察：六阀断电时
+整个气路连通、六个传感器读数基本一样 → <span class="tm">09:38</span>推论罐压传感器白装
+→ <span class="tm">09:42</span>"每只脚加单向阀，气压是不是就独立了？"
+→ <span class="tag t-dec">决定</span>装单向阀（代码不用改），<b>当天全部装机</b>。</li>
+<li><span class="tm">10:20</span><span class="tag t-ask">提问</span>灰尘/细小物体吸进吸盘会怎样
+→ 记进 P4 硬件清单（滤芯）。</li>
+<li><span class="tm">13:35</span>加 oo 双击松盘快捷键（仅站立非走动时允许，通阀+停抽，
+便于把机器人从玻璃上拿下来）。</li>
+<li><span class="tm">13:58-14:32</span><span class="tag t-dec">决定</span>补抽滞环改
+-60/-75（减少补抽频次）并当天验收：盘能压过 -75、泵能停、掀脚隔离通过——单向阀线收口。</li>
+<li><span class="tm">14:37</span><span class="tag t-wt">问题</span>安全绳首次上墙：</li>
+</ul>
+<div class="quote">"在平地上机器人是可以往前走的，但在玻璃墙上……似乎一直是<b>原地踏步</b>，
+因为有重力的关系，机器人整体是被'拽'向下的，感觉每次它抬起一条腿它就被拽下一些，
+然后往前走实际上是原地踏步。"——此后四天的主线问题。</div>
+<ul>
+<li><span class="tm">14:57</span>当天对策：状态行加盘压显示 + <code>--sag-comp</code> 下坠补偿
+（事后复盘：这是治标）。</li>
+</ul>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>08-18 周二</b><span class="chip">35 条</span>
+<span class="theme">树莓派红灯"疑似烧毁"事故与退出流程重做</span></div>
+<ul>
+<li><span class="tm">02:58</span><span class="tag t-wt">问题</span>R3 气压传感器确认吸紧
+但读数忽高忽低。</li>
+<li><span class="tm">04:28</span><span class="tag t-acc">事故</span>跑
+<code>climb_walk --no-tank --sag-comp 4</code> 中途 Pi 红灯、远程失联死机；
+重启后一直红灯不变绿，拔掉所有接口仍红灯，Pin1→Pin6 为 0V——怀疑板子烧了。</li>
+<li><span class="tm">04:44-07:05</span>排查全程（用户拿万用表逐项报数）：
+MOSFET 板逐路量栅-漏/栅-源找击穿管；辨认输入侧元件（104/103/471/A042 EL3H7/222）；
+隔离完整性：IN↔V+、IN↔OUT− 全 OL、IN1~7 对输入地 1.77、IN8 为 0（本就没接线）；
+<span class="tag t-wt">问题</span>OUT7 二极管档 1.6 vs OUT6 0.6 的差异——拔掉电磁阀后
+读数一致 1.6，虚惊；3.3V 对 GND 200kΩ 档 9.8、3.3V↔5V 106，拔传感器后变"1"。</li>
+<li><span class="tm">07:06</span><span class="tag t-brk">破局</span>"苹果手机充电器可以吗？"
+——<span class="tm">07:11</span>换上就好了。<b>板子没坏，是原电源的问题</b>；
+追问原理（该电源扛不住瞬态）。</li>
+<li><span class="tm">12:03-12:07</span>复盘归因：是不是多个高功率器件同时运行导致？
+并指出关键事实——<b>事故发生在按 ESC×2 之后</b>（退出序列瞬态冲击）。</li>
+<li><span class="tm">12:15-12:30</span><span class="tag t-dec">决定</span>重做 ESC×2 退出流程：
+"18 舵机带整机重量 glide 回站姿"一步裸删（本就接近站姿）、先停泵、
+六足同时放气改为逐阀通断、间隔 0.2s。</li>
+<li><span class="tm">07:34</span><span class="tag t-dec">决定</span>给 climb_walk 加文件日志，
+"把值得记录的都记下来"——后来 08-19/08-20 的量化分析全靠这个黑匣子。</li>
+<li><span class="tm">12:40-15:08</span>code-review 本次改动（9+1 项发现）→ 修复；
+software 目录补 <code>requirements.txt</code>。</li>
+</ul>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>08-19 周三</b><span class="chip">67 条 · 全月峰值</span>
+<span class="theme">攻坚日：落地吸附链连修，用户点破弹性势能根因</span></div>
+<ul>
+<li><span class="tm">02:13</span><span class="tag t-wt">问题</span>墙上爬行时脚落地
+没垂直压到位，经常吸不紧——要求先分析不动手。</li>
+<li><span class="tm">02:41</span><span class="tag t-fix">纠偏</span>发现分析里引用了
+"罐模式开阀瞬间脚被拽向墙几毫米"——"这是瞎说，根本没测过罐模式，如果有记录去掉"。</li>
+<li><span class="tm">02:41-02:52</span><span class="tag t-dec">决定</span>三项时序改造：
+①抬腿前先通阀 0.3s 再驱动抬腿（原先是先抬后通气，看到的抬腿是"拽起"的）；
+②启动时六腿同时下压没有反力座、等于把机身抬高——改逐腿"下压→吸住→下一腿"；
+③重试路径从"抬 5mm 压回同深"改为"抬 5mm 压更深 5mm"。</li>
+<li><span class="tm">03:21-03:29</span><span class="tag t-ask">提问</span>抬腿时身体是否前倾
+（自我修正："不是向前倾，是向重力方向倾"）；加 i 键单步行走（要记录轮到哪条腿）。</li>
+<li><span class="tm">03:42-04:06</span>子 agent 审核本会话改动 → 三处问题一起收掉。</li>
+<li><span class="tm">04:39-04:52</span><span class="tag t-wt">问题</span>重试后仍压不到位：
+下压只是"轻微下压"，抽气后才有明显踩住的移动 → 下压深度 13mm 改 18mm 试。</li>
+<li><span class="tm">05:10-06:28</span>另开会话专项审核"器件协同打架"bug：
+确认发现一（按 p 后场景）、发现二（oo 松盘没逐阀间隔）属实，都修掉。</li>
+<li><span class="tm">07:08</span><span class="tag t-wt">问题</span>墙上复测：
+"脚一松开就感觉被往下拖拽了一些，往上走就是原地踏步"——提出
+<b>抬腿时其他脚下压贴墙 + 身体前倾</b>，让落腿能往前且压住墙面。</li>
+<li><span class="tm">08:01-08:11</span>步子加大；i 键改半步（按一次抬、再按落、再按换腿）。</li>
+<li><span class="tm">08:35</span><span class="tag t-wt">问题</span>抓到补抽逻辑 bug：
+按 i 抬腿期间泵一直抽——判断是否补抽时把<b>抬起腿</b>的气压也算进去了，应只看支撑腿。
+<span class="tm">08:41</span>状态行加"泵"字段方便肉眼核对。</li>
+<li><span class="tm">08:57</span><span class="tag t-wt">问题</span>三连：R1 不往前迈；
+R2/R3 抬腿被下拽明显；w 连走模式下 R2 还没吸紧 R3 就抬了。</li>
+<li><span class="tm">09:09-09:29</span><span class="tag t-dec">决定</span>步序整顿：
+为什么有时 L1 先走有时 L2（不确定性消除）；对比 L1→L2→L3→R1→R2→R3 与左右交替序，
+最终定 <b>R3 开头的交替序</b>（R3→L1→R2→L3→R1→L2）。</li>
+<li><span class="tm">09:30-09:58</span><span class="tag t-ask">提问</span>驱动原理确认：
+前进主要靠 hip 转动？其他腿 coxa 也随动？默认步幅 40mm？为什么不能 coxa 扫 25°
+→ 改 22° 试；--max-step 66 与 --speed 22 是否要同给、与 --no-tank 兼容性。</li>
+<li><span class="tm">10:15</span>落点向身体靠近一些，让吸盘轴更接近垂直。</li>
+<li><span class="tm">11:10</span>上传黑匣子日志 + <code>real_climb.mp4</code>：
+指定看 21-22s 的 R1、32-34s 的 L1——抬腿时 coxa 有明显"先拽下、再上移"。</li>
+<li><span class="tm">12:52</span><span class="tag t-fix">纠偏</span>AI 归因"前腿 press 反力方向
+不同"被驳回："你的分析错了，其他腿也有，只是我没说，我对比了地面爬行视频"——
+并自己给出解释：上一腿落地后、抬腿前有身体前倾动作，重力下这个前倾里 R1 coxa 的转动
+<b>慢了一拍</b>，在抬起后才执行，所以看到先下后上。</li>
+<li><span class="tm">13:05-13:20</span>厘清"前倾"语义分歧（= 身体向 L1/R1 前进方向移动，
+不是向墙倾），确认 18 关节能做到 → <span class="tag t-dec">决定</span>拆独立脚本
+<code>body_lean.py</code>：↑↓ 键前后倾 + 单腿抬起，不和 climb_walk 混。</li>
+<li><span class="tm">13:43-14:53</span>补认知课：让做 <code>gait-to-servo.html</code>
+（图+动画讲"关节怎么动、动作怎么变成脉宽指令"）；追问 VENT→WAIT 全程哪些其他腿关节也在动；
+嫌"支撑相与摆动相"一章不够细，要求重写。</li>
+<li><span class="tm">15:41</span>提出改"以周期行走长度为驱动"的慢速串行步态（气阀与关节
+动作串行、过程足够慢便于排障）；报告对比实验：<b>地面 lean 实测 ~40mm、墙上只有 ~20mm</b>
+（目标 50mm）。<span class="tm">15:53</span>顺带定案：--no-tank 上墙已多次验证，
+删"严禁上墙"文案。</li>
+<li><span class="tm">16:16</span><span class="tag t-brk">破局</span>当天最关键的一段（用户原话）：</li>
+</ul>
+<div class="quote">"如果抬起腿的弹性势能比较大，抬起腿把势能释放掉了，
+<b>整个身体反而往下移动了一段距离，我发现这个才是导致它一直没法前进的原因</b>。你分析下。"
+——次日被数据证实为 83% 主因。</div>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>08-20 周四</b><span class="chip">9 条</span>
+<span class="theme">棘轮量化实锤 → 零力交接设计与实现</span></div>
+<ul>
+<li><span class="tm">02:47</span>报实验①（零指令、按 R3→L1→R2→L3→R1→L2 逐腿抬落 2 轮）
+人工读数：第一轮 148→143→131→128→119→103→91，第二轮 81→60→56→42→25→17
+——每轮下滑 57→74mm。<span class="tm">03:03</span>补交视频
+<code>lean_20260820.mp4</code> + 黑匣子日志，并逐项答疑：吸盘零滑移、静置零漂移、
+单位 mm、数值减小=沿墙向下。</li>
+<li>视频逐帧量化（NCC 追踪、0.881mm/px）出报告 <code>vent-snap-20260820.html</code>：
+<span class="num">83%</span> 的下滑发生在<b>放气密封破裂瞬间</b>（阀开后 0.4s 泄压期
+身体位移 &lt;0.15mm，破裂后 1~2 帧一步坠到位）；press 落地只占 4%；
+单次弹跳 L1 最大 20.9mm、封顶 ~21mm（舵机扭矩饱和）；整机电流 0.73→~1.9A
+逐周期棘轮上升。<b>慢放气方案被数据否决</b>。</li>
+<li><span class="tm">03:25-03:31</span><span class="tag t-dec">决定</span>治法 =
+<b>vent 前零力交接</b>（被抬腿沿上坡"还"δ 卸载、其余五腿各接 δ/5，力≈0 再放气）。
+明确工作方式："你先写设计文档，我在下一个会话再实现"→ HANDOVER-DESIGN.md
+（δ 起标 = 实测弹跳 ×0.8）。</li>
+<li><span class="tm">03:41</span>新会话："审核文档，正确则直接实现，否则修正后再实现"
+→ 当天完成 <code>--handover</code>（含 8 项新测试，81 全绿）；
+<span class="tm">04:11</span>让设计 §9.3 实机 A/B 方案：
+<code>body_lean --handover L1:17,R1:15,L3:11,R3:9,R2:5,L2:5</code>
+→ 产出 HANDOVER-AB-PROTOCOL.md + 量化管线 <code>ab_quant.py</code> 入库。</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-21 周五</b><span class="chip">2 条</span>
+<span class="theme">复盘</span></div>
+<ul>
+<li>检索历史会话可行性确认 → 整理本时间线（403 条手输消息全量抽取）。</li>
+</ul>
+</div>
+
+<h2>跨天规律与复盘</h2>
+
+<div class="card">
+<ul>
+<li><b>三次破局的共同点</b>：tibia 三视图纠偏（08-07）、USB3.0 欠压规律（08-16）、
+弹性势能根因（08-19）——都是用户用实物照片/实测对照把 AI 的错误假设顶回去，
+而不是靠继续追问得到的。<b>画图对质</b>（三视图、示意 HTML）是化解认知分歧最有效的手段；
+08-19 的 gait-to-servo 讲解页也属同一模式——先补齐认知，再判断 AI 的分析对不对。</li>
+<li><b>"原地踏步"的完整因果链</b>：08-17 首次上墙暴露 → --sag-comp 补偿（治标）→
+08-19 白天在落地吸附链上连修七八处（必要但非主因）→ 08-19 傍晚用户点破弹性势能根因 →
+08-20 量化实锤（83% 在密封破裂瞬间）→ 零力交接治本。前后正好四天。</li>
+<li><b>两次"疑似硬件报废"都是虚惊</b>：08-09 R1 舵盘齿轮滑丝（换舵盘了事）、
+08-18 树莓派红灯不启动（换个电源就好）。真正报废的器件为零；
+但 08-18 的排查代价最大（一上午万用表逐点测量），教训沉淀为退出流程重做+文件日志。</li>
+<li><b>四次用户纠正 AI 的记录</b>：08-07 舵盘位置"错得离谱"、08-19 删"罐模式拽墙"的
+无出处记录、08-19 驳回"前腿 press 反力"归因、08-19 澄清"前倾"语义分歧。
+共同点：用户手里有 AI 没有的实物/视频证据。</li>
+<li><b>消息量即冲突量</b>：67 条（攻坚日）、46 条（L3 之争）、43/42/35 条分别对应
+方案问答、首次上墙、事故排查；反过来 08-20 只用 9 条就完成"实验→报告→设计→实现"
+——前一天把问题想清楚了，后面就快。</li>
+</ul>
+</div>
+
+<div class="warn">
+<b>当前待办</b>：带 <code>--handover</code>（δ 起标 L1:17 / R1:15 / L3:11 / R3:9 / R2:5 / L2:5）
+上墙跑 §9.3 实机 A/B 实验，方案见 <code>docs/HANDOVER-AB-PROTOCOL.md</code>，
+量化管线 <code>software/logs_analysis/ab_quant.py</code>。
+验收判据：每轮位移 &lt;10mm（基线 76.4）、逐腿 vent 跳变 |x|≤2mm、
+电流不再逐周期爬升、交接段身体 |x|≤3mm 平滑。判定一律看第 2 轮；A/B 期 --sag-comp 保持 0。
+</div>
+
+<p class="cap">数据来源：<code>~/.claude/projects/-home-shaopeng-spider/*.jsonl</code>（28 个会话），
+2026-08-21 抽取；只统计用户手输消息，不含工具输出与系统消息。时刻为本机时区。</p>
+
+</main>
+</body>
+</html>

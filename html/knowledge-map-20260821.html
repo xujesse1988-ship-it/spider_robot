@@ -1,0 +1,790 @@
+<title>爬墙六足知识地图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;600&display=swap">
+
+<style>
+:root{
+  --paper:#F3F5F2;
+  --surface:#FFFFFF;
+  --surface-2:#EAEEEA;
+  --ink:#12211E;
+  --ink-mid:#3C4E4A;
+  --ink-soft:#687974;
+  --rule:#D5DCD7;
+  --rule-soft:#E4E9E4;
+  --accent:#0B6E62;
+  --accent-soft:#D9EBE6;
+  --brass:#8C6316;
+  --brass-soft:#F0E5CD;
+  --shadow:0 1px 2px rgba(18,33,30,.05),0 8px 24px -16px rgba(18,33,30,.25);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1514;
+    --surface:#14201E;
+    --surface-2:#1A2725;
+    --ink:#E7ECE8;
+    --ink-mid:#B6C4BF;
+    --ink-soft:#87968F;
+    --rule:#26332F;
+    --rule-soft:#1E2B28;
+    --accent:#4FC2AE;
+    --accent-soft:#12302B;
+    --brass:#D8A552;
+    --brass-soft:#2C2415;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -18px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1514;
+  --surface:#14201E;
+  --surface-2:#1A2725;
+  --ink:#E7ECE8;
+  --ink-mid:#B6C4BF;
+  --ink-soft:#87968F;
+  --rule:#26332F;
+  --rule-soft:#1E2B28;
+  --accent:#4FC2AE;
+  --accent-soft:#12302B;
+  --brass:#D8A552;
+  --brass-soft:#2C2415;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -18px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'IBM Plex Sans','Noto Sans SC',system-ui,-apple-system,sans-serif;
+  font-size:16px;
+  line-height:1.78;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px 96px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+
+/* ---------- header ---------- */
+header.top{
+  border-bottom:1px solid var(--rule);
+  padding:56px 0 32px;
+  margin-bottom:44px;
+}
+.eyebrow{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-soft);margin:0 0 18px;
+}
+h1{
+  font-size:clamp(30px,4.6vw,46px);
+  line-height:1.18;font-weight:700;letter-spacing:-.01em;
+  margin:0 0 20px;text-wrap:balance;
+}
+.thesis{
+  max-width:64ch;font-size:17.5px;color:var(--ink-mid);margin:0 0 8px;
+}
+.thesis strong{color:var(--ink);font-weight:600}
+.stats{
+  display:flex;flex-wrap:wrap;gap:0;margin-top:32px;
+  border:1px solid var(--rule);border-radius:2px;overflow:hidden;
+  background:var(--surface);
+}
+.stat{
+  flex:1 1 128px;padding:12px 16px;
+  border-right:1px solid var(--rule-soft);
+}
+.stat:last-child{border-right:0}
+.stat b{
+  display:block;font-family:'IBM Plex Mono',monospace;
+  font-size:19px;font-weight:500;line-height:1.3;
+  font-variant-numeric:tabular-nums;color:var(--ink);
+}
+.stat span{font-size:12px;color:var(--ink-soft);letter-spacing:.02em}
+
+/* ---------- layout ---------- */
+.cols{display:block}
+@media(min-width:1040px){
+  .cols{display:grid;grid-template-columns:170px minmax(0,1fr);gap:56px;align-items:start}
+  nav.rail{position:sticky;top:32px}
+}
+nav.rail{display:none}
+@media(min-width:1040px){nav.rail{display:block}}
+nav.rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+nav.rail a{
+  display:block;padding:4px 0 4px 12px;
+  border-left:2px solid var(--rule);
+  color:var(--ink-soft);text-decoration:none;font-size:13.5px;line-height:1.5;
+}
+nav.rail a:hover,nav.rail a:focus-visible{color:var(--accent);border-left-color:var(--accent)}
+nav.rail .num{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;
+  margin-right:6px;opacity:.7;
+}
+
+section{scroll-margin-top:24px}
+h2{
+  font-size:25px;font-weight:600;letter-spacing:-.005em;
+  margin:64px 0 6px;padding-top:24px;border-top:1px solid var(--rule);
+  text-wrap:balance;
+}
+h2:first-of-type{margin-top:0;border-top:0;padding-top:0}
+.sub{color:var(--ink-soft);font-size:14.5px;margin:0 0 28px;max-width:62ch}
+h3{font-size:17px;font-weight:600;margin:36px 0 10px}
+p{max-width:66ch}
+
+/* ---------- domain groups ---------- */
+.group-label{
+  display:flex;align-items:baseline;gap:12px;
+  margin:38px 0 16px;
+}
+.group-label .tag{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent);
+  border:1px solid var(--accent);border-radius:2px;padding:1px 7px;
+  white-space:nowrap;
+}
+.group-label h3{margin:0;font-size:18px}
+.group-label .note{color:var(--ink-soft);font-size:13.5px}
+
+.cards{display:grid;gap:14px;grid-template-columns:1fr}
+@media(min-width:720px){.cards{grid-template-columns:1fr 1fr}}
+.card{
+  background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  padding:18px 20px 20px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:10px;
+}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card-head h4{margin:0;font-size:16.5px;font-weight:600;letter-spacing:.01em}
+.chip{
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;
+  padding:2px 7px;border-radius:2px;white-space:nowrap;
+}
+.chip.gate{background:var(--brass-soft);color:var(--brass);border:1px solid var(--brass)}
+.chip.learn{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}
+.chip.copy{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--rule)}
+.anchor{
+  font-size:13.5px;color:var(--ink-mid);margin:0;
+  padding-left:11px;border-left:2px solid var(--accent);
+}
+.anchor code,.card li code,p code,li code,td code{
+  font-family:'IBM Plex Mono',monospace;font-size:.87em;
+  background:var(--surface-2);padding:1px 4px;border-radius:2px;
+  color:var(--ink-mid);
+}
+.card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px}
+.card li{font-size:14.5px;color:var(--ink-mid);line-height:1.6}
+.card li b{color:var(--ink);font-weight:600}
+
+/* ---------- matrix ---------- */
+.figure{
+  margin:32px 0 8px;border:1px solid var(--rule);border-radius:3px;
+  background:var(--surface);padding:20px 8px 8px;overflow-x:auto;
+}
+.figure svg{display:block;min-width:660px;margin:0 auto}
+.fig-cap{font-size:13px;color:var(--ink-soft);margin:10px 4px 0;max-width:none}
+.ax{fill:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em}
+.quad{fill:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:10.5px;opacity:.72}
+.lbl{fill:var(--ink);font-family:'Noto Sans SC','IBM Plex Sans',sans-serif;font-size:12.5px}
+.dot{fill:var(--accent)}
+.dot.hot{fill:var(--brass)}
+.grid-line{stroke:var(--rule);stroke-width:1}
+.grid-line.dash{stroke-dasharray:3 4}
+
+/* ---------- steps ---------- */
+.steps{display:flex;flex-direction:column;gap:0;margin-top:24px}
+.step{
+  display:grid;grid-template-columns:64px minmax(0,1fr);gap:20px;
+  padding:20px 0;border-top:1px solid var(--rule-soft);
+}
+.step:first-child{border-top:1px solid var(--rule)}
+.step-no{
+  font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:500;
+  color:var(--accent);letter-spacing:.04em;padding-top:2px;
+}
+.step h4{margin:0 0 6px;font-size:16.5px;font-weight:600}
+.step p{margin:0 0 8px;font-size:14.5px;color:var(--ink-mid)}
+.step .gate-line{
+  font-size:13.5px;color:var(--ink-soft);
+  font-family:'IBM Plex Mono',monospace;
+}
+.step .gate-line b{color:var(--brass);font-weight:500}
+
+/* ---------- lessons ---------- */
+.lesson{
+  border-left:3px solid var(--brass);
+  padding:2px 0 2px 20px;margin:30px 0;
+}
+.lesson h4{margin:0 0 8px;font-size:17px;font-weight:600}
+.lesson p{margin:0 0 10px;font-size:15px;color:var(--ink-mid)}
+blockquote{
+  margin:12px 0;padding:0;
+  font-family:'Noto Serif SC',Georgia,serif;
+  font-size:15.5px;line-height:1.8;color:var(--ink);
+  max-width:60ch;
+}
+blockquote::before{content:"“"}
+blockquote::after{content:"”"}
+blockquote cite{
+  display:block;font-family:'IBM Plex Mono',monospace;font-style:normal;
+  font-size:11.5px;color:var(--ink-soft);letter-spacing:.06em;margin-top:6px;
+}
+
+/* ---------- tables ---------- */
+.table-wrap{overflow-x:auto;margin:22px 0;border:1px solid var(--rule);border-radius:3px}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{
+  text-align:left;padding:10px 14px;font-size:14px;
+  border-bottom:1px solid var(--rule-soft);vertical-align:top;
+}
+th{
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-soft);font-weight:500;
+  background:var(--surface-2);border-bottom:1px solid var(--rule);
+}
+tbody tr:last-child td{border-bottom:0}
+td.num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---------- verdict ---------- */
+.verdict{
+  background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  padding:24px 26px;margin-top:28px;box-shadow:var(--shadow);
+}
+.verdict h4{margin:0 0 10px;font-size:16px;font-weight:600}
+.verdict h4 + p{margin-top:0}
+.verdict p{font-size:15px;color:var(--ink-mid);margin:0 0 18px}
+.verdict p:last-child{margin-bottom:0}
+.verdict .flag{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--brass);display:block;margin-bottom:4px;
+}
+a{color:var(--accent)}
+a:focus-visible,:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+footer{
+  margin-top:72px;padding-top:20px;border-top:1px solid var(--rule);
+  font-size:13px;color:var(--ink-soft);
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">spider · 爬墙六足机器人 · 知识盘点 2026-08-21</p>
+  <h1>爬墙六足知识地图</h1>
+  <p class="thesis">
+    这台机器真正吃掉时间的，不是运动学和步态——那两章是教科书内容，一周能看完，代码只有 52 行加 102 行。
+    真正决定成败的是四件更土的事：<strong>把气密做住、把电源做稳、把几何量准、把实验设计对</strong>。
+    下面按"项目里哪儿用到了它"逐条拆开，最后给出学习顺序和一份诚实的难度判断。
+  </p>
+  <div class="stats">
+    <div class="stat"><b>6 × 3</b><span>腿 × 关节 = 18 舵机</span></div>
+    <div class="stat"><b>1 + 6 + 7</b><span>泵 / 阀 / 压力传感</span></div>
+    <div class="stat"><b>50 Hz</b><span>控制环周期</span></div>
+    <div class="stat"><b>11.8k</b><span>行 Python</span></div>
+    <div class="stat"><b>81</b><span>项自动测试</span></div>
+    <div class="stat"><b>2.5 kg</b><span>整机重量硬上限</span></div>
+    <div class="stat"><b>¥2000~2800</b><span>全套器件</span></div>
+  </div>
+</header>
+
+<div class="cols">
+
+<nav class="rail" aria-label="目录">
+  <ol>
+    <li><a href="#map"><span class="num mono">A</span>知识全景</a></li>
+    <li><a href="#matrix"><span class="num mono">B</span>先学什么</a></li>
+    <li><a href="#path"><span class="num mono">C</span>学习路线</a></li>
+    <li><a href="#lessons"><span class="num mono">D</span>书上没有的</a></li>
+    <li><a href="#cost"><span class="num mono">E</span>成本与减配</a></li>
+    <li><a href="#verdict"><span class="num mono">F</span>判断</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============ A ============ -->
+<section id="map">
+  <h2>A · 知识全景：十三个领域</h2>
+  <p class="sub">
+    分四组。每张卡片的第一行是"项目里的锚点"——这条知识具体落在哪个文件、哪个数字上；
+    右上角的标记表示：<span class="chip gate">门槛</span> 不会就开不了工，
+    <span class="chip learn">边做边学</span> 项目本身会教你，
+    <span class="chip copy">可抄现成</span> 有成熟方案可直接拿。
+  </p>
+
+  <div class="group-label">
+    <span class="tag">一 · 机械与运动</span>
+    <span class="note">让它动起来</span>
+  </div>
+  <div class="cards">
+
+    <article class="card">
+      <div class="card-head"><h4>串联机构运动学</h4><span class="chip learn">边做边学</span></div>
+      <p class="anchor"><code>kinematics.py</code> 全部数学只有 52 行：<code>atan2</code> 解 coxa 摆角，余弦定理解膝角，可达判据 <code>|l2−l3| &lt; d &lt; l2+l3</code>。</p>
+      <ul>
+        <li><b>正解与逆解</b>：三角函数、余弦定理，二连杆平面解，会手推一遍即可</li>
+        <li><b>坐标变换</b>：身体系 → 腿系的平移加绕 Z 旋转；身体姿态用 RPY 做逆变换（<code>robot.py</code>）</li>
+        <li><b>工作空间与包络余量</b>：目标点离可达边界要留安全距（本项目留 3mm），否则支撑相走到一半解不出来</li>
+        <li><b>真正的难点是耦合</b>：三自由度腿的足端位置和吸盘朝向是绑死的——落点一选，吸盘朝哪就定了，没有第四个踝关节去补</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>步态与运动规划</h4><span class="chip learn">边做边学</span></div>
+      <p class="anchor"><code>gait.py</code> 102 行给出三角/波浪/爬墙三套相位表；爬墙引擎 <code>climb.py</code> 却写了 1019 行——差额全是"和吸附联动"。</p>
+      <ul>
+        <li><b>相位式步态</b>：占空比、每腿相位偏移、支撑相反向匀速扫、摆动相 smoothstep 加正弦抬腿</li>
+        <li><b>静态稳定</b>：支撑多边形与重心投影；墙上改用一次只挪一只脚的五足支撑</li>
+        <li><b>刚体速度场</b> <code>v + ω × r</code>：转向时每条腿的步幅不一样，就是这个公式</li>
+        <li><b>事件驱动</b>：相位钟能被吸附事件停住——从"按时间表走"变成"等物理确认"，这是地面到墙面最大的软件改动</li>
+        <li><b>抬腿次序也是设计</b>：本项目实测同侧三连抬会把扰动堆在一边，改成对角交替 R3→L1→R2→L3→R1→L2</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>机械设计与 3D 打印</h4><span class="chip gate">门槛</span></div>
+      <p class="anchor"><code>tools/generate_climbing_parts.py</code> 用 trimesh + manifold3d 做布尔运算，按实购吸盘三视图挖出"全形状负模"的小腿腔体。</p>
+      <ul>
+        <li><b>参数化建模</b>：并/差/交、旋转体、拉伸；尺寸写成 <code>PARAMS</code>，换零件改数重生成</li>
+        <li><b>打印方向决定可行性</b>：本项目的吸盘小腿只能立打——方轴离平背面 4.5mm 而腔体半径 17mm，平躺必穿床</li>
+        <li><b>公差与配合</b>：打印孔径要卡尺实测复核；六角袋防转、定位销对位这类零件级技巧</li>
+        <li><b>材料</b>：腿件 PETG 优先，壁数填充按受力定；舵盘 25 齿花键 = 每格 14.4°，装配残差只能靠软件标定修，别指望装准</li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="group-label">
+    <span class="tag">二 · 力学与能量</span>
+    <span class="note">让它掉不下来</span>
+  </div>
+  <div class="cards">
+
+    <article class="card">
+      <div class="card-head"><h4>静力学与力预算</h4><span class="chip gate">门槛</span></div>
+      <p class="anchor">单只 Ø30 吸盘 @−50kPa 实测：法向拉脱 25N、竖直玻璃剪切 15N（约六折）。五足支撑对 2.8kg 整机，剪切安全系数 ≈2.7。</p>
+      <ul>
+        <li><b>吸附力</b> <code>F = ΔP × A</code>，以及为什么剪切远小于法向</li>
+        <li><b>剥离力矩</b> <code>≈ m·g·d/h</code>：重心离墙每近 1cm 都是实打实的余量——所以身体要贴墙、电池装墙侧</li>
+        <li><b>舵机力矩</b>：kg·cm 怎么换算到关节，为什么 35kg·cm 要按 50% 降额用，堵转是什么后果</li>
+        <li><b>安全系数思维</b>：按最坏几只脚有效承力算，不按标称算</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>弹性、储能与棘轮</h4><span class="chip gate">门槛</span></div>
+      <p class="anchor">本项目最贵的一课：墙上"原地踏步"卡了四天，最后视频逐帧量化实锤——<b>83% 的下滑发生在放气密封破裂的那 1~2 帧</b>，不是滑移，不是打滑。</p>
+      <ul>
+        <li><b>串联弹簧</b>：波纹吸盘横向变形 + 舵机带载让位角，合起来就是一根弹簧，抬腿前一直在存能</li>
+        <li><b>棘轮机制</b>：弹性让位被下一次吸附"锁死"成不可逆位移，一周期六次，能吃掉整个步幅</li>
+        <li><b>能量视角比力视角有用</b>：慢放气被数据直接否决——力的释放不随泄压渐进，密封一破就是一步到位</li>
+        <li><b>治法是交接不是补偿</b>：放气前先把这条腿的载荷匀给另外五条（各接 δ/5，六腿指令均值不变=身体不动），力≈0 再放气</li>
+        <li><b>会写十几行的一维弹簧模型</b>：<code>HANDOVER-DESIGN.md</code> 附录 A 复现了实测的 26% 净前进率——建模不需要复杂，需要抓对机理</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>重量预算</h4><span class="chip learn">边做边学</span></div>
+      <p class="anchor">2.5kg 是硬上限；扣掉无吸附整机 1.9kg，留给整套气路的只有 0.6kg，而粗估要 0.94~1.11kg。<b>预算一开始就是超的。</b></p>
+      <ul>
+        <li>每件到货就上秤记账，趋势比单点重要（<code>docs/weight-log.md</code>）</li>
+        <li>减重是有优先级的工程动作：首飞只装单泵（−130g）、罐选小号、打印件镂空</li>
+        <li>爬墙对重量的敏感度和地面机器人完全不是一个量级——超重直接吃掉吸附裕量</li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="group-label">
+    <span class="tag">三 · 气与电</span>
+    <span class="note">让它可靠</span>
+  </div>
+  <div class="cards">
+
+    <article class="card">
+      <div class="card-head"><h4>真空与气动</h4><span class="chip gate">门槛</span></div>
+      <p class="anchor">泵 → 单向阀 → 储气罐 → 歧管 → 六路常闭三通阀 → 六个吸盘，每足再加一只单向阀做故障隔离。</p>
+      <ul>
+        <li><b>负压的基本量</b>：kPa 表压、泵极限（555 双头约 −75~−85）、抽气时间常数≈容积/流量（一阶指数，和 RC 同形）</li>
+        <li><b>元件语言</b>：二位三通阀的 P/A/R 三口、常开常闭、单向阀方向、储气罐为什么能加快响应</li>
+        <li><b>断电保压</b>是这套设计的命门：接法要让断电时吸盘连着停转的泵，借隔膜泵内部单向阀死锁保真空——机器人断电不掉，且静止吸附时阀零耗电</li>
+        <li><b>漏气排查</b>：接头即漏点，肥皂水加逐段夹管二分法；滞环控制（−60/−75kPa）减少泵启停</li>
+        <li><b>脏东西会骗你</b>：灰尘堵住取压口会封出一个假真空，状态机以为吸住了——所以每足加滤芯</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>电子与电源完整性</h4><span class="chip gate">门槛</span></div>
+      <p class="anchor">这个项目里最能"杀死你一整天"的一类问题：一次红灯不启动的疑似烧板，排查一上午，最后换个充电器就好了。</p>
+      <ul>
+        <li><b>电源架构</b>：2S 直供舵机 / 独立 5V 5A 给 Pi（绝不共轨，舵机堵转压降会让 Pi 重启）/ 升压 12V 给泵阀</li>
+        <li><b>开关器件</b>：MOSFET 板、光耦隔离、感性负载续流二极管；继电器必须切正极高边——地经 USB 与 Pi 共通，低边开关会被旁路</li>
+        <li><b>模拟链路</b>：4.5V 传感器要分压进 3.3V 系统，ADS1115 的单端通道、PGA 量程、转换就绪位轮询，两点标定出 <code>kPa = 25 × (V − V_atm)</code></li>
+        <li><b>电源完整性</b>：欠压历史标志、瞬态余量、USB 口选择都能让系统在半空中重启；<b>先验电源，再怀疑逻辑</b></li>
+        <li><b>噪声判读</b>：读数瞬断先做频谱——工频占比小就是静电耦合，不是接触不良</li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="group-label">
+    <span class="tag">四 · 软件与方法</span>
+    <span class="note">让它可查、可信</span>
+  </div>
+  <div class="cards">
+
+    <article class="card">
+      <div class="card-head"><h4>嵌入式实时软件</h4><span class="chip learn">边做边学</span></div>
+      <p class="anchor">50Hz 主环里要塞进 18 路舵机指令 + 7 路 I2C 压力读数，不做限流会周期性抖动——<code>adhesion.py</code> 里的读数缓存和突发限流就是为这个。</p>
+      <ul>
+        <li><b>协议实现</b>：串口按固件源码逐字节对，14 位值拆成两个 7 位；包头校验，不能分段写</li>
+        <li><b>时间预算</b>：传感器读数最坏陈旧 0.11s，所以判据的确认窗必须显著大于它，否则窗内跨不过两次真实采样</li>
+        <li><b>状态机与互锁</b>：吸附六态、腿相位十段、抬腿前其余五足必须全部吸牢</li>
+        <li><b>防毛刺</b>：判据用"条件连续成立一段时间"而不是"连续 N 次"——不依赖采样率</li>
+        <li><b>硬件抽象 + Mock</b>：没有硬件也能跑完整逻辑和 81 项测试，这是能远程开发的前提</li>
+        <li><b>黑匣子日志</b>：行缓冲加周期 fsync，写盘失败只告警不炸控制环——后来的两份量化报告全靠它</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>控制观（本项目没有 PID）</h4><span class="chip learn">边做边学</span></div>
+      <p class="anchor">18 个 PWM 舵机：没有位置回读、没有力矩模式、没有单路使能。能做的只有一件事——发位置指令。</p>
+      <ul>
+        <li><b>改指令 = 改力</b>：吸住的脚不能滑，所以位置指令的增量实际上是在重新分配载荷，这是"零力交接"能成立的全部原理</li>
+        <li><b>电流是力的间接观测</b>：吸附后总电流不回落，就说明舵机在和真空对抗；逐周期爬升就是内应力在累积</li>
+        <li><b>准静态</b>：交接和倾身都按 10mm/s 匀速铺，慢到可以忽略动力学</li>
+        <li><b>什么时候不该上闭环</b>：传感器精度、执行器带宽都不支持时，开环加互锁加超时冻结比硬凑一个反馈环更可靠</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>测量与标定</h4><span class="chip gate">门槛</span></div>
+      <p class="anchor">全项目最费事的工序：18 路舵机的脉宽↔关节角逐个实测拟合，还打过一场"小腿到底多长"的硬仗（<code>L3-DISPUTE-OPEN.md</code>）。</p>
+      <ul>
+        <li><b>最小二乘拟合</b>：舵机是线性模型，实测 2~4 个点拟合出斜率和零位，看残差判合格</li>
+        <li><b>测法设计</b>：高差法（<code>sinα = Δh/l</code>）、三边法（余弦定理）、投影法——挑一个可复现、对横向偏距免疫的量法</li>
+        <li><b>误差传播</b>：姿态接近竖直时正弦变平，1mm 读数误差会放大成 4.5°——所以标定姿态要选，不能随便摆</li>
+        <li><b>基准定义比测量本身更重要</b>：膝轴在哪、足端在哪、吸盘轴是哪条线——三个都定错过一次，且都是靠三视图对质才纠回来</li>
+        <li><b>状态相关几何</b>：吸盘自由态高 19mm、压密封 7.5mm、抽真空 8mm——所以"先压密封再抽气"，抽气几乎不再动</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>实验设计与数据分析</h4><span class="chip gate">门槛</span></div>
+      <p class="anchor"><code>logs_analysis/ab_quant.py</code>：视频逐帧 NCC 模板匹配 + 抛物线亚像素 + 静物参照修正相机漂移，把每轮 74mm 的下滑按事件拆开。</p>
+      <ul>
+        <li><b>量化优先于调参</b>：没有这次逐帧量化，"83% 在密封破裂瞬间"永远发现不了，只会继续瞎调补偿系数</li>
+        <li><b>视频测位移</b>：模板匹配、亚像素插值、mm/px 标定、参照物去相机漂移</li>
+        <li><b>A/B 对照的纪律</b>：当日重跑基线、相机三脚架变焦锁死、首轮前打对时标记、判定一律看第 2 轮（第 1 轮是从零爬坡的暂态）</li>
+        <li><b>敢用数据否决自己的方案</b>：慢放气这个"看起来很合理"的想法，就是被剖面数据当场枪毙的</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>系统工程与工作纪律</h4><span class="chip gate">门槛</span></div>
+      <p class="anchor">路线图把最贵的假设放在最前面：单腿上墙的决策门只花第一批 ¥600~950，过不了就止损，15 个舵机根本不用买。</p>
+      <ul>
+        <li><b>风险前置</b>：先验证最可能推翻整个方案的那一条，而不是先做最有把握的部分</li>
+        <li><b>验收判据要可量化</b>：50 次循环 &gt;95%、1.5kg 挂 5 分钟、每轮位移 &lt;10mm——不是"感觉还行"</li>
+        <li><b>降级与失效安全</b>：漏气先挽救、超时冻结报警；进程一死 GPIO 释放、继电器断、常闭阀保真空</li>
+        <li><b>把作废的结论也写进文档</b>：本项目专门有一节"本轮产生过的错误结论，勿再使用"——防止几周后自己把错的又捡回来</li>
+        <li><b>安全纪律</b>：安全绳全程不摘、地面铺垫、挂重测试人不站下面、锂电充电不离人</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ============ B ============ -->
+<section id="matrix">
+  <h2>B · 先学什么：依赖度 × 学习成本</h2>
+  <p class="sub">
+    横轴是"从零学会要花多少力气"，纵轴是"不会它这个项目会不会卡死"。
+    右上角那几个才是真正的门槛——注意它们没有一个是"机器人学"。
+  </p>
+
+  <div class="figure">
+    <svg viewBox="0 0 760 470" role="img" aria-labelledby="mtitle mdesc">
+      <title id="mtitle">十三个知识领域的依赖度与学习成本分布</title>
+      <desc id="mdesc">真空气动、测量标定、电源完整性、弹性棘轮四项落在高依赖高成本区，是本项目的实际门槛；运动学与步态属于高依赖但低成本。</desc>
+
+      <!-- frame -->
+      <line class="grid-line" x1="70" y1="30" x2="70" y2="400"/>
+      <line class="grid-line" x1="70" y1="400" x2="720" y2="400"/>
+      <line class="grid-line dash" x1="395" y1="30" x2="395" y2="400"/>
+      <line class="grid-line dash" x1="70" y1="141" x2="720" y2="141"/>
+
+      <!-- axis labels -->
+      <text class="ax" x="70" y="425">低</text>
+      <text class="ax" x="690" y="425">高</text>
+      <text class="ax" x="330" y="443">从零学会的成本 →</text>
+      <text class="ax" x="26" y="400" transform="rotate(-90 26 400)">依赖度 →</text>
+
+      <!-- quadrant hints -->
+      <text class="quad" x="84" y="52">必修 · 好学</text>
+      <text class="quad" x="612" y="52">必修 · 难学（真门槛）</text>
+      <text class="quad" x="84" y="388">顺手就会</text>
+      <text class="quad" x="640" y="388">可后补</text>
+
+      <!-- points: x = 70 + cost*6.5 , y = 400 - dep*3.7 -->
+      <g>
+        <circle class="dot" cx="148" cy="197" r="5"/><text class="lbl" x="160" y="201">重量账</text>
+        <circle class="dot hot" cx="174" cy="74" r="5.5"/><text class="lbl" x="186" y="78">系统纪律</text>
+        <circle class="dot" cx="239" cy="134" r="5"/><text class="lbl" x="251" y="138">力学账</text>
+        <circle class="dot" cx="278" cy="89" r="5"/><text class="lbl" x="290" y="93">运动学</text>
+        <circle class="dot" cx="291" cy="171" r="5"/><text class="lbl" x="303" y="175">打印件</text>
+        <circle class="dot" cx="382" cy="111" r="5"/><text class="lbl" x="394" y="115">步态</text>
+        <circle class="dot" cx="408" cy="222" r="5"/><text class="lbl" x="420" y="226">控制观</text>
+        <circle class="dot" cx="447" cy="148" r="5"/><text class="lbl" x="459" y="152">实时软件</text>
+        <circle class="dot hot" cx="343" cy="48" r="5.5"/><text class="lbl" x="355" y="52">真空气路</text>
+        <circle class="dot hot" cx="486" cy="67" r="5.5"/><text class="lbl" x="498" y="71">测量标定</text>
+        <circle class="dot" cx="551" cy="126" r="5"/><text class="lbl" x="563" y="130">实验方法</text>
+        <circle class="dot hot" cx="616" cy="82" r="5.5"/><text class="lbl" x="604" y="86" text-anchor="end">电源完整性</text>
+        <circle class="dot hot" cx="642" cy="41" r="5.5"/><text class="lbl" x="630" y="45" text-anchor="end">弹性棘轮</text>
+      </g>
+    </svg>
+    <p class="fig-cap">
+      琥珀色 = 这个项目里实际造成过停工的五项。位置是按本项目 166 次提交、一个月开发日志的实际耗时判断的，不是通用排名。
+    </p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th style="width:130px">分档</th><th>内容</th><th style="width:180px">怎么处理</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="chip gate">硬门槛</span></td>
+          <td>万用表和基本电路常识（分压、共地、二极管档量通断）；能读能写 Python；三角函数与向量；会调 3D 打印机；<b>愿意做记录</b></td>
+          <td>开工前就该有，边学会拖垮整个节奏</td>
+        </tr>
+        <tr>
+          <td><span class="chip learn">边做边学</span></td>
+          <td>IK / 步态 / 状态机 / I2C 与 ADC / 气动元件 / 标定方法 / 视频量化</td>
+          <td>每个阶段现学现用，有验收判据兜底</td>
+        </tr>
+        <tr>
+          <td><span class="chip copy">可抄现成</span></td>
+          <td>步行平台结构（MakeYourPet 全套 STL + 接线图，MIT）；舵机板固件（Servo2040 + chica）；本仓库的运动学/步态/吸附/爬墙引擎</td>
+          <td>直接用，别重造；省下的时间全花在气路和标定上</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ C ============ -->
+<section id="path">
+  <h2>C · 学习路线：按阶段补课</h2>
+  <p class="sub">
+    这是一条真实的顺序——每一步都是下一步的前提，而且每一步都有一个"过不了就停"的判据。
+    按这个顺序学，知识是被问题拽出来的，不是提前背下来的。
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-no">P0</div>
+      <div>
+        <h4>一条腿动起来</h4>
+        <p>要补：3D 打印与装配、舵机脉宽的概念、Pi 的 SSH/串口、Python 包与测试。这一步先把仿真跑起来，硬件还没到货就能干。</p>
+        <p class="gate-line">判据：<b>三个舵机能被程序摆动，仿真和测试全绿。</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P1</div>
+      <div>
+        <h4>真空回路上台架</h4>
+        <p>要补：气动元件、GPIO 与 MOSFET、ADC 与分压、两点标定、泄漏排查。整个项目的物理基础在这一步定型——三条曲线（抽气时间、泄漏率、释放时间）和斜角容差都在这里测出来。</p>
+        <p class="gate-line">判据：<b>竖直玻璃上单足挂 1.5kg 保持 10 分钟；一个吸-确认-放循环 &lt;2s。</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P2</div>
+      <div>
+        <h4>单腿上墙 — 决策门</h4>
+        <p>要补：单腿 IK 与吸附状态机联调、力学预算的实测校核、承力工装设计。这是整个项目唯一的止损点，通过之前不买第二批器件。</p>
+        <p class="gate-line">判据：<b>50 次吸放成功率 &gt;95%；1.5kg 悬挂 5 分钟 + 1kg 侧拉不脱落。</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P3</div>
+      <div>
+        <h4>整机装配与地面行走</h4>
+        <p>要补：18 路标定的方法学（本项目最费事的工序，占了好几天）、步态参数、跑偏补偿。到这里"机器人学"部分就学完了。</p>
+        <p class="gate-line">判据：<b>直线走 2m、原地转 360°、单腿点到点误差 &lt;5mm。</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P4</div>
+      <div>
+        <h4>整机上墙</h4>
+        <p>要补：事件驱动步态改造、多路传感的实时预算、失效安全与降级、黑匣子日志、以及——上墙后才会暴露的那些力学问题。本项目在这一步卡了四天，靠视频量化才找到根因。</p>
+        <p class="gate-line">判据：<b>竖直玻璃上爬 1m、横移 0.5m、断电悬停 5 分钟不脱落。</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P5</div>
+      <div>
+        <h4>负重、地墙过渡、感知</h4>
+        <p>要补：过渡序列编排与重心管理、视觉与姿态传感。运动学上已验证有解（平身时墙距前髋 80~200mm 都存在可行落足点），难在序列编排。</p>
+        <p class="gate-line">判据：<b>按需排序，不设统一门槛。</b></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ D ============ -->
+<section id="lessons">
+  <h2>D · 书上不会讲的六条</h2>
+  <p class="sub">
+    这些是这个项目自己撞出来的。每一条都花了至少一整天，有几条花了四天。
+  </p>
+
+  <div class="lesson">
+    <h4>一 · 三自由度腿的位置和朝向是绑死的</h4>
+    <p>
+      吸盘要压得密封，轴线得基本垂直墙面；但腿只有三个关节，落点一定，吸盘朝向就定了，没有第四个自由度去补。
+      结果是站高 90mm、支撑相伸展 176mm、步幅 ≤40mm 这三个数不是调出来的舒服值，
+      而是被"波纹吸盘 ±15° 容差"反解出来的硬约束。地面上通用的 reach=130 姿态搬到墙上，吸盘会以 16.7° 斜着贴面，直接吸不住。
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>二 · "常闭阀"标称靠不住，断电保压要靠接法凑出来</h4>
+    <p>
+      买到的三通阀断电时是出气口通大气——照标称接，一断电全机就掉。
+      实际解法是把管路反过来接：断电时吸盘连着停转的隔膜泵，借泵内部的单向阀死锁保真空。
+      顺带还白赚一个好处：静止吸附时线圈不通电，六个阀零耗电。<b>元件的真实行为要自己吹气实测，不能信页面。</b>
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>三 · 抬腿的弹性势能，会在密封破裂那一瞬把整机拽下去</h4>
+    <blockquote>
+      在平地上机器人是可以往前走的，但在玻璃墙上似乎一直是原地踏步……每次它抬起一条腿它就被拽下一些。
+      <cite>项目日志 · 首次上墙当天</cite>
+    </blockquote>
+    <blockquote>
+      如果抬起腿的弹性势能比较大，抬起腿把势能释放掉了，整个身体反而往下移动了一段距离，我发现这个才是导致它一直没法前进的原因。
+      <cite>项目日志 · 四天后点破根因，次日被数据证实</cite>
+    </blockquote>
+    <p>
+      逐帧量化结果：阀开后 0.4s 泄压期身体位移 &lt;0.15mm，密封破裂后 1~2 帧（&lt;100ms）一步坠到位，
+      单腿弹跳 5.8~20.9mm 不等（<b>逐腿差四倍</b>），整机电流每周期棘轮式上升不回落。
+      治法不是慢放气（数据已否决），是放气前先把载荷交出去。
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>四 · 位置控制的执行器，也能做力的重分配</h4>
+    <p>
+      吸住的脚不能滑，所以给它的位置指令改变的其实是力。
+      被抬那条腿的指令沿"上坡"退还 δ 卸载自己，其余五条各沿"下坡"接 δ/5——六腿指令的矢量和为零，身体指令纹丝不动，
+      但那条腿的受力被降到接近零，密封再破也没有能量可放。这个思路在没有力矩接口的舵机上依然成立，是本项目最漂亮的一步。
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>五 · 电源问题伪装成一切别的问题</h4>
+    <p>
+      树莓派红灯不启动、拔光接口仍红灯、万用表量到 0V——排查了一上午 MOSFET 板逐路击穿，
+      最后换了个手机充电器就好了，板子根本没坏。同一周还有一条：舵机板插 USB3.0 蓝口就报欠压，插 USB2.0 黑口就正常。
+      <b>顺序应该反过来：先换电源、先看欠压标志，再怀疑逻辑和器件。</b>
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>六 · 几何真值不是量出来的，是先定义再量的</h4>
+    <p>
+      "小腿多长"这个问题吵了一整天，根子不在测量精度，在三个基准点没定义清楚：膝轴在哪、足端算到哪、吸盘轴是哪条线。
+      最后是靠画三视图对质才收敛的（<code>tibia_len = 123.7</code>，官方值是 134）。
+      而且吸盘轴根本不是"膝到唇心的连线"，两者差 25.2°——这个错误一度让"垂直站立"整个实现是错的。
+      <b>画图对质是化解分歧最有效的手段，比继续争论便宜得多。</b>
+    </p>
+  </div>
+</section>
+
+<!-- ============ E ============ -->
+<section id="cost">
+  <h2>E · 成本、时间与减配路线</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>做到哪一步</th><th style="width:130px">器件成本</th><th>需要的知识</th><th style="width:110px">能玩到什么</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>单腿吸附台架</b>（P0~P2）</td>
+          <td class="num">¥600~950</td>
+          <td>气动 + 电源 + ADC + 单腿 IK + 状态机</td>
+          <td>验证爬墙可行性，拍出"单足挂 3kg"的视频</td>
+        </tr>
+        <tr>
+          <td><b>地面六足</b>（跳过气路）</td>
+          <td class="num">¥1300~2200</td>
+          <td>只需第一、四组：运动学、步态、标定、嵌入式</td>
+          <td>完整的行走机器人，社区路线成熟</td>
+        </tr>
+        <tr>
+          <td><b>整机爬墙</b>（P0~P4 全套）</td>
+          <td class="num">¥2000~2800</td>
+          <td>十三项全要，另加实验量化能力</td>
+          <td>玻璃/瓷砖墙上爬行 + 断电悬停</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    时间上，本项目从单腿验收到首次上墙、再到定位并解决"原地踏步"，是一个月的密集开发（166 次提交）。
+    其中真正花在运动学和步态上的时间不到一周，剩下的全在标定、气路、电源和量化实验上。
+  </p>
+  <p>
+    <b>减配建议</b>：只想学机器人，做地面六足就够，省掉整个第三组的知识和一半的钱；
+    想玩爬墙但不想装整机，单腿台架几百块就能把最有意思的物理问题（密封、剥离、弹性）全碰到。
+    <b>不建议的减配</b>：省掉压力传感器用定时开阀——没有压力反馈，状态机没法判断"吸住了没有"，
+    上墙就是听天由命；省掉黑匣子日志——出事之后什么都查不到。
+  </p>
+</section>
+
+<!-- ============ F ============ -->
+<section id="verdict">
+  <h2>F · 一份诚实的判断</h2>
+
+  <div class="verdict">
+    <h4>好消息</h4>
+    <p>
+      看起来最"高门槛"的那部分——运动学、步态、机器人控制——恰恰是最标准化、最容易抄的。
+      腿的逆解 52 行，步态引擎 102 行，结构件有 MIT 协议的完整开源方案，舵机板有现成固件。
+      一个会写 Python、懂三角函数的人，两周内可以让一台六足在地上走起来。
+    </p>
+
+    <h4>坏消息</h4>
+    <p>
+      决定这台机器能不能上墙的，全是"不像机器人学"的东西：一个接头没插到底，机器人就掉；
+      电源余量差一点，半空中重启；标定基准定义错了，"垂直站立"实现出来是斜的；
+      吸盘的弹性储能没人想到，四天调参毫无进展。这些没有教科书，只能靠实测、记录和对质。
+    </p>
+
+    <h4>如果只能记住一条</h4>
+    <p>
+      这个项目里三次真正的破局——小腿长度纠偏、欠压规律定位、弹性势能根因——
+      <b>都不是靠更聪明的分析得到的，是靠拿实物照片、万用表读数、逐帧视频，把一个听起来合理的错误假设顶回去。</b>
+      愿不愿意做这件事，比会不会解逆运动学更能决定你能不能把它做完。
+    </p>
+
+    <p><span class="flag">前置自检</span>
+      如果"拿万用表逐点报数"和"拿卡尺量三视图画图对质"这两件事你都做不下去，
+      这台机器大概率会停在半路——不是因为不会，是因为不查。
+    </p>
+  </div>
+</section>
+
+<footer>
+  依据仓库 <code>spider</code> 于 2026-08-21 的状态整理：<code>docs/</code> 十四份设计与操作文档、
+  <code>software/</code> 11.8k 行 Python 与 81 项测试、<code>html/</code> 两份实验量化报告、166 次提交。
+  当前进度：整机已上墙，零力交接已实现，实机 A/B 实验待跑。
+</footer>
+
+</main>
+</div>
+</div>

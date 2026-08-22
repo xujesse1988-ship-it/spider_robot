@@ -1,0 +1,912 @@
+<title>舵机手册</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+
+<style>
+:root{
+  --paper:#F4F2EF;
+  --surface:#FFFFFF;
+  --surface-2:#EDEAE5;
+  --ink:#1B1815;
+  --ink-mid:#4A443D;
+  --ink-soft:#7A7269;
+  --rule:#DCD7D0;
+  --rule-soft:#E8E4DE;
+  --accent:#C25610;
+  --accent-soft:#F8E8DA;
+  --steel:#35566B;
+  --steel-soft:#E1E9EE;
+  --shadow:0 1px 2px rgba(27,24,21,.05),0 10px 26px -18px rgba(27,24,21,.35);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#141210;
+    --surface:#1D1A16;
+    --surface-2:#26211A;
+    --ink:#EDE9E3;
+    --ink-mid:#BDB5AA;
+    --ink-soft:#8C8478;
+    --rule:#332D25;
+    --rule-soft:#262019;
+    --accent:#F08A3C;
+    --accent-soft:#33210F;
+    --steel:#84AEC7;
+    --steel-soft:#18262D;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 32px -20px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141210;
+  --surface:#1D1A16;
+  --surface-2:#26211A;
+  --ink:#EDE9E3;
+  --ink-mid:#BDB5AA;
+  --ink-soft:#8C8478;
+  --rule:#332D25;
+  --rule-soft:#262019;
+  --accent:#F08A3C;
+  --accent-soft:#33210F;
+  --steel:#84AEC7;
+  --steel-soft:#18262D;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 32px -20px rgba(0,0,0,.9);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:'Barlow','Noto Sans SC',system-ui,-apple-system,sans-serif;
+  font-size:16.5px;line-height:1.8;-webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:900px;margin:0 auto;padding:0 24px 100px}
+.mono{font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+
+/* header */
+header.top{padding:56px 0 30px;border-bottom:2px solid var(--ink);margin-bottom:12px}
+.kicker{
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--accent);margin:0 0 16px;
+}
+h1{
+  font-size:clamp(34px,6vw,54px);line-height:1.06;font-weight:700;
+  letter-spacing:-.015em;margin:0 0 18px;text-wrap:balance;
+}
+.lede{font-size:18px;color:var(--ink-mid);max-width:60ch;margin:0}
+.lede b{color:var(--ink);font-weight:600}
+.idcard{
+  display:flex;flex-wrap:wrap;gap:0;margin:28px 0 0;
+  border:1px solid var(--rule);background:var(--surface);border-radius:2px;overflow:hidden;
+}
+.idcard div{flex:1 1 120px;padding:11px 15px;border-right:1px solid var(--rule-soft)}
+.idcard div:last-child{border-right:0}
+.idcard b{
+  display:block;font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:500;
+  font-variant-numeric:tabular-nums;line-height:1.4;
+}
+.idcard span{font-size:11.5px;color:var(--ink-soft);letter-spacing:.03em}
+
+/* sections */
+section{scroll-margin-top:20px}
+h2{
+  font-size:15px;font-weight:600;letter-spacing:.02em;margin:66px 0 20px;
+  display:flex;align-items:center;gap:14px;text-transform:none;
+}
+h2 .n{
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;
+  color:var(--paper);background:var(--accent);
+  width:24px;height:24px;border-radius:2px;
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+}
+h2 .t{font-size:23px;font-weight:700;letter-spacing:-.01em}
+h2::after{content:"";flex:1 1 auto;height:1px;background:var(--rule)}
+h3{font-size:17.5px;font-weight:600;margin:34px 0 8px}
+p{max-width:64ch;margin:0 0 16px}
+ul,ol{max-width:64ch;padding-left:22px;margin:0 0 16px}
+li{margin-bottom:7px}
+code{
+  font-family:'JetBrains Mono',monospace;font-size:.86em;
+  background:var(--surface-2);padding:1px 5px;border-radius:2px;color:var(--ink-mid);
+}
+strong{font-weight:600}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* measured callout */
+.measured{
+  border:1px solid var(--rule);border-left:3px solid var(--accent);
+  background:var(--surface);border-radius:2px;padding:16px 20px;margin:22px 0;
+  box-shadow:var(--shadow);
+}
+.measured .tag{
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent);display:block;margin-bottom:6px;
+}
+.measured p{margin:0;font-size:15px;color:var(--ink-mid);max-width:none}
+.measured p + p{margin-top:9px}
+
+.warn{
+  border:1px solid var(--steel);background:var(--steel-soft);
+  border-radius:2px;padding:14px 18px;margin:20px 0;
+}
+.warn p{margin:0;font-size:15px;color:var(--ink-mid);max-width:none}
+.warn b{color:var(--ink)}
+
+/* figures */
+.fig{
+  margin:26px 0 10px;border:1px solid var(--rule);background:var(--surface);
+  border-radius:2px;padding:18px 12px 10px;overflow-x:auto;box-shadow:var(--shadow);
+}
+.fig svg{display:block;margin:0 auto;min-width:560px}
+.cap{font-size:13px;color:var(--ink-soft);margin:12px 6px 2px;max-width:none;line-height:1.6}
+
+.blk{fill:var(--surface-2);stroke:var(--rule);stroke-width:1.2}
+.blk-a{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.2}
+.ln{stroke:var(--ink-soft);stroke-width:1.4;fill:none}
+.ln-a{stroke:var(--accent);stroke-width:1.8;fill:none}
+.ln-d{stroke:var(--steel);stroke-width:1.6;fill:none;stroke-dasharray:5 4}
+.tx{fill:var(--ink);font-family:'Noto Sans SC','Barlow',sans-serif;font-size:13px}
+.tx-s{fill:var(--ink-soft);font-family:'JetBrains Mono',monospace;font-size:11px}
+.tx-a{fill:var(--accent);font-family:'Noto Sans SC','Barlow',sans-serif;font-size:12.5px;font-weight:500}
+.tx-b{fill:var(--steel);font-family:'Noto Sans SC','Barlow',sans-serif;font-size:12.5px;font-weight:500}
+
+/* simulator */
+.sim{
+  border:1px solid var(--rule);background:var(--surface);border-radius:2px;
+  padding:20px;margin:26px 0 10px;box-shadow:var(--shadow);
+}
+.sim-top{display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:center}
+.sim-readout{
+  display:flex;gap:0;flex-wrap:wrap;margin-top:18px;
+  border:1px solid var(--rule);border-radius:2px;overflow:hidden;
+}
+.sim-readout div{flex:1 1 110px;padding:9px 13px;border-right:1px solid var(--rule-soft)}
+.sim-readout div:last-child{border-right:0}
+.sim-readout b{
+  display:block;font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:500;
+  font-variant-numeric:tabular-nums;color:var(--accent);
+}
+.sim-readout span{font-size:11px;color:var(--ink-soft);letter-spacing:.03em}
+.sim-ctl{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+.sim-ctl label{
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;
+  letter-spacing:.08em;color:var(--ink-soft);
+}
+input[type=range]{width:100%;accent-color:var(--accent);height:24px}
+.sim-toggle{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--ink-mid)}
+.sim-toggle input{accent-color:var(--steel);width:16px;height:16px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.presets button{
+  font-family:'JetBrains Mono',monospace;font-size:12px;
+  background:var(--surface-2);color:var(--ink-mid);
+  border:1px solid var(--rule);border-radius:2px;padding:4px 10px;cursor:pointer;
+}
+.presets button:hover{border-color:var(--accent);color:var(--accent)}
+
+/* tables */
+.tw{overflow-x:auto;margin:22px 0;border:1px solid var(--rule);border-radius:2px}
+table{border-collapse:collapse;width:100%;min-width:560px;background:var(--surface)}
+th,td{text-align:left;padding:10px 14px;font-size:14.5px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{
+  font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-soft);font-weight:500;
+  background:var(--surface-2);border-bottom:1px solid var(--rule);
+}
+tbody tr:last-child td{border-bottom:0}
+td.k{font-weight:600;white-space:nowrap}
+td.num{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* checklist */
+.check{display:grid;gap:12px;grid-template-columns:1fr;margin-top:20px}
+@media(min-width:680px){.check{grid-template-columns:1fr 1fr 1fr}}
+.check div{
+  background:var(--surface);border:1px solid var(--rule);border-top:3px solid var(--accent);
+  border-radius:2px;padding:14px 16px;
+}
+.check h4{
+  margin:0 0 8px;font-size:14px;font-weight:700;letter-spacing:.02em;
+}
+.check ul{margin:0;padding-left:17px;max-width:none}
+.check li{font-size:13.5px;color:var(--ink-mid);line-height:1.6;margin-bottom:6px}
+
+footer{margin-top:76px;padding-top:20px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-soft)}
+footer p{max-width:none;margin:0 0 6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">spider · 爬墙六足 · 零件笔记</p>
+  <h1>舵机手册</h1>
+  <p class="lede">
+    这台机器有 18 个舵机，是全机数量最多、最贵、也最容易被误解的零件。
+    它不是"电机"——你不给它电压，你给它一个<b>角度</b>；它内部自己闭环转过去。
+    但这个闭环<b>关在壳子里</b>，外面拿不到位置：程序永远只知道"指令发出去了"，
+    不知道关节真的转到没有。爬墙时踩过的坑，大半从这一句话长出来。
+  </p>
+  <div class="idcard">
+    <div><b>DS3235</b><span>本项目选型</span></div>
+    <div><b>35 kg·cm</b><span>标称堵转扭矩</span></div>
+    <div><b>180°</b><span>控制角（非 270°）</span></div>
+    <div><b>7.4 V</b><span>2S 电池直供</span></div>
+    <div><b>25 齿</b><span>输出轴花键</span></div>
+    <div><b>× 18</b><span>六腿 × 三关节</span></div>
+  </div>
+</header>
+
+<!-- ===== 1 ===== -->
+<section id="what">
+  <h2><span class="n">1</span><span class="t">壳子里面是什么</span></h2>
+
+  <p>
+    一个标准舵机 = <strong>小直流电机 + 减速齿轮组 + 位置电位器 + 一块控制板</strong>，塞进一个小盒子，
+    引出三根线：电源正、地、信号。控制板不断比较"信号线要求的角度"和"电位器测到的实际角度"，
+    差多少就驱动电机往哪边转，转到差不多就停——<strong>这是一个完整的位置闭环，只是它在盒子里面</strong>。
+  </p>
+
+  <div class="fig">
+    <svg viewBox="0 0 620 300" role="img" aria-labelledby="t1 d1">
+      <title id="t1">舵机内部结构与信号流向</title>
+      <desc id="d1">信号线只把目标角度送进控制板；电位器的实际角度反馈只在壳内闭环，不会送回外部控制器。</desc>
+
+      <!-- case -->
+      <rect x="86" y="46" width="452" height="196" rx="6" class="blk"/>
+      <text class="tx-s" x="96" y="66">SERVO CASE</text>
+
+      <!-- wires in -->
+      <line class="ln-a" x1="8" y1="98" x2="86" y2="98"/>
+      <text class="tx-a" x="10" y="90">信号（脉宽）</text>
+      <line class="ln" x1="8" y1="132" x2="86" y2="132"/>
+      <text class="tx-s" x="10" y="150">电源 + / −</text>
+
+      <!-- board -->
+      <rect x="112" y="80" width="96" height="62" rx="3" class="blk-a"/>
+      <text class="tx" x="128" y="106">控制板</text>
+      <text class="tx-s" x="122" y="126">比较 &amp; 驱动</text>
+
+      <!-- motor -->
+      <rect x="234" y="80" width="86" height="62" rx="3" class="blk"/>
+      <text class="tx" x="252" y="107">直流电机</text>
+      <text class="tx-s" x="256" y="126">高转速</text>
+
+      <!-- gears -->
+      <rect x="346" y="80" width="96" height="62" rx="3" class="blk"/>
+      <text class="tx" x="360" y="107">减速齿轮</text>
+      <text class="tx-s" x="358" y="126">~1:270 金属</text>
+
+      <!-- output shaft -->
+      <circle cx="496" cy="111" r="27" class="blk-a"/>
+      <circle cx="496" cy="111" r="9" fill="none" stroke="currentColor" stroke-width="1.2" style="color:var(--accent)"/>
+      <text class="tx" x="470" y="164">输出轴</text>
+      <text class="tx-s" x="466" y="181">25 齿花键</text>
+
+      <!-- pot -->
+      <rect x="346" y="182" width="96" height="44" rx="3" class="blk"/>
+      <text class="tx" x="366" y="209">电位器</text>
+
+      <!-- flow arrows -->
+      <line class="ln" x1="208" y1="111" x2="228" y2="111"/>
+      <polygon points="234,111 226,107 226,115" fill="currentColor" style="color:var(--ink-soft)"/>
+      <line class="ln" x1="320" y1="111" x2="340" y2="111"/>
+      <polygon points="346,111 338,107 338,115" fill="currentColor" style="color:var(--ink-soft)"/>
+      <line class="ln" x1="442" y1="111" x2="463" y2="111"/>
+      <polygon points="469,111 461,107 461,115" fill="currentColor" style="color:var(--ink-soft)"/>
+      <line class="ln" x1="496" y1="138" x2="496" y2="204"/>
+      <line class="ln" x1="496" y1="204" x2="442" y2="204"/>
+
+      <!-- feedback -->
+      <path class="ln-d" d="M346 204 L160 204 L160 142"/>
+      <polygon points="160,136 156,144 164,144" fill="currentColor" style="color:var(--steel)"/>
+      <text class="tx-b" x="196" y="224">壳内反馈：实际角度只回到控制板</text>
+
+      <!-- blocked readback -->
+      <line class="ln-d" x1="86" y1="262" x2="538" y2="262" style="stroke:var(--ink-soft);opacity:.45"/>
+      <text class="tx-s" x="86" y="284" style="fill:var(--ink-soft)">外部控制器拿不到这个角度 —— 对树莓派来说，整条运动链是开环的</text>
+      <g style="color:var(--accent)">
+        <line x1="300" y1="254" x2="316" y2="270" stroke="currentColor" stroke-width="2"/>
+        <line x1="316" y1="254" x2="300" y2="270" stroke="currentColor" stroke-width="2"/>
+      </g>
+    </svg>
+    <p class="cap">
+      橙色是命令流，蓝色虚线是反馈流。<strong>反馈流不出壳</strong>——这一张图解释了本项目后面一半的设计取舍。
+    </p>
+  </div>
+
+  <h3>和别的"会转的东西"区别在哪</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:120px">类型</th><th>你给它什么</th><th>它给你什么</th><th style="width:150px">适合做什么</th></tr></thead>
+      <tbody>
+        <tr><td class="k">直流电机</td><td>电压 / 电流</td><td>转速，位置得自己加编码器</td><td>轮子、泵、风扇</td></tr>
+        <tr><td class="k">步进电机</td><td>一步一步的脉冲</td><td>开环角度，丢步不告诉你</td><td>3D 打印机、机床</td></tr>
+        <tr><td class="k">PWM 舵机</td><td>目标角度（脉宽）</td><td>只有转动，没有任何回读</td><td>关节、舵面、这台机器</td></tr>
+        <tr><td class="k">总线舵机</td><td>目标角度 + 速度 + 力矩上限</td><td><strong>能读回位置、电流、温度</strong></td><td>要力控或诊断的关节</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    本项目用的是第三种。舵机自己内部还分好几个大类（模拟 / 数字 / 总线 / 关节模组，
+    以及限位、连续旋转、多圈三种转法），放在<strong>第 3 节</strong>展开；
+    换成别的类型对这台机器意味着什么，放在<strong>第 10 节</strong>算账。
+  </p>
+</section>
+
+<!-- ===== 2 ===== -->
+<section id="pwm">
+  <h2><span class="n">2</span><span class="t">它怎么听懂"角度"</span></h2>
+
+  <p>
+    信号线上是一串方波：<strong>每 20 毫秒来一个高电平脉冲</strong>，脉冲多宽，舵盘停在哪。
+    行业惯例 1500µs 是中位，1000/2000µs 是常见的两端；本项目把范围放宽到
+    <code>500~2500µs</code> 用满行程，实测斜率约 <strong>10µs = 1°</strong>。
+    脉冲之间的 20ms 空档不代表"松开"——只要脉冲不断，舵机就一直用力顶在那个角度上。
+  </p>
+
+  <div class="sim">
+    <div class="sim-top">
+      <svg id="pulse" viewBox="0 0 340 130" width="340" height="130" role="img" aria-label="脉冲波形示意">
+        <line class="ln" x1="16" y1="96" x2="326" y2="96" style="stroke:var(--rule)"/>
+        <path id="wave" class="ln-a" d=""/>
+        <line id="mark1" class="ln-d" x1="0" y1="26" x2="0" y2="104" style="stroke:var(--ink-soft);opacity:.5;stroke-dasharray:3 3"/>
+        <line id="mark2" class="ln-d" x1="0" y1="26" x2="0" y2="104" style="stroke:var(--ink-soft);opacity:.5;stroke-dasharray:3 3"/>
+        <text id="wlab" class="tx-a" x="20" y="20">1500 µs</text>
+        <text class="tx-s" x="16" y="120">20 ms 周期 · 脉宽已放大 4× 便于观察</text>
+      </svg>
+
+      <svg id="horn" viewBox="0 0 190 190" width="180" height="180" role="img" aria-label="舵盘角度示意">
+        <circle cx="95" cy="95" r="72" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+        <line x1="95" y1="95" x2="95" y2="17" stroke="var(--rule)" stroke-width="1"/>
+        <text class="tx-s" x="82" y="12">0°</text>
+        <text class="tx-s" x="2" y="99">−90</text>
+        <text class="tx-s" x="162" y="99">+90</text>
+        <g id="ghost" style="display:none">
+          <line id="ghostArm" x1="95" y1="95" x2="95" y2="30"
+                stroke="var(--steel)" stroke-width="4" stroke-linecap="round" stroke-dasharray="5 4"/>
+        </g>
+        <line id="arm" x1="95" y1="95" x2="95" y2="30"
+              stroke="var(--accent)" stroke-width="6" stroke-linecap="round"/>
+        <circle cx="95" cy="95" r="11" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/>
+      </svg>
+    </div>
+
+    <div class="sim-readout">
+      <div><b id="oUs">1500</b><span>脉宽 µs</span></div>
+      <div><b id="oServo">0.0°</b><span>舵机自身角度</span></div>
+      <div><b id="oJoint">47.8°</b><span>L2 大腿关节角</span></div>
+      <div><b id="oNote">中位</b><span>状态</span></div>
+    </div>
+
+    <div class="sim-ctl">
+      <label for="slider">拖动改变脉宽 · 500 ~ 2500 µs</label>
+      <input id="slider" type="range" min="500" max="2500" step="1" value="1500" aria-describedby="oUs">
+      <div class="presets">
+        <button type="button" data-us="1953">舵机 −45°</button>
+        <button type="button" data-us="1500">中位 1500</button>
+        <button type="button" data-us="1739">站姿工作点</button>
+        <button type="button" data-us="1048">舵机 +45°</button>
+      </div>
+      <label class="sim-toggle">
+        <input id="load" type="checkbox">
+        <span>叠加"带载让位"（示意）——负载把舵盘往受力方向拽开几度，指令位置和实际位置就此分家</span>
+      </label>
+    </div>
+  </div>
+  <p class="cap">
+    关节角一栏用的是 L2 大腿舵机（通道 10）的实测标定：<code>attach = 47.81°</code>（中位时关节实际就在 47.8°，
+    不是 0°）、舵机自身 <code>∓45° = 1952.5 / 1047.5 µs</code>。
+    <strong>这一路脉宽变大关节角反而变小</strong>——左右腿是镜像装配，方向差不改公式，直接收进标定表的两个端点里。
+    换一个舵机，同一个脉宽对应的关节角就完全不同，这就是 18 路必须逐个标定的原因。
+    另外滑块给的 500~2500µs 是软件软限位，<strong>真实机械行程比这窄</strong>，超出会撞结构——代码里另有关节角包络检查兜着。
+  </p>
+
+  <h3>数字舵机和模拟舵机</h3>
+  <p>
+    差别不在信号（都吃同样的脉宽），在内部：模拟舵机大约按 50Hz 的节奏驱动电机，死区大、抖、保持力弱；
+    数字舵机内部以几百 Hz 驱动，<strong>死区小、响应快、保持扭矩明显更高</strong>，代价是更费电、更热。
+    做关节必须用数字舵机——爬墙时每条支撑腿都在持续扛剪切力，靠的就是这份保持扭矩。
+  </p>
+</section>
+
+<!-- ===== 3 ===== -->
+<section id="kinds">
+  <h2><span class="n">3</span><span class="t">舵机的几个大类</span></h2>
+
+  <h3>先分清两个撞名的"伺服"</h3>
+  <p>
+    中文里"伺服电机"和"舵机"经常混着说，但搜出来是两个世界：
+  </p>
+  <ul>
+    <li><strong>RC 舵机</strong>（本页说的这种）：电机、齿轮、反馈、驱动全塞进一个小盒子，引出三根线，几十到几百块。</li>
+    <li><strong>工业伺服</strong>：无刷电机 + 编码器 + <strong>一个单独的驱动器</strong>，闭环在驱动器里，接口是脉冲串、EtherCAT 或 CANopen，一套几千起，体积重量都不是 DIY 机器人扛得动的。</li>
+  </ul>
+  <p>找资料时用"舵机"或 <code>RC servo</code>，别用"伺服电机"——会跑到完全不相干的行业里去。</p>
+
+  <h3>按接口分：四代，分水岭在"能不能回读"</h3>
+  <div class="tw">
+    <table>
+      <thead>
+        <tr><th style="width:120px">类型</th><th style="width:150px">怎么下命令</th><th>能读回什么</th><th style="width:130px">代价</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="k">模拟舵机</td>
+          <td>PWM 脉宽</td>
+          <td>什么都读不到；内部约 50Hz 驱动，死区大、会抖、保持力弱</td>
+          <td>最便宜</td>
+        </tr>
+        <tr>
+          <td class="k">数字舵机<br><span class="mono" style="font-size:11px;color:var(--accent)">本项目</span></td>
+          <td>PWM 脉宽</td>
+          <td>什么都读不到；但内部几百 Hz 驱动，死区小、保持扭矩明显更高</td>
+          <td>性价比最高</td>
+        </tr>
+        <tr>
+          <td class="k">总线舵机</td>
+          <td>半双工串口，一根线菊花链串起全部关节</td>
+          <td><strong>位置、电流、温度、电压都能读回；还能设力矩上限和多圈模式</strong></td>
+          <td>贵一档，驱动层要自己写</td>
+        </tr>
+        <tr>
+          <td class="k">关节模组<br><span class="mono" style="font-size:11px;color:var(--ink-soft)">FOC</span></td>
+          <td>CAN 总线，可直接发<strong>力矩</strong>指令</td>
+          <td>位置、速度、力矩全闭环，能做真正的柔顺控制</td>
+          <td>贵一个数量级，重得多</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    前两代你只能"把指令发出去然后祈祷"，从第三代起才有真正的反馈。
+    这条分界线决定了控制软件能写成什么样——本页第 6 节那五条坑，有四条是被这条线卡住的。
+  </p>
+  <p>
+    各家型号更新很快，记类别比记型号有用。举几个常见的当搜索入口：
+    模拟档有 SG90、MG996R 这一族；数字档有 DS3218 / DS3235 / ZOSKAY 一族，高端航模是 Savox、Futaba；
+    总线舵机有 Feetech 的 SCS / STS 系列、Hiwonder LX-16A，以及生态最全但也最贵的 Robotis Dynamixel；
+    关节模组有宇树 GO-M8010、达妙 DM-J4310、MyActuator RMD-X 这些四足机器狗用的型号。
+  </p>
+
+  <h3>按转动方式分：三种</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:150px">类型</th><th>行为</th><th style="width:200px">能不能当关节用</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">限位舵机</td>
+          <td>180° / 270° / 300° 三档常见。脉宽 = <strong>绝对角度</strong>，断电再上电还是那个角</td>
+          <td>能，本项目用的就是这种</td>
+        </tr>
+        <tr>
+          <td class="k">连续旋转舵机</td>
+          <td>拆掉限位块、电位器焊死在中点后，脉宽的含义变成<strong>转速和方向</strong>，1500µs = 停</td>
+          <td><strong>不能。</strong>它没有位置概念了，本质是个带减速箱的调速电机——做轮子可以</td>
+        </tr>
+        <tr>
+          <td class="k">多圈 / 绞盘舵机</td>
+          <td>能转好几圈并记住圈数（总线舵机的一个模式；航模里的绞盘舵机也算）</td>
+          <td>能，但腿关节用不上；适合收放绳索、丝杠</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>按用料分：决定寿命和价格的四个部件</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:110px">部件</th><th style="width:150px">便宜的做法</th><th style="width:170px">贵的做法</th><th>差别落在哪</th></tr></thead>
+      <tbody>
+        <tr><td class="k">电机</td><td>有核有刷</td><td>无核（coreless）→ 无刷</td><td>响应速度、发热、寿命</td></tr>
+        <tr><td class="k">齿轮</td><td>塑料齿</td><td>混合齿 → 全金属 → 钛合金</td><td><strong>堵转时会不会打齿</strong>——爬墙场景没有商量余地</td></tr>
+        <tr><td class="k">反馈</td><td>电位器</td><td>磁编码器</td><td>电位器是接触式，会磨损、有噪声，是很多舵机真正的寿命瓶颈</td></tr>
+        <tr><td class="k">轴承</td><td>无轴承 / 单轴承</td><td>双轴承</td><td>输出轴侧向受力时晃不晃</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    爬墙的腿正好是<strong>侧向受力 + 长期接近堵转</strong>这两种最伤舵机的工况叠在一起，
+    所以全金属齿和双轴承在这个项目里是硬要求，不是加分项。
+  </p>
+
+  <h3>按尺寸分：三档</h3>
+  <ul>
+    <li><strong>微型（9g 级）</strong>：SG90 那种，几块钱一个，塑料齿，扭矩 1~2kg·cm。做摄像头云台、玩具够用。</li>
+    <li><strong>标准（约 40×20×40，55~65g）</strong>：本项目这一档，扭矩 15~40kg·cm，机器人关节的主力尺寸，
+      结构件生态也全是围着这个尺寸做的。</li>
+    <li><strong>大扭矩（1/5 车用）</strong>：60kg·cm 往上，一个就一两百克。力气够了，但重量对爬墙是致命的。</li>
+  </ul>
+</section>
+
+<!-- ===== 4 ===== -->
+<section id="spec">
+  <h2><span class="n">4</span><span class="t">参数怎么读，怎么挑</span></h2>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:130px">参数</th><th>真实含义</th><th style="width:220px">本项目怎么定的</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">扭矩 kg·cm</td>
+          <td>力臂 1cm 处能提起多少 kg，是<strong>堵转值</strong>不是工作值；而且和电压绑定，降压用扭矩按比例缩水</td>
+          <td>35kg·cm 档，<strong>按 50% 降额</strong>使用</td>
+        </tr>
+        <tr>
+          <td class="k">速度 sec/60°</td>
+          <td>空载转 60° 要几秒。带载会明显变慢</td>
+          <td>不是瓶颈——爬墙步态本来就要慢</td>
+        </tr>
+        <tr>
+          <td class="k">控制角</td>
+          <td>同样 500~2500µs 铺在 180° 还是 270° 上。铺 270° 意味着<strong>每度对应的脉宽少三分之一，分辨率变差</strong></td>
+          <td>必须买 <strong>180° 版</strong>，下单时问清楚</td>
+        </tr>
+        <tr>
+          <td class="k">工作电压</td>
+          <td>同型号常有 6.8V 上限版和 7.4V 版两种</td>
+          <td>2S 电池直供 7.4V，<strong>必须确认标签含 7.4V</strong></td>
+        </tr>
+        <tr>
+          <td class="k">齿轮材质</td>
+          <td>塑料齿便宜但堵转就打齿；金属齿贵、重、稍有齿隙</td>
+          <td>金属齿，没有商量余地</td>
+        </tr>
+        <tr>
+          <td class="k">花键齿数</td>
+          <td>输出轴的齿数决定舵盘能装在哪些角度上</td>
+          <td>25 齿 → <strong>每格 14.4°</strong>，见第 7 节</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="warn">
+    <p>
+      <b>不要买杂牌最低价。</b>爬墙时舵机接近堵转是常态，齿轮打齿的后果不是"这条腿不好使"，
+      是整机从墙上掉下来。同价位宁可少买两个备件，也要买有口碑的牌子。
+    </p>
+  </div>
+</section>
+
+<!-- ===== 5 ===== -->
+<section id="torque">
+  <h2><span class="n">5</span><span class="t">力矩够不够：只能靠电流看</span></h2>
+
+  <p>
+    舵机不告诉你它在使多大劲，但<strong>电流会</strong>。这是本项目唯一能"看见力"的窗口，
+    所以驱动板的电流读数从头到尾都在状态行里显示。
+  </p>
+
+  <div class="measured">
+    <span class="tag">本项目实测</span>
+    <p><strong>单腿压紧峰值 0.73A</strong>；吸附后挂重保持期 <strong>持续 0.61A</strong> 扛载。</p>
+    <p>整机行走 <strong>持续 2~4A、瞬态约 12A</strong>——这个数决定了舵机总电源开关要选 ≥15A 的继电器。</p>
+    <p>墙上五足支撑是<strong>持续</strong>承剪切载荷，也就是持续 3A 级电流 + 持续发热。这是常态，不是异常。</p>
+  </div>
+
+  <h3>三条用电流做的判据</h3>
+  <ul>
+    <li><strong>吸附后总电流要回落</strong>到该姿态的基线。不回落 = 这条腿的预压量没吃干净，舵机正在和真空对抗——白烧电、白发热。</li>
+    <li><strong>电流逐周期爬升不回落</strong> = 内应力在累积。08-20 实测整机从 0.73A 一路爬到约 1.9A，这是"弹性棘轮"的电学证据。</li>
+    <li><strong>压入时电流陡增</strong>但还没到预期高度 = 撞到东西了，立刻停。</li>
+  </ul>
+</section>
+
+<!-- ===== 6 ===== -->
+<section id="honest">
+  <h2><span class="n">6</span><span class="t">舵机不老实：五种带载行为</span></h2>
+
+  <p>
+    以下五条在数据手册上一条都找不到，但每一条都在这个项目里造成过实际后果。
+    它们的共同根源就是第 1 节那张图：<strong>你发的是位置，收到的是"大概那个位置"，而且你无从知道差多少。</strong>
+  </p>
+
+  <h3>一 · 让位角：带载时它停不到指令位置</h3>
+  <p>
+    电机的保持力矩是有限的，外力越大，实际停的角度离指令越远——像一根很硬的弹簧，不是刚体。
+    本项目里这一条最贵的一次表现：足端预压行程按几何算是 13mm，实机发下去只压进几毫米，
+    大半被"舵机带载位置误差 + 齿隙"吃掉了，最后默认值改成 <code>press_delta_mm = 18</code>，
+    用<strong>指令超程换真实压缩</strong>。
+  </p>
+
+  <h3>二 · 齿隙：反向时先空转一点</h3>
+  <p>金属齿轮组必然有间隙。同一个目标角，从上面过去和从下面过去，实际停的位置不一样。这让"回到原位"这件事天然不精确。</p>
+
+  <h3>三 · 扭矩饱和：储能有上限</h3>
+  <p>
+    实测单腿抬起时的弹性回弹最大约 21mm 就封顶了，再抬也不会更多——因为舵机扭矩到顶，存不进更多能量。
+    这条既是坏消息（说明腿链一直在被压弯），也是好消息（棘轮效应有天花板，机器不会无限往下掉）。
+  </p>
+
+  <h3>四 · 它是弹簧，会存能量</h3>
+  <p>
+    舵机让位角 + 吸盘的橡胶变形 = 一根串联弹簧。抬腿前这根弹簧一直在存能，
+    <strong>吸盘密封破裂的一瞬间一次性释放</strong>——实测 83% 的整机下滑就发生在那 1~2 帧里。
+    解法不是让舵机更硬，是放气前先把这条腿的载荷交给其他五条，让弹簧里没有能量可放。
+  </p>
+
+  <h3>五 · 发热与降额</h3>
+  <p>
+    持续扛载的舵机会烫。判断有没有超出安全区的土办法：加深 3mm 预压后<strong>电流增幅仍平缓</strong>、
+    没有陡增、没有异响、摸着不烫手，就认为有余量；陡增就是已经贴近堵转区了。
+  </p>
+
+  <div class="warn">
+    <p>
+      <b>一条铁律：使能状态下永远不许用手掰关节。</b>
+      35kg·cm 的堵转力矩足够打坏齿轮，而且掰出来的角度是假的——松手它就自己转回指令位置。
+      要调整姿势，先断舵机电。
+    </p>
+  </div>
+</section>
+
+<!-- ===== 7 ===== -->
+<section id="mount">
+  <h2><span class="n">7</span><span class="t">装配与标定：装不准是常态</span></h2>
+
+  <p>
+    舵盘是花键插在输出轴上的。本项目的舵机是 <strong>25 齿</strong>花键，
+    也就是 <code>360 ÷ 25 = 14.4°</code> 一格——舵盘只能插在这些离散角度上，
+    <strong>最坏情况会差 ±7.2°</strong>。所以官方给的安装角（−8° / 35° / 68°）是设计意图，不是公差要求，
+    对不准是正常的，不用拆了重装。
+  </p>
+
+  <p>正确做法是三步：</p>
+  <ol>
+    <li><strong>先回中再装舵盘</strong>：上电让全部舵机停在 1500µs，保持通电状态把舵盘按最接近的一格插上（<code>servo_center.py</code>）。</li>
+    <li><strong>实测两个点</strong>：把关节摆到 −45° 和 +45°，记下对应脉宽。</li>
+    <li><strong>把残差写进标定表</strong>：<code>attach_deg</code> 记"舵机中位时关节实际是几度"，方向反了改 <code>sign</code>。18 个舵机各一份。</li>
+  </ol>
+
+  <div class="measured">
+    <span class="tag">这一步有多费事</span>
+    <p>
+      18 路标定是整个装配阶段最耗时的工序，本项目花了好几天，还专门写了一个最小二乘拟合脚本
+      （<code>calib_fit.py</code>）：每个舵机测 2~4 个点，拟合出斜率和零位，看残差判合格。
+      标定表的完整算法和一个可复现的算例，在<strong>《从走路指令到 18 路舵机》</strong>那份图解里。
+    </p>
+  </div>
+
+  <h3>一个值得认识的故障：舵盘滑丝</h3>
+  <p>
+    症状是"这个关节的回中角度自己变了"。原因是舵盘花键孔被磨圆，和输出轴打滑。
+    换舵盘即可，但换完必须重标定这一路——<code>attach_deg</code> 已经不是原来的值了。
+  </p>
+</section>
+
+<!-- ===== 8 ===== -->
+<section id="power">
+  <h2><span class="n">8</span><span class="t">供电、上电顺序与断电行为</span></h2>
+
+  <h3>绝不和控制器共用电源轨</h3>
+  <p>
+    18 个舵机同时动，瞬态能拉到 12A，电压会明显往下掉。
+    如果树莓派和舵机吃同一路电，<strong>舵机堵转的一瞬间树莓派就重启</strong>——在墙上重启等于掉下来。
+    本项目的做法：2S 电池直供舵机，另接一路独立的 5V/5A 降压给树莓派，两路只共地。
+  </p>
+
+  <h3>上电顺序：先发脉宽，再使能</h3>
+  <p>
+    舵机上电瞬间会直接冲向信号线要求的位置。所以正确顺序是
+    <strong>先把 18 路目标脉宽发好，再合舵机电</strong>——固件保证使能瞬间直接到位，不乱跳。
+    整机上电还要多一步：先发蹲姿（离断电趴姿最近，跳变最小），再缓慢过渡到站姿。
+  </p>
+
+  <h3>断电 = 趴下，这是特性不是故障</h3>
+  <p>
+    舵机没电就没有保持力，机器人会瘫成一堆。本项目把这一点当成<strong>急停机制</strong>来用：
+    舵机总电走一个由树莓派控制的继电器，脚本正常退出、异常崩溃、甚至进程被强杀，
+    GPIO 一释放继电器就断开，舵机立刻失电。
+  </p>
+  <div class="warn">
+    <p>
+      <b>但爬墙时"趴下"是不够的。</b>所以吸附回路做成了断电保持真空：舵机断电机器人软下来，
+      六个吸盘仍然吸在墙上不掉。两套断电行为是分开设计的——这是整机安全论证里最关键的一条。
+    </p>
+  </div>
+  <p>
+    另外软件里设了两道电压线：<strong>6.4V 警告、6.0V 直接抛异常停机</strong>。
+    锂电欠压意味着泵没力、舵机没劲，在墙上就是掉落前兆。
+  </p>
+</section>
+
+<!-- ===== 9 ===== -->
+<section id="checklist">
+  <h2><span class="n">9</span><span class="t">三张自检清单</span></h2>
+
+  <div class="check">
+    <div>
+      <h4>到手三查</h4>
+      <ul>
+        <li>标签电压是否含 7.4V（不是 6.8V 上限版）</li>
+        <li>控制角是 180° 而不是 270°</li>
+        <li>金属齿、附舵盘和螺丝</li>
+        <li>逐个单独上电扫一遍 1000→2000µs，听有无异响、看有无卡顿</li>
+      </ul>
+    </div>
+    <div>
+      <h4>装配前</h4>
+      <ul>
+        <li>先回中到 1500µs 再装舵盘，保持通电</li>
+        <li>舵盘插最接近的一格，残差留给标定</li>
+        <li>左右腿镜像装配 —— 方向差收进标定表，不改公式</li>
+        <li>装完立刻测 ±45° 并回填</li>
+      </ul>
+    </div>
+    <div>
+      <h4>每次上机前</h4>
+      <ul>
+        <li>先发脉宽再使能，机身先垫高</li>
+        <li>看电压：低于 6.4V 不要开始</li>
+        <li>状态行盯电流：吸附后要回落</li>
+        <li>使能中手不进关节活动范围</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 10 ===== -->
+<section id="alt">
+  <h2><span class="n">10</span><span class="t">换成别的类型会怎样</span></h2>
+
+  <p>把第 3 节那些类型放回这台机器上，先摆一条谁都绕不过去的硬约束：</p>
+
+  <div class="measured">
+    <span class="tag">重量这一关先筛一遍</span>
+    <p>
+      整机重量硬上限 <strong>2.5kg</strong>，而 <strong>18 个舵机是全机最大的一块重量</strong>——
+      单腿（3 个舵机 + 打印件）实测 260g，六条腿就是 1.56kg，占了无吸附整机预算的八成。
+    </p>
+    <p>
+      所以"换个更强的执行器"这条路，<strong>先被重量否掉一半选项</strong>，剩下的才轮到谈钱和谈接口。
+    </p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:150px">换成</th><th>结果</th><th style="width:90px">结论</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">9g 微型舵机</td>
+          <td>扭矩差一个数量级，塑料齿一堵就打</td>
+          <td>直接否</td>
+        </tr>
+        <tr>
+          <td class="k">同款 270° 版</td>
+          <td>同样的 500~2500µs 铺在更大的角度范围上，<strong>每度对应的脉宽少三分之一</strong>，
+              分辨率变差、标定表全部重算，换不来任何好处</td>
+          <td>不换</td>
+        </tr>
+        <tr>
+          <td class="k">无刷数字舵机</td>
+          <td>接口完全不变，拆下来换上去就行；更耐用、发热小、寿命长，代价是贵不少。
+              想让机器多跑几百小时可以考虑</td>
+          <td>可选升级</td>
+        </tr>
+        <tr>
+          <td class="k">总线舵机<br><span class="mono" style="font-size:11px">Feetech / Dynamixel</span></td>
+          <td><strong>本项目真正值得考虑的那一个。</strong>能读回位置、电流、温度，第 6 节那五条坑里有四条会轻松很多；
+              "零力交接"可以直接发力矩指令，不必再绕道位置指令去间接改力。
+              重量和标准舵机同一个级别，<strong>重量这关能过</strong>。
+              代价是接线从 18 路 PWM 变成菊花链、驱动层要重写、供电档位可能要跟着调</td>
+          <td>值得</td>
+        </tr>
+        <tr>
+          <td class="k">FOC 关节模组</td>
+          <td>力控是真的好用，但单个几百克、几百上千块——18 个既超重又超预算。
+              这是四足机器狗的方案，不是一台要贴在玻璃上的 2.5kg 机器的方案</td>
+          <td>否</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="warn">
+    <p>
+      <b>修正本页早先的一句话。</b>之前写总线舵机"贵 2~4 倍"——那是拿 Dynamixel 那一档比的。
+      国产总线舵机在同扭矩档上只贵一点，18 个的差价没有想象中吓人。
+      真正的成本不在钱，在<b>重做驱动层和线束</b>：串口协议、菊花链供电、ID 分配、掉线处理，都要自己搭一遍。
+    </p>
+  </div>
+
+  <div class="measured">
+    <span class="tag">结论</span>
+    <p>
+      <strong>先用 PWM 数字舵机把机器做出来，仍然是对的选择</strong>——便宜、生态成熟、坏了随时换，
+      而且这台机器的结构件、驱动板、整套开源方案都是围着它设计的。
+    </p>
+    <p>
+      但要清楚自己买到的是什么：<strong>一个便宜、有力、完全不汇报情况的执行器。</strong>
+      本页里所有"实测回填""判据靠气压和电流、不靠指令位置"的做法，都是在给这个盲区打补丁。
+      等到要做力控或者更精细的步态，<strong>第一个该考虑的升级是总线舵机，而不是 FOC 模组</strong>。
+    </p>
+  </div>
+</section>
+
+<footer>
+  <p>页面生成 2026-08-21。参数快照来自 <code>software/hexapod/config.py</code>（18 份实测标定，2026-08-08 拟合）、
+  <code>docs/BOM.md</code>、<code>docs/P2-GUIDE.md</code> 与 08-19/08-20 两份实验量化报告。</p>
+  <p>姊妹页：<strong>《从走路指令到 18 路舵机》</strong>（<code>html/gait-to-servo.html</code>）讲的是指令怎么一路变成脉宽；
+  本页讲的是拿到脉宽之后，那个零件自己发生了什么。</p>
+</footer>
+
+</div>
+
+<script>
+"use strict";
+(function(){
+  // L2 femur（通道 10）实测标定
+  var ATTACH = 47.81, M45 = 1952.5, P45 = 1047.5;
+  var CENTER = (M45 + P45) / 2;          // 1500
+  var SLOPE  = (P45 - M45) / 90;         // µs per servo-degree ≈ -10.06
+
+  var slider = document.getElementById('slider');
+  var load   = document.getElementById('load');
+  var arm    = document.getElementById('arm');
+  var ghost  = document.getElementById('ghost');
+  var ghostArm = document.getElementById('ghostArm');
+  var wave   = document.getElementById('wave');
+  var wlab   = document.getElementById('wlab');
+  var m1     = document.getElementById('mark1');
+  var m2     = document.getElementById('mark2');
+  var oUs    = document.getElementById('oUs');
+  var oServo = document.getElementById('oServo');
+  var oJoint = document.getElementById('oJoint');
+  var oNote  = document.getElementById('oNote');
+
+  function note(us){
+    if (Math.abs(us - 1500) < 8)  return '中位';
+    if (us < 700 || us > 2300)    return '超出机械行程';
+    if (Math.abs(us - 1739) < 10) return '站姿工作点';
+    return us < 1500 ? '大腿抬起' : '大腿压低';
+  }
+
+  function draw(us){
+    // 与 config.py 同式：servo_deg = (us − center) / 斜率，joint = attach + servo_deg
+    // 本路斜率为负（左腿镜像装配），所以脉宽变大 → 角度变小
+    var servoDeg = (us - CENTER) / SLOPE;
+    var jointDeg = ATTACH + servoDeg;
+
+    oUs.textContent    = Math.round(us);
+    oServo.textContent = (servoDeg >= 0 ? '+' : '') + servoDeg.toFixed(1) + '°';
+    oJoint.textContent = jointDeg.toFixed(1) + '°';
+    oNote.textContent  = note(us);
+
+    // 舵盘：正脉宽 → 顺时针
+    arm.setAttribute('transform', 'rotate(' + servoDeg.toFixed(2) + ' 95 95)');
+
+    if (load.checked){
+      // 示意（非实测）：负载方向固定，把舵盘往一边拽开 4°——指令位置与实际位置就此分家
+      ghost.style.display = '';
+      ghostArm.setAttribute('transform', 'rotate(' + (servoDeg + 4).toFixed(2) + ' 95 95)');
+    } else {
+      ghost.style.display = 'none';
+    }
+
+    // 脉冲波形：20ms 周期铺 100px；真实脉宽只占 2.5~12.5px，放大 4 倍才看得见
+    var x0 = 16, per = 100, base = 96, top = 34;
+    var w = us / 50;
+    var d = 'M' + x0 + ' ' + base;
+    for (var i = 0; i < 3; i++){
+      var s = x0 + i * per;
+      d += ' L' + s + ' ' + base + ' L' + s + ' ' + top +
+           ' L' + (s + w) + ' ' + top + ' L' + (s + w) + ' ' + base;
+    }
+    d += ' L' + (x0 + 3 * per) + ' ' + base;
+    wave.setAttribute('d', d);
+    m1.setAttribute('x1', x0); m1.setAttribute('x2', x0);
+    m2.setAttribute('x1', x0 + w); m2.setAttribute('x2', x0 + w);
+    wlab.setAttribute('x', Math.min(x0 + w + 6, 250));
+    wlab.textContent = Math.round(us) + ' µs';
+  }
+
+  slider.addEventListener('input', function(){ draw(+slider.value); });
+  load.addEventListener('change', function(){ draw(+slider.value); });
+  var btns = document.querySelectorAll('.presets button');
+  for (var i = 0; i < btns.length; i++){
+    btns[i].addEventListener('click', function(e){
+      slider.value = e.currentTarget.getAttribute('data-us');
+      draw(+slider.value);
+    });
+  }
+  draw(1500);
+})();
+</script>

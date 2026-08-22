@@ -88,9 +88,9 @@ def _leg(name, mx, my, ang, ch, touch, coxa_cal=None, femur_cal=None, tibia_cal=
 # ±45° 标定 2026-08-08 calib_fit.py 全 18 路拟合（样本与残差见 docs/data/calib_pm45.json）
 DEFAULT_LEGS = (
     _leg("L1",  83.5,  63.0,  55.0, (15, 16, 17), 23,
-         coxa_cal=ServoCal(channel=15, attach_deg=3.31, us_m45=1959.0, us_p45=1041.0),
+         coxa_cal=ServoCal(channel=15, attach_deg=-1.31, us_m45=1959.0, us_p45=1041.0),
          femur_cal=ServoCal(channel=16, attach_deg=45.71, us_m45=1973.4, us_p45=1026.6),
-         tibia_cal=ServoCal(channel=17, attach_deg=104.06, us_m45=1947.3, us_p45=1052.7)),
+         tibia_cal=ServoCal(channel=17, attach_deg=100.06, us_m45=1947.3, us_p45=1052.7)),
     _leg("L2",   0.0,  81.5,  90.0, (9, 10, 11), 21,
          coxa_cal=ServoCal(channel=9, attach_deg=1.55, us_m45=1955.8, us_p45=1044.2),
          # femur 2026-08-09 重拟合：原 4 样本里 1200µs 那个 α=81°，高差法在接近竖直处
@@ -100,7 +100,7 @@ DEFAULT_LEGS = (
          femur_cal=ServoCal(channel=10, attach_deg=47.81, us_m45=1952.5, us_p45=1047.5),
          tibia_cal=ServoCal(channel=11, attach_deg=94.04, us_m45=1949.5, us_p45=1050.5)),
     _leg("L3", -83.5,  63.0, 125.0, (3, 4, 5), 19,
-         coxa_cal=ServoCal(channel=3, attach_deg=18.37, us_m45=1956.9, us_p45=1043.1),
+         coxa_cal=ServoCal(channel=3, attach_deg=14.37, us_m45=1956.9, us_p45=1043.1),
          femur_cal=ServoCal(channel=4, attach_deg=45.25, us_m45=1961.1, us_p45=1038.9),
          tibia_cal=ServoCal(channel=5, attach_deg=100.4, us_m45=1927.1, us_p45=1072.9)),
     _leg("R1",  83.5, -63.0, -55.0, (12, 13, 14), 22,

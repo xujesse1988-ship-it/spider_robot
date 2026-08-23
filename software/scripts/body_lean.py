@@ -20,7 +20,8 @@
        该腿几何复位（身体保持已倾量），逐腿轮流可以"蠕动"前移
   空格 取消未铺完的倾身 + 未开始的抬起（悬停中的腿按 i 落地收口）
   f    解除冻结（人工处理完报警后按；未铺完的倾身一并取消）
-  o×2  放开全部吸盘但六足保持站立（地面取机；墙上严禁）
+  o×2  放开全部吸盘但六足保持站立（取机；墙上必须先扶稳——放开即坠；
+       I2C 失联冻结下照常可用：盲态纯计时排气、阀由取机序列直驱）
   ESC×2 安全退出（停泵->逐足串行放气->断电，停在爬墙站位）
 
 方向键说明：↑/↓ 是本脚本的倾身键（小幅可逆动作，误触无害），其余转义
@@ -226,8 +227,8 @@ def main():
     def io_freeze(e):
         """IO 持续失败降落伞：冻结悬停而不是炸退进程（同 climb_walk）。"""
         if not eng.frozen:
-            eng.frozen = (f"IO 持续失败（{e}）——恢复后按 f，"
-                          "或 ESC×2 退出（盲态纯计时放气）")
+            eng.frozen = (f"IO 持续失败（{e}）——恢复后按 f；oo 取机 / "
+                          "ESC×2 退出均可盲态运行（纯计时放气）")
             log.event(f"⚠ IO 降落伞：{e!r}")
             try:
                 io.set_pump(False)   # 一次性停泵（泵引脚不依赖 I2C）
@@ -370,19 +371,41 @@ def main():
                                   "→ 六足舵机撑住（泵禁开）")
                         print("\n放开吸盘：停泵 → 逐足串行排气（约 1.5s）……")
 
+                        adh_dead = pwr_dead = False
+
                         def _pickup_tick():
-                            nonlocal last_status, peak_a
-                            ctl.update(dt)
-                            watch.poll()
+                            nonlocal last_status, peak_a, adh_dead, pwr_dead
+                            try:
+                                ctl.update(dt)   # 排气驱动：读失败不许打断取机
+                            except Exception as e:
+                                # I2C 失联（如 Errno 121 冻结）下也必须能放开
+                                # 吸盘从墙上取机：VENTING 分支先 set_valve 再
+                                # 读压确认，异常只丢确认不丢排气，退化纯计时
+                                # 排气（与 ESC 退出 _exit_tick 同款加固，
+                                # 08-23 实测该口径盲态可用）。原实现不接异常，
+                                # 盲态按 oo 会炸穿主环→进程死→舵机断电，
+                                # 半放气挂墙比冻结糟得多
+                                if not adh_dead:
+                                    adh_dead = True
+                                    log.event("⚠ 取机期吸附状态机异常"
+                                              f"（I2C 降级？），退化纯计时排气: {e}")
+                            watch.poll()   # 零传感器 IO：盲态也照记（阀直驱留痕）
                             t_now = time.monotonic()
                             if t_now - last_status > STATUS_S:
                                 last_status = t_now
-                                pv, pc = (drv.read_voltage_v(),
-                                          drv.read_current_a()) \
-                                    if args.mock else bot.check_power()
-                                peak_a = max(peak_a, pc)
-                                watch.telemetry(pv, pc, peak_a, (0, 0, 0),
-                                                note=" 取机放气")
+                                try:
+                                    pv, pc = (drv.read_voltage_v(),
+                                              drv.read_current_a()) \
+                                        if args.mock else bot.check_power()
+                                    peak_a = max(peak_a, pc)
+                                    watch.telemetry(pv, pc, peak_a, (0, 0, 0),
+                                                    note=" 取机放气")
+                                except Exception as e:
+                                    # 欠压 RuntimeError 同吞：善后期只记录，
+                                    # 绝不打断取机（与退出序列同口径）
+                                    if not pwr_dead:
+                                        pwr_dead = True
+                                        log.event(f"⚠ 取机期电压读取失败: {e}")
                             if not args.mock:
                                 time.sleep(dt)
 
@@ -390,6 +413,9 @@ def main():
                             _pickup_tick()
                         for i in range(6):
                             ctl.request_release(i)
+                            # 直驱阀到排气位（幂等，理由见 climb_walk 同段）：
+                            # 盲态下不直驱 = 只放得开一只脚
+                            io.set_valve(i, False)
                             for _ in range(int(0.2 / dt)):
                                 _pickup_tick()
                         print("已放开：全阀排气、泵停，六足仅舵机撑住原地。"
@@ -397,7 +423,8 @@ def main():
                     else:
                         last_o = time.monotonic()
                         print("\n再按一次 o 确认放开全部吸盘（六足保持站立）"
-                              "——墙上严禁（等于坠落）")
+                              "——墙上=放开即坠，先扶稳机身（安全绳兜底）"
+                              "再确认")
 
             if k is not None:
                 log.event(f"键 {k!r} 倾={eng.lean_mm:+.1f}"

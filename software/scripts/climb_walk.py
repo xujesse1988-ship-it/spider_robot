@@ -14,9 +14,10 @@ CLIMB 步态。
       未开始的可按空格取消；悬停中不可取消（按 i 落地收口是唯一出路）
   f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->停泵->逐足
       串行放气->断电，终态停在爬墙站位；要地面站姿另跑 --release）
-  o×2 放开全部吸盘但六足保持站立（地面取机用：停泵后逐足串行排气约 1.5s，
-      舵机撑住原地，整机可直接从玻璃上拿起）。仅站立非走动时允许；墙上严禁
-      （等于坠落）
+  o×2 放开全部吸盘但六足保持站立（取机用：停泵后逐足串行排气约 1.5s，
+      舵机撑住原地，整机可直接拿起）。仅站立非走动时允许；墙上取机必须
+      先扶稳机身再按（放开即坠，安全绳兜底）；I2C 失联冻结下照常可用
+      （盲态纯计时排气，阀由取机序列直驱）
 
 用法:
   python climb_walk.py --mock                # 无硬件干跑（Mock 吸盘必吸上）
@@ -454,8 +455,8 @@ def main():
         纯计时放气），链路闭合。故障未恢复时异常会逐帧重现并被逐帧
         吞掉（ctl.update 先于冻结检查执行，与工作空间冻结同口径）。"""
         if not eng.frozen:
-            eng.frozen = (f"IO 持续失败（{e}）——恢复后按 f，"
-                          "或停走后 ESC×2 退出（盲态纯计时放气）")
+            eng.frozen = (f"IO 持续失败（{e}）——恢复后按 f；oo 取机 / "
+                          "停走后 ESC×2 退出均可盲态运行（纯计时放气）")
             log.event(f"⚠ IO 降落伞：{e!r}")
             try:
                 # 一次性停泵：泵引脚是 GPIO 不依赖 I2C。I2C 死时 ctl.update
@@ -678,19 +679,41 @@ def main():
                                   "→ 六足舵机撑住（泵禁开）")
                         print("\n放开吸盘：停泵 → 逐足串行排气（约 1.5s）……")
 
+                        adh_dead = pwr_dead = False
+
                         def _pickup_tick():
-                            nonlocal last_status, peak_a
-                            ctl.update(dt)
-                            watch.poll()
+                            nonlocal last_status, peak_a, adh_dead, pwr_dead
+                            try:
+                                ctl.update(dt)   # 排气驱动：读失败不许打断取机
+                            except Exception as e:
+                                # I2C 失联（如 Errno 121 冻结）下也必须能放开
+                                # 吸盘从墙上取机：VENTING 分支先 set_valve 再
+                                # 读压确认，异常只丢确认不丢排气，退化纯计时
+                                # 排气（与 ESC 退出 _exit_tick 同款加固，
+                                # 08-23 实测该口径盲态可用）。原实现不接异常，
+                                # 盲态按 oo 会炸穿主环→进程死→舵机断电，
+                                # 半放气挂墙比冻结糟得多
+                                if not adh_dead:
+                                    adh_dead = True
+                                    log.event("⚠ 取机期吸附状态机异常"
+                                              f"（I2C 降级？），退化纯计时排气: {e}")
+                            watch.poll()   # 零传感器 IO：盲态也照记（阀直驱留痕）
                             t_now = time.monotonic()
                             if t_now - last_status > STATUS_S:
                                 last_status = t_now
-                                pv, pc = (drv.read_voltage_v(),
-                                          drv.read_current_a()) \
-                                    if args.mock else bot.check_power()
-                                peak_a = max(peak_a, pc)
-                                watch.telemetry(pv, pc, peak_a, (0, 0, 0),
-                                                note=" 取机放气")
+                                try:
+                                    pv, pc = (drv.read_voltage_v(),
+                                              drv.read_current_a()) \
+                                        if args.mock else bot.check_power()
+                                    peak_a = max(peak_a, pc)
+                                    watch.telemetry(pv, pc, peak_a, (0, 0, 0),
+                                                    note=" 取机放气")
+                                except Exception as e:
+                                    # 欠压 RuntimeError 同吞：善后期只记录，
+                                    # 绝不打断取机（与退出序列同口径）
+                                    if not pwr_dead:
+                                        pwr_dead = True
+                                        log.event(f"⚠ 取机期电压读取失败: {e}")
                             if not args.mock:
                                 time.sleep(dt)
 
@@ -698,6 +721,11 @@ def main():
                             _pickup_tick()
                         for i in range(6):
                             ctl.request_release(i)
+                            # 直驱阀到排气位（与 VENTING 分支写同一值，幂等
+                            # 不抢）：盲态下 ctl.update 会在首只 ATTACHED 脚
+                            # 的读压处抛出、后面脚的 VENTING 分支轮不到——
+                            # 不直驱 = 盲态取机只放得开一只脚
+                            io.set_valve(i, False)
                             for _ in range(int(0.2 / dt)):   # 足间错峰
                                 _pickup_tick()
                         print("已放开：全阀排气、泵停，六足仅舵机撑住原地。"
@@ -706,7 +734,8 @@ def main():
                     else:
                         last_o = time.monotonic()
                         print("\n再按一次 o 确认放开全部吸盘（六足保持站立，"
-                              "仅舵机撑住）——墙上严禁（等于坠落）")
+                              "仅舵机撑住）——墙上=放开即坠，先扶稳机身"
+                              "（安全绳兜底）再确认")
 
             if k is not None:
                 log.event(f"键 {k!r} → 速 {vx:g},{vy:g},{wz:g}"

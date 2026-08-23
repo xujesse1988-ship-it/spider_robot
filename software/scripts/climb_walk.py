@@ -36,13 +36,16 @@ CLIMB 步态。
                                              # 沿下坡向额外平移 3mm，顶回"每抬
                                              # 一腿被拽下一截"的棘轮下滑（头朝
                                              # 上贴墙口径；从小标定，宁欠勿过）
-  python climb_walk.py --handover L1:17,R1:15,L3:11,R3:9,R2:5,L2:5
+  python climb_walk.py --max-step 38 --handover L1:17,R1:15,L3:11,R3:9,R2:5,L2:5
                                              # vent 前零力交接：窗头决策后被抬
                                              # 腿先沿上坡还 δ 卸载、其余支撑腿
                                              # 各沿下坡接 δ/5（身体不动），铺完
                                              # 才放气——治 08-20 实测"83% 下滑
                                              # 在密封破裂瞬间"的弹跳棘轮。起标
-                                             # =实测单次弹跳×0.8，宁欠勿过
+                                             # =实测单次弹跳×0.8，宁欠勿过。
+                                             # δ 有硬校验：δmax ≤ comp_tail−
+                                             # 半步幅（默认步幅 40 时余 16.8
+                                             # 装不下 17，故本例 --max-step 38）
                                              # （docs/HANDOVER-DESIGN.md）
   python climb_walk.py --stand-height 62 --max-step 78 --speed 27
                                              # 大步幅直行实验：站高降到 62 后
@@ -251,7 +254,9 @@ def main():
                          "0.05,0：晚轮到多接——早收到的载荷被后续落地的零预载"
                          "锁定稀释回集体，模型稳态循环内应力较均分 -32%%"
                          "（HANDOVER-DESIGN 附录 A）。口径假设按'轮到 X'提示"
-                         "轮转抬腿，偏离轮转（反复抬同一腿）时分配失真勿开。"
+                         "轮转抬腿；偏离轮转（反复抬同一腿）的抬腿由引擎守卫"
+                         "自动退回均分 δ/5 并提示——原先照套权重会把 0.6δ "
+                         "每次砸向同一条支撑腿（审核）。"
                          "⚠ 非单调，且改变稳态运行点，δ 表需下调重标")
     ap.add_argument("--release", action="store_true",
                     help="只做逐足串行放气+回站姿")
@@ -331,6 +336,23 @@ def main():
                  f"{step_cap:.0f}mm（站高 {cfg.stand_height:g}/压入 "
                  f"{cfg.legs[0].press_delta_mm:g} 的联合解）。想更大先降站高："
                  "--stand-height 62 时上限 ~79")
+    if handover is not None and max(handover.values()) > 0.0:
+        # δ 硬校验（审核）：δ 是与 sag_comp 同级的支撑系推手，sag_comp 在
+        # max_straight_step 里是强制账、δ 原先却只在启动时打印"⚠ 余量不足"
+        # 照跑——出厂起标表 L1:17 在默认参数下已超余量 16.8mm，上墙以交接
+        # 截断（引擎兜底）收场=δ 铺不满、实验白跑。与 --max-step 同级拒绝：
+        # 余量 = comp_tail − 半步幅上限（步幅限幅的最坏口径，转向键同样封
+        # 在 climb_max_step 内）。支撑腿一个周期攒 5 次份额、轮到自己抬才
+        # 抵回，最大额外外摆 ≈ δmax（任意归一化权重下同界）
+        ho_max = max(handover.values())
+        tail = ClimbEngine(cfg, None).comp_tail
+        room = tail - cfg.climb_max_step / 2.0
+        if ho_max > room + 1e-6:
+            ap.error(f"--handover δmax {ho_max:g}mm 超支撑尾余量 {room:.1f}mm"
+                     f"（comp_tail {tail:.1f} − 半步幅 "
+                     f"{cfg.climb_max_step / 2:g}）。降 --max-step（本 δ 表需 "
+                     f"≤{2 * (tail - ho_max):.0f}）或减 δ——大步幅与大 δ "
+                     "不同开（HANDOVER-DESIGN §4.7）")
     speed = args.speed
 
     # 黑匣子：建在碰任何硬件之前，硬件初始化失败也要留痕（excepthook 兜底）
@@ -449,6 +471,7 @@ def main():
     step_was = False        # 单步在途标志（沿检测"在途→结束"打完成提示）
     hover_was = None        # 单步悬停腿（沿检测进入悬停打"再按 i 落地"提示）
     gate_was = None         # 抬腿门槛等待（沿检测打"等泵压实"提示，按拒抬腿）
+    ho_note_was = None      # 交接守卫留痕（沿检测打越界截断/退均分提示）
     was_started = False
     at_pause = True      # 就位暂停中（尚未开始任何吸附动作）
     aborted = False      # 在暂停处确认退出（finally 不再做善后）
@@ -552,9 +575,10 @@ def main():
         ho_max = max(cfg.leg(n).handover_mm for n in LEG_NAMES)
         if ho_max > 0.0:
             # 工作空间账（HANDOVER-DESIGN §4.7）：支撑腿因交接的最大额外
-            # 下坡外摆 ≈ δ（一个周期攒 5 次 δ/5，轮到自己抬时才抵回），要
-            # 与支撑尾余量并排亮出来——δ 尚未计进 max_straight_step 总账
-            # （留到实验站住后再做），v1 纪律 = 大步幅与大 δ 不同开
+            # 下坡外摆 ≈ δ（一个周期攒 5 次份额，轮到自己抬时才抵回）。
+            # δ 已在参数校验处按 comp_tail−半步幅上限硬拒（与 --max-step
+            # 同级，审核），此处按当前速度亮出实际余量；运行时另有引擎逐
+            # tick 越界截断+放气前门槛复检兜底（提示见主循环交接守卫）
             room = eng.comp_tail - min(worst, cfg.climb_max_step) / 2.0
             print("零力交接开启：δ "
                   + " ".join(f"{n}={cfg.leg(n).handover_mm:g}"
@@ -562,14 +586,14 @@ def main():
                   + f"mm，铺设 {HANDOVER_SPEED_MMS:g}mm/s"
                   f"（最长 {ho_max / HANDOVER_SPEED_MMS:.1f}s/步，周期拉宽）；"
                   f"支撑尾余量 comp_tail−半步幅 = {room:.0f}mm vs δmax "
-                  f"{ho_max:g}——δ 未计进步幅总账，大步幅与大 δ 不同开"
-                  + ("" if room >= ho_max else "（⚠ 余量不足，先降速/减步幅）"))
+                  f"{ho_max:g}（启动硬校验已过；越界另有交接截断兜底）")
             log.note(f"handover δmax={ho_max:g}mm 支撑尾余量={room:.1f}mm")
             if cfg.handover_slot_w:
                 print("交接载荷分配：按窗序轮转距离加权（晚轮到→先轮到）"
                       + "/".join(f"{v:.2f}" for v in cfg.handover_slot_w)
                       + "——模型稳态内应力较均分低 ~30%，δ 表偏大时下调重标；"
-                      "口径假设按'轮到 X'提示轮转抬腿")
+                      "口径假设按'轮到 X'提示轮转抬腿，偏离轮转的抬腿该次"
+                      "自动退回均分（引擎守卫，主循环有提示）")
                 log.note("handover_slot_w="
                          + ",".join(f"{v:.3f}" for v in cfg.handover_slot_w))
             if cfg.climb_sag_comp_mm > 0:
@@ -797,6 +821,14 @@ def main():
                       "冻结报警）")
                 log.event(f"抬腿门槛等待：{leg} 等 {kp}")
             gate_was = gate_now
+            note_now = eng.handover_note
+            if note_now and note_now != ho_note_was:
+                # 交接守卫（越界截断/偏离轮转退均分）：引擎只留痕不发声，
+                # 这里沿检测亮给操作者并落黑匣子——截断=δ 没铺满，本步弹跳
+                # 会比预期大，连续出现该停下检查 δ 表/步幅
+                print(f"\n⚠ {note_now}")
+                log.event(f"交接守卫：{note_now}")
+            ho_note_was = note_now
             hover_now = eng.step_hover_leg()
             if hover_now and hover_now != hover_was:
                 print(f"\n单步：{hover_now} 已悬停在落点上方"

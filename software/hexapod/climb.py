@@ -11,7 +11,10 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
            改力不改位：本腿指令沿"上坡"还 δ（卸载自己），其余支撑腿各沿
            "下坡"接 δ/5（均值不变=身体指令不动），HANDOVER_SPEED_MMS
            匀速铺完才放气进 VENT——密封破裂时无能量可释放。本足全程仍
-           吸附贴面，须随支撑场平移（update() 4.7 步驱动交接位移）
+           吸附贴面，须随支撑场平移（update() 4.7 步驱动交接位移）。
+           三道守卫（审核补）：漏气监护覆盖交接腿本身；位移逐 tick 过包络
+           预检，越界当场截断剩余量提前放气（绝不推到 WorkspaceError 冻结）；
+           铺完放气前复检抬腿门槛/互锁（窗头判定已陈旧 δ/速率 秒）
   VENT     先通气再抬（08-19 实机：边放气边抬时排气建立慢于抬离，腿被残余
            真空"拽起"）：原地保持 lift_vent_s 只开排气；本足仍贴面，须随
            支撑场平移（不随场 = 在墙面系被拖着划）
@@ -57,11 +60,12 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
 冻结（frozen）是粘滞报警态：足端目标全部保持、吸附状态机照跑（常闭阀保
 真空，吸附态冻结是安全态），人工处理后 clear_freeze() 继续。
 
-启动序列：调用方先让机器人 stand() 到默认站姿，引擎逐足"压入->抽气确认->
-下一腿"（08-19 实机结论：六足同时压入没有反力座——机身被整体顶起/顶离墙，
-杯压不实；逐足压时其余腿还站着当反力座，压紧力=体重/扶持力的分摊。逐足
-抽气原本也是防六阀同开抽垮罐），全部 ATTACHED 后相位钟才开始走
-（started=True）。
+启动序列：调用方先让机器人 stand() 到默认站姿，引擎按窗序
+（R3→L1→R2→L3→R1→L2）逐足"压入->抽气确认->下一腿"（08-19 实机结论：
+六足同时压入没有反力座——机身被整体顶起/顶离墙，杯压不实；逐足压时其余
+腿还站着当反力座，压紧力=体重/扶持力的分摊。逐足抽气原本也是防六阀同开
+抽垮罐。吸附序取窗序＝落地新旧与抬腿轮转从启动起对齐、首抬腿 R3 是驻留
+最久的盘），全部 ATTACHED 后相位钟才开始走（started=True）。
 """
 import math
 from dataclasses import replace
@@ -205,8 +209,14 @@ def parse_handover_weights(spec):
     if len(w) != 5:
         raise ValueError(f"--handover-weights 需要恰 5 个值（新→老），"
                          f"给了 {len(w)}")
-    if any(v < 0 for v in w) or sum(w) <= 0:
-        raise ValueError("--handover-weights 权重须非负且和大于 0")
+    # 有限性必须显式验（审核）：NaN 参与 < 与 <= 比较全为 False，
+    # "nan,1,1,1,1" 会溜过下面两条检查；inf 则在归一化处产出 inf/inf=NaN。
+    # NaN 份额下游没有任何守卫接得住——leg_ik 的可达性判断对 NaN 也全 False
+    # 不抛 WorkspaceError，joint_deg_to_us 的 min/max 钳位把 NaN 解析成
+    # min_us：五条支撑腿 15 路舵机被静默打到 500µs 端点
+    if (any(not math.isfinite(v) for v in w) or any(v < 0 for v in w)
+            or sum(w) <= 0):
+        raise ValueError("--handover-weights 权重须为有限数、非负且和大于 0")
     total = sum(w)
     return tuple(v / total for v in w)
 
@@ -324,7 +334,11 @@ class ClimbEngine:
         self.frozen = None           # 冻结原因；None = 正常
         self.started = False         # 启动全吸附完成，相位钟开始走
         self.t = 0.0                 # 相位钟
-        self._attach_queue = list(LEG_NAMES)
+        # 启动吸附序 = 窗序（原 LEG_NAMES 的 L1..R3）：①落地新旧从启动起就
+        # 与抬腿轮转对齐，权重模型"晚轮到多接"的口径不再有启动首轮的特例；
+        # ②首抬腿 R3 从"最后吸上的最新盘"变成"最先吸上、驻留最久的盘"，
+        # 首抬肩膀更瓷实；③压入次序左右交替（对角波浪）而不是先左排后右排
+        self._attach_queue = list(self.slot_order)
         self._slot_leg = None        # 当前相位窗属于哪条腿
         self._slot_active = False    # 本窗摆动已启动
         self._slot_skipped = False   # 本窗静止跳过
@@ -347,6 +361,24 @@ class ClimbEngine:
         # 零力交接（update() 4.7 步）：当前在途交接的剩余铺设量 mm。
         # 一次一腿的窗序保证同时至多一个交接在途，不需要按腿存
         self._ho_left = 0.0
+        # 权重在引擎口再验一次并归一化（审核）：CLI 之外直设 config 的路径
+        # 原先既不验也不归一——(1,1,1,1,1) 会让每次抬腿身体指令净下坡 +4δ，
+        # 静默破坏只有 parse_handover_weights 才保证的零和不变量；nan/inf
+        # 同理只有 CLI 口在拦。归一化后的份额存 _slot_w，4.7 步只认它
+        w = cfg.handover_slot_w
+        if w:
+            if (len(w) != 5 or any(not math.isfinite(v) for v in w)
+                    or any(v < 0 for v in w) or sum(w) <= 0):
+                raise ValueError(f"handover_slot_w 非法（{w!r}）：须 5 元、"
+                                 "有限、非负、和大于 0（空元组=均分）")
+            self._slot_w = tuple(v / sum(w) for v in w)
+        else:
+            self._slot_w = ()
+        self._ho_share = None    # 本次交接的分摊表 {腿:份额}，启动交接时定格
+        self._prev_lift = None   # 最近一次实际抬过的腿（权重轮转口径守卫用）
+        # 交接守卫最近一次动作的说明文本（越界截断/偏离轮转退均分），脚本
+        # 层沿检测亮给操作者并落黑匣子——引擎自己没有输出口
+        self.handover_note = None
         # 起步过渡记账：comp_tail 稳态账假设"支撑从 +半步幅落点起"，只在连续
         # 行走成立——起步/停走再起步的过渡周期里，窗序靠后的腿从默认位/停点
         # 起被拖满步幅+VENT 随场，账外多 ~20mm（实测 press18 满速满额补偿在
@@ -499,13 +531,19 @@ class ClimbEngine:
                 if self.cfg.leg(cur).handover_mm > 0.0:
                     # 零力交接先行（4.7 步铺设），request_release 推迟到交接
                     # 完成：交接期间吸盘必须保持密封吸附（ATTACHED 控制环
-                    # 照跑，互锁/漏气监护对它照常成立）
+                    # 照跑，互锁照常；漏气监护对交接腿本身也覆盖——
+                    # _leak_watch 收 STANCE+HANDOVER，审核修）。分摊表在此
+                    # 定格：铺设期恒定，权重的轮转口径守卫也在这一步做
                     self._ho_left = self.cfg.leg(cur).handover_mm
+                    self._ho_share = self._handover_share(cur)
                     self.phase_of[cur] = LegPhase.HANDOVER
                 else:
                     self.ctl.request_release(LEG_NAMES.index(cur))
                     # 先通气 lift_vent_s 再抬（VENT 段贴面原地，随支撑场平移）
                     self.phase_of[cur] = LegPhase.VENT
+                # 轮转指针（权重口径守卫用）：δ=0 直放气的抬腿也要记——
+                # 它同样推进真实的抬腿轮转
+                self._prev_lift = cur
                 self._slot_active = True
                 if self.step_pending and cur == self.step_leg:
                     self.step_pending = False
@@ -633,38 +671,63 @@ class ClimbEngine:
                 and self.phase_of[self._slot_leg] == LegPhase.HANDOVER):
             cur = self._slot_leg
             step = min(self._ho_left, HANDOVER_SPEED_MMS * dt)
-            self._ho_left -= step
             dx, dy = self._down
             sup = [n for n in LEG_NAMES if self.phase_of[n] == LegPhase.STANCE]
-            w = self.cfg.handover_slot_w
-            if len(w) == len(sup):
-                # 载荷分配按窗序轮转距离加权：w[0]=最晚才轮到抬的支撑腿
-                # （轮转上刚抬过的那条），w[-1]=下一个要抬的。机理（附录 A
-                # 模型数值，模型排序即 (j-a)%6 的轮转距离）：每次落地的零预
-                # 载锁定把受力格局重摊——早收到的载荷被后续落地稀释回集体，
-                # 晚收到的原封不动攒到该腿自己抬腿，所以"稀释机会最多的腿
-                # 多接"。激进档 0.6/0.25/0.1/0.05/0 稳态循环内应力 29.7→
-                # 20.2（-32%）；非单调（全给一条收益归零），反向 +30% 更糟。
-                # ⚠ 不按"落地新旧"排：启动吸附序（L1..R3）≠ 窗序轮转
-                # （R3L1R2L3R1L2），落地新旧在启动后的首轮会错位（用户提醒
-                # 抓获）；窗序距离从第一抬就正确且不需要落地时间戳。代价=
-                # 假设按轮转抬（跟"轮到 X"提示走）；偏离轮转（反复抬同一
-                # 腿标定 δ）时分配失真，那种场合别开权重。⚠ 开权重改变
-                # 稳态运行点，δ 表需下调重标。任意归一化权重下六腿位移和
-                # =0（均值不变=身体指令不动）照旧成立
-                k0 = self.slot_order.index(cur)
-                order = [self.slot_order[(k0 - a) % 6] for a in range(1, 6)]
-                share = {n: w[k] for k, n in enumerate(order)}
-            else:                               # 未配置（空元组）=均分 δ/5
-                share = {n: 1.0 / len(sup) for n in sup}
-            self.foot[cur][0] -= dx * step      # 反下坡 = 上坡 = 卸载方向
-            self.foot[cur][1] -= dy * step
-            for n in sup:                       # 实际支撑数（一次一腿下恒 5）
-                self.foot[n][0] += dx * step * share[n]
-                self.foot[n][1] += dy * step * share[n]
+            # 分摊表在交接启动时定格（_handover_share，含权重轮转口径守卫）
+            share = self._ho_share or {n: 1.0 / len(sup) for n in sup}
+            if step > 0.0:
+                # 越界预检截断（审核）：4.5 步有 comp_tail 限额、4.6 步有
+                # _lean_room 截短，原 4.7 步是唯一没有包络钳制的支撑系推手
+                # ——δ 偏大/支撑系累积漂移时把某腿推出 IK 包络，WorkspaceError
+                # 冻结；而 clear_freeze 保留在途交接（那是对的，见其注释），
+                # 墙上按 f 续铺 ~0.2mm 又在同一帧复冻=死循环，交接腿非
+                # STANCE 连 oo 取机都被拒，唯一出路 ESC×2 全放气=坠落。
+                # 修法：本 tick 位移先算后落，任一腿的新目标越出安全包络
+                # （同 _lean_room 口径）就当场截断剩余交接量、提前放气——
+                # 部分卸载=弹跳打折但安全，绝不走到冻结
+                moves = [(cur, -dx * step, -dy * step)] + [
+                    (n, dx * step * share[n], dy * step * share[n])
+                    for n in sup]              # cur 反下坡=上坡=卸载方向
+                clip = next((n for n, mx, my in moves if not self._foot_xy_ok(
+                    n, self.foot[n][0] + mx, self.foot[n][1] + my)), None)
+                if clip is not None:
+                    self.handover_note = (
+                        f"交接越界截断：{clip} 已到工作空间边界，{cur} 剩余 "
+                        f"{self._ho_left:.1f}mm 未卸载即提前放气——δ 偏大或"
+                        "支撑系累积漂移（反复抬同一腿标 δ？），检查 δ 表/步幅")
+                    self._ho_left = 0.0
+                else:
+                    self._ho_left -= step
+                    for n, mx, my in moves:
+                        self.foot[n][0] += mx
+                        self.foot[n][1] += my
             if self._ho_left <= _EPS:
-                self.ctl.request_release(LEG_NAMES.index(cur))
-                self.phase_of[cur] = LegPhase.VENT
+                # 放气前门槛/互锁复检（审核）：窗头那次判定距此已过 δ/速率
+                # 秒（漏气暂停、冻结+f 更久），期间某支撑盘可能从过线漏到
+                # "深于 -20 漏气绊线、浅于门槛"的监护盲区——带着软肩膀放气
+                # 正是门槛要防的 08-19 事故类（且激进权重下窗序前驱=最新的
+                # 盘吃最大份额）。复检不过：保持密封等泵拽深，与窗头等待
+                # 同款计时/超时冻结；_gate_t 在窗切换时清零，窗头等待与
+                # 本处复检不同时活跃，共用无冲突
+                shallow = self._lift_gate_shallow(cur)
+                bad = () if self.air_mode else tuple(
+                    n for n in LEG_NAMES if n != cur
+                    and not self.ctl.is_attached(LEG_NAMES.index(n)))
+                if shallow or bad:
+                    self.gate_wait = (cur, bad + tuple(n for n, _ in shallow))
+                    self._gate_t += dt
+                    if self._gate_t > self.cfg.lift_gate_timeout_s:
+                        txt = "/".join(list(bad) + [
+                            f"{n}({k:.0f}kPa)" if k is not None else f"{n}(--)"
+                            for n, k in shallow])
+                        self.frozen = (
+                            f"交接后放气门槛超时：{txt} 等 "
+                            f"{self.cfg.lift_gate_timeout_s:.0f}s 未恢复，"
+                            f"{cur} 拒放气（交接期间支撑盘漏软？）")
+                else:
+                    self._gate_t = 0.0
+                    self.ctl.request_release(LEG_NAMES.index(cur))
+                    self.phase_of[cur] = LegPhase.VENT
 
         # 5. 摆动分段状态机按真实时间推进（钟停时重试/等待照常进行）
         self._run_machines(dt)
@@ -768,7 +831,7 @@ class ClimbEngine:
             return 0.0, "启动序列未完成"
         if self.frozen:
             return 0.0, "冻结中"
-        if any(self.phase_of[n] == LegPhase.STANCE
+        if any(self.phase_of[n] in (LegPhase.STANCE, LegPhase.HANDOVER)
                and self.ctl.is_leaking(LEG_NAMES.index(n)) for n in LEG_NAMES):
             return 0.0, "支撑足漏气挽救中"
         sign = 1.0 if dmm > 0 else -1.0
@@ -782,29 +845,40 @@ class ClimbEngine:
         """取消尚未铺完的倾身量（已执行部分不回退——身体已经移过去了）。"""
         self._lean_left = 0.0
 
+    def _foot_xy_ok(self, name, x, y):
+        """支撑目标 (x,y) 在该腿当前压深下是否仍在安全包络内：外界=IK 包络
+        留 D_SAFE_MARGIN（同 comp_tail 口径，z 取该足当前指令深度），内界=
+        站位半径求解区间下限（更近的半径没验证过唇口/IK 账）。倾身截短
+        （_lean_room）与交接越界截断（4.7 步）共用，口径不许漂移。"""
+        leg = self.cfg.leg(name)
+        r = math.hypot(x - leg.mount_x, y - leg.mount_y)
+        d_safe = self.cfg.femur_len + self.cfg.tibia_len - D_SAFE_MARGIN
+        return r >= _R_BRACKET[0] and \
+            math.hypot(r - self.cfg.coxa_len, self.foot[name][2]) <= d_safe
+
     def _lean_room(self, sign):
         """当前支撑足在 sign 方向（+1=身体向前）还能再倾多少 mm。从"当前
-        足位＋已排队量"起算，1mm 步进扫描到某足越界为止：外界=IK 包络留
-        D_SAFE_MARGIN（同 comp_tail 口径，z 取该足实际压深），内界=站位
-        半径求解区间下限（更近的半径没验证过唇口/IK 账）。"""
-        d_safe = self.cfg.femur_len + self.cfg.tibia_len - D_SAFE_MARGIN
+        足位＋已排队量"起算，1mm 步进扫描到某足越界为止（判据 _foot_xy_ok）。
+        在途交接也要预扣（审核）：交接 Z 段里授予的倾身要等 4.6 步恢复推进
+        才执行，届时支撑腿可能已再吃进最多 份额×剩余交接量 的下坡位移——
+        原实现只扣 _lean_left 不扣 _ho_left，Z 段授予的倾身执行时会超包络。
+        方向上保守：不区分交接下坡与倾身方向的夹角，按最大份额整量预扣。"""
         room = 80.0
         for n in LEG_NAMES:
             if self.phase_of[n] != LegPhase.STANCE:
                 continue
-            leg = self.cfg.leg(n)
             x = self.foot[n][0] - self._lean_left   # 排队量先记账
-            y, z = self.foot[n][1], self.foot[n][2]
+            y = self.foot[n][1]
             ok = 0.0
             while ok < room:
-                nx = x - sign * (ok + 1.0)
-                r = math.hypot(nx - leg.mount_x, y - leg.mount_y)
-                if r < _R_BRACKET[0] \
-                        or math.hypot(r - self.cfg.coxa_len, z) > d_safe:
+                if not self._foot_xy_ok(n, x - sign * (ok + 1.0), y):
                     break
                 ok += 1.0
             room = min(room, ok)
-        return room
+        if self._ho_left > _EPS:
+            room -= self._ho_left * (max(self._ho_share.values())
+                                     if self._ho_share else 0.2)
+        return max(0.0, room)
 
     def clear_freeze(self):
         """人工处理后解除冻结；重试/等待计时全部清零，挂着 FAULT 的腿自动
@@ -896,13 +970,48 @@ class ClimbEngine:
                 out.append((n, k))
         return out
 
+    def _handover_share(self, cur):
+        """本次交接各支撑腿的载荷份额 {腿: 0~1}（交接启动时定格，铺设期恒定）。
+        权重口径=按窗序轮转距离：w[0]=最晚才轮到抬的支撑腿（轮转上刚抬过的
+        那条），w[4]=下一个要抬的。机理（附录 A 模型数值，模型排序即 (j-a)%6
+        的轮转距离）：每次落地的零预载锁定把受力格局重摊——早收到的载荷被
+        后续落地稀释回集体，晚收到的原封不动攒到该腿自己抬腿，所以"稀释机会
+        最多的腿多接"。激进档 0.6/0.25/0.1/0.05/0 稳态循环内应力 29.7→20.2
+        （-32%）；非单调（全给一条收益归零），反向 +30% 更糟。⚠ 不按"落地
+        新旧"排而按窗序距离：从第一抬就正确、不依赖吸附历史、不需要落地
+        时间戳（历史教训：v1.5 第一版按落地新旧排，当时启动吸附序还是
+        L1..R3 ≠ 窗序，首轮分错腿被用户抓获；启动吸附序后来也改成了窗序，
+        但排序独立于吸附序这一点不变）。⚠ 开权重改变稳态运行点，δ 表需
+        下调重标。任意归一化权重下六腿位移和=0（均值不变=身体指令不动）
+        照旧成立。
+        轮转口径守卫（审核）：分配数学只在实际按轮转抬腿时成立——偏离轮转
+        （body_lean 反复抬同一腿标 δ 等）时套权重会把 w[0] 份额每次砸向同一
+        条支撑腿且永不归还（落地复位只清被抬腿自己），激进档 0.6δ/次实测
+        4~6 次就把该腿推出工作空间。cur 不是上一抬腿的窗序继任者就本次退回
+        均分 δ/5（帮助文案的 ~10 次预算随之照旧成立），handover_note 留痕。"""
+        others = [n for n in LEG_NAMES if n != cur]
+        if self._slot_w:
+            if (self._prev_lift is None or cur == self.slot_order[
+                    (self.slot_order.index(self._prev_lift) + 1) % 6]):
+                k0 = self.slot_order.index(cur)
+                order = [self.slot_order[(k0 - a) % 6] for a in range(1, 6)]
+                return {n: self._slot_w[k] for k, n in enumerate(order)}
+            self.handover_note = (
+                f"{cur} 偏离轮转抬腿（上一抬 {self._prev_lift}），本次交接"
+                "退回均分 δ/5——权重分配只在按窗序轮抬时成立")
+        return {n: 1.0 / len(others) for n in others}
+
     def _leak_watch(self):
         """支撑足漏气监护（启动序列与行走共用）：挽救窗内返回 True
-        （相位钟应暂停），超 leak_rescue_s 置 frozen。"""
+        （相位钟应暂停），超 leak_rescue_s 置 frozen。交接腿（HANDOVER）
+        也在监护内（审核）：它密封承载且正被系统性卸载，唇口中途失效时
+        4.7 步继续从一只已不承载的脚"还力"=储能照样瞬释，随后还会对已泄
+        的盘放气——原实现只认 STANCE，交接腿恰好脱管最长 δ/速率 秒。"""
         pause = False
         for n in LEG_NAMES:
             i = LEG_NAMES.index(n)
-            if self.phase_of[n] == LegPhase.STANCE and self.ctl.is_leaking(i):
+            if self.phase_of[n] in (LegPhase.STANCE, LegPhase.HANDOVER) \
+                    and self.ctl.is_leaking(i):
                 pause = True
                 if self.ctl.leak_time(i) > self.cfg.leak_rescue_s:
                     # 每足支路已装单向阀（歧管—阀罐口间，只许吸盘→歧管），

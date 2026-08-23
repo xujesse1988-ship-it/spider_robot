@@ -120,9 +120,11 @@ def main():
                          "i 抬起前自动先交接（被抬腿沿上坡还 δ 卸载、支撑腿"
                          "各接 δ/5，铺完才放气）。本脚本是 δ 的 A/B 标定"
                          "入口：起标=实测单次弹跳×0.8，宁欠勿过。范围 0~25。"
-                         "注意：反复抬同一条腿时支撑指令每次多漂下坡 δ/5、"
-                         "轮抬一圈才互相抵回——单腿连标 ~10 次后换腿或重启，"
-                         "越界由工作空间冻结兜底")
+                         "注意：反复抬同一条腿时支撑指令每次多漂下坡 δ/5"
+                         "（开 --handover-weights 也一样：偏离轮转的抬腿被"
+                         "引擎守卫退回均分）、轮抬一圈才互相抵回——单腿连标 "
+                         "~10 次后换腿或重启，越界由引擎交接截断兜底（当场"
+                         "提前放气并提示，不再推到冻结）")
     ap.add_argument("--handover-weights", nargs="?",
                     const="0.6,0.25,0.1,0.05,0", default=None,
                     help="交接载荷分配按窗序轮转距离加权（5 权重：w1=最晚才"
@@ -131,7 +133,10 @@ def main():
                          "0.05,0：晚轮到多接——早收到的载荷被后续落地的零预载"
                          "锁定稀释回集体，模型稳态循环内应力较均分 -32%%"
                          "（HANDOVER-DESIGN 附录 A）。口径假设按'轮到 X'提示"
-                         "轮转抬腿，偏离轮转（反复抬同一腿）时分配失真勿开。"
+                         "轮转抬腿；偏离轮转（本脚本反复抬同一腿标 δ 是常态）"
+                         "的抬腿由引擎守卫自动退回均分 δ/5 并提示——原先照套"
+                         "权重会把 0.6δ 每次砸向同一条支撑腿，实测 4~6 次抬腿"
+                         "吹爆工作空间（审核）。"
                          "⚠ 非单调，且改变稳态运行点，δ 表需下调重标")
     ap.add_argument("--stand-height", type=float,
                     default=DEFAULT_CONFIG.stand_height,
@@ -231,6 +236,7 @@ def main():
     hover_was = None
     step_was = False
     gate_was = None
+    ho_note_was = None
     was_started = False
     at_pause = True
     aborted = False
@@ -476,6 +482,14 @@ def main():
                       f"{cfg.lift_gate_kpa:g}kPa，{leg} 等泵压实再抬")
                 log.event(f"抬腿门槛等待：{leg} 等 {'/'.join(soft)}")
             gate_was = gate_now
+            note_now = eng.handover_note
+            if note_now and note_now != ho_note_was:
+                # 交接守卫（越界截断/偏离轮转退均分，与 climb_walk 同款）：
+                # 截断=δ 没铺满、本次弹跳会比预期大，标 δ 时勿把这种次的
+                # 残余当 δ 不够继续加——先换腿或重启复位几何
+                print(f"\n⚠ {note_now}")
+                log.event(f"交接守卫：{note_now}")
+            ho_note_was = note_now
             hover_now = eng.step_hover_leg()
             if hover_now and hover_now != hover_was:
                 print(f"\n{hover_now} 已悬停（离面 {cfg.lift_clearance:g}mm）："

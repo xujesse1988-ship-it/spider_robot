@@ -22,6 +22,11 @@
 
 第 4 条是机构正确性的独立探针：交接期间六腿指令均值不变 ⇒ 身体理应纹丝
 不动。若交接段身体系统性下坠 ⇒ 方向/分摊有 bug 或 δ 严重超标，**当场停**。
+⚠ 逐腿 δ 表的已知伪迹（设计 §2 ⚠ 注，审核实测）：落地复位吞掉交接残差，
+六腿指令均值每次落地跳一步——B 组首轮会累计 ~5mm **上坡**指令伪迹（即首轮
+下滑读数比物理真实少 ~5mm）、轮内 ±1.3mm 摆动。这属于表非均匀的几何账，
+**不是**分摊 bug：方向是上坡、量有界、第 2 轮起每轮漂移归 0。"当场停"只
+认**系统性下坠**；上坡侧的小台阶按伪迹放行。
 
 ## 2. 工况与命令行（照抄基线，只差 --handover）
 
@@ -81,16 +86,21 @@ python scripts/body_lean.py --no-tank --stand-height 62 --tilt-trim 6 \
 ```
 # 先抽帧量模板（每组各一次；矩形坐标按各自第 0 帧量）
 python software/logs_analysis/ab_quant.py --video images/lean_YYYYMMDD_A.mp4 \
-    --log software/logs_analysis/lean_YYYYMMDD_*.log --out /tmp/ab/A --frames-only
+    --log software/logs_analysis/lean_YYYYMMDD_*.log --out ~/ab/A --frames-only
 # A 组：--calib T0,T1,MM = 首抬前/末落后两个安静时刻（日志秒）+ 胶带尺读数差
-python software/logs_analysis/ab_quant.py --video ... --log ... --out /tmp/ab/A \
+python software/logs_analysis/ab_quant.py --video ... --log ... --out ~/ab/A \
     --body Y0:Y1,X0:X1 --ref Y0:Y1,X0:X1 --calib 142.3,327.5,131
 # B 组：沿用 A 组打印出的 mm/px
-python software/logs_analysis/ab_quant.py --video ... --log ... --out /tmp/ab/B \
+python software/logs_analysis/ab_quant.py --video ... --log ... --out ~/ab/B \
     --body ... --ref ... --mmppx 0.881
-# 可疑事件的 30fps 破裂剖面（N=分解表序号；建议至少看 B 组 L1#2、R1#2）
+# 可疑事件的原生帧率破裂剖面（时间轴按 ffprobe 实测帧率，60fps 手机录像
+# 也不再打对折；N=分解表序号；建议至少看 B 组 L1#2、R1#2）
 python software/logs_analysis/ab_quant.py ... --zoom 7
 ```
+
+⚠ `--out` 勿指向 /tmp：抽帧缓存按分钟级视频有几个 GB，/tmp 配额一满整机
+Bash 全部静默失败（本机已踩过）。用 home 下目录，跑完 `rm -r ~/ab/*/seq`
+清缓存（traj.csv/报告很小，保留）。
 
 读数位置：分解表"vent跳变"列 = δ 反馈信号（**以第 2 轮为准**）；"交接段"列
 = 均值不变检查；"第 N 轮下滑" = 总判据；电流段落 = 棘轮判据。追踪健康行
@@ -104,6 +114,12 @@ python software/logs_analysis/ab_quant.py ... --zoom 7
   下每次抬腿的储能与基线稳态相等（δ 按基线弹跳标对稳态是对的），但首轮
   储能从 mg/6k 爬坡到稳态（模型 14.8→36.9，基线实测 vent 跳变第 1 轮
   2.3→16.3mm 同款斜坡）——首轮早腿必然轻度过冲。**判定一律看第 2 轮**。
+  另：逐腿 δ 表的落地复位伪迹（§1 判据 4 ⚠ 注）会让 B 首轮下滑读数比物理
+  真实**少 ~5mm**——首轮数字偏好看属预期，同样不作数。
+- **交接被引擎截断的抬落不进 δ 修正**：脚本打出"⚠ 交接越界截断"（黑匣子
+  同记）说明该次 δ 没铺满、弹跳必然偏大——那是工作空间账（步幅/漂移）的
+  问题不是 δ 不够，按残余加 δ 会火上浇油。有效 A/B 组内截断次数应为 0，
+  出现即先查步幅/站位再重跑该组。
 - 第 2 轮某腿残余下坠 >3mm：δ_i ← min(δ_i + 0.8×残余, 21)；
 - 第 2 轮某腿上弹 <-2mm：δ_i ← δ_i − 0.8×|上弹|；
 - 改表后整组重跑 B'（重新上墙）；一个下午预算 A + B + B' 三组
@@ -111,11 +127,15 @@ python software/logs_analysis/ab_quant.py ... --zoom 7
 - **当场停**的情形：交接段身体系统性下坠（机理 bug，回桌复查 4.7 步方向
   /分摊）；任一腿上弹 >5mm（δ 严重超标，全表减半重试）；第 1 轮下滑
   不降反升（方向反了级别的错误）。
-- 冻结处理照旧：交接中支撑腿漏气会自动暂停（Z 段变长属正常），挽救超时
-  冻结按 `f` 续铺；`clear_freeze` 不丢在途交接（tests §7.6 已固化）。
+- 冻结处理照旧：交接中支撑腿**或交接腿本身**漏气都会自动暂停（v1.6 起
+  交接腿纳入监护；Z 段变长属正常），挽救超时冻结按 `f` 续铺；
+  `clear_freeze` 不丢在途交接（tests §7.6 已固化）。
 
 达标后的推进（设计 §9.4）：climb_walk 先单步（`i`）后连续，δ 微调，重测
-净前进率（26% 基线）；δ 标稳后可另开一组 `--handover-weights`（载荷按窗序
+净前进率（26% 基线）——ab_quant 现已直接解析 climb_walk 日志（单步/连续
+混跑都行，从相位转移行建时间线；退出序列的放气会被滤掉不计入抬落——
+08-19 climb 日志真实抬落是 10 次，按 vent 事件数数出的 16 是错的）；
+δ 标稳后可另开一组 `--handover-weights`（载荷按窗序
 轮转距离加权，设计 §5 v1.5；口径假设按"轮到 X"提示轮转抬腿）A/B——模型预期循环内应力降 ~30%、δ 表随之整体
 下调重标，务必与 δ 标定分开成组，别混变量；报告并入 html（管线输出直接喂
 `vent-snap-20260820.html` 同款图表）。**A/B 期间 --sag-comp 保持 0**

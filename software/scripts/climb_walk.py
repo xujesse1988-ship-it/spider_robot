@@ -94,7 +94,8 @@ from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import (ClimbEngine, LegPhase, max_straight_step,
-                           parse_handover, HANDOVER_SPEED_MMS)
+                           parse_handover, parse_handover_weights,
+                           HANDOVER_SPEED_MMS)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch, PHASE_CH, ADH_CH
@@ -242,6 +243,16 @@ def main():
                          "实测'83%% 下滑在密封破裂瞬间'的弹跳棘轮。起标=实测"
                          "单次弹跳×0.8 宁欠勿过；与 --sag-comp 建议 A/B 期"
                          "只开一个（同开双份推挤支撑系）。范围 0~25")
+    ap.add_argument("--handover-weights", nargs="?",
+                    const="0.6,0.25,0.1,0.05,0", default=None,
+                    help="交接载荷分配按窗序轮转距离加权（5 权重：w1=最晚才"
+                         "轮到抬的支撑腿=刚抬过的，w5=下一个要抬的；自动归一化，"
+                         "需同时开 --handover）。不带值=激进档 0.6,0.25,0.1,"
+                         "0.05,0：晚轮到多接——早收到的载荷被后续落地的零预载"
+                         "锁定稀释回集体，模型稳态循环内应力较均分 -32%%"
+                         "（HANDOVER-DESIGN 附录 A）。口径假设按'轮到 X'提示"
+                         "轮转抬腿，偏离轮转（反复抬同一腿）时分配失真勿开。"
+                         "⚠ 非单调，且改变稳态运行点，δ 表需下调重标")
     ap.add_argument("--release", action="store_true",
                     help="只做逐足串行放气+回站姿")
     args = ap.parse_args()
@@ -280,6 +291,15 @@ def main():
             handover = parse_handover(args.handover)
         except ValueError as e:
             ap.error(str(e))
+    ho_w = None
+    if args.handover_weights is not None:
+        if handover is None:
+            ap.error("--handover-weights 需要同时开 --handover（权重只作用于"
+                     "交接载荷的分配）")
+        try:
+            ho_w = parse_handover_weights(args.handover_weights)
+        except ValueError as e:
+            ap.error(str(e))
     if not args.release and not sys.stdin.isatty():
         # TTY 检查必须在碰任何硬件之前：否则真机先上电站立、再在 termios
         # 处崩溃断电瘫倒（审核发现 #5）。--release 无需键盘，放行。
@@ -299,6 +319,8 @@ def main():
     if handover is not None:
         cfg = replace(cfg, legs=tuple(
             replace(l, handover_mm=handover[l.name]) for l in cfg.legs))
+    if ho_w is not None:
+        cfg = replace(cfg, handover_slot_w=ho_w)
     if args.air:
         cfg = replace(cfg, max_attach_retry=1)   # 架空必 FAULT，少陪跑几轮重试
     # 步幅几何上限按最终 cfg（站高/压入/补偿/加深封顶全生效后）动态验证：
@@ -543,6 +565,13 @@ def main():
                   f"{ho_max:g}——δ 未计进步幅总账，大步幅与大 δ 不同开"
                   + ("" if room >= ho_max else "（⚠ 余量不足，先降速/减步幅）"))
             log.note(f"handover δmax={ho_max:g}mm 支撑尾余量={room:.1f}mm")
+            if cfg.handover_slot_w:
+                print("交接载荷分配：按窗序轮转距离加权（晚轮到→先轮到）"
+                      + "/".join(f"{v:.2f}" for v in cfg.handover_slot_w)
+                      + "——模型稳态内应力较均分低 ~30%，δ 表偏大时下调重标；"
+                      "口径假设按'轮到 X'提示轮转抬腿")
+                log.note("handover_slot_w="
+                         + ",".join(f"{v:.3f}" for v in cfg.handover_slot_w))
             if cfg.climb_sag_comp_mm > 0:
                 print("⚠ --sag-comp 与 --handover 同开：交接治坠源、补偿是"
                       "坠后追补，同开双份推挤支撑系白吃工作空间——A/B 标定"

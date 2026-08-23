@@ -57,7 +57,8 @@ from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import (ClimbEngine, LegPhase, LEAN_SPEED_MMS,
-                           parse_handover, HANDOVER_SPEED_MMS)
+                           parse_handover, parse_handover_weights,
+                           HANDOVER_SPEED_MMS)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
@@ -122,6 +123,16 @@ def main():
                          "注意：反复抬同一条腿时支撑指令每次多漂下坡 δ/5、"
                          "轮抬一圈才互相抵回——单腿连标 ~10 次后换腿或重启，"
                          "越界由工作空间冻结兜底")
+    ap.add_argument("--handover-weights", nargs="?",
+                    const="0.6,0.25,0.1,0.05,0", default=None,
+                    help="交接载荷分配按窗序轮转距离加权（5 权重：w1=最晚才"
+                         "轮到抬的支撑腿=刚抬过的，w5=下一个要抬的；自动归一化，"
+                         "需同时开 --handover）。不带值=激进档 0.6,0.25,0.1,"
+                         "0.05,0：晚轮到多接——早收到的载荷被后续落地的零预载"
+                         "锁定稀释回集体，模型稳态循环内应力较均分 -32%%"
+                         "（HANDOVER-DESIGN 附录 A）。口径假设按'轮到 X'提示"
+                         "轮转抬腿，偏离轮转（反复抬同一腿）时分配失真勿开。"
+                         "⚠ 非单调，且改变稳态运行点，δ 表需下调重标")
     ap.add_argument("--stand-height", type=float,
                     default=DEFAULT_CONFIG.stand_height,
                     help="站高 mm（默认 %(default)g，范围 55~95）")
@@ -142,6 +153,15 @@ def main():
             handover = parse_handover(args.handover)
         except ValueError as e:
             ap.error(str(e))
+    ho_w = None
+    if args.handover_weights is not None:
+        if handover is None:
+            ap.error("--handover-weights 需要同时开 --handover（权重只作用于"
+                     "交接载荷的分配）")
+        try:
+            ho_w = parse_handover_weights(args.handover_weights)
+        except ValueError as e:
+            ap.error(str(e))
     if not sys.stdin.isatty():
         sys.exit("需要交互终端（ssh 加 -t；勿用 nohup/管道跑本脚本）")
 
@@ -155,6 +175,8 @@ def main():
     if handover is not None:
         cfg = replace(cfg, legs=tuple(
             replace(l, handover_mm=handover[l.name]) for l in cfg.legs))
+    if ho_w is not None:
+        cfg = replace(cfg, handover_slot_w=ho_w)
 
     log = RunLog(os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs"),
@@ -259,6 +281,13 @@ def main():
                   + f"mm，铺设 {HANDOVER_SPEED_MMS:g}mm/s"
                   f"（最长 {ho_max / HANDOVER_SPEED_MMS:.1f}s/次抬起）。"
                   "A/B 判据：vent 无可见弹跳、每轮下滑 <10mm、电流不再爬升")
+            if cfg.handover_slot_w:
+                print("交接载荷分配：按窗序轮转距离加权（晚轮到→先轮到）"
+                      + "/".join(f"{v:.2f}" for v in cfg.handover_slot_w)
+                      + "——模型稳态内应力较均分低 ~30%，δ 表偏大时下调重标；"
+                      "口径假设按'轮到 X'提示轮转抬腿")
+                log.note("handover_slot_w="
+                         + ",".join(f"{v:.3f}" for v in cfg.handover_slot_w))
 
         print("就位暂停：确认无异常后按 p 开始全吸附启动序列（ESC×2 断电退出）")
         while True:

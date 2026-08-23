@@ -1253,3 +1253,73 @@ def test_parse_handover_formats_and_bounds():
         except ValueError:
             continue
         raise AssertionError(f"{bad!r} 应被拒绝")
+
+
+def test_handover_weighted_allocation_by_rotation_distance():
+    """--handover-weights：交接载荷按窗序轮转距离分配（w[0]=最晚才轮到抬的
+    支撑腿=刚抬过的，w[4]=下一个要抬的）。窗序 R3→L1→R2→L3→R1→L2：抬 L1
+    时晚→先 = R3,L2,R1,L3,R2——**首抬就正确**（启动吸附序 L1..R3 ≠ 窗序，
+    按落地新旧排会把首轮分错，第一版实测踩过）；再抬 L2 验证随抬腿换位。
+    任意归一化权重下六腿位移矢量和 = 0（均值不变=身体指令不动）照旧成立。"""
+    w = (0.6, 0.25, 0.1, 0.05, 0.0)
+    cfg = replace(CFG, handover_slot_w=w, legs=tuple(
+        replace(l, handover_mm=10.0) for l in CFG.legs))
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(cfg, ctl)
+    start(eng)
+    d = 10.0
+    f0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    assert eng.request_lift("L1") is None
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["L1"] == LegPhase.VENT
+    assert math.isclose(eng.foot["L1"][0], f0["L1"][0] + d, abs_tol=1e-6)
+    for n, share in (("R3", 0.6), ("L2", 0.25), ("R1", 0.1),
+                     ("L3", 0.05), ("R2", 0.0)):
+        assert math.isclose(eng.foot[n][0], f0[n][0] - d * share,
+                            abs_tol=1e-6), n
+        assert math.isclose(eng.foot[n][1], f0[n][1], abs_tol=1e-9)
+    for _ in range(int(20 / DT)):                  # 先到悬停才能落地
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.HOVER:
+            break
+    assert eng.phase_of["L1"] == LegPhase.HOVER
+    assert eng.step_land() is None
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.STANCE and not eng.step_active:
+            break
+    assert eng.phase_of["L1"] == LegPhase.STANCE
+    f1 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    assert eng.request_lift("L2") is None      # 窗序上 L2 的上一位是 R1
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L2"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["L2"] == LegPhase.VENT
+    for n, share in (("R1", 0.6), ("L3", 0.25), ("R2", 0.1),
+                     ("L1", 0.05), ("R3", 0.0)):
+        assert math.isclose(eng.foot[n][0], f1[n][0] - d * share,
+                            abs_tol=1e-6), n
+    tot = sum(eng.foot[n][0] - f1[n][0] for n in LEG_NAMES)
+    assert abs(tot) < 1e-6
+
+
+def test_parse_handover_weights_formats_and_bounds():
+    """--handover-weights 解析：5 元、自动归一化、负值/零和/错个数拒绝。"""
+    from hexapod.climb import parse_handover_weights
+    w = parse_handover_weights("0.6,0.25,0.1,0.05,0")
+    assert all(math.isclose(a, b, abs_tol=1e-12)
+               for a, b in zip(w, (0.6, 0.25, 0.1, 0.05, 0.0)))
+    w2 = parse_handover_weights("2,1,1,0,0")           # 自动归一化
+    assert math.isclose(sum(w2), 1.0) and math.isclose(w2[0], 0.5)
+    for bad in ("0.6,0.25", "1,1,1,1,1,1", "1,1,1,1,-1", "0,0,0,0,0",
+                "a,b,c,d,e", ""):
+        try:
+            parse_handover_weights(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"{bad!r} 应被拒绝")

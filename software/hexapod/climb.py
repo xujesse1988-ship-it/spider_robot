@@ -193,6 +193,24 @@ def parse_handover(spec):
     return out
 
 
+def parse_handover_weights(spec):
+    """解析 --handover-weights 为 5 元权重元组（自动归一化）。份额按窗序
+    轮转距离套用：w[0]=最晚才轮到抬的支撑腿（刚抬过的那条），w[4]=下一个
+    要抬的。非法格式/负值/零和抛 ValueError（脚本层转 ap.error）。"""
+    try:
+        w = tuple(float(v) for v in spec.split(","))
+    except ValueError:
+        raise ValueError(f"--handover-weights 格式错（{spec!r}）：5 个逗号分隔"
+                         "数（新→老），如 0.6,0.25,0.1,0.05,0") from None
+    if len(w) != 5:
+        raise ValueError(f"--handover-weights 需要恰 5 个值（新→老），"
+                         f"给了 {len(w)}")
+    if any(v < 0 for v in w) or sum(w) <= 0:
+        raise ValueError("--handover-weights 权重须非负且和大于 0")
+    total = sum(w)
+    return tuple(v / total for v in w)
+
+
 def _press_tilt(cfg, r, z_press):
     """(径向 r, 压入深度 z) 姿态下，物理吸盘轴偏离面法线的带符号角（rad）。
     吸盘轴 = a_t + cup_delta（勿拿 a_t 当吸盘轴，LEG-GEOMETRY §2.13 教训）；
@@ -618,11 +636,32 @@ class ClimbEngine:
             self._ho_left -= step
             dx, dy = self._down
             sup = [n for n in LEG_NAMES if self.phase_of[n] == LegPhase.STANCE]
+            w = self.cfg.handover_slot_w
+            if len(w) == len(sup):
+                # 载荷分配按窗序轮转距离加权：w[0]=最晚才轮到抬的支撑腿
+                # （轮转上刚抬过的那条），w[-1]=下一个要抬的。机理（附录 A
+                # 模型数值，模型排序即 (j-a)%6 的轮转距离）：每次落地的零预
+                # 载锁定把受力格局重摊——早收到的载荷被后续落地稀释回集体，
+                # 晚收到的原封不动攒到该腿自己抬腿，所以"稀释机会最多的腿
+                # 多接"。激进档 0.6/0.25/0.1/0.05/0 稳态循环内应力 29.7→
+                # 20.2（-32%）；非单调（全给一条收益归零），反向 +30% 更糟。
+                # ⚠ 不按"落地新旧"排：启动吸附序（L1..R3）≠ 窗序轮转
+                # （R3L1R2L3R1L2），落地新旧在启动后的首轮会错位（用户提醒
+                # 抓获）；窗序距离从第一抬就正确且不需要落地时间戳。代价=
+                # 假设按轮转抬（跟"轮到 X"提示走）；偏离轮转（反复抬同一
+                # 腿标定 δ）时分配失真，那种场合别开权重。⚠ 开权重改变
+                # 稳态运行点，δ 表需下调重标。任意归一化权重下六腿位移和
+                # =0（均值不变=身体指令不动）照旧成立
+                k0 = self.slot_order.index(cur)
+                order = [self.slot_order[(k0 - a) % 6] for a in range(1, 6)]
+                share = {n: w[k] for k, n in enumerate(order)}
+            else:                               # 未配置（空元组）=均分 δ/5
+                share = {n: 1.0 / len(sup) for n in sup}
             self.foot[cur][0] -= dx * step      # 反下坡 = 上坡 = 卸载方向
             self.foot[cur][1] -= dy * step
             for n in sup:                       # 实际支撑数（一次一腿下恒 5）
-                self.foot[n][0] += dx * step / len(sup)
-                self.foot[n][1] += dy * step / len(sup)
+                self.foot[n][0] += dx * step * share[n]
+                self.foot[n][1] += dy * step * share[n]
             if self._ho_left <= _EPS:
                 self.ctl.request_release(LEG_NAMES.index(cur))
                 self.phase_of[cur] = LegPhase.VENT

@@ -1,3 +1,5 @@
+import time
+
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA)
 
@@ -243,3 +245,58 @@ def test_tankless_climb_engine_full_cycle():
         lifted = lifted or any(p != LegPhase.STANCE
                                for p in eng.phase_of.values())
     assert lifted and eng.frozen is None
+
+
+def _bare_pi5io():
+    """不碰硬件构造 Pi5VacuumIO（绕开 __init__ 的 lgpio/smbus 导入）：只测
+    _kpa 的读失败容忍逻辑。08-23 实测泵/阀通电瞬态致 Errno 121 且 <1s 自愈，
+    单次 NACK 直接上抛会把毛刺放大成全机冻结——本组测试固化"重试一次→
+    0.5s 旧值→持续才上抛"的梯子。"""
+    from hexapod.adhesion import Pi5VacuumIO
+    io = object.__new__(Pi5VacuumIO)
+    io._cache = {}
+    io._burst = []
+    io.read_faults = 0
+    return io
+
+
+def test_bus_error_rides_glitch_then_raises_when_sustained():
+    io = _bare_pi5io()
+    adc = (0x48, 1)
+    calls = []
+    io._read_v = lambda addr, ch: (calls.append("ok"), 2.0)[1]
+    k0 = io._kpa(adc)                      # 灌一个新鲜缓存
+
+    def read_fail(addr, ch):
+        calls.append("fail")
+        raise OSError(121, "Remote I/O error")
+    io._read_v = read_fail
+    time.sleep(0.06)                       # 过 CACHE_S/突发窗，走真实读路径
+    assert io._kpa(adc) == k0              # 瞬态：重试后用旧值顶，不上抛
+    assert io.read_faults == 1
+    assert calls.count("fail") == 2        # 首读 + 重试各一次
+    # 旧值做旧 >0.5s = 持续失联：必须上抛，报文点名总线失联 + 芯片地址
+    io._cache[adc] = (k0, time.time() - 0.6)
+    io._burst = []
+    try:
+        io._kpa(adc)
+    except IOError as e:
+        assert "总线失联" in str(e) and "0x48" in str(e)
+    else:
+        raise AssertionError("持续总线失联未上抛")
+
+
+def test_bus_error_single_glitch_recovers_on_retry():
+    io = _bare_pi5io()
+    adc = (0x49, 2)
+    seq = [OSError(121, "Remote I/O error"), 1.9]
+
+    def read_flaky(addr, ch):
+        v = seq.pop(0)
+        if isinstance(v, Exception):
+            raise v
+        return v
+    io._read_v = read_flaky
+    kpa = io._kpa(adc)                     # 首读炸、重试成功：拿到新鲜值
+    assert not seq and io.read_faults == 0
+    assert abs(kpa - io.KPA_PER_V * (1.9 * io.V_DIV - io.V_ATM)) < 1e-9

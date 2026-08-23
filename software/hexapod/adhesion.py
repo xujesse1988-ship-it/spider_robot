@@ -148,7 +148,8 @@ class Pi5VacuumIO:
         self._bus = SMBus(1)
         self._cache = {}      # (addr, ch) -> (kpa, 采样时刻)
         self._burst = []      # 最近 BURST_WINDOW 内真实转换的时间戳
-        self.read_faults = 0  # 转换超时计数（联调脚本可显示，持续超时会上抛）
+        self.read_faults = 0  # 读失败计数（转换超时/总线失联皆记；联调
+                              # 脚本 TLM IO错= 可显示，持续失败会上抛）
         # 逻辑镜像（True=接通真空 / 泵开）：黑匣子与状态显示用，不回读 GPIO。
         # 初值与上面 claim 的电平一致（阀=排气位断真空、泵停）
         self.valve = [False] * n_feet
@@ -190,11 +191,29 @@ class Pi5VacuumIO:
         if hit and len(self._burst) >= self.MAX_BURST:
             return hit[0]
         self._burst.append(now)
-        v = self._read_v(*adc)
-        if v is None:                       # 转换超时：短期容忍用旧值，持续必须上抛
+        bus_err = None
+        try:
+            v = self._read_v(*adc)
+        except OSError as e:
+            # 总线级失联（如 Errno 121 从机不应答）。08-23 实测（lean_20260823
+            # _165641.log）：三次 121 全部落在泵/阀通电后 0.05~0.6s 内且均
+            # <1s 自愈（EMI/电源瞬态；IO错 全场 0 = 芯片失联前完全健康）——
+            # 单次 NACK 直接上抛会把瞬态毛刺放大成全机冻结。与"转换超时"
+            # 同款容忍：隔 1ms 重试一次，再用 0.5s 内旧值顶，持续失联才
+            # 上抛（降落伞冻结语义不变）。治本在硬件：泵/阀续流二极管、
+            # ADC 板去耦、I2C 走线离 12V 束（P4-GUIDE 排障表）
+            time.sleep(0.001)
+            try:
+                v = self._read_v(*adc)
+            except OSError:
+                v, bus_err = None, e
+        if v is None:                       # 读失败：短期容忍用旧值，持续必须上抛
             self.read_faults += 1
             if hit and now - hit[1] < 0.5:
                 return hit[0]
+            if bus_err is not None:
+                raise IOError(f"ADS1115 0x{adc[0]:02x} AIN{adc[1]} 总线失联"
+                              f"（{bus_err}）") from bus_err
             raise IOError(f"ADS1115 0x{adc[0]:02x} AIN{adc[1]} 转换持续超时")
         kpa = self.KPA_PER_V * (v * self.V_DIV - self.V_ATM)
         self._cache[adc] = (kpa, now)

@@ -7,7 +7,8 @@ from dataclasses import replace
 from hexapod.adhesion import AdhesionController, MockVacuumIO, FootState
 from hexapod.climb import (ClimbEngine, LegPhase, PRESS_DEPTH_MAX,
                            TILT_BAND_DEG, _press_tilt, max_straight_step,
-                           parse_handover, HANDOVER_SPEED_MMS)
+                           parse_handover, parse_leg_order,
+                           gait_with_slot_order, HANDOVER_SPEED_MMS)
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
 from hexapod.driver import MockDriver
 from hexapod.kinematics import leg_ik
@@ -1610,3 +1611,114 @@ def test_lean_room_reserves_inflight_handover():
     assert eng._ho_left > 10.0                         # 大头还没铺
     # 预扣 ≈ 剩余交接量 × 最大份额（均分 0.2）≈ 3.4mm
     assert eng._lean_room(1.0) <= room0 - 2.0
+
+
+# ---------- 自定义抬腿窗序（--leg-order，含启动吸附序同步） ----------
+
+ORDER = ("L1", "R1", "L2", "R2", "L3", "R3")
+
+
+def make_order_engine(order, deltas=None, slot_w=()):
+    """按自定义窗序建引擎：重排相位偏移（gait_with_slot_order），
+    slot_order/轮次/权重轮转距离/启动吸附序应全部自动跟随。"""
+    cfg = CFG
+    if deltas or slot_w:
+        cfg = replace(CFG, handover_slot_w=slot_w, legs=tuple(
+            replace(l, handover_mm=(deltas or {}).get(l.name, 0.0))
+            for l in CFG.legs))
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    return io, ctl, ClimbEngine(cfg, ctl, gait_with_slot_order(order))
+
+
+def test_parse_leg_order_formats_and_bounds():
+    """--leg-order 解析：下划线/逗号分隔、不分大小写；缺腿/重复/未知名/
+    空串拒绝（非排列会破坏窗口拼接）。"""
+    assert parse_leg_order("L1_R1_L2_R2_L3_R3") == ORDER
+    assert parse_leg_order("l1,r1,l2,r2,l3,r3") == ORDER
+    assert parse_leg_order("R3_L1_R2_L3_R1_L2") == \
+        ("R3", "L1", "R2", "L3", "R1", "L2")           # 默认序也可显式给
+    for bad in ("L1_R1_L2_R2_L3", "L1_R1_L2_R2_L3_L3", "L1_R1_L2_R2_L3_X9",
+                "L1_R1_L2_R2_L3_R3_L1", "", "L1"):
+        try:
+            parse_leg_order(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"{bad!r} 应被拒绝")
+
+
+def test_custom_leg_order_drives_slots_attach_and_walk():
+    """自定义窗序生效链：slot_order=给定序、启动吸附序=同一序、行走抬腿
+    按同一序轮转（相位偏移重排后窗口拼接不变，一次一腿等硬规则照旧）。"""
+    io, ctl, eng = make_order_engine(ORDER)
+    assert eng.slot_order == ORDER
+    assert eng.step_leg == "L1"                        # 轮次指针从新序首腿起
+    pressed = []
+    for _ in range(int(30 / DT)):                      # 启动：吸附序=窗序
+        eng.update(DT)
+        moving = [n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE]
+        assert len(moving) <= 1
+        for n in moving:
+            if n not in pressed:
+                pressed.append(n)
+        if eng.started:
+            break
+    assert eng.started and pressed == list(ORDER)
+    bot = Hexapod(MockDriver())
+    lifts = []
+    was_stance = {n: True for n in LEG_NAMES}
+    for _ in range(int(40 / DT)):                      # 行走：抬腿按新序轮转
+        bot.pulses(eng.update(DT, 30.0, 0.0, 0.0))
+        assert eng.frozen is None
+        for n in LEG_NAMES:
+            swinging = eng.phase_of[n] != LegPhase.STANCE
+            if swinging and was_stance[n]:
+                lifts.append(n)
+            was_stance[n] = not swinging
+        if len(lifts) >= 8:
+            break
+    assert len(lifts) >= 8
+    for k, n in enumerate(lifts):
+        assert n == ORDER[k % 6], f"第 {k} 抬 {n}，应为 {ORDER[k % 6]}"
+
+
+def test_custom_leg_order_weights_follow_new_rotation():
+    """权重轮转距离按新序算：order=L1..R3 时抬 L1，w[0] 给新序上刚抬过的
+    R3（列表末位=L1 的轮转前驱）、w[4] 给下一个要抬的 R1；抬新序继任者
+    R1 不触发偏离轮转守卫。"""
+    w = (0.6, 0.25, 0.1, 0.05, 0.0)
+    io, ctl, eng = make_order_engine(
+        ORDER, deltas={n: 10.0 for n in LEG_NAMES}, slot_w=w)
+    start(eng)
+    d = 10.0
+    f0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    assert eng.request_lift("L1") is None
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["L1"] == LegPhase.VENT
+    for n, share in (("R3", 0.6), ("L3", 0.25), ("R2", 0.1),
+                     ("L2", 0.05), ("R1", 0.0)):
+        assert math.isclose(eng.foot[n][0], f0[n][0] - d * share,
+                            abs_tol=1e-6), n
+    tot = sum(eng.foot[n][0] - f0[n][0] for n in LEG_NAMES)
+    assert abs(tot) < 1e-6
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.HOVER:
+            break
+    assert eng.step_land() is None
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.STANCE and not eng.step_active:
+            break
+    f1 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    assert eng.request_lift("R1") is None              # 新序上 L1 的继任者
+    for _ in range(int(20 / DT)):
+        eng.update(DT)
+        if eng.phase_of["R1"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["R1"] == LegPhase.VENT
+    assert eng.handover_note is None                   # 按新序轮转，守卫不出手
+    assert math.isclose(eng.foot["L1"][0], f1["L1"][0] - d * 0.6, abs_tol=1e-6)

@@ -98,7 +98,9 @@ from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import (ClimbEngine, LegPhase, max_straight_step,
                            parse_handover, parse_handover_weights,
+                           parse_leg_order, gait_with_slot_order,
                            HANDOVER_SPEED_MMS)
+from hexapod.gait import CLIMB
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch, PHASE_CH, ADH_CH
@@ -258,6 +260,16 @@ def main():
                          "自动退回均分 δ/5 并提示——原先照套权重会把 0.6δ "
                          "每次砸向同一条支撑腿（审核）。"
                          "⚠ 非单调，且改变稳态运行点，δ 表需下调重标")
+    ap.add_argument("--leg-order", default=None,
+                    help="抬腿窗序（含启动吸附序，两者同一顺序）：六腿排列如 "
+                         "L1_R1_L2_R2_L3_R3（下划线或逗号分隔，不分大小写，"
+                         "不缺不重）。默认=CLIMB 对角交替波浪 "
+                         "R3_L1_R2_L3_R1_L2——相邻抬腿全在对角/交叉位、不同侧"
+                         "三连（08-19 实测同侧连抬扰动集中一侧=R2/R3 下坠的"
+                         "结构性根源）。自定义顺序属实验口径，同侧/同排连抬"
+                         "自担代价；'轮到 X'提示、--handover-weights 轮转距离"
+                         "、启动吸附序全部自动跟随新序。⚠ 换序改变权重与"
+                         "逐腿 δ 的稳态格局，A/B 不得跨序比较、δ 表按序分组")
     ap.add_argument("--release", action="store_true",
                     help="只做逐足串行放气+回站姿")
     args = ap.parse_args()
@@ -305,6 +317,12 @@ def main():
             ho_w = parse_handover_weights(args.handover_weights)
         except ValueError as e:
             ap.error(str(e))
+    leg_order = None
+    if args.leg_order is not None:
+        try:
+            leg_order = parse_leg_order(args.leg_order)
+        except ValueError as e:
+            ap.error(str(e))
     if not args.release and not sys.stdin.isatty():
         # TTY 检查必须在碰任何硬件之前：否则真机先上电站立、再在 termios
         # 处崩溃断电瘫倒（审核发现 #5）。--release 无需键盘，放行。
@@ -330,7 +348,10 @@ def main():
         cfg = replace(cfg, max_attach_retry=1)   # 架空必 FAULT，少陪跑几轮重试
     # 步幅几何上限按最终 cfg（站高/压入/补偿/加深封顶全生效后）动态验证：
     # 落点唇口 ≤11.5° 工作带 + 支撑尾端包络双口径（climb.max_straight_step）
-    step_cap = max_straight_step(cfg)
+    # 自定义窗序：重排相位偏移（值集不变），slot_order/轮次/权重轮转距离/
+    # 启动吸附序全部自动跟随——引擎与几何账都吃同一个 gait
+    gait = gait_with_slot_order(leg_order) if leg_order else CLIMB
+    step_cap = max_straight_step(cfg, gait)
     if args.max_step > step_cap + 1e-6:
         ap.error(f"--max-step {args.max_step:g} 超本几何安全上限 "
                  f"{step_cap:.0f}mm（站高 {cfg.stand_height:g}/压入 "
@@ -345,7 +366,7 @@ def main():
         # 在 climb_max_step 内）。支撑腿一个周期攒 5 次份额、轮到自己抬才
         # 抵回，最大额外外摆 ≈ δmax（任意归一化权重下同界）
         ho_max = max(handover.values())
-        tail = ClimbEngine(cfg, None).comp_tail
+        tail = ClimbEngine(cfg, None, gait).comp_tail
         room = tail - cfg.climb_max_step / 2.0
         if ho_max > room + 1e-6:
             ap.error(f"--handover δmax {ho_max:g}mm 超支撑尾余量 {room:.1f}mm"
@@ -374,7 +395,8 @@ def main():
              f" tilt_trim={cfg.cup_tilt_trim_deg:g}°"
              f" handover={ho_txt}"
              f" SPEED={speed:g} TURN={TURN} update_hz={cfg.update_hz:g}"
-             f" max_step={cfg.climb_max_step}")
+             f" max_step={cfg.climb_max_step}"
+             + (f" leg_order={'_'.join(leg_order)}" if leg_order else ""))
     _prev_hook = sys.excepthook
 
     def _crash_hook(tp, val, tb):
@@ -400,7 +422,7 @@ def main():
         ctl_kw["suck_timeout_s"] = 2.5   # 泵实时抽比罐存量慢，放宽超时
     ctl = AdhesionController(io, **ctl_kw)
     bot = Hexapod(drv, cfg)
-    eng = ClimbEngine(cfg, ctl, air_mode=args.air)
+    eng = ClimbEngine(cfg, ctl, gait, air_mode=args.air)
     watch = ClimbWatch(log, eng, ctl, io, cfg)   # 挂上吸附钩子 + 跳变轮询
     log.note(f"阈值: ATTACH={ATTACH_KPA} PUMP_ON={PUMP_ON_KPA}"
              f" PUMP_OFF={PUMP_OFF_KPA} comp_tail={eng.comp_tail:.1f}mm"
@@ -560,6 +582,12 @@ def main():
                   f"{worst:.0f}>{cfg.climb_max_step:g}mm），引擎实际按 "
                   f"≈{eff_v:.1f}mm/s 下发；状态行与黑匣子记的都是限幅后实际值")
             log.note(f"SPEED={speed:g} 被步幅上限缩放：直行实际 ≈{eff_v:.2f}mm/s")
+        if leg_order:
+            # 打 eng.slot_order 而不是回显参数：证明相位表真按新序生效了
+            print("抬腿窗序（含启动吸附序）：" + "→".join(eng.slot_order)
+                  + "——实验口径：默认对角波浪的'相邻抬腿全在对角位'不再"
+                  "保证，同侧/同排连抬注意软肩下坠；权重/逐腿 δ 稳态随序"
+                  "改变，A/B 勿跨序比较")
         if cfg.climb_sag_comp_mm > 0:
             # 本速度直行的每事件实际量（工作空间总账限额 eng.comp_tail，
             # 随压深在引擎里反解）

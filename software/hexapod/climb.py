@@ -61,7 +61,8 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
 真空，吸附态冻结是安全态），人工处理后 clear_freeze() 继续。
 
 启动序列：调用方先让机器人 stand() 到默认站姿，引擎按窗序
-（R3→L1→R2→L3→R1→L2）逐足"压入->抽气确认->下一腿"（08-19 实机结论：
+（默认 R3→L1→R2→L3→R1→L2；--leg-order 换序时吸附序同步跟随）
+逐足"压入->抽气确认->下一腿"（08-19 实机结论：
 六足同时压入没有反力座——机身被整体顶起/顶离墙，杯压不实；逐足压时其余
 腿还站着当反力座，压紧力=体重/扶持力的分摊。逐足抽气原本也是防六阀同开
 抽垮罐。吸附序取窗序＝落地新旧与抬腿轮转从启动起对齐、首抬腿 R3 是驻留
@@ -221,6 +222,37 @@ def parse_handover_weights(spec):
     return tuple(v / total for v in w)
 
 
+def parse_leg_order(spec):
+    """解析 --leg-order 为六腿窗序元组。格式 L1_R1_L2_R2_L3_R3（下划线或
+    逗号分隔，腿名不分大小写），必须恰是六腿的一个排列——缺腿/重复/未知名
+    都会破坏"5/6 占空+等距相位恰好铺满一圈"的窗口拼接，一律拒绝
+    （抛 ValueError，脚本层转 ap.error）。"""
+    names = tuple(t.strip().upper()
+                  for t in spec.replace(",", "_").split("_") if t.strip())
+    if sorted(names) != sorted(LEG_NAMES):
+        raise ValueError(
+            f"--leg-order 必须是六腿的一个排列（如 {'_'.join(LEG_NAMES)}，"
+            f"不缺不重），给了 {spec!r}")
+    return names
+
+
+def gait_with_slot_order(order, gait=CLIMB):
+    """按指定窗序重排步态的相位偏移：窗序（抬腿轮转）= 窗头时刻
+    (duty−offset) mod 1 升序，是从相位表**导出**的——所以改抬腿顺序的正确
+    做法是重排偏移而不是碰 slot_order。取原步态的偏移值集合按窗头排序后
+    按新序重新指派：浮点值与原步态完全同集，窗口拼接的边界行为不变；
+    slot_order/轮次推进/权重轮转距离/启动吸附序（=窗序）全部自动跟随。
+    ⚠ 默认 CLIMB 序（R3→L1→R2→L3→R1→L2 对角交替波浪）是有讲究的：相邻
+    抬腿全在对角/交叉位、不同侧三连（08-19 实测同侧连抬扰动集中一侧=
+    R2/R3 下坠的结构性根源）——自定义顺序属实验口径，注意同侧/同排连抬
+    的代价；换序改变权重与逐腿 δ 的稳态格局，A/B 不得跨序比较。"""
+    heads = sorted(LEG_NAMES,
+                   key=lambda n: (gait.duty - gait.offsets[n]) % 1.0)
+    vals = [gait.offsets[n] for n in heads]
+    return replace(gait, name=f"{gait.name}[{'_'.join(order)}]",
+                   offsets={n: vals[k] for k, n in enumerate(order)})
+
+
 def _press_tilt(cfg, r, z_press):
     """(径向 r, 压入深度 z) 姿态下，物理吸盘轴偏离面法线的带符号角（rad）。
     吸盘轴 = a_t + cup_delta（勿拿 a_t 当吸盘轴，LEG-GEOMETRY §2.13 教训）；
@@ -288,8 +320,10 @@ class ClimbEngine:
         self._geom = GaitEngine(replace(cfg, cycle_time=cfg.climb_cycle_time,
                                         max_step=cfg.climb_max_step), gait)
         # 窗序（抬腿轮转顺序）由步态相位表导出：窗头时刻 = (duty-offset) mod 1
-        # 升序，CLIMB 现为 R3→L1→R2→L3→R1→L2（对角交替波浪）。轮次推进
-        # 与起步对轮次全按它走，不许再拿 LEG_NAMES 的排列当窗序硬编码
+        # 升序，CLIMB 默认 R3→L1→R2→L3→R1→L2（对角交替波浪）。轮次推进
+        # 与起步对轮次全按它走，不许再拿 LEG_NAMES 的排列当窗序硬编码；
+        # 换序的唯一正道 = gait_with_slot_order 重排偏移（--leg-order 入口），
+        # 吸附序/轮次/权重轮转距离全自动跟随
         self.slot_order = tuple(sorted(
             LEG_NAMES, key=lambda n: (gait.duty - gait.offsets[n]) % 1.0))
         # 爬墙站位 ≠ 地面站位（foot_reach=130 时吸盘轴偏法线 ~19°，超 ±15°

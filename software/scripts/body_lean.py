@@ -58,7 +58,9 @@ from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import (ClimbEngine, LegPhase, LEAN_SPEED_MMS,
                            parse_handover, parse_handover_weights,
+                           parse_leg_order, gait_with_slot_order,
                            HANDOVER_SPEED_MMS)
+from hexapod.gait import CLIMB
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
@@ -138,6 +140,13 @@ def main():
                          "权重会把 0.6δ 每次砸向同一条支撑腿，实测 4~6 次抬腿"
                          "吹爆工作空间（审核）。"
                          "⚠ 非单调，且改变稳态运行点，δ 表需下调重标")
+    ap.add_argument("--leg-order", default=None,
+                    help="抬腿窗序（含启动吸附序）：六腿排列如 "
+                         "L1_R1_L2_R2_L3_R3（下划线或逗号分隔，不分大小写，"
+                         "不缺不重）。默认=CLIMB 对角波浪 R3_L1_R2_L3_R1_L2。"
+                         "'轮到 X'提示与 --handover-weights 轮转距离自动跟随"
+                         "新序（守卫仍按新序判偏离轮转）。⚠ 换序改变权重与"
+                         "逐腿 δ 的稳态格局，δ 标定按序分组、勿跨序比较")
     ap.add_argument("--stand-height", type=float,
                     default=DEFAULT_CONFIG.stand_height,
                     help="站高 mm（默认 %(default)g，范围 55~95）")
@@ -165,6 +174,12 @@ def main():
                      "交接载荷的分配）")
         try:
             ho_w = parse_handover_weights(args.handover_weights)
+        except ValueError as e:
+            ap.error(str(e))
+    leg_order = None
+    if args.leg_order is not None:
+        try:
+            leg_order = parse_leg_order(args.leg_order)
         except ValueError as e:
             ap.error(str(e))
     if not sys.stdin.isatty():
@@ -197,7 +212,8 @@ def main():
     log.note(f"参数: lean_step={args.lean_step:g}mm lean_speed={LEAN_SPEED_MMS:g}mm/s"
              f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
              f" stand={cfg.stand_height:g} tilt_trim={cfg.cup_tilt_trim_deg:g}°"
-             f" handover={ho_txt}")
+             f" handover={ho_txt}"
+             + (f" leg_order={'_'.join(leg_order)}" if leg_order else ""))
     _prev_hook = sys.excepthook
 
     def _crash_hook(tp, val, tb):
@@ -217,7 +233,8 @@ def main():
         ctl_kw["suck_timeout_s"] = 2.5
     ctl = AdhesionController(io, **ctl_kw)
     bot = Hexapod(drv, cfg)
-    eng = ClimbEngine(cfg, ctl)
+    gait = gait_with_slot_order(leg_order) if leg_order else CLIMB
+    eng = ClimbEngine(cfg, ctl, gait)
     watch = ClimbWatch(log, eng, ctl, io, cfg)
     log.note(f"阈值: ATTACH={ATTACH_KPA} PUMP_ON={PUMP_ON_KPA}"
              f" PUMP_OFF={PUMP_OFF_KPA} comp_tail={eng.comp_tail:.1f}mm"
@@ -279,6 +296,10 @@ def main():
         print(f"倾身几何余量（站位起算）：前 ~{fwd_room:.0f}mm / "
               f"后 ~{eng._lean_room(-1.0):.0f}mm，每档 {args.lean_step:g}mm，"
               f"铺设速率 {LEAN_SPEED_MMS:g}mm/s")
+        if leg_order:
+            # 打 eng.slot_order 而不是回显参数：证明相位表真按新序生效了
+            print("抬腿窗序（含启动吸附序）：" + "→".join(eng.slot_order)
+                  + "——'轮到 X'提示与权重轮转按新序走；δ 标定按序分组")
         ho_max = max(cfg.leg(n).handover_mm for n in LEG_NAMES)
         if ho_max > 0.0:
             print("零力交接开启：δ "

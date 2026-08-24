@@ -1212,10 +1212,11 @@ def test_handover_direction_rotates_with_heading():
 
 
 def test_handover_lift_in_place_solvable_at_max_delta():
-    """极限 δ 全程 IK 可解（§7.8）：request_lift + δ=20（>21 实测封顶前的
-    最大标定值）走完整抬落，全程 pulses 可解、支撑足除交接分量（下坡 δ/5）
-    外纹丝不动（对比 test_lift_in_place_hover_and_land_back）。"""
-    cfg, io, ctl, eng = make_ho_engine({n: 20.0 for n in LEG_NAMES})
+    """极限 δ 全程 IK 可解（§7.8）：request_lift + δ=45（解析上限，08-24
+    外推 δ*≈28~42 加余量）走完整抬落，全程 pulses 可解、支撑足除交接分量
+    （下坡 δ/5）外纹丝不动（对比 test_lift_in_place_hover_and_land_back）。
+    抬中腿 L2：+δ 上坡对中腿近乎切向，半径只多 ~6mm，不该触发越界截断。"""
+    cfg, io, ctl, eng = make_ho_engine({n: 45.0 for n in LEG_NAMES})
     start(eng)
     bot = Hexapod(MockDriver(), cfg)
     others0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES if n != "L2"}
@@ -1230,7 +1231,7 @@ def test_handover_lift_in_place_solvable_at_max_delta():
     assert math.isclose(eng.foot["L2"][0], x0, abs_tol=1e-6)
     assert math.isclose(eng.foot["L2"][1], y0, abs_tol=1e-6)
     for n, p in others0.items():                       # 支撑足只动交接分量
-        assert math.isclose(eng.foot[n][0], p[0] - 20.0 / 5, abs_tol=1e-6), n
+        assert math.isclose(eng.foot[n][0], p[0] - 45.0 / 5, abs_tol=1e-6), n
         assert math.isclose(eng.foot[n][1], p[1], abs_tol=1e-9)
         assert math.isclose(eng.foot[n][2], p[2], abs_tol=1e-9)
     assert eng.step_land() is None
@@ -1251,7 +1252,9 @@ def test_parse_handover_formats_and_bounds():
     assert got["L1"] == 17.0 and got["R3"] == 9.0
     assert all(got[n] == 0.0 for n in LEG_NAMES if n not in ("L1", "R3"))
     assert parse_handover("0") == {n: 0.0 for n in LEG_NAMES}   # 0=关，合法
-    for bad in ("26", "-1", "L1:26", "L1:-1", "X9:5", "L1:x", "L1:", "abc", ""):
+    # 上限 45（08-24 三组外推 δ*≈28~42 加余量；旧 25 是"弹跳当储能"的错账）
+    assert parse_handover("45") == {n: 45.0 for n in LEG_NAMES}
+    for bad in ("46", "-1", "L1:46", "L1:-1", "X9:5", "L1:x", "L1:", "abc", ""):
         try:
             parse_handover(bad)
         except ValueError:

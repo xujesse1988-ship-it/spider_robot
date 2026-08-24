@@ -175,8 +175,13 @@ def max_straight_step(cfg, gait=CLIMB):
 def parse_handover(spec):
     """解析 --handover 参数为 {腿名: δmm}（未给的腿 0）。两种格式：
     "8" = 六腿统一；"L1:17,R3:9" = 逐腿设（可只给部分腿，腿名不分大小写）。
-    范围 0~25mm（>21 超实测单腿弹跳封顶——舵机扭矩饱和限储能，再大没意义，
-    HANDOVER-DESIGN §6）。非法格式/腿名/越界抛 ValueError（脚本层转 ap.error）。"""
+    范围 0~45mm。上限依据 08-24 三组原地标定（δ=0/12/24，逐腿弹跳对 δ 严格
+    线性，外推零弹跳需 δ*≈28~42mm/腿）：旧上限 25 的理由"弹跳封顶 ~21 ⇒
+    更大没意义"错把放气瞬间的弹跳当储能——弹跳是储能被其余五腿并联接住后
+    的读数（≈储能/5~8，随逐腿刚度），δ 要还的是储能本身。45 = 外推上界 +
+    余量；工作空间不归本口径管——climb_walk 启动按 δmax ≤ comp_tail−半步幅
+    硬拒、引擎 4.7 步逐 tick 包络越界截断兜底（HANDOVER-DESIGN §5/§6）。
+    非法格式/腿名/越界抛 ValueError（脚本层转 ap.error）。"""
     out = {n: 0.0 for n in LEG_NAMES}
     try:
         if ":" in spec:
@@ -192,9 +197,10 @@ def parse_handover(spec):
         raise ValueError(f"--handover 格式错（{spec!r}）：统一值如 8，或逐腿 "
                          f"L1:17,R3:9——{e}") from None
     for n, v in out.items():
-        if not 0.0 <= v <= 25.0:
-            raise ValueError(f"--handover {n}={v:g} 越界：范围 0~25mm"
-                             "（>21 超实测单腿弹跳封顶，没有意义）")
+        if not 0.0 <= v <= 45.0:
+            raise ValueError(f"--handover {n}={v:g} 越界：范围 0~45mm"
+                             "（08-24 外推储能上界 δ*≈42 加余量；"
+                             "更大先查标定口径是不是把弹跳当了储能）")
     return out
 
 

@@ -66,8 +66,9 @@ CLIMB 步态。
                                              # 漏气=3 足承载）——绳保护实验口径；
                                              # δ 表须按双足工况重标（三组=现表
                                              # ×0.5/0.75/1.0 线性外推），A/B 勿
-                                             # 与单足跨口径比较。与 --sag-comp/
-                                             # --handover-weights 互斥
+                                             # 与单足跨口径比较。与 --sag-comp
+                                             # 互斥；权重可同开（双足档
+                                             # 1,1,1,0,0，勿搬单足档）
   python climb_walk.py --lift-gate -45       # 抬腿门槛：其余支撑盘压全部深于
                                              # 此值才放行抬腿（默认 -50；0=关）。
                                              # ATTACHED 的 -30 只是密封判据，刚
@@ -263,17 +264,21 @@ def main():
                          "只开一个（同开双份推挤支撑系）。范围 0~45，步幅"
                          "预算另有启动硬校验（δmax ≤ comp_tail−半步幅）")
     ap.add_argument("--handover-weights", nargs="?",
-                    const="0.6,0.25,0.1,0.05,0", default=None,
+                    const="auto", default=None,
                     help="交接载荷分配按窗序轮转距离加权（5 权重：w1=最晚才"
                          "轮到抬的支撑腿=刚抬过的，w5=下一个要抬的；自动归一化，"
-                         "需同时开 --handover）。不带值=激进档 0.6,0.25,0.1,"
-                         "0.05,0：晚轮到多接——早收到的载荷被后续落地的零预载"
-                         "锁定稀释回集体，模型稳态循环内应力较均分 -32%%"
-                         "（HANDOVER-DESIGN 附录 A）。口径假设按'轮到 X'提示"
-                         "轮转抬腿；偏离轮转（反复抬同一腿）的抬腿由引擎守卫"
-                         "自动退回均分 δ/5 并提示——原先照套权重会把 0.6δ "
-                         "每次砸向同一条支撑腿（审核）。"
-                         "⚠ 非单调，且改变稳态运行点，δ 表需下调重标")
+                         "需同时开 --handover）。不带值=按口径取推荐档：单足="
+                         "激进档 0.6,0.25,0.1,0.05,0（晚轮到多接——早收到的"
+                         "载荷被后续落地的零预载锁定稀释回集体，模型稳态循环内"
+                         "应力较均分 -32%%，HANDOVER-DESIGN 附录 A；单足实测"
+                         "对下滑改善明显）；--dual 下=1,1,1,0,0（刚落的对+次对"
+                         "后腿三等分；份额按距离取值就地归一，模型最差单腿 "
+                         "-12%%/均值 -21%%，DUAL-SWING-DESIGN 附录 C）。"
+                         "⚠ 档位按口径分家：单足激进档照搬双足会把对内后腿"
+                         "推高过均分（模型 32.9 vs 30.8）。口径假设按'轮到 X'"
+                         "提示轮转抬腿；偏离轮转（反复抬同一腿）的抬腿由引擎"
+                         "守卫自动退回均分并提示（审核）。"
+                         "⚠ 非单调，且改变稳态运行点，δ 表按开权重工况标")
     ap.add_argument("--leg-order", default=None,
                     help="抬腿窗序（含启动吸附序，两者同一顺序）：六腿排列如 "
                          "L1_R1_L2_R2_L3_R3（下划线或逗号分隔，不分大小写，"
@@ -293,7 +298,8 @@ def main():
                          "⚠ 支撑冗余降一档（单盘漏气=3 足承载）：绳保护实验"
                          "口径；δ 表须按双足工况重标（body_lean --dual 三组="
                          "现表×0.5/0.75/1.0 线性外推 δ*_pair×0.8），A/B 勿与"
-                         "单足跨口径比较。与 --sag-comp/--handover-weights 互斥")
+                         "单足跨口径比较。与 --sag-comp 互斥；--handover-"
+                         "weights 可同开（双足档 1,1,1,0,0，勿搬单足档）")
     ap.add_argument("--release", action="store_true",
                     help="只做逐足串行放气+回站姿")
     args = ap.parse_args()
@@ -334,6 +340,11 @@ def main():
             ap.error(str(e))
     ho_w = None
     if args.handover_weights is not None:
+        if args.handover_weights == "auto":
+            # 不带值的推荐档按口径分家（DUAL-SWING-DESIGN §3.5/附录 C）：
+            # 单足档照搬双足会把对内后腿推高过均分
+            args.handover_weights = ("1,1,1,0,0" if args.dual
+                                     else "0.6,0.25,0.1,0.05,0")
         if handover is None:
             ap.error("--handover-weights 需要同时开 --handover（权重只作用于"
                      "交接载荷的分配）")
@@ -351,9 +362,6 @@ def main():
         ap.error("--dual 与 --sag-comp 互斥：/5 分摊账按单摆动+5 支撑推导，"
                  "双足下语义不成立；治坠用 --handover（零力交接才是治本层，"
                  "DUAL-SWING-DESIGN §3.5）")
-    if args.dual and args.handover_weights is not None:
-        ap.error("--dual 与 --handover-weights 互斥：5 权重轮转模型按单摆+5 "
-                 "支撑推导，双足 v1 一律均分 δ/4（DUAL-SWING-DESIGN §3.5）")
     if not args.release and not sys.stdin.isatty():
         # TTY 检查必须在碰任何硬件之前：否则真机先上电站立、再在 termios
         # 处崩溃断电瘫倒（审核发现 #5）。--release 无需键盘，放行。
@@ -662,8 +670,10 @@ def main():
             if cfg.handover_slot_w:
                 print("交接载荷分配：按窗序轮转距离加权（晚轮到→先轮到）"
                       + "/".join(f"{v:.2f}" for v in cfg.handover_slot_w)
-                      + "——模型稳态内应力较均分低 ~30%，δ 表偏大时下调重标；"
-                      "口径假设按'轮到 X'提示轮转抬腿，偏离轮转的抬腿该次"
+                      + ("——双足：份额按距离取值就地归一（模型最差单腿 -12%/"
+                         "均值 -21%），δ 表按开权重工况标" if args.dual else
+                         "——模型稳态内应力较均分低 ~30%，δ 表偏大时下调重标")
+                      + "；口径假设按'轮到 X'提示轮转抬腿，偏离轮转的抬腿该次"
                       "自动退回均分（引擎守卫，主循环有提示）")
                 log.note("handover_slot_w="
                          + ",".join(f"{v:.3f}" for v in cfg.handover_slot_w))

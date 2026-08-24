@@ -38,8 +38,9 @@
                                              # ——双足 δ 三组标定载体（三组=单足
                                              # 现表×0.5/0.75/1.0，逐腿 vent 跳变
                                              # 线性外推 δ*_pair×0.8；放气错峰
-                                             # ≥0.4s 保逐腿视频可分辨）。与
-                                             # --handover-weights 互斥
+                                             # ≥0.4s 保逐腿视频可分辨）。权重可
+                                             # 同开（双足档 1,1,1,0,0，对序按
+                                             # 环序轮转否则守卫退均分）
   python body_lean.py --dry                  # 真舵机 + 仿真气路（不碰阀泵）
   python body_lean.py --no-tank              # 无罐：泵直抽歧管（地面/上墙均可）
   python body_lean.py                        # 全链路
@@ -139,18 +140,21 @@ def main():
                          "~10 次后换腿或重启，越界由引擎交接截断兜底（当场"
                          "提前放气并提示，不再推到冻结）")
     ap.add_argument("--handover-weights", nargs="?",
-                    const="0.6,0.25,0.1,0.05,0", default=None,
+                    const="auto", default=None,
                     help="交接载荷分配按窗序轮转距离加权（5 权重：w1=最晚才"
                          "轮到抬的支撑腿=刚抬过的，w5=下一个要抬的；自动归一化，"
-                         "需同时开 --handover）。不带值=激进档 0.6,0.25,0.1,"
-                         "0.05,0：晚轮到多接——早收到的载荷被后续落地的零预载"
-                         "锁定稀释回集体，模型稳态循环内应力较均分 -32%%"
-                         "（HANDOVER-DESIGN 附录 A）。口径假设按'轮到 X'提示"
+                         "需同时开 --handover）。不带值=按口径取推荐档：单足="
+                         "激进档 0.6,0.25,0.1,0.05,0（晚轮到多接——早收到的"
+                         "载荷被后续落地的零预载锁定稀释回集体，模型稳态循环内"
+                         "应力较均分 -32%%，HANDOVER-DESIGN 附录 A；单足实测"
+                         "对下滑改善明显）；--dual 下=1,1,1,0,0（刚落的对+次对"
+                         "后腿三等分，份额按距离取值就地归一，模型最差单腿 "
+                         "-12%%/均值 -21%%，DUAL-SWING-DESIGN 附录 C）。⚠ 档位"
+                         "按口径分家，单足档勿照搬双足。口径假设按'轮到 X'提示"
                          "轮转抬腿；偏离轮转（本脚本反复抬同一腿标 δ 是常态）"
-                         "的抬腿由引擎守卫自动退回均分 δ/5 并提示——原先照套"
-                         "权重会把 0.6δ 每次砸向同一条支撑腿，实测 4~6 次抬腿"
-                         "吹爆工作空间（审核）。"
-                         "⚠ 非单调，且改变稳态运行点，δ 表需下调重标")
+                         "的抬腿由引擎守卫自动退回均分并提示——权重工况标 δ "
+                         "要按环序轮抬（对序 L1+R2→L3+R1→L2+R3，协议 §8.1）。"
+                         "⚠ 非单调，且改变稳态运行点，δ 表按开权重工况标")
     ap.add_argument("--leg-order", default=None,
                     help="抬腿窗序（含启动吸附序）：六腿排列如 "
                          "L1_R1_L2_R2_L3_R3（下划线或逗号分隔，不分大小写，"
@@ -166,7 +170,8 @@ def main():
                          "1.0，ab_quant 逐腿 vent 跳变线性外推 δ*_pair，取 "
                          "×0.8 起标；引擎放气错峰 ≥0.4s 保逐腿可分辨）。"
                          "⚠ 对抬期间恒 4 足吸附；δ 勿与单足口径混标；"
-                         "与 --handover-weights 互斥")
+                         "--handover-weights 可同开（双足档 1,1,1,0,0；标定"
+                         "对序须按环序轮转，权重才不被守卫退回均分）")
     ap.add_argument("--stand-height", type=float,
                     default=DEFAULT_CONFIG.stand_height,
                     help="站高 mm（默认 %(default)g，范围 55~95）")
@@ -189,10 +194,11 @@ def main():
             ap.error(str(e))
     ho_w = None
     if args.handover_weights is not None:
-        if args.dual:
-            ap.error("--dual 与 --handover-weights 互斥：5 权重轮转模型按单摆"
-                     "+5 支撑推导，双足 v1 一律均分 δ/4（DUAL-SWING-DESIGN "
-                     "§3.5）")
+        if args.handover_weights == "auto":
+            # 不带值的推荐档按口径分家（DUAL-SWING-DESIGN §3.5/附录 C）：
+            # 单足档照搬双足会把对内后腿推高过均分
+            args.handover_weights = ("1,1,1,0,0" if args.dual
+                                     else "0.6,0.25,0.1,0.05,0")
         if handover is None:
             ap.error("--handover-weights 需要同时开 --handover（权重只作用于"
                      "交接载荷的分配）")
@@ -343,8 +349,11 @@ def main():
             if cfg.handover_slot_w:
                 print("交接载荷分配：按窗序轮转距离加权（晚轮到→先轮到）"
                       + "/".join(f"{v:.2f}" for v in cfg.handover_slot_w)
-                      + "——模型稳态内应力较均分低 ~30%，δ 表偏大时下调重标；"
-                      "口径假设按'轮到 X'提示轮转抬腿")
+                      + ("——双足：份额按距离取值就地归一（模型最差单腿 -12%/"
+                         "均值 -21%），δ 按开权重工况标、对序须按环序轮转"
+                         if args.dual else
+                         "——模型稳态内应力较均分低 ~30%，δ 表偏大时下调重标")
+                      + "；口径假设按'轮到 X'提示轮转抬腿")
                 log.note("handover_slot_w="
                          + ",".join(f"{v:.3f}" for v in cfg.handover_slot_w))
 

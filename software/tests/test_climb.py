@@ -2112,18 +2112,22 @@ def test_dual_retry_partner_lands_max_two_airborne():
     assert ctl.is_attached(li) and eng.frozen is None
 
 
-def test_dual_engine_rejects_sag_and_weights():
-    """双足禁 sag_comp/权重（§7.12，v1 拍板）：CLI 之外直设 config 的路径
-    也要拒（引擎口双保险）；单足照旧允许。"""
-    for bad in (replace(CFG, climb_sag_comp_mm=3.0),
-                replace(CFG, handover_slot_w=(0.6, 0.25, 0.1, 0.05, 0.0))):
-        try:
-            ClimbEngine(bad, AdhesionController(MockVacuumIO(6)), CLIMB_DUAL)
-        except ValueError:
-            continue
-        raise AssertionError("双足下 sag/权重应被拒绝")
+def test_dual_engine_rejects_sag_accepts_weights():
+    """双足禁 sag_comp（拍板 B；直设 config 的路径也要拒）；权重 v1.1 起
+    双足解禁（单足实测有效后的拍板 B 修订，份额走 _share_now 距离取值+
+    就地归一）——构造即过，形状校验/归一化照旧。单足 sag 不受影响。"""
+    try:
+        ClimbEngine(replace(CFG, climb_sag_comp_mm=3.0),
+                    AdhesionController(MockVacuumIO(6)), CLIMB_DUAL)
+        raise AssertionError("双足下 sag 应被拒绝")
+    except ValueError:
+        pass
+    eng = ClimbEngine(replace(CFG, handover_slot_w=(1.0, 1.0, 1.0, 0.0, 0.0)),
+                      AdhesionController(MockVacuumIO(6)), CLIMB_DUAL)
+    assert math.isclose(sum(eng._slot_w), 1.0)         # 归一化照旧
+    assert math.isclose(eng._slot_w[0], 1.0 / 3.0)
     ClimbEngine(replace(CFG, climb_sag_comp_mm=3.0),
-                AdhesionController(MockVacuumIO(6)))   # 单足不受影响
+                AdhesionController(MockVacuumIO(6)))   # 单足 sag 照旧允许
 
 
 def test_max_straight_step_dual_duty():
@@ -2154,3 +2158,71 @@ def test_dual_composes_with_custom_leg_order():
     assert len(lifts) >= 8
     for k, n in enumerate(lifts):
         assert n == ORDER[k % 6], f"第 {k} 抬 {n}"
+
+
+def make_dual_w_engine(d=12.0, w=(1.0, 1.0, 1.0, 0.0, 0.0)):
+    """双足+权重引擎（δ 全腿统一 d，w 默认双足推荐档 1,1,1,0,0）。"""
+    cfg = replace(CFG, handover_slot_w=w, legs=tuple(
+        replace(l, handover_mm=d) for l in CFG.legs))
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    return io, ctl, ClimbEngine(cfg, ctl, CLIMB_DUAL)
+
+
+def test_dual_weighted_shares_distance_renorm():
+    """双足权重份额（v1.1）：按前向轮转距离取 w[5-d] 就地归一。双足推荐档
+    1,1,1,0,0 抬 L1（对=L1+R2）：搭档 R2（d1）与次对先腿 L3（d2）全程 0，
+    R1/L2/R3（d3/d4/d5）各 δ/3；R2 自己卸载时在场支撑只剩 L2/R3 有权重，
+    归一后各 δ/2。全程零和；轮转正常不触守卫。"""
+    d = 12.0
+    io, ctl, eng = make_dual_w_engine(d)
+    start(eng)
+    f0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    assert eng.request_lift("L1") is None
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["L1"] == LegPhase.VENT
+    assert math.isclose(eng.foot["L1"][0], f0["L1"][0] + d, abs_tol=1e-6)
+    assert math.isclose(eng.foot["L3"][0], f0["L3"][0], abs_tol=1e-9)  # d2=0
+    # 只受 L1 影响的 R1（R2 的表里 R1 权重 0）此刻恰 δ/3；L2/R3 已叠着
+    # R2 并行交接的份额（重叠铺设是双足常态），终态再断言
+    assert math.isclose(eng.foot["R1"][0], f0["R1"][0] - d / 3, abs_tol=1e-6)
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        if eng.phase_of["R2"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["R2"] == LegPhase.VENT
+    # R2 全程零受载（d1 权重 0），自己还整份 δ
+    assert math.isclose(eng.foot["R2"][0], f0["R2"][0] + d, abs_tol=1e-6)
+    # R2 的支撑集 {L3:d1,R1:d2,L2:d3,R3:d4} -> 权重 (0,0,1/3,1/3) 归一
+    # -> L2/R3 各 1/2：累计 = -d/3 - d/2
+    assert math.isclose(eng.foot["L3"][0], f0["L3"][0], abs_tol=1e-9)
+    assert math.isclose(eng.foot["R1"][0], f0["R1"][0] - d / 3, abs_tol=1e-6)
+    for n in ("L2", "R3"):
+        assert math.isclose(eng.foot[n][0], f0[n][0] - d / 3 - d / 2,
+                            abs_tol=1e-6), n
+    tot = sum(eng.foot[n][0] - f0[n][0] for n in LEG_NAMES)
+    assert abs(tot) < 1e-6                             # 零和照旧
+    assert eng.handover_note is None                   # 按轮转，守卫不出手
+
+
+def test_dual_weights_rotation_guard_falls_back():
+    """双足权重轮转守卫：反复抬同一对（δ 标定工作流）第二次起偏离轮转，
+    先腿退回均分并 handover_note 留痕——均分下 L3（权重档恒 0 的腿）
+    真的吃到份额，与权重路径可判别。"""
+    d = 12.0
+    io, ctl, eng = make_dual_w_engine(d)
+    start(eng)
+    _pair_lift_and_land(eng)                           # 第一对（权重，已验）
+    eng.select_step_leg("L1")                          # 再抬同一对=偏离轮转
+    f1 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    assert eng.request_lift("L1") is None
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["L1"] == LegPhase.VENT
+    assert eng.handover_note and "偏离轮转" in eng.handover_note
+    assert eng.foot["L3"][0] < f1["L3"][0] - 0.5       # 均分：L3 吃到份额

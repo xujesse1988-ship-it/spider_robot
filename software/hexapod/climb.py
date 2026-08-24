@@ -68,10 +68,12 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
 在途摆动=已按窗序放行的设计常态，豁免）；放气按窗头序排队、错峰
 ≥VENT_STAGGER_S（两腿同刻密封破裂=双倍储能砸进 4 只支撑，最坏弹跳
 ×2.5——错峰不能只靠窗头差，δ 逐腿不同时后窗腿会先铺完反超）。单足
-（duty 5/6）窗口不重叠，全部泛化逐字退化为原行为。⚠ 双足禁
-sag_comp/handover_slot_w（/5 分摊与 5 权重轮转模型都按单摆+5 支撑推导，
-v1 拍板禁用）；δ 表须按双足工况整表重标（弹跳读数 ×5/4、稳态储能变），
-A/B 勿与单足跨口径比较。
+（duty 5/6）窗口不重叠，全部泛化逐字退化为原行为。⚠ 双足禁 sag_comp
+（/5 分摊按单摆+5 支撑推导，拍板 B）；权重 v1.1 起双足解禁（单足实测
+权重有效后的拍板修订）：份额按轮转距离取值+就地归一（_share_now），
+档位按口径分家——双足推荐 1,1,1,0,0，单足档勿照搬（DUAL-SWING §3.5/
+附录 C 模型）；δ 表须按双足工况整表重标（弹跳读数 ×5/4、稳态储能变，
+开权重再降一档），A/B 勿与单足跨口径比较。
 
 启动序列：调用方先让机器人 stand() 到默认站姿，引擎按窗序
 （默认 R3→L1→R2→L3→R1→L2；--leg-order 换序时吸附序同步跟随）
@@ -360,19 +362,15 @@ class ClimbEngine:
         # 现行为），CLIMB_DUAL 4/6 → 2（双足：窗口两两重叠，任意时刻恰 2 腿
         # 在窗、稳态恒 4 足吸附——docs/DUAL-SWING-DESIGN.md §2）
         self._n_swing = max(1, round((1.0 - gait.duty) * 6))
-        if self._n_swing > 1:
-            # 双足禁 sag_comp / 权重（v1 拍板，DUAL-SWING-DESIGN §3.5）：
-            # /5 分摊算术与 5 权重轮转模型都按"单摆动+5 支撑"推导，双足下
-            # 语义不成立。CLI 已 ap.error，这里再拒一道直设 config 的路径
-            # （与下方权重再验同一教训：只在 CLI 口拦会漏）
-            if cfg.climb_sag_comp_mm > 0.0:
-                raise ValueError("双摆动窗（duty<5/6）不支持 climb_sag_comp_mm"
-                                 "：/5 分摊账按单摆+5 支撑推导；治坠用零力交接"
-                                 "（handover_mm）")
-            if cfg.handover_slot_w:
-                raise ValueError("双摆动窗（duty<5/6）不支持 handover_slot_w"
-                                 "：5 权重轮转模型按单摆+5 支撑推导，双足一律"
-                                 "均分 δ/支撑数")
+        if self._n_swing > 1 and cfg.climb_sag_comp_mm > 0.0:
+            # 双足禁 sag_comp（拍板 B，DUAL-SWING-DESIGN §3.5）：/5 分摊
+            # 算术按"单摆动+5 支撑"推导，双足下语义不成立。CLI 已 ap.error，
+            # 这里再拒一道直设 config 的路径（与权重再验同一教训：只在 CLI
+            # 口拦会漏）。权重 v1.1 起双足解禁（份额按轮转距离取值+就地
+            # 归一，_share_now；单足实测权重有效后的拍板 B 修订，§3.5）
+            raise ValueError("双摆动窗（duty<5/6）不支持 climb_sag_comp_mm"
+                             "：/5 分摊账按单摆+5 支撑推导；治坠用零力交接"
+                             "（handover_mm）")
         # 爬墙站位 ≠ 地面站位（foot_reach=130 时吸盘轴偏法线 ~19°，超 ±15°
         # 容差，唇口斜着接面吸不住）：逐腿解"压入位吸盘轴 ⊥ 吸附面"的半径
         # （默认参数约 176mm），落点带按 ±TILT_BAND_DEG 换算成半径区间裁剪。
@@ -464,11 +462,12 @@ class ClimbEngine:
             self._slot_w = tuple(v / sum(w) for v in w)
         else:
             self._slot_w = ()
-        # {腿: 权重定格份额表}：只在权重生效（单摆+恰 5 支撑）时于放行瞬间
-        # 定格（_freeze_share）；不在册的腿 4.7 步每 tick 按当前 STANCE 集合
-        # 均分——双足下先行腿的定格表会把份额塞给已进 HANDOVER 的对内第二腿
-        # （账污染），单足下铺设期 STANCE 集合恒定、现算与定格逐位一致
-        self._ho_share = {}
+        # {腿: True}：本次交接套权重（放行瞬间由 _weights_ok 定夺，含轮转
+        # 口径守卫）；份额本身由 _share_now 每 tick 按当前 STANCE 集合现算
+        # ——权重档按前向轮转距离取值+就地归一（单足铺设期支撑恒 5、权重和
+        # 恒 1，与 v1.5 定格表逐位一致；双足支撑集随对内先后/前对落地动态
+        # 变化，归一自动适配）。不在册=均分
+        self._ho_weighted = {}
         self._prev_lift = None   # 最近一次实际抬过的腿（权重轮转口径守卫用）
         # 交接守卫最近一次动作的说明文本（越界截断/偏离轮转退均分），脚本
         # 层沿检测亮给操作者并落黑匣子——引擎自己没有输出口
@@ -666,12 +665,12 @@ class ClimbEngine:
                 # 不可观测，行为与旧"直接 VENT"一致）——放气错峰的排队等待
                 # 需要一个"已放行未放气"的驻留态。交接期间吸盘保持密封吸附
                 # （ATTACHED 控制环照跑，互锁照常；漏气监护对交接腿本身也
-                # 覆盖——_leak_watch 收 STANCE+HANDOVER，审核修）。权重
-                # 份额表在此定格（_freeze_share，含轮转口径守卫）
+                # 覆盖——_leak_watch 收 STANCE+HANDOVER，审核修）。是否套
+                # 权重在此定夺（_weights_ok，含轮转口径守卫），份额由
+                # _share_now 每 tick 现算
                 self._ho_left[cur] = self.cfg.leg(cur).handover_mm
-                share = self._freeze_share(cur)
-                if share is not None:
-                    self._ho_share[cur] = share
+                if self._weights_ok(cur):
+                    self._ho_weighted[cur] = True
                 self.phase_of[cur] = LegPhase.HANDOVER
                 self._vent_queue.append(cur)
                 # 轮转指针（权重口径守卫用）：δ=0 直放气的抬腿也要记——
@@ -805,10 +804,10 @@ class ClimbEngine:
         # f→0 后放气无能量可释放。按真实时间匀速铺（载荷重分配是准静态
         # 过程，不随相位钟停），漏气挽救期暂停（漏着的盘摩擦余量低，不该
         # 被推，与 4.5/4.6 同禁区）。多摆泛化（DUAL-SWING-DESIGN §4）：全部
-        # HANDOVER 腿并行铺设；分摊每 tick 按当前 STANCE 集合现算——先行腿
-        # 的定格表会把份额塞给已进 HANDOVER 的对内第二腿（账污染），单足下
-        # 铺设期 STANCE 集合恒定、现算与旧定格逐位一致（权重表仍在放行时
-        # 定格，见 _freeze_share）。铺完才 request_release 进 VENT，放气过
+        # HANDOVER 腿并行铺设；分摊每 tick 按当前 STANCE 集合现算
+        # （_share_now：均分或按轮转距离取权重就地归一——先行腿若用定格表
+        # 会把份额塞给已进 HANDOVER 的对内第二腿=账污染；单足下铺设期集合
+        # 恒定，现算与 v1.5 定格表逐位一致）。铺完才 request_release 进 VENT，放气过
         # 三关：①窗头序队首（前窗腿先放）；②距上次放气 ≥ VENT_STAGGER_S
         # （两腿同刻密封破裂=双倍储能砸进 4 只支撑，§3.3）；③门槛/互锁复检。
         # ①②是静默短等——前窗腿的铺设速率固定、③有 lift_gate_timeout_s
@@ -821,8 +820,7 @@ class ClimbEngine:
                 dx, dy = self._down
                 sup = [n for n in LEG_NAMES
                        if self.phase_of[n] == LegPhase.STANCE]
-                share = self._ho_share.get(cur) or (
-                    {n: 1.0 / len(sup) for n in sup} if sup else {})
+                share = self._share_now(cur, sup)
                 if step > 0.0 and share:
                     # 越界预检截断（审核）：4.5 步有 comp_tail 限额、4.6 步有
                     # _lean_room 截短，原 4.7 步是唯一没有包络钳制的支撑系推
@@ -890,7 +888,7 @@ class ClimbEngine:
                     self.phase_of[cur] = LegPhase.VENT
                     self._vent_queue.pop(0)
                     self._ho_left.pop(cur, None)
-                    self._ho_share.pop(cur, None)
+                    self._ho_weighted.pop(cur, None)
                     self._last_vent_t = self._rt
 
         # 4.8 对步落地错峰（step_land 排队的后续腿）：头一只已当拍下探，其余
@@ -1091,14 +1089,14 @@ class ClimbEngine:
                 ok += 1.0
             room = min(room, ok)
         if self._ho_left:
-            # 每个在途交接按"剩余量 × 最大可能份额"预扣：权重定格表取其最大
-            # 权重；均分=1/当前支撑数（单足=1/5=0.2 与旧常数一致，双足=1/4）
-            sup_n = sum(1 for n in LEG_NAMES
-                        if self.phase_of[n] == LegPhase.STANCE)
+            # 每个在途交接按"剩余量 × 当前最大份额"预扣（_share_now 现算：
+            # 均分=1/支撑数——单足 0.2 与旧常数一致、双足 0.25；权重档取
+            # 归一后的最大份额，单足恒 5 支撑时=max(w) 与旧口径一致）
+            sup = [n for n in LEG_NAMES
+                   if self.phase_of[n] == LegPhase.STANCE]
             for cur, left in self._ho_left.items():
-                tbl = self._ho_share.get(cur)
-                room -= left * (max(tbl.values()) if tbl
-                                else 1.0 / max(1, sup_n))
+                tbl = self._share_now(cur, sup)
+                room -= left * (max(tbl.values()) if tbl else 0.0)
         return max(0.0, room)
 
     def clear_freeze(self):
@@ -1196,44 +1194,63 @@ class ClimbEngine:
                 out.append((n, k))
         return out
 
-    def _freeze_share(self, cur):
-        """权重工况下在放行瞬间定格的份额表 {腿: 0~1}；返回 None = 不定格，
-        4.7 步每 tick 按当前 STANCE 集合均分（无权重的常规路径；调用点在
-        cur 改相位之前，cur 仍 STANCE）。
+    def _weights_ok(self, cur):
+        """本次交接是否套权重（放行瞬间定夺，_ho_weighted 入册；份额由
+        _share_now 每 tick 现算）。
         权重口径=按窗序轮转距离：w[0]=最晚才轮到抬的支撑腿（轮转上刚抬过的
         那条），w[4]=下一个要抬的。机理（附录 A 模型数值，模型排序即 (j-a)%6
         的轮转距离）：每次落地的零预载锁定把受力格局重摊——早收到的载荷被
         后续落地稀释回集体，晚收到的原封不动攒到该腿自己抬腿，所以"稀释机会
-        最多的腿多接"。激进档 0.6/0.25/0.1/0.05/0 稳态循环内应力 29.7→20.2
-        （-32%）；非单调（全给一条收益归零），反向 +30% 更糟。⚠ 不按"落地
-        新旧"排而按窗序距离：从第一抬就正确、不依赖吸附历史、不需要落地
-        时间戳（历史教训：v1.5 第一版按落地新旧排，当时启动吸附序还是
+        最多的腿多接"。单足激进档 0.6/0.25/0.1/0.05/0 稳态循环内应力
+        29.7→20.2（-32%）；非单调（全给一条收益归零），反向更糟。⚠ 不按
+        "落地新旧"排而按窗序距离：从第一抬就正确、不依赖吸附历史、不需要
+        落地时间戳（历史教训：v1.5 第一版按落地新旧排，当时启动吸附序还是
         L1..R3 ≠ 窗序，首轮分错腿被用户抓获；启动吸附序后来也改成了窗序，
         但排序独立于吸附序这一点不变）。⚠ 开权重改变稳态运行点，δ 表需
-        下调重标。任意归一化权重下六腿位移和=0（均值不变=身体指令不动）
-        照旧成立。权重模型按"单摆+恰 5 支撑"推导：其余腿有任何在途摆动
-        （双摆动窗；引擎口本就拒双足+权重，防御直设路径）一律退均分。
+        下调重标。任意归一化权重下位移和=0（均值不变=身体指令不动）照旧
+        成立。单足下其余腿有在途摆动=异常工况，退均分（双足下在途是设计
+        常态，不查——份额归一由 _share_now 自动适配）。
         轮转口径守卫（审核）：分配数学只在实际按轮转抬腿时成立——偏离轮转
         （body_lean 反复抬同一腿标 δ 等）时套权重会把 w[0] 份额每次砸向同一
         条支撑腿且永不归还（落地复位只清被抬腿自己），激进档 0.6δ/次实测
         4~6 次就把该腿推出工作空间。cur 不是上一抬腿的窗序继任者就本次退回
-        均分 δ/5（帮助文案的 ~10 次预算随之照旧成立），handover_note 留痕。"""
+        均分（帮助文案的 ~10 次预算随之照旧成立），handover_note 留痕。"""
         if not self._slot_w:
-            return None
-        if any(self.phase_of[n] != LegPhase.STANCE
-               for n in LEG_NAMES if n != cur):
+            return False
+        if self._n_swing == 1 and any(
+                self.phase_of[n] != LegPhase.STANCE
+                for n in LEG_NAMES if n != cur):
             self.handover_note = (f"{cur} 交接时支撑非 5（有腿在途），"
-                                  "权重退回均分——权重模型按单摆+5 支撑推导")
-            return None
+                                  "权重退回均分——单足权重模型按 5 支撑推导")
+            return False
         if (self._prev_lift is None or cur == self.slot_order[
                 (self.slot_order.index(self._prev_lift) + 1) % 6]):
-            k0 = self.slot_order.index(cur)
-            order = [self.slot_order[(k0 - a) % 6] for a in range(1, 6)]
-            return {n: self._slot_w[k] for k, n in enumerate(order)}
+            return True
         self.handover_note = (
             f"{cur} 偏离轮转抬腿（上一抬 {self._prev_lift}），本次交接"
-            "退回均分 δ/5——权重分配只在按窗序轮抬时成立")
-        return None
+            "退回均分——权重分配只在按窗序轮抬时成立")
+        return False
+
+    def _share_now(self, cur, sup):
+        """当前 tick 的交接分摊表 {腿: 份额}（sup=当前 STANCE 集合）。
+        权重档（_ho_weighted 在册）：按前向轮转距离 d=(槽差 mod 6) 取
+        w[5−d]、就地归一——单足铺设期支撑恒 5、权重和恒 1，与 v1.5 定格表
+        逐位一致；双足支撑集随对内先后/前对落地动态变化，归一自动适配
+        （DUAL-SWING-DESIGN §3.5 v1.1）。⚠ 档位按口径分家（附录 C 模型）：
+        双足推荐 1,1,1,0,0（=刚落对+次对后腿三等分，最差单腿 −12%/均值
+        −21%）；单足激进档照搬双足会把对内后腿推高过均分（32.9 vs 30.8），
+        "均值最优"的 0.5,0.5,0,0,0 则把循环漏斗进后腿（单腿 57）——勿跨
+        口径搬表。无权重/守卫退回=均分。"""
+        if not sup:
+            return {}
+        if self._ho_weighted.get(cur):
+            k0 = self.slot_order.index(cur)
+            raw = {n: self._slot_w[5 - ((self.slot_order.index(n) - k0) % 6)]
+                   for n in sup}
+            tot = sum(raw.values())
+            if tot > _EPS:
+                return {n: v / tot for n, v in raw.items()}
+        return {n: 1.0 / len(sup) for n in sup}
 
     def _leak_watch(self):
         """支撑足漏气监护（启动序列与行走共用）：挽救窗内返回 True

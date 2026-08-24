@@ -56,6 +56,18 @@ CLIMB 步态。
                                              # 包络双口径）。--max-step>40 时
                                              # 侧移/转向键被禁用（那两个方向
                                              # 的账没按大步幅核，直行专用）
+  python climb_walk.py --dual                # 双足爬行（docs/DUAL-SWING-DESIGN.md）
+                                             # ：占空 5/6→4/6，任意时刻恒 2 腿
+                                             # 在摆/4 足吸附（窗口错峰重叠，对内
+                                             # 0.6s），理论提速 ~2.5×；环序不变，
+                                             # 同刻在空两腿恒异侧不同排；i 单步=
+                                             # 对步（两腿先后悬停、再按 i 一并
+                                             # 落地）。⚠ 支撑冗余降一档（单盘
+                                             # 漏气=3 足承载）——绳保护实验口径；
+                                             # δ 表须按双足工况重标（三组=现表
+                                             # ×0.5/0.75/1.0 线性外推），A/B 勿
+                                             # 与单足跨口径比较。与 --sag-comp/
+                                             # --handover-weights 互斥
   python climb_walk.py --lift-gate -45       # 抬腿门槛：其余支撑盘压全部深于
                                              # 此值才放行抬腿（默认 -50；0=关）。
                                              # ATTACHED 的 -30 只是密封判据，刚
@@ -100,7 +112,7 @@ from hexapod.climb import (ClimbEngine, LegPhase, max_straight_step,
                            parse_handover, parse_handover_weights,
                            parse_leg_order, gait_with_slot_order,
                            HANDOVER_SPEED_MMS)
-from hexapod.gait import CLIMB
+from hexapod.gait import CLIMB, CLIMB_DUAL
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch, PHASE_CH, ADH_CH
@@ -272,6 +284,16 @@ def main():
                          "自担代价；'轮到 X'提示、--handover-weights 轮转距离"
                          "、启动吸附序全部自动跟随新序。⚠ 换序改变权重与"
                          "逐腿 δ 的稳态格局，A/B 不得跨序比较、δ 表按序分组")
+    ap.add_argument("--dual", action="store_true",
+                    help="双足爬行（双摆动窗，docs/DUAL-SWING-DESIGN.md）：占空 "
+                         "5/6→4/6，任意时刻恒 2 腿在摆/4 足吸附，理论提速 "
+                         "~2.5×（窗数 6→3 × 每周期行程 ×1.25）。环序不变（窗头"
+                         "整体平移一槽，首腿 R3→L1），同刻在空两腿恒异侧不同排；"
+                         "对内放气错峰 ≥0.4s（引擎守卫）；i 单步=对步。"
+                         "⚠ 支撑冗余降一档（单盘漏气=3 足承载）：绳保护实验"
+                         "口径；δ 表须按双足工况重标（body_lean --dual 三组="
+                         "现表×0.5/0.75/1.0 线性外推 δ*_pair×0.8），A/B 勿与"
+                         "单足跨口径比较。与 --sag-comp/--handover-weights 互斥")
     ap.add_argument("--release", action="store_true",
                     help="只做逐足串行放气+回站姿")
     args = ap.parse_args()
@@ -325,6 +347,13 @@ def main():
             leg_order = parse_leg_order(args.leg_order)
         except ValueError as e:
             ap.error(str(e))
+    if args.dual and args.sag_comp > 0.0:
+        ap.error("--dual 与 --sag-comp 互斥：/5 分摊账按单摆动+5 支撑推导，"
+                 "双足下语义不成立；治坠用 --handover（零力交接才是治本层，"
+                 "DUAL-SWING-DESIGN §3.5）")
+    if args.dual and args.handover_weights is not None:
+        ap.error("--dual 与 --handover-weights 互斥：5 权重轮转模型按单摆+5 "
+                 "支撑推导，双足 v1 一律均分 δ/4（DUAL-SWING-DESIGN §3.5）")
     if not args.release and not sys.stdin.isatty():
         # TTY 检查必须在碰任何硬件之前：否则真机先上电站立、再在 termios
         # 处崩溃断电瘫倒（审核发现 #5）。--release 无需键盘，放行。
@@ -351,8 +380,10 @@ def main():
     # 步幅几何上限按最终 cfg（站高/压入/补偿/加深封顶全生效后）动态验证：
     # 落点唇口 ≤11.5° 工作带 + 支撑尾端包络双口径（climb.max_straight_step）
     # 自定义窗序：重排相位偏移（值集不变），slot_order/轮次/权重轮转距离/
-    # 启动吸附序全部自动跟随——引擎与几何账都吃同一个 gait
-    gait = gait_with_slot_order(leg_order) if leg_order else CLIMB
+    # 启动吸附序全部自动跟随——引擎与几何账都吃同一个 gait。--dual 只换
+    # duty（偏移同集），与换序自由组合；vent 随场拖尾按新 duty 自动收紧
+    base = CLIMB_DUAL if args.dual else CLIMB
+    gait = gait_with_slot_order(leg_order, base) if leg_order else base
     step_cap = max_straight_step(cfg, gait)
     if args.max_step > step_cap + 1e-6:
         ap.error(f"--max-step {args.max_step:g} 超本几何安全上限 "
@@ -366,7 +397,8 @@ def main():
         # 截断（引擎兜底）收场=δ 铺不满、实验白跑。与 --max-step 同级拒绝：
         # 余量 = comp_tail − 半步幅上限（步幅限幅的最坏口径，转向键同样封
         # 在 climb_max_step 内）。支撑腿一个周期攒 5 次份额、轮到自己抬才
-        # 抵回，最大额外外摆 ≈ δmax（任意归一化权重下同界）
+        # 抵回，最大额外外摆 ≈ δmax（任意归一化权重下同界；双足=两窗各吃
+        # 对和/4，上界同为 δmax——DUAL-SWING-DESIGN 附录 A，公式不用分叉）
         ho_max = max(handover.values())
         tail = ClimbEngine(cfg, None, gait).comp_tail
         room = tail - cfg.climb_max_step / 2.0
@@ -397,7 +429,7 @@ def main():
              f" tilt_trim={cfg.cup_tilt_trim_deg:g}°"
              f" handover={ho_txt}"
              f" SPEED={speed:g} TURN={TURN} update_hz={cfg.update_hz:g}"
-             f" max_step={cfg.climb_max_step}"
+             f" max_step={cfg.climb_max_step} dual={int(args.dual)}"
              + (f" leg_order={'_'.join(leg_order)}" if leg_order else ""))
     _prev_hook = sys.excepthook
 
@@ -589,7 +621,16 @@ def main():
             print("抬腿窗序（含启动吸附序）：" + "→".join(eng.slot_order)
                   + "——实验口径：默认对角波浪的'相邻抬腿全在对角位'不再"
                   "保证，同侧/同排连抬注意软肩下坠；权重/逐腿 δ 稳态随序"
-                  "改变，A/B 勿跨序比较")
+                  "改变，A/B 勿跨序比较"
+                  + ("。⚠ --dual 下相邻=同刻在空：同侧相邻是同刻同侧双摆，"
+                     "代价远大于单足" if args.dual else ""))
+        if args.dual:
+            print("双足爬行（双摆动窗）：环序 " + "→".join(eng.slot_order)
+                  + "，稳态恒 2 腿在摆/4 足吸附，对内放气错峰 "
+                  "≥0.4s；i=对步（两腿先后悬停、再按 i 一并落地）。"
+                  "⚠ 支撑冗余降一档（绳保护实验口径）；δ 表须按双足工况"
+                  "重标（body_lean --dual 三组标定），A/B 勿与单足跨口径比较")
+            log.note("dual=1 slot_order=" + "_".join(eng.slot_order))
         if cfg.climb_sag_comp_mm > 0:
             # 本速度直行的每事件实际量（工作空间总账限额 eng.comp_tail，
             # 随压深在引擎里反解）
@@ -696,11 +737,14 @@ def main():
                 wz = -TURN
             elif k == " ":
                 vx = vy = wz = 0.0
-                if eng.step_pending:
-                    eng.cancel_step()
+                if eng.step_pending and eng.cancel_step():
                     step_was = False       # 别把取消误报成"单步完成"
                     print("\n已取消未开始的单步（摆动中的单步不可打断）")
                     log.event("单步取消（未开始）")
+                elif eng.step_pending:
+                    # 对步先行腿已在途：整组不可撤（撤后行腿会留单摆殿后）
+                    print("\n对步已有腿在途，整组不可撤——两腿悬停后按 i "
+                          "一并落地收口")
                 elif eng.step_hover_leg():
                     print("\n悬停中的腿不可取消——按 i 落地收口")
             elif k == "i":
@@ -709,21 +753,23 @@ def main():
                 else:
                     hover = eng.step_hover_leg()
                     if hover:
+                        hs = "+".join(eng.step_hover_legs())  # land 前取（首腿受理即下探）
                         deny = eng.step_land()
                         if deny:
                             print(f"\n单步落地不可用：{deny}")
                         else:
-                            print(f"\n单步：{hover} 落地压入，吸附确认后自动停")
-                            log.event(f"单步落地（后半步）：{hover}")
+                            print(f"\n单步：{hs} 落地压入，吸附确认后自动停")
+                            log.event(f"单步落地（后半步）：{hs}")
                     else:
+                        grp = "+".join(eng.step_group())
                         deny = eng.request_step(speed, 0.0, 0.0)
                         if deny:
                             print(f"\n单步不可用：{deny}")
                         else:
-                            print(f"\n单步：轮到 {eng.step_leg}，当拍抬腿"
-                                  "（悬停后再按 i 落地）")
-                            log.event(f"单步受理（抬半步）：{eng.step_leg} "
-                                      f"v={speed:g}")
+                            print(f"\n单步：轮到 {grp}，当拍抬腿"
+                                  + ("（两腿都悬停后再按 i 一并落地）"
+                                     if args.dual else "（悬停后再按 i 落地）"))
+                            log.event(f"单步受理（抬半步）：{grp} v={speed:g}")
             elif k == "f" and eng.frozen:
                 # 解冻同时清零速度：人工处理时手还在机器旁，绝不能带着
                 # 冻结前的旧速度立刻恢复行走（审核发现 #4）
@@ -859,15 +905,20 @@ def main():
                 print(f"\n⚠ {note_now}")
                 log.event(f"交接守卫：{note_now}")
             ho_note_was = note_now
-            hover_now = eng.step_hover_leg()
+            hover_now = "+".join(eng.step_hover_legs()) or None
             if hover_now and hover_now != hover_was:
+                tail = ("再按 i 一并落地" if "+" in hover_now else
+                        ("等搭档悬停后按 i 一并落地" if args.dual
+                         else "再按 i 落地"))
                 print(f"\n单步：{hover_now} 已悬停在落点上方"
-                      f"（离面 {cfg.lift_clearance:g}mm），再按 i 落地")
+                      f"（离面 {cfg.lift_clearance:g}mm），{tail}")
             hover_was = hover_now
             step_now = eng.step_pending or eng.step_active
             if step_was and not step_now:
-                print(f"\n单步完成，下一条：{eng.step_leg}（再按 i 抬它）")
-                log.event(f"单步完成，下一条 {eng.step_leg}")
+                nxt = "+".join(eng.step_group())
+                word = "下一对" if args.dual else "下一条"
+                print(f"\n单步完成，{word}：{nxt}（再按 i 抬它）")
+                log.event(f"单步完成，{word} {nxt}")
             step_was = step_now
 
             if eng.started and not was_started:

@@ -6,6 +6,12 @@
 已补 HANDOVER 键——与 §3.2 PHASE_CH 同族的 KeyError 隐患，设计漏列。
 **待办：§9.3 实机 A/B 验收**——实验方案与量化工具已备好：
 `docs/HANDOVER-AB-PROTOCOL.md` + `software/logs_analysis/ab_quant.py`）。
+2026-08-24 多摆泛化（docs/DUAL-SWING-DESIGN.md，双足爬行）：`_ho_left`
+改按腿存（两交接可重叠）、分摊改每 tick 按当前 STANCE 集合现算（单足工况
+与旧定格逐位一致；权重表仍在放行时定格）、δ=0 也统一先进 HANDOVER（同拍
+直落 VENT，拍间不可观测）、放气加"窗头序队列+VENT_STAGGER_S 错峰+门槛
+复检"三关——本文 §3.4/§3.5 的"一次一腿、不需要按腿存"描述仅存档，现行
+实现见 climb.py 4.7 步。
 实测依据：`html/vent-snap-20260820.html`（08-20 原地踏步实验量化报告）、
 `software/logs_analysis/lean_20260820_102117.log`、`images/lean_20260820.mp4`。
 

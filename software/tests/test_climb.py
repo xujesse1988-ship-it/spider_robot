@@ -8,8 +8,10 @@ from hexapod.adhesion import AdhesionController, MockVacuumIO, FootState
 from hexapod.climb import (ClimbEngine, LegPhase, PRESS_DEPTH_MAX,
                            TILT_BAND_DEG, _press_tilt, max_straight_step,
                            parse_handover, parse_leg_order,
-                           gait_with_slot_order, HANDOVER_SPEED_MMS)
+                           gait_with_slot_order, HANDOVER_SPEED_MMS,
+                           VENT_STAGGER_S, LAND_STAGGER_S)
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
+from hexapod.gait import CLIMB, CLIMB_DUAL
 from hexapod.driver import MockDriver
 from hexapod.kinematics import leg_ik
 from hexapod.robot import Hexapod
@@ -1125,12 +1127,12 @@ def test_handover_pauses_on_support_leak_and_resumes():
         if ctl.is_leaking(ri):
             break
     assert ctl.is_leaking(ri)
-    left0 = eng._ho_left
+    left0 = sum(eng._ho_left.values())
     assert 0.0 < left0 < HO["L1"]
     feet0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
     run(eng, 0.5)                                      # 挽救窗（2s）内
     assert eng.frozen is None
-    assert eng._ho_left == left0                       # 交接暂停不丢
+    assert sum(eng._ho_left.values()) == left0         # 交接暂停不丢
     assert eng.phase_of["L1"] == LegPhase.HANDOVER
     assert ctl.state[LEG_NAMES.index("L1")] == FootState.ATTACHED  # 没放气
     assert all(tuple(eng.foot[n]) == feet0[n] for n in LEG_NAMES)
@@ -1160,12 +1162,12 @@ def test_handover_survives_freeze_and_resumes():
             break
     run(eng, 0.4)
     assert eng.phase_of["L1"] == LegPhase.HANDOVER
-    left0 = eng._ho_left
+    left0 = sum(eng._ho_left.values())
     assert 0.0 < left0 < HO["L1"]
     eng.frozen = "测试注入"
     feet0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
     run(eng, 1.0)
-    assert eng._ho_left == left0                       # 冻结：交接保持不丢
+    assert sum(eng._ho_left.values()) == left0         # 冻结：交接保持不丢
     assert all(tuple(eng.foot[n]) == feet0[n] for n in LEG_NAMES)
     eng.clear_freeze()
     assert eng.step_active                             # 在途抬起不被取消
@@ -1456,12 +1458,12 @@ def test_handover_leg_leak_pauses_ramp_and_resumes():
         if ctl.is_leaking(li):
             break
     assert ctl.is_leaking(li)
-    left0 = eng._ho_left
+    left0 = sum(eng._ho_left.values())
     assert 0.0 < left0 < HO["L1"]
     feet0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
     run(eng, 0.5)                                      # 挽救窗（2s）内
     assert eng.frozen is None
-    assert eng._ho_left == left0                       # 交接暂停不丢
+    assert sum(eng._ho_left.values()) == left0         # 交接暂停不丢
     assert eng.phase_of["L1"] == LegPhase.HANDOVER     # 没放气
     assert all(tuple(eng.foot[n]) == feet0[n] for n in LEG_NAMES)
     io.sealed[li] = True                               # 挽救成功
@@ -1563,7 +1565,7 @@ def test_handover_release_gate_rechecked_after_ramp():
     io.floor = -41.0                                   # 盲区：过 -30/-20，欠 -50
     run(eng, 3.0)                                      # 铺完 + 等待
     li = LEG_NAMES.index("L1")
-    assert eng._ho_left <= 1e-6                        # 铺是铺完了
+    assert sum(eng._ho_left.values()) <= 1e-6          # 铺是铺完了
     assert eng.phase_of["L1"] == LegPhase.HANDOVER     # 但拒放气
     assert ctl.state[li] == FootState.ATTACHED and io.valve[li]
     assert eng.gate_wait is not None and eng.gate_wait[0] == "L1"
@@ -1611,7 +1613,7 @@ def test_lean_room_reserves_inflight_handover():
         if eng.phase_of["L1"] == LegPhase.HANDOVER:
             break
     assert eng.phase_of["L1"] == LegPhase.HANDOVER
-    assert eng._ho_left > 10.0                         # 大头还没铺
+    assert sum(eng._ho_left.values()) > 10.0           # 大头还没铺
     # 预扣 ≈ 剩余交接量 × 最大份额（均分 0.2）≈ 3.4mm
     assert eng._lean_room(1.0) <= room0 - 2.0
 
@@ -1725,3 +1727,430 @@ def test_custom_leg_order_weights_follow_new_rotation():
     assert eng.phase_of["R1"] == LegPhase.VENT
     assert eng.handover_note is None                   # 按新序轮转，守卫不出手
     assert math.isclose(eng.foot["L1"][0], f1["L1"][0] - d * 0.6, abs_tol=1e-6)
+
+
+# ---------- 双足爬行（双摆动窗 CLIMB_DUAL，docs/DUAL-SWING-DESIGN.md） ----------
+
+DUAL_ORDER = ("L1", "R2", "L3", "R1", "L2", "R3")   # duty 4/6 的窗头序（环序=CLIMB）
+DUAL_HO = {"L1": 31.0, "R1": 33.0, "L3": 29.0,      # 08-24 单足 δ*×0.8 起标表
+           "R3": 22.0, "R2": 22.0, "L2": 24.0}      # （双足工况重标前的起点）
+
+
+def make_dual_engine(deltas=None, cfg0=None):
+    cfg = cfg0 if cfg0 is not None else CFG
+    if deltas is not None:
+        cfg = replace(cfg, legs=tuple(
+            replace(l, handover_mm=deltas.get(l.name, 0.0)) for l in cfg.legs))
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    return io, ctl, ClimbEngine(cfg, ctl, CLIMB_DUAL)
+
+
+def _lift_edges(eng, was_stance, out):
+    """沿检测 STANCE→摆动 的抬腿事件（测试助手）。"""
+    for n in LEG_NAMES:
+        sw = eng.phase_of[n] != LegPhase.STANCE
+        if sw and was_stance[n]:
+            out.append(n)
+        was_stance[n] = not sw
+
+
+def test_dual_gait_tiling_order_and_pairs():
+    """duty 4/6 窗口铺满（§7.1）：任意时刻恰 2 腿在窗；窗头序=CLIMB 环序
+    整体平移一槽（首腿 R3→L1，环序不变）；启动吸附序自动跟随（首吸 L1）；
+    相邻（=同刻在空的）两腿恒异侧、恒不同排（前排永远 ≥1 只在位）。"""
+    io, ctl, eng = make_dual_engine()
+    assert eng.slot_order == DUAL_ORDER
+    assert eng._n_swing == 2
+    assert eng._attach_queue[0] == "L1"
+    c = list(eng.slot_order)
+    k = c.index("R3")
+    assert tuple(c[k:] + c[:k]) == ("R3", "L1", "R2", "L3", "R1", "L2")
+    for k in range(97):                        # 避开窗口边界的采样
+        t = (k * 0.031 + 0.007) * CFG.climb_cycle_time
+        inwin = [n for n in LEG_NAMES
+                 if (t / CFG.climb_cycle_time + CLIMB_DUAL.offsets[n]) % 1.0
+                 >= CLIMB_DUAL.duty]
+        assert len(inwin) == 2, (t, inwin)
+    for a, b in zip(DUAL_ORDER, DUAL_ORDER[1:] + DUAL_ORDER[:1]):
+        assert a[0] != b[0] and a[1] != b[1], (a, b)
+
+
+def test_dual_startup_sequential_press_follows_order():
+    """启动序列不随双足改变（逐足串行压入，反力座问题与步态无关）：
+    任意时刻至多一腿离开等待位，吸附序=双足窗序（首吸 L1）。"""
+    io, ctl, eng = make_dual_engine()
+    pressed = []
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        moving = [n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE]
+        assert len(moving) <= 1, f"启动并压: {moving}"
+        for n in moving:
+            if n not in pressed:
+                pressed.append(n)
+        if eng.started:
+            break
+    assert eng.started and ctl.attached_count() == 6
+    assert pressed == list(DUAL_ORDER)
+
+
+def test_dual_walk_rhythm_pairs_and_support():
+    """双足连续行走（§7.2）：抬腿严格按窗序轮转；稳态同刻 2 腿离面/4 足
+    吸附（摆动重叠真发生）；抬腿起点节奏=错峰双摆（对内 ~T/6=0.6s、对间
+    ~单窗时长）；全程 IK 可解、零冻结（DUAL-SWING-DESIGN 附录 B）。"""
+    io, ctl, eng = make_dual_engine()
+    start(eng)
+    bot = Hexapod(MockDriver())
+    lifts, launch_t = [], []
+    was_stance = {n: True for n in LEG_NAMES}
+    t_real, max_swing, attached_min = 0.0, 0, 6
+    for _ in range(int(70 / DT)):
+        bot.pulses(eng.update(DT, 30.0, 0.0, 0.0))
+        assert eng.frozen is None
+        t_real += DT
+        n_swing = sum(1 for n in LEG_NAMES
+                      if eng.phase_of[n] != LegPhase.STANCE)
+        assert n_swing <= 2
+        max_swing = max(max_swing, n_swing)
+        attached_min = min(attached_min, ctl.attached_count())
+        before = len(lifts)
+        _lift_edges(eng, was_stance, lifts)
+        launch_t.extend([t_real] * (len(lifts) - before))
+        if len(lifts) >= 13:
+            break
+    assert len(lifts) >= 13
+    for k, n in enumerate(lifts):
+        assert n == DUAL_ORDER[k % 6], f"第 {k} 抬 {n}"
+    assert max_swing == 2                      # 双摆真的发生
+    assert attached_min >= 4                   # 恒 ≥4 足吸附
+    gaps = [b - a for a, b in zip(launch_t, launch_t[1:])]
+    for k, g in enumerate(gaps[:10]):
+        if k % 2 == 0:
+            assert g < 1.2, (k, gaps)          # 对内：窗头差 0.6s 量级
+        else:
+            assert g > 1.5, (k, gaps)          # 对间：等前窗腿吸牢 ~4s
+
+
+def test_dual_start_alignment_first_lift_is_rotation_pointer():
+    """起步对轮次（§7.11）：静止任意时长后起步，首抬=轮次腿、次抬=窗序
+    继任——上一窗后半截的在窗腿被标跳过，不会拿截短的窗放行。"""
+    io, ctl, eng = make_dual_engine()
+    start(eng)
+    run(eng, 1.7)                              # 静止空转，相位落在任意位置
+    lifts = []
+    was_stance = {n: True for n in LEG_NAMES}
+    for _ in range(int(10 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        _lift_edges(eng, was_stance, lifts)
+        if len(lifts) >= 2:
+            break
+    assert lifts == ["L1", "R2"]
+
+
+def test_dual_interlock_refuses_detached_support():
+    """互锁豁免只给在途摆动腿（§7.3）：窗外支撑腿硬失附照样拒抬新腿+超时
+    冻结点名——豁免不扩大化。"""
+    io, ctl, eng = make_dual_engine()
+    start(eng)
+    for _ in range(int(10 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        if eng.phase_of["L1"] != LegPhase.STANCE \
+                and eng.phase_of["R2"] != LegPhase.STANCE:
+            break
+    assert eng.phase_of["L1"] != LegPhase.STANCE     # 首对已双摆
+    ctl.state[LEG_NAMES.index("R1")] = FootState.FAULT   # 窗外支撑硬失附
+    run(eng, CFG.interlock_timeout_s + 8.0, vx=30.0)
+    assert eng.frozen is not None and "互锁" in eng.frozen
+    assert "R1" in eng.frozen and "L3" in eng.frozen     # 拒的是下一窗头 L3
+
+
+def test_dual_vent_stagger_and_head_order():
+    """放气错峰硬要求（§7.4）：δ 后窗腿更小时先铺完，也必须等前窗腿放气
+    且间隔 ≥VENT_STAGGER_S——两腿同刻密封破裂=双倍储能砸进 4 只支撑
+    （§3.3）；放气次序=窗头序。"""
+    io, ctl, eng = make_dual_engine({"L1": 31.0, "R2": 5.0})
+    start(eng)
+    t_real, t_vent = 0.0, {}
+    for _ in range(int(30 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        t_real += DT
+        for n in ("L1", "R2"):
+            if n not in t_vent and eng.phase_of[n] == LegPhase.VENT:
+                t_vent[n] = t_real
+        if len(t_vent) == 2:
+            break
+    assert len(t_vent) == 2
+    assert t_vent["L1"] < t_vent["R2"]                 # 窗头序先放
+    assert t_vent["R2"] - t_vent["L1"] >= VENT_STAGGER_S - 2 * DT
+    # R2 δ=5（0.5s 铺完）+窗头差 0.6s=1.1s 就绪，但被压到 L1（3.1s 铺完）
+    # 之后——错峰守卫真的拦了
+    assert t_vent["R2"] >= 31.0 / HANDOVER_SPEED_MMS - 0.5
+
+
+def test_dual_pair_handover_zero_sum_and_shares():
+    """对内两交接重叠的位移账（§7.5）：全程每 tick 六腿位移矢量和=0；前窗
+    腿放气时=起点+上坡 δ 整；4 条支撑腿彼此位移相等；后窗腿先当 0.6s 支撑
+    吃前窗腿份额（δ/5 速率）、自己再还 δ。零速原地对抬（request_lift，
+    body_lean --dual 标定口径）。"""
+    io, ctl, eng = make_dual_engine(DUAL_HO)
+    start(eng)
+    f0 = {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    assert eng.request_lift("L1") is None              # 对=L1+R2（窗序继任）
+    saw_pair = False
+    for _ in range(int(60 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.HANDOVER \
+                and eng.phase_of["R2"] == LegPhase.HANDOVER:
+            saw_pair = True
+            tot = [sum(eng.foot[n][k] - f0[n][k] for n in LEG_NAMES)
+                   for k in (0, 1)]
+            assert abs(tot[0]) < 1e-6 and abs(tot[1]) < 1e-9
+        if eng.phase_of["L1"] == LegPhase.VENT:
+            break
+    assert saw_pair and eng.phase_of["L1"] == LegPhase.VENT
+    assert math.isclose(eng.foot["L1"][0], f0["L1"][0] + DUAL_HO["L1"],
+                        abs_tol=1e-6)
+    sup = ("L2", "L3", "R1", "R3")
+    moved = {n: eng.foot[n][0] - f0[n][0] for n in sup}
+    ref = moved["L2"]
+    assert all(math.isclose(v, ref, abs_tol=1e-6) for v in moved.values())
+    assert ref < -3.0                                  # 真吃到下坡份额
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        if eng.phase_of["R2"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["R2"] == LegPhase.VENT
+    recv = HANDOVER_SPEED_MMS * (CFG.climb_cycle_time / 6.0) / 5.0  # ≈1.2mm
+    assert math.isclose(eng.foot["R2"][0] - f0["R2"][0],
+                        DUAL_HO["R2"] - recv, abs_tol=0.2)
+
+
+def test_dual_pair_step_hover_land_rotation():
+    """对步（§7.6）：一次受理一对，两腿先后悬停（对外第三腿绝不被步速蹭
+    放行）；只有一只悬停时拒落地；两只都悬停后头一只当拍下探、次一只
+    LAND_STAGGER_S 错峰；两只都收口自动停、轮次推进 2。"""
+    io, ctl, eng = make_dual_engine()
+    start(eng)
+    assert eng.step_leg == "L1" and eng.step_group() == ("L1", "R2")
+    assert eng.request_step(30.0, 0.0, 0.0) is None
+    hover_seen = one_hover_deny = False
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        others = [n for n in LEG_NAMES if n not in ("L1", "R2")
+                  and eng.phase_of[n] != LegPhase.STANCE]
+        assert not others, f"对外腿被放行: {others}"
+        hov = eng.step_hover_legs()
+        if len(hov) == 1 and not one_hover_deny:
+            assert eng.step_land() is not None         # 半对不许落
+            one_hover_deny = True
+        if len(hov) == 2:
+            hover_seen = True
+            break
+    assert hover_seen and one_hover_deny
+    assert set(eng.step_hover_legs()) == {"L1", "R2"}
+    assert eng.step_land() is None
+    t_desc, t_real = {}, 0.0
+    for _ in range(int(30 / DT)):
+        eng.update(DT)
+        t_real += DT
+        for n in ("L1", "R2"):
+            if n not in t_desc and eng.phase_of[n] == LegPhase.DESCEND:
+                t_desc[n] = t_real
+        if not eng.step_active and not eng.step_pending and all(
+                eng.phase_of[n] == LegPhase.STANCE for n in ("L1", "R2")):
+            break
+    assert not eng.step_active and not eng.step_pending
+    assert ctl.is_attached(0) and ctl.is_attached(LEG_NAMES.index("R2"))
+    assert "R2" in t_desc                              # L1 在受理拍已下探
+    assert abs(t_desc["R2"] - LAND_STAGGER_S) < 3 * DT
+    assert eng.step_leg == "L3"                        # 轮次推进 2
+
+
+def test_dual_release_gate_rechecks_supports_only():
+    """放气前门槛复检只查支撑腿（§7.7）：对内搭档（HANDOVER 在途）不在
+    点名单；支撑软→拒放气 gate_wait 外显，泵拽深后恢复放气。"""
+    io = _FloorIO(6)
+    ctl = AdhesionController(io)
+    cfg = replace(CFG, legs=tuple(
+        replace(l, handover_mm=DUAL_HO.get(l.name, 0.0)) for l in CFG.legs))
+    eng = ClimbEngine(cfg, ctl, CLIMB_DUAL)
+    start(eng)
+    assert eng.request_lift("L1") is None
+    for _ in range(int(10 / DT)):
+        eng.update(DT)
+        if eng.phase_of["R2"] == LegPhase.HANDOVER:
+            break
+    assert eng.phase_of["L1"] == LegPhase.HANDOVER \
+        and eng.phase_of["R2"] == LegPhase.HANDOVER
+    io.floor = -41.0                       # 盲区：过 -30/-20，欠 -50
+    run(eng, DUAL_HO["L1"] / HANDOVER_SPEED_MMS + 2.0)
+    assert eng.phase_of["L1"] == LegPhase.HANDOVER     # 拒放气保持密封
+    assert ctl.state[LEG_NAMES.index("L1")] == FootState.ATTACHED
+    assert eng.gate_wait is not None and eng.gate_wait[0] == "L1"
+    assert eng.gate_wait[1] and "R2" not in eng.gate_wait[1]
+    assert eng.frozen is None
+    io.floor = -100.0                      # 泵拽回去了
+    for _ in range(int(8 / DT)):
+        eng.update(DT)
+        if eng.phase_of["L1"] == LegPhase.VENT:
+            break
+    assert eng.phase_of["L1"] == LegPhase.VENT
+
+
+def _pair_lift_and_land(eng, timeout_s=60.0):
+    """request_lift 走完整"对抬→双悬停→step_land→双落收口"（测试助手）。"""
+    assert eng.request_lift(eng.step_leg) is None
+    for _ in range(int(timeout_s / DT)):
+        eng.update(DT)
+        if len(eng.step_hover_legs()) == 2:
+            break
+    assert len(eng.step_hover_legs()) == 2, (eng.status(), eng.frozen)
+    assert eng.step_land() is None
+    for _ in range(int(timeout_s / DT)):
+        eng.update(DT)
+        if not eng.step_active and not eng.step_pending and all(
+                p == LegPhase.STANCE for p in eng.phase_of.values()):
+            return
+    raise AssertionError(f"对抬落未收口: {eng.status()} frozen={eng.frozen}")
+
+
+def test_dual_handover_budget_closure_bound():
+    """工作空间账（§7.8，DUAL-SWING-DESIGN 附录 A）：轮抬一整圈（3 对）后
+    每条腿因交接攒下的下坡漂移 ≤ δ 上界；再抬一圈不增长（稳态无发散）。
+    漂移剖面=份额几何的精确预言：刚抬过的对 2s、中间对 s、刚落的对 0
+    （s=每对给每条支撑的份额）。"""
+    d = 12.0
+    io, ctl, eng = make_dual_engine({n: d for n in LEG_NAMES})
+    start(eng)
+    home = {n: eng.default_feet[n][:2] for n in LEG_NAMES}
+
+    def drift():
+        return {n: home[n][0] - eng.foot[n][0] for n in LEG_NAMES}  # 下坡=+
+
+    for rnd in range(2):
+        for _ in range(3):
+            _pair_lift_and_land(eng)
+        assert eng.frozen is None
+        for n, v in drift().items():
+            assert v <= d + 0.4, (rnd, n, v)           # 附录 A 上界 δmax
+    gap = CFG.climb_cycle_time / 6.0
+    s = (HANDOVER_SPEED_MMS * gap / 5.0                # 前窗腿铺给 5 的头段
+         + (d - HANDOVER_SPEED_MMS * gap) / 4.0        # 前窗腿铺给 4 的尾段
+         + d / 4.0)                                    # 后窗腿全程铺给 4
+    want = {"L1": 2 * s, "R2": 2 * s, "L3": s, "R1": s, "L2": 0.0, "R3": 0.0}
+    for n, v in drift().items():
+        assert abs(v - want[n]) <= 0.4, (n, v, want[n])
+
+
+def test_dual_leak_blocks_new_lift_while_flyers_land():
+    """漏气挽救（§7.9）：双摆中支撑漏气→新抬腿停发（窗头拒），在空两腿
+    照常 real-time 走完（自愈回 6 吸附）；挽救成功后行走恢复、零冻结。"""
+    io, ctl, eng = make_dual_engine()
+    start(eng)
+    flyers = []
+    for _ in range(int(10 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        flyers = [n for n in LEG_NAMES if eng.phase_of[n] != LegPhase.STANCE]
+        if len(flyers) == 2:
+            break
+    assert len(flyers) == 2
+    li = next(LEG_NAMES.index(n) for n in LEG_NAMES if n not in flyers)
+    io.sealed[li] = False
+    for _ in range(int(3 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        if ctl.is_leaking(li):
+            break
+    assert ctl.is_leaking(li)
+    z_before = {n: eng.foot[n][2] for n in flyers}
+    lifted_during_leak = []
+    was_stance = {n: eng.phase_of[n] == LegPhase.STANCE for n in LEG_NAMES}
+    for _ in range(int(1.0 / DT)):                     # 挽救窗（2s）内
+        eng.update(DT, 30.0, 0.0, 0.0)
+        _lift_edges(eng, was_stance, lifted_during_leak)
+    assert not lifted_during_leak                      # 漏气期零新抬
+    assert eng.frozen is None
+    assert any(abs(eng.foot[n][2] - z_before[n]) > 1e-6 or
+               eng.phase_of[n] == LegPhase.STANCE for n in flyers)  # 在空腿没被冻住
+    io.sealed[li] = True                               # 挽救成功
+    for _ in range(int(3 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        if not ctl.is_leaking(li):
+            break
+    assert not ctl.is_leaking(li)
+    resumed = []
+    was_stance = {n: eng.phase_of[n] == LegPhase.STANCE for n in LEG_NAMES}
+    for _ in range(int(15 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        _lift_edges(eng, was_stance, resumed)
+        if resumed:
+            break
+    assert resumed and eng.frozen is None              # 行走恢复
+
+
+def test_dual_retry_partner_lands_max_two_airborne():
+    """先行腿 FAULT 重试、后行腿正常收口（§7.10）：全程同刻 ≤2 腿离面，
+    搭档先落好、重试腿随后成功，零冻结。（漏气腿取首抬 L1：抬前一直支撑
+    的腿拔密封会先触发漏气挽救，与单足重试测试同一规避法。）"""
+    io, ctl, eng = make_dual_engine()
+    start(eng)
+    li, ri = LEG_NAMES.index("L1"), LEG_NAMES.index("R2")
+    io.sealed[li] = False                  # 首抬 L1 落地必吸不上
+    saw_retry = partner_first = False
+    for _ in range(int(40 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        assert sum(1 for n in LEG_NAMES
+                   if eng.phase_of[n] != LegPhase.STANCE) <= 2
+        if eng.retries["L1"] >= 1:
+            saw_retry = True
+            io.sealed[li] = True           # 重试时"贴好了"
+            if ctl.is_attached(ri) and not ctl.is_attached(li):
+                partner_first = True       # 搭档先落好，先行腿还在挣扎
+        if saw_retry and ctl.is_attached(li) \
+                and eng.phase_of["L1"] == LegPhase.STANCE:
+            break
+    assert saw_retry and partner_first
+    assert ctl.is_attached(li) and eng.frozen is None
+
+
+def test_dual_engine_rejects_sag_and_weights():
+    """双足禁 sag_comp/权重（§7.12，v1 拍板）：CLI 之外直设 config 的路径
+    也要拒（引擎口双保险）；单足照旧允许。"""
+    for bad in (replace(CFG, climb_sag_comp_mm=3.0),
+                replace(CFG, handover_slot_w=(0.6, 0.25, 0.1, 0.05, 0.0))):
+        try:
+            ClimbEngine(bad, AdhesionController(MockVacuumIO(6)), CLIMB_DUAL)
+        except ValueError:
+            continue
+        raise AssertionError("双足下 sag/权重应被拒绝")
+    ClimbEngine(replace(CFG, climb_sag_comp_mm=3.0),
+                AdhesionController(MockVacuumIO(6)))   # 单足不受影响
+
+
+def test_max_straight_step_dual_duty():
+    """步幅上限账自动跟随 duty（§7.13）：双足 vent 随场拖尾 ×5/4 更长，
+    上限只紧不松、量级不变。"""
+    s1 = max_straight_step(CFG, CLIMB)
+    s2 = max_straight_step(CFG, CLIMB_DUAL)
+    assert 20.0 <= s2 <= s1 + 1e-6
+    assert s2 > s1 - 5.0
+
+
+def test_dual_composes_with_custom_leg_order():
+    """--leg-order 与双足组合（§7.14）：重排偏移+改 duty 叠加，窗序=给定
+    序、双摆照常、抬腿按新序轮转、全程零冻结。"""
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(CFG, ctl, gait_with_slot_order(ORDER, CLIMB_DUAL))
+    assert eng.slot_order == ORDER and eng._n_swing == 2
+    start(eng)
+    lifts = []
+    was_stance = {n: True for n in LEG_NAMES}
+    for _ in range(int(50 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        assert eng.frozen is None
+        _lift_edges(eng, was_stance, lifts)
+        if len(lifts) >= 8:
+            break
+    assert len(lifts) >= 8
+    for k, n in enumerate(lifts):
+        assert n == ORDER[k % 6], f"第 {k} 抬 {n}"

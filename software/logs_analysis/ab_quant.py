@@ -253,6 +253,11 @@ def parse_log(path):
            ("ho", re.compile(r"相位 (\w+) stance→handover")),
            ("lt", re.compile(r"相位 (\w+) lift→transfer")),
            ("td", re.compile(r"相位 (\w+) transfer→descend")),
+           # 对步第二只腿（--dual，DUAL-SWING-DESIGN §4-6）经落地错峰队列走
+           # hover→descend，且"落地：L1+R2"的 \w+ 只捕获首腿——没有本行，
+           # 每对的第二只腿会因"缺落地"被整条丢弃出标定表。单足日志本转移
+           # 与"落地："文本同刻共存，pick 先命中谁都同语义
+           ("td", re.compile(r"相位 (\w+) hover→descend")),
            ("land", re.compile(r"落地：(\w+)")),
            ("land", re.compile(r"落地（后半步）：(\w+)")))
     rx_lean = re.compile(r"倾身 ([+-][0-9.]+)mm")

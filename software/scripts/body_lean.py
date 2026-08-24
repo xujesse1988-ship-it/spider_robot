@@ -32,6 +32,14 @@
   python body_lean.py --handover L1:17,R1:15,L3:11,R3:9,R2:5,L2:5
                                              # 零力交接 A/B 标定（重跑 08-20
                                              # 原地踏步实验对照下滑量）
+  python body_lean.py --dual --handover ...  # 双足对抬（DUAL-SWING-DESIGN §6）：
+                                             # i 一次抬一对（所选腿+窗序继任，
+                                             # 先后 0.6s 悬停，再按 i 一并落地）
+                                             # ——双足 δ 三组标定载体（三组=单足
+                                             # 现表×0.5/0.75/1.0，逐腿 vent 跳变
+                                             # 线性外推 δ*_pair×0.8；放气错峰
+                                             # ≥0.4s 保逐腿视频可分辨）。与
+                                             # --handover-weights 互斥
   python body_lean.py --dry                  # 真舵机 + 仿真气路（不碰阀泵）
   python body_lean.py --no-tank              # 无罐：泵直抽歧管（地面/上墙均可）
   python body_lean.py                        # 全链路
@@ -60,7 +68,7 @@ from hexapod.climb import (ClimbEngine, LegPhase, LEAN_SPEED_MMS,
                            parse_handover, parse_handover_weights,
                            parse_leg_order, gait_with_slot_order,
                            HANDOVER_SPEED_MMS)
-from hexapod.gait import CLIMB
+from hexapod.gait import CLIMB, CLIMB_DUAL
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
@@ -150,6 +158,15 @@ def main():
                          "'轮到 X'提示与 --handover-weights 轮转距离自动跟随"
                          "新序（守卫仍按新序判偏离轮转）。⚠ 换序改变权重与"
                          "逐腿 δ 的稳态格局，δ 标定按序分组、勿跨序比较")
+    ap.add_argument("--dual", action="store_true",
+                    help="双足对抬（双摆动窗，docs/DUAL-SWING-DESIGN.md）：i 一次"
+                         "抬一对（数字键选对首腿，搭档=窗序继任，窗头差 0.6s "
+                         "先后抬到悬停，两腿都悬停后再按 i 一并落地错峰下探）"
+                         "——双足 δ 三组标定的载体（三组=单足现表 ×0.5/0.75/"
+                         "1.0，ab_quant 逐腿 vent 跳变线性外推 δ*_pair，取 "
+                         "×0.8 起标；引擎放气错峰 ≥0.4s 保逐腿可分辨）。"
+                         "⚠ 对抬期间恒 4 足吸附；δ 勿与单足口径混标；"
+                         "与 --handover-weights 互斥")
     ap.add_argument("--stand-height", type=float,
                     default=DEFAULT_CONFIG.stand_height,
                     help="站高 mm（默认 %(default)g，范围 55~95）")
@@ -172,6 +189,10 @@ def main():
             ap.error(str(e))
     ho_w = None
     if args.handover_weights is not None:
+        if args.dual:
+            ap.error("--dual 与 --handover-weights 互斥：5 权重轮转模型按单摆"
+                     "+5 支撑推导，双足 v1 一律均分 δ/4（DUAL-SWING-DESIGN "
+                     "§3.5）")
         if handover is None:
             ap.error("--handover-weights 需要同时开 --handover（权重只作用于"
                      "交接载荷的分配）")
@@ -215,7 +236,7 @@ def main():
     log.note(f"参数: lean_step={args.lean_step:g}mm lean_speed={LEAN_SPEED_MMS:g}mm/s"
              f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
              f" stand={cfg.stand_height:g} tilt_trim={cfg.cup_tilt_trim_deg:g}°"
-             f" handover={ho_txt}"
+             f" handover={ho_txt} dual={int(args.dual)}"
              + (f" leg_order={'_'.join(leg_order)}" if leg_order else ""))
     _prev_hook = sys.excepthook
 
@@ -236,7 +257,8 @@ def main():
         ctl_kw["suck_timeout_s"] = 2.5
     ctl = AdhesionController(io, **ctl_kw)
     bot = Hexapod(drv, cfg)
-    gait = gait_with_slot_order(leg_order) if leg_order else CLIMB
+    base = CLIMB_DUAL if args.dual else CLIMB
+    gait = gait_with_slot_order(leg_order, base) if leg_order else base
     eng = ClimbEngine(cfg, ctl, gait)
     watch = ClimbWatch(log, eng, ctl, io, cfg)
     log.note(f"阈值: ATTACH={ATTACH_KPA} PUMP_ON={PUMP_ON_KPA}"
@@ -303,6 +325,13 @@ def main():
             # 打 eng.slot_order 而不是回显参数：证明相位表真按新序生效了
             print("抬腿窗序（含启动吸附序）：" + "→".join(eng.slot_order)
                   + "——'轮到 X'提示与权重轮转按新序走；δ 标定按序分组")
+        if args.dual:
+            print("双足对抬：环序 " + "→".join(eng.slot_order)
+                  + "——i 抬一对（对=所选腿+窗序继任，先后 0.6s 错峰），两腿"
+                  "都悬停后再按 i 一并落地（错峰下探）；对抬期间恒 4 足吸附。"
+                  "δ 按双足工况标定（三组=单足表×0.5/0.75/1.0），勿与单足"
+                  "混口径")
+            log.note("dual=1 slot_order=" + "_".join(eng.slot_order))
         ho_max = max(cfg.leg(n).handover_mm for n in LEG_NAMES)
         if ho_max > 0.0:
             print("零力交接开启：δ "
@@ -375,34 +404,40 @@ def main():
                 if deny:
                     print(f"\n选腿拒绝：{deny}")
                 else:
-                    print(f"\n已选 {eng.step_leg}，按 i 原地抬起")
+                    print(f"\n已选 {'+'.join(eng.step_group())}，按 i 原地抬起")
             elif k == "i" and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动")
             elif k == "i":
                 hover = eng.step_hover_leg()
                 if hover:
+                    hs = "+".join(eng.step_hover_legs())  # land 前取（首腿受理即下探）
                     deny = eng.step_land()
                     if deny:
                         print(f"\n落地不可用：{deny}")
                     else:
-                        print(f"\n{hover} 落回站位，压入+吸附确认后收口")
-                        log.event(f"落地：{hover}")
+                        print(f"\n{hs} 落回站位，压入+吸附确认后收口")
+                        log.event(f"落地：{hs}")
                 else:
+                    grp = "+".join(eng.step_group())
                     deny = eng.request_lift()
                     if deny:
                         print(f"\n抬起不可用：{deny}")
                     else:
-                        print(f"\n原地抬起 {eng.step_leg}（悬停后可继续 ↑/↓ "
-                              "倾身，再按 i 落地）")
-                        log.event(f"原地抬起受理：{eng.step_leg}")
+                        print(f"\n原地抬起 {grp}（悬停后可继续 ↑/↓ 倾身，"
+                              + ("两腿都悬停后按 i 一并落地）" if args.dual
+                                 else "再按 i 落地）"))
+                        log.event(f"原地抬起受理：{grp}")
             elif k == " ":
                 msgs = []
                 if abs(eng.lean_pending) > 1e-6:
                     eng.cancel_lean()
                     msgs.append("未铺完的倾身已取消")
                 if eng.step_pending:
-                    eng.cancel_step()
-                    msgs.append("未开始的抬起已取消")
+                    if eng.cancel_step():
+                        msgs.append("未开始的抬起已取消")
+                    else:
+                        msgs.append("对抬已有腿在途，整组不可撤"
+                                    "（悬停后按 i 一并落地）")
                 if eng.step_hover_leg():
                     msgs.append("悬停中的腿不可取消——按 i 落地收口")
                 if msgs:
@@ -514,15 +549,18 @@ def main():
                 print(f"\n⚠ {note_now}")
                 log.event(f"交接守卫：{note_now}")
             ho_note_was = note_now
-            hover_now = eng.step_hover_leg()
+            hover_now = "+".join(eng.step_hover_legs()) or None
             if hover_now and hover_now != hover_was:
+                tail = ("i 一并落地" if "+" in hover_now else
+                        ("等搭档悬停后 i 一并落地" if args.dual else "i 落地"))
                 print(f"\n{hover_now} 已悬停（离面 {cfg.lift_clearance:g}mm）："
-                      "↑/↓ 继续倾身，i 落地")
+                      f"↑/↓ 继续倾身，{tail}")
             hover_was = hover_now
             step_now = eng.step_pending or eng.step_active
             if step_was and not step_now:
-                print(f"\n抬起-落地完成（1~6 重新选腿；当前轮到 {eng.step_leg}）")
-                log.event(f"抬落完成，轮到 {eng.step_leg}")
+                grp = "+".join(eng.step_group())
+                print(f"\n抬起-落地完成（1~6 重新选腿；当前轮到 {grp}）")
+                log.event(f"抬落完成，轮到 {grp}")
             step_was = step_now
 
             if eng.started and not was_started:

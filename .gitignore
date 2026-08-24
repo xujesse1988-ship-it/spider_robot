@@ -6,6 +6,10 @@ __pycache__/
 # 黑匣子运行日志（一跑一文件，只留在本机）
 software/logs/
 
+# 手机原始录像（几百 MB/段，只留在本机；入库视频用转码后的 .mp4，
+# 如 images/lean_20260820.mp4）
+images/*.MOV
+
 # macOS
 .DS_Store
 **/.DS_Store

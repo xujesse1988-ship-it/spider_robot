@@ -11,11 +11,18 @@
   ↑/↓  向前/向后倾身一档（--lean-step，默认 5mm）：请求排队后以 10mm/s
        匀速铺完，摆动/落压期间自动暂停不丢；授予量按支撑足对 IK 包络
        实算截短（到边会拒绝并提示）
-  t    对时标记一键流程（HANDOVER-AB-PROTOCOL §4.3，A/B 每组首轮抬落前
-       必做）：+10mm 倾身 → 铺完停 2s → 回位 → 静置 20s 后提示完成，
-       全程 ~24s 勿碰机身。ab_quant 靠这段大位移锁视频-日志对时——
-       身体几乎不动的组（δ 达标组）活动对比度对时法会失锁,08-24 三组
-       对时全错即此教训。等价手动键序 ↑×2→等 2s→↓×2；空格取消
+  t    一键实验序列（HANDOVER-AB-PROTOCOL §4）：①对时标记——+10mm 倾身
+       → 铺完停 2s → 回位 → 静置 20s（ab_quant 靠这段大位移锁视频-日志
+       对时：身体几乎不动的组活动对比度法会失锁，08-24 三组对时全错即此
+       教训）；②自动轮换 --auto-rounds 轮（默认 3）×6 腿——按轮次序逐腿
+       （--dual 逐对）抬起-悬停 1s-落下，腿间等泵歇 ≥2s 且距收口 ≥10s
+       （协议"等盘压回 -75 泵停"的自动化，上限 30s 超时继续并留痕），
+       轮间静置 15s——节奏与协议手动口径一致且逐组可复现，轮换序由引擎
+       轮次保证（权重守卫要求的环序轮转不再依赖人手）；③结束静置 30s
+       （电流回落观测窗）后打"✓ 实验序列完成"。空格随时取消（对时标记
+       回位完成后取消仍有效，剩余轮换可 1~6+i 手动续）；冻结自动中止
+       （该组按协议 §6 判定）；--auto-rounds 0 = 只做标记不轮换（反复抬
+       同一腿标 δ 的场合用）。手动等价键序见协议 §4
   1~6  选腿（1=L1 2=L2 3=L3 4=R1 5=R2 6=R3），选完按 i 抬它
   i    原地抬起所选腿到悬停（互锁/抬腿门槛/先通气全套照走；--handover
        开启时抬起前自动先做零力交接：被抬腿沿上坡还 δ 卸载、其余支撑腿
@@ -90,6 +97,17 @@ LEG_KEYS = {"1": "L1", "2": "L2", "3": "L3", "4": "R1", "5": "R2", "6": "R3"}
 MARK_LEAN_MM = 10.0
 MARK_HOLD_S = 2.0
 MARK_REST_S = 20.0
+# 自动轮换（t 序列第二段）参数：悬停 1s 即落（视频里分辨摆动/下探段）；
+# 腿间间歇 = 泵歇 ≥2s 且距收口 ≥10s（协议 §4"等盘压回 -75 泵停再抬下一条"
+# 的自动化，上限 30s 超时继续并留痕——泵一直不歇=漏气，盯状态行）；
+# 轮间 15s、结束静置 30s = 协议 §4 手动口径原值
+AUTO_HOVER_S = 1.0
+AUTO_GAP_MIN_S = 10.0
+AUTO_GAP_PUMP_S = 2.0
+AUTO_GAP_MAX_S = 30.0
+AUTO_ROUND_GAP_S = 15.0
+AUTO_TAIL_S = 30.0
+LEGS_PER_ROUND = 6
 
 
 def read_key(timeout):
@@ -134,6 +152,11 @@ def main():
     ap.add_argument("--lean-step", type=float, default=5.0,
                     help="每按一次 ↑/↓ 的倾身量 mm（默认 %(default)g，范围 "
                          "1~15）。授予量另按支撑足几何截短")
+    ap.add_argument("--auto-rounds", type=int, default=3,
+                    help="t 键序列的自动轮换轮数（默认 %(default)d，范围 0~6；"
+                         "0=只做对时标记不轮换——反复抬同一腿标 δ 的场合用）。"
+                         "每轮 6 腿按轮次序逐腿（--dual 下逐对）抬起-悬停-"
+                         "落下，腿间等泵歇、轮间 15s、末尾结束静置 30s")
     ap.add_argument("--press-delta", type=float, default=None,
                     help="预压行程 mm，覆盖全部腿（默认用 config 值 "
                          f"{DEFAULT_CONFIG.legs[0].press_delta_mm:g}）")
@@ -198,6 +221,9 @@ def main():
         ap.error(f"--stand-height {args.stand_height} 非法：范围 55~95mm")
     if not -8.0 <= args.tilt_trim <= 8.0:
         ap.error(f"--tilt-trim {args.tilt_trim} 非法：范围 -8~8°")
+    if not 0 <= args.auto_rounds <= 6:
+        ap.error(f"--auto-rounds {args.auto_rounds} 非法：范围 0~6（0=只做"
+                 "对时标记）")
     handover = None
     if args.handover is not None:
         try:
@@ -293,10 +319,17 @@ def main():
     last_esc = float("-inf")
     last_o = float("-inf")
     released_hold = False
-    mark_state = None            # 对时标记状态机：None/fwd_lay/hold/back_lay/rest
+    mark_state = None            # t 实验序列状态机：None/对时标记四态（fwd_lay/
+                                 # hold/back_lay/rest）/自动轮换六态（lift_req/
+                                 # lift_wait/hover_dwell/land_wait/leg_gap/
+                                 # round_gap）/tail（结束静置）
     mark_t = 0.0
     mark_base = 0.0              # 标记起点的已倾量——回程按"回到起点"实算，
-                                 # 去程被几何截短/冻结取消也能回准
+                                 # 去程被几何截短/中途取消也能回准
+    auto_round = 1               # 自动轮换：当前轮（1 起）
+    auto_legs_done = 0           # 本轮已收口腿数（--dual 每次 +2）
+    auto_group = ()              # 在途抬落组（受理时定格；轮次收口后会推进）
+    pump_on_last = 0.0           # 最近一次见泵开的时刻（腿间"泵歇 ≥2s"判据）
     hover_was = None
     step_was = False
     gate_was = None
@@ -411,7 +444,7 @@ def main():
             elif k in ("UP", "DOWN") and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动——取下后 ESC×2 退出")
             elif k in ("UP", "DOWN") and mark_state:
-                print("\n对时标记进行中，倾身键已屏蔽（空格取消标记后再手动倾身）")
+                print("\n实验序列进行中，倾身键已屏蔽（空格取消后再手动倾身）")
             elif k in ("UP", "DOWN"):
                 d = args.lean_step if k == "UP" else -args.lean_step
                 granted, deny = eng.request_lean(d)
@@ -426,6 +459,8 @@ def main():
                     log.event(f"倾身 {granted:+g}mm（目标累计 {total:+.0f}）")
             elif k in LEG_KEYS and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动")
+            elif k in LEG_KEYS and mark_state:
+                print("\n实验序列进行中，选腿会打乱轮换序——空格取消后再手动")
             elif k in LEG_KEYS:
                 deny = eng.select_step_leg(LEG_KEYS[k])
                 if deny:
@@ -434,15 +469,10 @@ def main():
                     print(f"\n已选 {'+'.join(eng.step_group())}，按 i 原地抬起")
             elif k == "i" and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动")
-            elif k == "i" and mark_state in ("fwd_lay", "hold", "back_lay"):
-                print("\n对时标记进行中（回位后自动进静置）——铺设/回位段"
-                      "不抬腿，空格取消标记")
+            elif k == "i" and mark_state:
+                print("\n实验序列进行中（标记完自动轮换抬落）——空格取消后"
+                      "可手动抬落")
             elif k == "i":
-                if mark_state == "rest":
-                    # 静置段抬腿=操作者提前开跑：两段倾身斜坡已入日志，对时
-                    # 不受影响，只是安静参考段变短——记录不拦截
-                    mark_state = None
-                    log.event("对时标记静置提前结束（按 i 开跑）")
                 hover = eng.step_hover_leg()
                 if hover:
                     hs = "+".join(eng.step_hover_legs())  # land 前取（首腿受理即下探）
@@ -466,7 +496,7 @@ def main():
                 print("\n吸盘已放开（取机窗口），不可再动")
             elif k == "t":
                 if mark_state:
-                    print("\n对时标记进行中……（空格取消）")
+                    print("\n实验序列进行中……（空格取消）")
                 else:
                     deny = None
                     if eng.step_pending or eng.step_active or eng.step_hover_leg():
@@ -481,21 +511,35 @@ def main():
                         log.event(f"对时标记拒绝：{deny}")
                     else:
                         mark_state = "fwd_lay"
+                        auto_round, auto_legs_done = 1, 0
                         clip = ("" if granted >= MARK_LEAN_MM - 1e-6 else
                                 f"（几何截短自 {MARK_LEAN_MM:g}，拟合幅值以"
                                 "日志为准）")
-                        print(f"\n对时标记：倾身 {granted:+g}mm{clip} → 停 "
-                              f"{MARK_HOLD_S:g}s → 回位 → 静置 {MARK_REST_S:g}s"
-                              "。全程 ~24s 勿碰机身/按键（空格取消）")
+                        plan = ("" if args.auto_rounds == 0 else
+                                f" → 自动轮换 {args.auto_rounds} 轮×"
+                                f"{LEGS_PER_ROUND} 腿 → 尾静置 "
+                                f"{AUTO_TAIL_S:g}s")
+                        print(f"\n实验序列开跑：对时标记（倾身 {granted:+g}mm"
+                              f"{clip} → 停 {MARK_HOLD_S:g}s → 回位 → 静置 "
+                              f"{MARK_REST_S:g}s）{plan}。勿碰机身/按键，"
+                              "空格随时取消")
                         log.event(f"倾身 {granted:+g}mm（对时标记 去程）")
+                        if args.auto_rounds:
+                            log.event(f"实验序列开跑：标记+自动轮换 "
+                                      f"{args.auto_rounds} 轮")
             elif k == " ":
                 msgs = []
                 if abs(eng.lean_pending) > 1e-6:
                     eng.cancel_lean()
                     msgs.append("未铺完的倾身已取消")
-                if mark_state:
-                    msgs.append(f"对时标记已取消（当前倾 {eng.lean_mm:+.1f}mm"
-                                "，↑/↓ 手动回位后可重按 t）")
+                if mark_state in ("fwd_lay", "hold", "back_lay"):
+                    msgs.append("实验序列已取消：对时标记未完成作废（当前倾 "
+                                f"{eng.lean_mm:+.1f}mm，↑/↓ 回位后重按 t）")
+                    mark_state = None
+                elif mark_state:
+                    msgs.append("实验序列已取消：对时标记已入日志仍有效；自动"
+                                f"轮换止于第 {auto_round} 轮 {auto_legs_done}"
+                                f"/{LEGS_PER_ROUND} 腿（可 1~6+i 手动续跑）")
                     mark_state = None
                 if eng.step_pending:
                     if eng.cancel_step():
@@ -509,15 +553,12 @@ def main():
                     print("\n" + "；".join(msgs))
                     log.event("空格：" + "；".join(msgs))
             elif k == "f" and eng.frozen:
+                # 实验序列不必在此善后：冻结出现的当拍序列已在主循环自动中止
                 print(f"\n解除冻结: {eng.frozen}（未铺完倾身已取消）")
-                if mark_state:
-                    # clear_freeze 取消未铺完倾身，标记的斜坡与日志已对不上
-                    mark_state = None
-                    print(f"（对时标记中止——当前倾 {eng.lean_mm:+.1f}mm，"
-                          "↑/↓ 回位后重按 t 重做）")
-                    log.event("对时标记中止（冻结处理）")
                 eng.clear_freeze()
                 last_frozen = None
+            elif k == "o" and mark_state:
+                print("\n实验序列进行中——空格取消后再取机")
             elif k == "o":
                 # 取机窗口（与 climb_walk 同款实现：逐足串行排气防六线圈
                 # 同刻阶跃；改那边同步改这边）
@@ -621,7 +662,8 @@ def main():
                 log.event(f"交接守卫：{note_now}")
             ho_note_was = note_now
             hover_now = "+".join(eng.step_hover_legs()) or None
-            if hover_now and hover_now != hover_was:
+            if hover_now and hover_now != hover_was and not mark_state:
+                # 自动序列中不打手动指引（悬停 1s 即自动落，i 提示会误导）
                 tail = ("i 一并落地" if "+" in hover_now else
                         ("等搭档悬停后 i 一并落地" if args.dual else "i 落地"))
                 print(f"\n{hover_now} 已悬停（离面 {cfg.lift_clearance:g}mm）："
@@ -630,13 +672,25 @@ def main():
             step_now = eng.step_pending or eng.step_active
             if step_was and not step_now:
                 grp = "+".join(eng.step_group())
-                print(f"\n抬起-落地完成（1~6 重新选腿；当前轮到 {grp}）")
+                if not mark_state:
+                    print(f"\n抬起-落地完成（1~6 重新选腿；当前轮到 {grp}）")
                 log.event(f"抬落完成，轮到 {grp}")
             step_was = step_now
 
             if mark_state:
                 now_m = time.monotonic()
-                if mark_state == "fwd_lay" and abs(eng.lean_pending) < 1e-6:
+                if io.pump:
+                    pump_on_last = now_m
+                if eng.frozen:
+                    # 冻结=组内异常，序列当拍中止（该组是否作废按协议 §6）；
+                    # 悬停中的腿解冻后手动 i 收口，不留自动动作
+                    print(f"\n⚠ 实验序列中止：全机冻结（第 {auto_round} 轮 "
+                          f"{auto_legs_done}/{LEGS_PER_ROUND} 腿）——处理后按"
+                          " f；悬停腿按 i 收口；该组数据按协议 §6 判定")
+                    log.event(f"实验序列中止：冻结（第 {auto_round} 轮 "
+                              f"{auto_legs_done}/{LEGS_PER_ROUND}）")
+                    mark_state = None
+                elif mark_state == "fwd_lay" and abs(eng.lean_pending) < 1e-6:
                     mark_state, mark_t = "hold", now_m
                 elif mark_state == "hold" and now_m - mark_t >= MARK_HOLD_S:
                     back = mark_base - eng.lean_mm
@@ -657,13 +711,96 @@ def main():
                     print(f"\n对时标记回位完成，静置 {MARK_REST_S:g}s"
                           "（勿碰机身/按键）……")
                 elif mark_state == "rest" and now_m - mark_t >= MARK_REST_S:
-                    mark_state = None
-                    print("\n✓ 对时标记完成，可开始第 1 轮抬落")
                     log.event("对时标记完成")
+                    if args.auto_rounds:
+                        mark_state = "lift_req"
+                        print(f"\n✓ 对时标记完成 → 自动轮换第 1/"
+                              f"{args.auto_rounds} 轮开始（轮换序 "
+                              + "→".join(eng.slot_order) + "）")
+                        log.event("自动轮换：第 1 轮开始")
+                    else:
+                        mark_state = None
+                        print("\n✓ 对时标记完成（--auto-rounds 0），"
+                              "手动开跑第 1 轮抬落")
+                elif mark_state == "lift_req":
+                    grp = "+".join(eng.step_group())
+                    auto_group = eng.step_group()
+                    deny = eng.request_lift()
+                    if deny:
+                        # 冻结在上面截获，走到这的拒绝=非预期状态，中止留人
+                        mark_state = None
+                        print(f"\n⚠ 实验序列中止：抬起被拒（{deny}）——可 "
+                              "1~6+i 手动续跑或重按 t 整组重来")
+                        log.event(f"实验序列中止：抬起被拒 {deny}")
+                    else:
+                        mark_state = "lift_wait"
+                        print(f"\n[自动 {auto_round}/{args.auto_rounds} 轮] "
+                              f"原地抬起 {grp}"
+                              f"（{auto_legs_done + len(auto_group)}"
+                              f"/{LEGS_PER_ROUND}）")
+                        log.event(f"原地抬起受理：{grp}")
+                elif mark_state == "lift_wait" and not eng.step_pending \
+                        and len(eng.step_hover_legs()) == len(auto_group):
+                    mark_state, mark_t = "hover_dwell", now_m
+                elif mark_state == "hover_dwell" \
+                        and now_m - mark_t >= AUTO_HOVER_S:
+                    hs = "+".join(eng.step_hover_legs())
+                    deny = eng.step_land()
+                    if deny:
+                        mark_state = None
+                        print(f"\n⚠ 实验序列中止：落地被拒（{deny}）——悬停"
+                              "腿按 i 手动收口")
+                        log.event(f"实验序列中止：落地被拒 {deny}")
+                    else:
+                        mark_state = "land_wait"
+                        log.event(f"落地：{hs}")
+                elif mark_state == "land_wait" \
+                        and not (eng.step_pending or eng.step_active):
+                    auto_legs_done += len(auto_group)
+                    print(f"\n[自动 {auto_round}/{args.auto_rounds} 轮] "
+                          f"{'+'.join(auto_group)} 收口"
+                          f"（{auto_legs_done}/{LEGS_PER_ROUND}）")
+                    if auto_legs_done < LEGS_PER_ROUND:
+                        mark_state, mark_t = "leg_gap", now_m
+                    elif auto_round < args.auto_rounds:
+                        log.event(f"自动轮换：第 {auto_round} 轮完成")
+                        print(f"[自动] 第 {auto_round} 轮完成，轮间静置 "
+                              f"{AUTO_ROUND_GAP_S:g}s……")
+                        auto_round += 1
+                        auto_legs_done = 0
+                        mark_state, mark_t = "round_gap", now_m
+                    else:
+                        log.event(f"自动轮换：第 {auto_round} 轮完成")
+                        print(f"[自动] 第 {auto_round} 轮完成——结束静置 "
+                              f"{AUTO_TAIL_S:g}s（电流回落观测窗）……")
+                        mark_state, mark_t = "tail", now_m
+                elif mark_state == "leg_gap":
+                    if now_m - mark_t >= AUTO_GAP_MIN_S \
+                            and now_m - pump_on_last >= AUTO_GAP_PUMP_S:
+                        mark_state = "lift_req"
+                    elif now_m - mark_t >= AUTO_GAP_MAX_S:
+                        print(f"\n⚠ 腿间间歇 {AUTO_GAP_MAX_S:g}s 泵仍未歇——"
+                              "超时继续（漏气？盯状态行盘压）")
+                        log.event("自动轮换：间歇超时（泵未歇）继续")
+                        mark_state = "lift_req"
+                elif mark_state == "round_gap" \
+                        and now_m - mark_t >= AUTO_ROUND_GAP_S:
+                    mark_state = "lift_req"
+                    print(f"\n[自动] 第 {auto_round}/{args.auto_rounds} "
+                          "轮开始")
+                    log.event(f"自动轮换：第 {auto_round} 轮开始")
+                elif mark_state == "tail" and now_m - mark_t >= AUTO_TAIL_S:
+                    mark_state = None
+                    print(f"\n✓ 实验序列完成：对时标记 + {args.auto_rounds} "
+                          f"轮×{LEGS_PER_ROUND} 腿 + 结束静置——可 ESC×2 "
+                          "退出取数")
+                    log.event("实验序列完成")
 
             if eng.started and not was_started:
                 was_started = True
-                print("\n✓ 六足吸附完成：↑/↓ 前/后倾身  t 对时标记  1~6 选腿"
+                t_help = ("t 对时标记" if args.auto_rounds == 0 else
+                          f"t 一键实验（标记+{args.auto_rounds} 轮轮换）")
+                print(f"\n✓ 六足吸附完成：↑/↓ 前/后倾身  {t_help}  1~6 选腿"
                       "  i 抬/落  空格取消  f 解冻  o×2 取机  ESC×2 退出")
             if eng.frozen != last_frozen:
                 last_frozen = eng.frozen
@@ -683,7 +820,11 @@ def main():
                     tag = (f" 倾{eng.lean_mm:+.1f}"
                            + (f"→{eng.lean_mm + eng.lean_pending:+.0f}"
                               if abs(eng.lean_pending) > 1e-6 else "")
-                           + (" 已放开" if released_hold else ""))
+                           + (" 已放开" if released_hold else "")
+                           + ((f" 自动{auto_round}/{args.auto_rounds}"
+                               if mark_state not in ("fwd_lay", "hold",
+                                                     "back_lay", "rest")
+                               else " 对时标记") if mark_state else ""))
                     print("\r" + status_line(eng, ctl, v, c, peak_a,
                                              eng.cmd, tag) + "  ",
                           end="", flush=True)

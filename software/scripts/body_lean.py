@@ -11,6 +11,11 @@
   ↑/↓  向前/向后倾身一档（--lean-step，默认 5mm）：请求排队后以 10mm/s
        匀速铺完，摆动/落压期间自动暂停不丢；授予量按支撑足对 IK 包络
        实算截短（到边会拒绝并提示）
+  t    对时标记一键流程（HANDOVER-AB-PROTOCOL §4.3，A/B 每组首轮抬落前
+       必做）：+10mm 倾身 → 铺完停 2s → 回位 → 静置 20s 后提示完成，
+       全程 ~24s 勿碰机身。ab_quant 靠这段大位移锁视频-日志对时——
+       身体几乎不动的组（δ 达标组）活动对比度对时法会失锁,08-24 三组
+       对时全错即此教训。等价手动键序 ↑×2→等 2s→↓×2；空格取消
   1~6  选腿（1=L1 2=L2 3=L3 4=R1 5=R2 6=R3），选完按 i 抬它
   i    原地抬起所选腿到悬停（互锁/抬腿门槛/先通气全套照走；--handover
        开启时抬起前自动先做零力交接：被抬腿沿上坡还 δ 卸载、其余支撑腿
@@ -78,6 +83,13 @@ from climb_walk import status_line, coils_off   # 显示/收尾与 climb_walk �
 
 STATUS_S = 0.5
 LEG_KEYS = {"1": "L1", "2": "L2", "3": "L3", "4": "R1", "5": "R2", "6": "R3"}
+# 对时标记（t 键）三个常数 = 协议 §4.3 的手动键序参数：幅值 +10mm（↑×2 档）、
+# 铺完停 2s、回位后静置 20s。改这里记得同步协议文档与 ab_quant 的窗口推导
+# （lean_fit 的 t0/t1 从日志倾身事件自算，幅值/停留变了拟合仍自洽，但
+# <6mm 幅值在 0.27mm/px 口径下逼近 1.2px 方差门槛，拟合会失败）
+MARK_LEAN_MM = 10.0
+MARK_HOLD_S = 2.0
+MARK_REST_S = 20.0
 
 
 def read_key(timeout):
@@ -281,6 +293,10 @@ def main():
     last_esc = float("-inf")
     last_o = float("-inf")
     released_hold = False
+    mark_state = None            # 对时标记状态机：None/fwd_lay/hold/back_lay/rest
+    mark_t = 0.0
+    mark_base = 0.0              # 标记起点的已倾量——回程按"回到起点"实算，
+                                 # 去程被几何截短/冻结取消也能回准
     hover_was = None
     step_was = False
     gate_was = None
@@ -394,6 +410,8 @@ def main():
                 print("\n再按一次 ESC 确认退出（会放气——墙上禁用！）")
             elif k in ("UP", "DOWN") and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动——取下后 ESC×2 退出")
+            elif k in ("UP", "DOWN") and mark_state:
+                print("\n对时标记进行中，倾身键已屏蔽（空格取消标记后再手动倾身）")
             elif k in ("UP", "DOWN"):
                 d = args.lean_step if k == "UP" else -args.lean_step
                 granted, deny = eng.request_lean(d)
@@ -416,7 +434,15 @@ def main():
                     print(f"\n已选 {'+'.join(eng.step_group())}，按 i 原地抬起")
             elif k == "i" and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动")
+            elif k == "i" and mark_state in ("fwd_lay", "hold", "back_lay"):
+                print("\n对时标记进行中（回位后自动进静置）——铺设/回位段"
+                      "不抬腿，空格取消标记")
             elif k == "i":
+                if mark_state == "rest":
+                    # 静置段抬腿=操作者提前开跑：两段倾身斜坡已入日志，对时
+                    # 不受影响，只是安静参考段变短——记录不拦截
+                    mark_state = None
+                    log.event("对时标记静置提前结束（按 i 开跑）")
                 hover = eng.step_hover_leg()
                 if hover:
                     hs = "+".join(eng.step_hover_legs())  # land 前取（首腿受理即下探）
@@ -436,11 +462,41 @@ def main():
                               + ("两腿都悬停后按 i 一并落地）" if args.dual
                                  else "再按 i 落地）"))
                         log.event(f"原地抬起受理：{grp}")
+            elif k == "t" and released_hold:
+                print("\n吸盘已放开（取机窗口），不可再动")
+            elif k == "t":
+                if mark_state:
+                    print("\n对时标记进行中……（空格取消）")
+                else:
+                    deny = None
+                    if eng.step_pending or eng.step_active or eng.step_hover_leg():
+                        deny = "抬腿在途（先收口再做标记）"
+                    elif abs(eng.lean_pending) > 1e-6:
+                        deny = "倾身未铺完（等它完成或空格取消）"
+                    if deny is None:
+                        mark_base = eng.lean_mm
+                        granted, deny = eng.request_lean(MARK_LEAN_MM)
+                    if deny:
+                        print(f"\n对时标记不可用：{deny}")
+                        log.event(f"对时标记拒绝：{deny}")
+                    else:
+                        mark_state = "fwd_lay"
+                        clip = ("" if granted >= MARK_LEAN_MM - 1e-6 else
+                                f"（几何截短自 {MARK_LEAN_MM:g}，拟合幅值以"
+                                "日志为准）")
+                        print(f"\n对时标记：倾身 {granted:+g}mm{clip} → 停 "
+                              f"{MARK_HOLD_S:g}s → 回位 → 静置 {MARK_REST_S:g}s"
+                              "。全程 ~24s 勿碰机身/按键（空格取消）")
+                        log.event(f"倾身 {granted:+g}mm（对时标记 去程）")
             elif k == " ":
                 msgs = []
                 if abs(eng.lean_pending) > 1e-6:
                     eng.cancel_lean()
                     msgs.append("未铺完的倾身已取消")
+                if mark_state:
+                    msgs.append(f"对时标记已取消（当前倾 {eng.lean_mm:+.1f}mm"
+                                "，↑/↓ 手动回位后可重按 t）")
+                    mark_state = None
                 if eng.step_pending:
                     if eng.cancel_step():
                         msgs.append("未开始的抬起已取消")
@@ -454,6 +510,12 @@ def main():
                     log.event("空格：" + "；".join(msgs))
             elif k == "f" and eng.frozen:
                 print(f"\n解除冻结: {eng.frozen}（未铺完倾身已取消）")
+                if mark_state:
+                    # clear_freeze 取消未铺完倾身，标记的斜坡与日志已对不上
+                    mark_state = None
+                    print(f"（对时标记中止——当前倾 {eng.lean_mm:+.1f}mm，"
+                          "↑/↓ 回位后重按 t 重做）")
+                    log.event("对时标记中止（冻结处理）")
                 eng.clear_freeze()
                 last_frozen = None
             elif k == "o":
@@ -572,10 +634,37 @@ def main():
                 log.event(f"抬落完成，轮到 {grp}")
             step_was = step_now
 
+            if mark_state:
+                now_m = time.monotonic()
+                if mark_state == "fwd_lay" and abs(eng.lean_pending) < 1e-6:
+                    mark_state, mark_t = "hold", now_m
+                elif mark_state == "hold" and now_m - mark_t >= MARK_HOLD_S:
+                    back = mark_base - eng.lean_mm
+                    if abs(back) < 1e-6:
+                        mark_state, mark_t = "rest", now_m
+                    else:
+                        granted, deny = eng.request_lean(back)
+                        if deny:
+                            mark_state = None
+                            print(f"\n⚠ 对时标记回程被拒：{deny}——↑/↓ 手动"
+                                  "回位后重按 t 重做")
+                            log.event(f"对时标记回程被拒：{deny}")
+                        else:
+                            mark_state = "back_lay"
+                            log.event(f"倾身 {granted:+g}mm（对时标记 回程）")
+                elif mark_state == "back_lay" and abs(eng.lean_pending) < 1e-6:
+                    mark_state, mark_t = "rest", now_m
+                    print(f"\n对时标记回位完成，静置 {MARK_REST_S:g}s"
+                          "（勿碰机身/按键）……")
+                elif mark_state == "rest" and now_m - mark_t >= MARK_REST_S:
+                    mark_state = None
+                    print("\n✓ 对时标记完成，可开始第 1 轮抬落")
+                    log.event("对时标记完成")
+
             if eng.started and not was_started:
                 was_started = True
-                print("\n✓ 六足吸附完成：↑/↓ 前/后倾身  1~6 选腿  i 抬/落  "
-                      "空格取消  f 解冻  o×2 取机  ESC×2 退出")
+                print("\n✓ 六足吸附完成：↑/↓ 前/后倾身  t 对时标记  1~6 选腿"
+                      "  i 抬/落  空格取消  f 解冻  o×2 取机  ESC×2 退出")
             if eng.frozen != last_frozen:
                 last_frozen = eng.frozen
                 if eng.frozen:

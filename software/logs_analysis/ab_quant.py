@@ -121,10 +121,14 @@ def parse_rect(s):
 def probe_video(video):
     """ffprobe 探源视频真实参数（时间轴/半径缩放/缓存指纹都用它——30fps、
     544×960 是基线口径不是普适事实：手机默认 60fps，硬编码直接把时间轴
-    打对折）。返回 dict(duration, fps, w, h)。"""
+    打对折）。返回 dict(duration, fps, w, h)。
+    ⚠ 旋转元数据（手机竖拍 MOV：流存横幅 3840×2160 + rotation=-90，ffmpeg
+    抽帧时自动转正出竖幅帧）：w/h 按旋转角换算成**抽出帧的实际取向**——
+    不换的话追踪半径缩放方向反、zoom 的帧尺寸校验必炸（08-25 实素材踩中）。"""
     r = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-         "stream=width,height,avg_frame_rate:format=duration",
+         "stream=width,height,avg_frame_rate:stream_side_data=rotation"
+         ":format=duration",
          "-of", "json", video], capture_output=True, text=True, check=True)
     j = json.loads(r.stdout)
     st = j["streams"][0]
@@ -133,9 +137,14 @@ def probe_video(video):
     if not 1.0 <= fps <= 240.0:
         raise SystemExit(f"ffprobe 帧率异常 {st['avg_frame_rate']}（VFR 花活？"
                          "先 ffmpeg 转恒定帧率再喂）")
+    w, h = int(st["width"]), int(st["height"])
+    rot = next((int(sd["rotation"]) for sd in st.get("side_data_list", [])
+                if "rotation" in sd), 0)
+    if rot % 180 != 0:
+        w, h = h, w
+        print(f"（源带旋转元数据 {rot}°：帧实际 {w}×{h}，w/h 已按转正后取向）")
     return dict(duration=float(j["format"]["duration"]), fps=fps,
-                w=int(st["width"]), h=int(st["height"]),
-                path=os.path.abspath(video))
+                w=w, h=h, path=os.path.abspath(video))
 
 
 def _meta(out):
@@ -481,6 +490,12 @@ def main():
     ap.add_argument("--sync", default="auto",
                     help="对时：auto=优先倾身标记（无则活动对比度）；"
                          "contrast=强制原法；或显式日志窗口 T0,T1")
+    ap.add_argument("--off", type=float, default=None,
+                    help="外部已知对时 off（video_t+off=log_t），跳过自动"
+                         "对时。标记没拍进视频时（如 08-25 C2 录像开晚），"
+                         "用阶跃基底回归（18 个 vent 阶跃扫 off 取 R² 最大）"
+                         "等外部法定准后传入——活动对比度法粗对齐可差 ~2s，"
+                         "轮窗不敏感但分段账会漏列")
     ap.add_argument("--zoom", type=int, default=None,
                     help="对第 N 次抬落（分解表序号）抽 30fps 剖面")
     args = ap.parse_args()
@@ -521,7 +536,11 @@ def main():
     if not lifts:
         raise SystemExit("日志里没有完整抬落事件")
 
-    off = find_offset(lifts, ev["lean"], tv, y, args.sync)
+    if args.off is not None:
+        off = args.off
+        print(f"对时（外部指定）：off={off:.2f}s")
+    else:
+        off = find_offset(lifts, ev["lean"], tv, y, args.sync)
 
     def yat(t_log):
         return float(np.interp(t_log - off, tv, y))

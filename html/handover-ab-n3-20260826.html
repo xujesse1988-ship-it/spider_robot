@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>零力交接+权重 n=3 拉丁方主结果(2026-08-26)</title>
+<style>
+  body { font-family: "Noto Sans CJK SC", "PingFang SC", sans-serif; margin: 2em auto;
+         max-width: 64em; line-height: 1.55; color: #222; background: #fff; padding: 0 1em; }
+  h1 { font-size: 1.5em; border-bottom: 3px solid #2a6; padding-bottom: .3em; }
+  h2 { font-size: 1.2em; margin-top: 1.6em; border-left: 5px solid #2a6; padding-left: .5em; }
+  table { border-collapse: collapse; margin: .8em 0; font-size: .92em; }
+  th, td { border: 1px solid #bbb; padding: .26em .55em; text-align: right; }
+  th { background: #eef5f0; }
+  td:first-child, th:first-child { text-align: left; }
+  .good { color: #1a7a3a; font-weight: 600; }
+  .warn { color: #a70; font-weight: 600; }
+  .big { font-size: 1.05em; font-weight: 700; }
+  .finding { background: #fff8ec; border: 1px solid #e0c080; padding: .7em 1em;
+             margin: .8em 0; border-radius: 6px; }
+  code { background: #f0f0f0; padding: 0 .3em; border-radius: 3px; font-size: .92em; }
+  .small { font-size: .85em; color: #555; }
+</style>
+</head>
+<body>
+<h1>零力交接 + 轮转权重:n=3 拉丁方上墙实验主结果(2026-08-25/26)</h1>
+<p class="small">三个重复 × 三条件(A 基线 / B δ标定表 / C =B+权重),组序拉丁方轮转
+(#1 A→B→C、#2 B→C→A、#3 C→A→B——每条件在每顺位恰好一次,顺序/电压效应解耦)。
+单重复细节:html/handover-ab-20260825.html。协议:docs/HANDOVER-AB-PROTOCOL.md。
+每组=body_lean 一键 t(标记+自动 3 轮×6 腿+尾静置),节奏由自动化保证逐组一致;
+九组日志零冻结/零截断/零门槛等待。</p>
+
+<h2>1. 主结果(mm,均值 ± 样本标准差,n=3)</h2>
+<table>
+<tr><th></th><th>A 基线</th><th>B 零力交接</th><th>C = B + 权重</th></tr>
+<tr><td>第 2 轮下滑(判定轮)</td><td>63.9 ± 0.9</td><td>38.1 ± 1.0(−40%)</td>
+    <td class="big">26.5 ± 1.7(−59%)</td></tr>
+<tr><td>三轮总下滑</td><td>185.5 ± 3.0</td><td>105.6 ± 2.2(−43%)</td>
+    <td class="big">72.8 ± 3.1(−61%)</td></tr>
+<tr><td>vent 破裂瞬间段(棘轮)</td><td>172.9 ± 3.4</td><td>31.6 ± 1.0(−82%)</td>
+    <td class="big">21.3 ± 5.2(−88%)</td></tr>
+<tr><td>交接铺设段</td><td>—</td><td>60.2 ± 2.2</td><td>38.7 ± 5.0(−36%)</td></tr>
+<tr><td>电流增量(末轮后−首抬前)</td><td>+0.97 ± 0.02A</td><td>+2.40 ± 0.08A</td><td>+1.85 ± 0.08A</td></tr>
+</table>
+<p><b>配对检验(逐重复同日配对,df=2)</b>:B−A = −79.9 ± 5.0mm,t=27.9,<b>p=0.0013</b>;
+C−A = −112.7 ± 6.1mm,t=32.1,<b>p≈0.001</b>;C−B = −32.8 ± 2.7mm,t=21.4,<b>p=0.0022</b>。
+三对比较全部显著;逐重复相对效应几乎恒定(B/A:−42/−45/−42%;C/A:−61/−63/−58%;
+C/B:−33/−32/−28%)。顺位与条件解耦后未见顺序效应(各条件三顺位内散布与总散布同量级)。</p>
+
+<h2>2. 九组逐行(总下滑 mm;比例逐组按 YYNMOS-8 板长边 93.0mm 实测)</h2>
+<table>
+<tr><th>重复</th><th>顺位1</th><th>顺位2</th><th>顺位3</th><th>mm/px 范围</th><th>对时</th></tr>
+<tr><td>#1(08-25 上午)</td><td>A 185.2</td><td>B 107.3</td><td>C 71.9</td>
+    <td>0.2951~0.2957</td><td>标记 R² 0.98~0.99</td></tr>
+<tr><td>#2(08-25 下午)</td><td>B 103.1</td><td>C 70.2</td><td>A 188.7</td>
+    <td>0.2917~0.2949</td><td>标记 R² 0.97~0.99;C2 见偏差①</td></tr>
+<tr><td>#3(08-26 上午)</td><td>C 76.3</td><td>A 182.7</td><td>B 106.4</td>
+    <td>0.2883~0.2912</td><td>标记 R² 0.95~0.98</td></tr>
+</table>
+
+<h2>3. 第 2 轮逐腿 vent 弹跳(mm,n=3)</h2>
+<table>
+<tr><th>条件</th><th>L1</th><th>R1</th><th>L3</th><th>R3</th><th>R2</th><th>L2</th></tr>
+<tr><td>A</td><td>20.1±1.3</td><td>16.2±1.2</td><td>7.5±0.5</td><td>6.3±0.3</td><td>6.7±2.0</td><td>3.5±0.9</td></tr>
+<tr><td>B</td><td>2.4±0.8</td><td>1.2±1.4</td><td>2.6±0.5</td><td>2.9±0.5</td><td>2.4±0.5</td><td>1.3±0.4</td></tr>
+<tr><td>C</td><td class="good">0.6±0.4</td><td class="good">0.9±0.3</td><td class="good">2.1±0.7</td>
+    <td class="good">1.3±1.1</td><td>2.5±0.8</td><td class="good">1.3±0.9</td></tr>
+</table>
+<p>A 组 L1 20.1±1.3 与 08-20 单次基线 21等量级(该日 20.9)——现象跨 5 天、换机位/换比例口径稳定重现。
+C 组全腿 ≤2.5mm,逼近协议"逐腿 ≤2mm"线;同 δ 下 C 对 B 的中后腿残余约砍半=权重稀释机理,n=3 成立。
+δ 表(δ*×0.8 配权重工况)三重复均无需修正;R1 多次出现轻微上弹(−0.9~−3.0px 量级),勿再加 δ。</p>
+
+<h2>4. 两个新发现(n=3 复现确认)</h2>
+<div class="finding"><b>发现 1:残余下滑主战场=交接铺设段,集中于最硬的 L1/R1,逐轮增长——三重复全复现。</b><br>
+B 组 L1 交接段逐轮:#1 6.8→10.3→12.6,#2 6.9→8.6→10.6,#3 6.7→8.8→11.9mm(R1 同款 6.6~11.4);
+其余四腿 ≈0~1.5mm。机理:六腿指令均值不变 ⇒ 身体不动,只在等刚度下成立;弹性平衡是刚度加权平均,
+从最硬腿(斜率 0.57/0.39)卸载必然下沉。B/C 残余的 57~62% 在此段——
+<b>下一代"刚度感知份额"(解 Σk·d=0)的改进空间 ~60%,三重复给了它 n=3 的实验依据。</b></div>
+<div class="finding"><b>发现 2:指令→实际柔性传递比 42.2 ± 3.3%(8 个独立标记,3 天 3 机位)。</b><br>
+±10mm 对时标记实测身体位移 3.78~4.73mm(A 4.15±0.36 / B 4.28±0.39 / C 3.94、4.48,C2 无标记)。
+整机沿墙剪切方向,指令位移六成被腿链弹性吸收;跨条件无系统差(交接/权重不改变传递比,合理——
+标记在全支撑静置态打)。</div>
+
+<h2>5. 电流账(方法代价,n=3)</h2>
+<p>交接把冲击滑移换成舵机持续扛载:电流增量 A +0.97 → B +2.40(×2.5)→ C +1.85A(较 B −23%)。
+三重复散布 ±0.08A,极稳。权重降持续载荷与模型方向一致(附录 A 稳态内应力 −32%),幅度约 2/3。
+注:九组电压起点 7.51~8.07V,拉丁方使电压与条件解耦,组内趋势可信。</p>
+
+<h2>6. 偏差记录(论文如实交代)</h2>
+<ul>
+<li><b>① C2(08-25 下午)录像开晚未拍到对时标记</b>:自动对时(标记法)找到假峰(R²=0.60,第 3 轮被误判出画)。
+处置:18 个放气时刻阶跃基底回归扫 off(R²=0.9992),并用同场 B2(标记真值已知)校准方法偏差(+0.37s),
+终值 off=77.25s 经 <code>ab_quant --off</code> 注入。逐轮/总量可靠;交接 vs vent 相邻两列的拆分含 ±0.3s
+级不确定(合并值 62.7 与 #1 的 61.4、#3 的 55.7 一致)。标记实位移该组缺测。</li>
+<li>机位在 #1 A→B、#2 C→A 之间动过(数十 px),#3 场内稳定 ≤0.4px:比例逐组按板长边实测
+(0.2883~0.2957,±0.2~0.5%),组内漂移由 ref 静物修正——已消解,不影响结论。</li>
+<li>电池:每场首组 ≥7.88V(#2/#3 首组 ≥8.06V),场内递减至 ~7.5-7.7V,未逐组回充;
+拉丁方解耦后无可见电压混杂。</li>
+<li>body_score 中位 0.39~0.76,低于内部 0.8 口径(板倾斜 4~31°+4K 细纹理,轴对齐 NCC 打分被拉低);
+ref 参照 0.988~0.999、九组互证 CV 1.6~4%,结果结构可信。改进项:旋转容忍模板。</li>
+<li>#3 视频防抖在画面上部有 3~5px 微畸变(板高度 ~1.5-2px),ref 选画面下部静物规避。</li>
+</ul>
+
+<h2>7. 结论</h2>
+<p class="big">n=3 拉丁方主结果:零力交接把三轮总下滑 185.5→105.6mm(−43%,p=0.0013),
+加轮转权重 →72.8mm(−61%,p≈0.001;对 B −32.8mm,p=0.0022);破裂瞬间棘轮位移 −82%/−88%。
+逐重复相对效应波动 ≤3 个百分点,论文主表数据齐。</p>
+<p>下一步:①刚度感知份额(打交接段 ~60% 残余);②模型闭环(逐腿刚度进附录 A,预测发现 1 的
+逐腿交接段下坠);③--zoom 破裂剖面插图;④(可选)挂重刚度实验定绝对 k、climb_walk 净前进率 demo。</p>
+<p class="small">素材:九组 report.txt 于 ~/ab_cache/{0825,0825pm,0826}/{A,B,C}/;
+汇总脚本 ~/ab_cache/aggregate.py;阶跃对时 ~/ab_cache/step_off.py;
+定位/比例核对图(scratchpad,已人工核对:第 1 天皮尺 4 帧读数经操作者确认)。</p>
+</body>
+</html>

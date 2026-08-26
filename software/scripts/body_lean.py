@@ -11,7 +11,10 @@
   ↑/↓  向前/向后倾身一档（--lean-step，默认 5mm）：请求排队后以 10mm/s
        匀速铺完，摆动/落压期间自动暂停不丢；授予量按支撑足对 IK 包络
        实算截短（到边会拒绝并提示）
-  t    一键实验序列（HANDOVER-AB-PROTOCOL §4）：①对时标记——+10mm 倾身
+  t    一键实验序列（HANDOVER-AB-PROTOCOL §4）：⓪起跑静置 60s——原协议
+       第 2 步"先静置再按 t"的内建化（--mark-settle 可调；C2 教训：录像
+       开着即可按 t，标记自动离视频起点够远；泵滞环稳定+NCC 安静漂移
+       参考同段兼得）；①对时标记——+10mm 倾身
        → 铺完停 2s → 回位 → 静置 20s（ab_quant 靠这段大位移锁视频-日志
        对时：身体几乎不动的组活动对比度法会失锁，08-24 三组对时全错即此
        教训）；②自动轮换 --auto-rounds 轮（默认 3）×6 腿——按轮次序逐腿
@@ -89,13 +92,18 @@ from climb_walk import status_line, coils_off   # 显示/收尾与 climb_walk �
 
 STATUS_S = 0.5
 LEG_KEYS = {"1": "L1", "2": "L2", "3": "L3", "4": "R1", "5": "R2", "6": "R3"}
-# 对时标记（t 键）三个常数 = 协议 §4.3 的手动键序参数：幅值 +10mm（↑×2 档）、
+# 对时标记（t 键）四个常数 = 协议 §4 的键序参数：起跑静置 60s（原协议
+# 第 2 步"先静置 ≥60s 再按 t"的内建化，2026-08-26——C2 教训：把纪律做进
+# 键里忘不了；静置三重目的=泵滞环稳定+NCC 安静漂移参考+标记离视频起点
+# 够远，--mark-settle 可调、<60 仅 mock/调试）、幅值 +10mm（↑×2 档）、
 # 铺完停 2s、回位后静置 20s。改这里记得同步协议文档与 ab_quant 的窗口推导
 # （lean_fit 的 t0/t1 从日志倾身事件自算，幅值/停留变了拟合仍自洽，但
-# <6mm 幅值在 0.27mm/px 口径下逼近 1.2px 方差门槛，拟合会失败）
+# <6mm 幅值在 0.27mm/px 口径下逼近 1.2px 方差门槛，拟合会失败；倾身事件
+# 时间戳=静置结束后 request_lean 受理刻，对时窗口推导不受静置影响）
 MARK_LEAN_MM = 10.0
 MARK_HOLD_S = 2.0
 MARK_REST_S = 20.0
+MARK_SETTLE_S = 60.0
 # 自动轮换（t 序列第二段）参数：悬停 1s 即落（视频里分辨摆动/下探段）；
 # 腿间间歇 = 泵歇 ≥2s 且距收口 ≥10s（协议 §4"等盘压回 -75 泵停再抬下一条"
 # 的自动化，上限 30s 超时继续并留痕——泵一直不歇=漏气，盯状态行）；
@@ -156,6 +164,13 @@ def main():
                          "0=只做对时标记不轮换——反复抬同一腿标 δ 的场合用）。"
                          "每轮 6 腿按轮次序逐腿（--dual 下逐对）抬起-悬停-"
                          "落下，腿间等泵歇、轮间 15s、末尾结束静置 30s")
+    ap.add_argument("--mark-settle", type=float, default=MARK_SETTLE_S,
+                    help="t 序列的起跑静置秒数（默认 %(default)g，范围 "
+                         "0~600）：按 t 先倒计时静置再打对时标记——原协议"
+                         "第 2 步'先静置 ≥60s 再按 t'的内建化（C2 教训），"
+                         "录像开着即可按 t。三重目的：泵滞环稳定/NCC 安静"
+                         "漂移参考/标记离视频起点够远。实验勿降，<60 仅 "
+                         "mock/调试")
     ap.add_argument("--press-delta", type=float, default=None,
                     help="预压行程 mm，覆盖全部腿（默认用 config 值 "
                          f"{DEFAULT_CONFIG.legs[0].press_delta_mm:g}）")
@@ -233,6 +248,9 @@ def main():
     if not 0 <= args.auto_rounds <= 6:
         ap.error(f"--auto-rounds {args.auto_rounds} 非法：范围 0~6（0=只做"
                  "对时标记）")
+    if not 0.0 <= args.mark_settle <= 600.0:   # nan 比较为假一并拒
+        ap.error(f"--mark-settle {args.mark_settle:g} 非法：范围 0~600s"
+                 "（默认 60；实验勿降，<60 仅 mock/调试）")
     handover = None
     if args.handover is not None:
         try:
@@ -299,7 +317,7 @@ def main():
              f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
              f" stand={cfg.stand_height:g} tilt_trim={cfg.cup_tilt_trim_deg:g}°"
              f" handover={ho_txt} handover_rate={cfg.handover_rate_mms:g}"
-             f" dual={int(args.dual)}"
+             f" mark_settle={args.mark_settle:g} dual={int(args.dual)}"
              + (f" leg_order={'_'.join(leg_order)}" if leg_order else ""))
     _prev_hook = sys.excepthook
 
@@ -343,6 +361,7 @@ def main():
                                  # lift_wait/hover_dwell/land_wait/leg_gap/
                                  # round_gap）/tail（结束静置）
     mark_t = 0.0
+    mark_cue = 0.0               # 起跑静置倒计时的下一播报阈值（15s 粒度）
     mark_base = 0.0              # 标记起点的已倾量——回程按"回到起点"实算，
                                  # 去程被几何截短/中途取消也能回准
     auto_round = 1               # 自动轮换：当前轮（1 起）
@@ -518,40 +537,48 @@ def main():
                     print("\n实验序列进行中……（空格取消）")
                 else:
                     deny = None
-                    if eng.step_pending or eng.step_active or eng.step_hover_leg():
+                    if not eng.started:
+                        # 静置内建后倾身请求延到 settle 收尾——未启动就进
+                        # 静置会拖满 settle 才报错，这里快速拒绝
+                        deny = "启动序列未完成（先按 p 全吸附启动）"
+                    elif eng.step_pending or eng.step_active or eng.step_hover_leg():
                         deny = "抬腿在途（先收口再做标记）"
                     elif abs(eng.lean_pending) > 1e-6:
                         deny = "倾身未铺完（等它完成或空格取消）"
-                    if deny is None:
-                        mark_base = eng.lean_mm
-                        granted, deny = eng.request_lean(MARK_LEAN_MM)
                     if deny:
                         print(f"\n对时标记不可用：{deny}")
                         log.event(f"对时标记拒绝：{deny}")
                     else:
-                        mark_state = "fwd_lay"
+                        # 起跑静置内建（协议 §4 原第 2 步；C2 教训）：录像
+                        # 开着即可按 t——倾身请求延到静置结束才发（settle
+                        # 态收尾处），标记事件戳自动离视频起点 ≥settle 秒
+                        mark_state, mark_t = "settle", time.monotonic()
+                        mark_cue = args.mark_settle - 15.0
                         auto_round, auto_legs_done = 1, 0
-                        clip = ("" if granted >= MARK_LEAN_MM - 1e-6 else
-                                f"（几何截短自 {MARK_LEAN_MM:g}，拟合幅值以"
-                                "日志为准）")
                         plan = ("" if args.auto_rounds == 0 else
                                 f" → 自动轮换 {args.auto_rounds} 轮×"
                                 f"{LEGS_PER_ROUND} 腿 → 尾静置 "
                                 f"{AUTO_TAIL_S:g}s")
-                        print(f"\n实验序列开跑：对时标记（倾身 {granted:+g}mm"
-                              f"{clip} → 停 {MARK_HOLD_S:g}s → 回位 → 静置 "
-                              f"{MARK_REST_S:g}s）{plan}。勿碰机身/按键，"
-                              "空格随时取消")
-                        log.event(f"倾身 {granted:+g}mm（对时标记 去程）")
-                        if args.auto_rounds:
-                            log.event(f"实验序列开跑：标记+自动轮换 "
-                                      f"{args.auto_rounds} 轮")
+                        print(f"\n实验序列开跑：起跑静置 {args.mark_settle:g}s"
+                              "（确认录像已在录！泵滞环/NCC 漂移参考/标记"
+                              "离画首三重目的）→ 对时标记（倾身 "
+                              f"+{MARK_LEAN_MM:g}mm → 停 {MARK_HOLD_S:g}s → "
+                              f"回位 → 静置 {MARK_REST_S:g}s）{plan}。"
+                              "勿碰机身/按键，空格随时取消")
+                        log.event(f"实验序列开跑：起跑静置 "
+                                  f"{args.mark_settle:g}s 后打标记"
+                                  + (f"，自动轮换 {args.auto_rounds} 轮"
+                                     if args.auto_rounds else ""))
             elif k == " ":
                 msgs = []
                 if abs(eng.lean_pending) > 1e-6:
                     eng.cancel_lean()
                     msgs.append("未铺完的倾身已取消")
-                if mark_state in ("fwd_lay", "hold", "back_lay"):
+                if mark_state == "settle":
+                    msgs.append("实验序列已取消：起跑静置中止，标记未打"
+                                "（重按 t 整组重来）")
+                    mark_state = None
+                elif mark_state in ("fwd_lay", "hold", "back_lay"):
                     msgs.append("实验序列已取消：对时标记未完成作废（当前倾 "
                                 f"{eng.lean_mm:+.1f}mm，↑/↓ 回位后重按 t）")
                     mark_state = None
@@ -709,6 +736,27 @@ def main():
                     log.event(f"实验序列中止：冻结（第 {auto_round} 轮 "
                               f"{auto_legs_done}/{LEGS_PER_ROUND}）")
                     mark_state = None
+                elif mark_state == "settle":
+                    left = args.mark_settle - (now_m - mark_t)
+                    if left <= 0.0:
+                        mark_base = eng.lean_mm
+                        granted, deny = eng.request_lean(MARK_LEAN_MM)
+                        if deny:
+                            mark_state = None
+                            print(f"\n⚠ 实验序列中止：静置后对时标记不可用"
+                                  f"（{deny}）——处理后重按 t 整组重来")
+                            log.event(f"对时标记拒绝：{deny}")
+                        else:
+                            mark_state = "fwd_lay"
+                            clip = ("" if granted >= MARK_LEAN_MM - 1e-6 else
+                                    f"（几何截短自 {MARK_LEAN_MM:g}，拟合"
+                                    "幅值以日志为准）")
+                            print(f"\n静置完成 → 对时标记开跑（倾身 "
+                                  f"{granted:+g}mm{clip}）")
+                            log.event(f"倾身 {granted:+g}mm（对时标记 去程）")
+                    elif left <= mark_cue:
+                        print(f"\n[t 静置] 剩 {left:.0f}s……（勿碰机身/按键）")
+                        mark_cue -= 15.0
                 elif mark_state == "fwd_lay" and abs(eng.lean_pending) < 1e-6:
                     mark_state, mark_t = "hold", now_m
                 elif mark_state == "hold" and now_m - mark_t >= MARK_HOLD_S:

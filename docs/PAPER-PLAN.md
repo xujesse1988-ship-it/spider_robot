@@ -59,10 +59,10 @@ C−B = −32.8±2.7mm(p=0.0022)。A 组 L1 第 2 轮弹跳 20.1±1.3,跨 5 天
   与 --off 注入)、aggregate.py(九组汇总统计,内含 RUNS 表=九组的
   目录/日志戳/逐组比例)、step_off.py(阶跃基底对时,标记缺失时的救援;
   用法与偏差校准见 n=3 报告偏差①);
-- **测量证据链**(核对图 188 张,~20MB):~/ab_cache/verify/——模板框
-  locate*_*.jpg、板比例 board_scale*.jpg(四角亚像素)、皮尺人工核对
-  ruler_A_f*.jpg(操作者已确认 4 帧读数)。论文附录/开源包素材,
-  是否入库由操作者定;
+- **测量证据链**(核对图 188 张,已入库):images/ab-verify-202608/——
+  模板框 locate*_*.jpg、板比例 board_scale*.jpg(四角亚像素)、皮尺
+  人工核对 ruler_A_f*.jpg(操作者已确认 4 帧读数)、12 角 10x 放大
+  ver_*.png。论文附录/开源包素材;
 - **设计文档**:HANDOVER-DESIGN.md(机构+附录 A 弹簧模型)、
   HANDOVER-AB-PROTOCOL.md(协议,§4=一键 t 流程)、DUAL-SWING-DESIGN.md
   (附录 C 双足模型);

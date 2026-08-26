@@ -1046,6 +1046,47 @@ def test_handover_holds_attached_then_vents_on_schedule():
     assert abs(t_ho - HO[leg] / HANDOVER_SPEED_MMS) < 3 * DT
 
 
+def test_handover_rate_override_scales_laying_time():
+    """D′ 参数化（v1.7）：cfg.handover_rate_mms=20 → 铺设时长 δ/20（±3DT），
+    相位序列不变（HANDOVER 保持吸附、铺完才 VENT）——提速只是时间轴压缩，
+    是"时间蠕变 vs 逐 mm 损耗"判别实验的旋钮（HANDOVER-AB-PROTOCOL §9）。
+    默认构造仍 10=既有回归即基线口径,零和位移账由上邻测试在默认速率盖。"""
+    cfg = replace(CFG, handover_rate_mms=20.0, legs=tuple(
+        replace(l, handover_mm=HO.get(l.name, 0.0)) for l in CFG.legs))
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(cfg, ctl)
+    start(eng)
+    leg = eng.slot_order[0]
+    fi = LEG_NAMES.index(leg)
+    for _ in range(int(5 / DT)):
+        eng.update(DT, 30.0, 0.0, 0.0)
+        if eng.phase_of[leg] == LegPhase.HANDOVER:
+            break
+    assert eng.phase_of[leg] == LegPhase.HANDOVER
+    t_ho = 0.0
+    while eng.phase_of[leg] == LegPhase.HANDOVER:
+        assert ctl.state[fi] == FootState.ATTACHED
+        eng.update(DT, 30.0, 0.0, 0.0)
+        t_ho += DT
+    assert eng.phase_of[leg] == LegPhase.VENT
+    assert abs(t_ho - HO[leg] / 20.0) < 3 * DT
+
+
+def test_handover_rate_guard_rejects_nonsense():
+    """速率护栏（引擎口再验，与权重同教训：CLI 之外直设 config 的路径不能
+    静默放行非准静态速率）：0/负/超 50/nan/inf 全拒。"""
+    for bad in (0.0, -1.0, 50.1, float("nan"), float("inf")):
+        cfg = replace(CFG, handover_rate_mms=bad)
+        io = MockVacuumIO(6)
+        ctl = AdhesionController(io)
+        try:
+            ClimbEngine(cfg, ctl)
+        except ValueError:
+            continue
+        raise AssertionError(f"handover_rate_mms={bad!r} 未被拒")
+
+
 def test_handover_displacement_account_zero_sum():
     """位移账（§7.3）：交接完成时被抬腿 = 起点 + 上坡 δ，每条支撑腿 =
     起点 + 下坡 δ/5（头朝上贴墙 _down=(-1,0)：上坡=+X），y 不受扰、z 恒在

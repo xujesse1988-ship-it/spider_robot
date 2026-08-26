@@ -74,9 +74,15 @@ X = mean(y_attached) − mg/(n·k)）：抬腿 j 无跳变的充要条件是 **f
 - `LegConfig.handover_mm: float = 0.0`——逐腿交接量 δ（0=关，默认关；与
   `press_delta_mm` 同为逐腿字段）。放 LegConfig 而不是 RobotConfig：实测
   逐腿差 4 倍（L1 17 vs R2 5），全局一个值没法用。
-- `climb.py` 模块常量 `HANDOVER_SPEED_MMS = 10.0`——交接铺设速率，与
-  LEAN_SPEED_MMS 同量级（吸住的脚改指令要慢，给载荷重分配留准静态时间）。
-  δ=17 时交接段 ~1.7s。
+- `RobotConfig.handover_rate_mms: float = 10.0`——交接铺设速率（08-26 起
+  参数化，单源在 config；`climb.HANDOVER_SPEED_MMS` 降级为默认别名供测试/
+  文案时长账）。默认 10 与 LEAN_SPEED_MMS 同量级（吸住的脚改指令要慢，给
+  载荷重分配留准静态时间），δ=17 时交接段 ~1.7s、δ 表 22~33 时 ~2.7-3.8s。
+  引擎 `__init__` 守卫 0<rate≤50(nan/inf 拒)——CLI 之外直设 config 的路径
+  也拦(与权重同教训)。**D′ 判别实验=20**:T1 拟合(html/stiffness-fit-
+  20260826.html)发现交接段 ~九成是"共模下沉≈蠕变率×窗时长",而窗时长
+  ≈0.5+δ/rate 与 δ 完全共线,提速是"时间蠕变 vs 逐 mm 损耗"的唯一离线
+  判别(协议 §9)。
 
 ### 3.2 新相位
 
@@ -245,6 +251,9 @@ replace 模式）。范围校验 0~45mm（2026-08-24 起：三组外推 δ*≈28
 工作空间由 climb_walk 启动硬拒与 4.7 步逐 tick 截断另守）。启动打印每腿 δ 与
 交接段时长。body_lean 文档头/键位说明补一句"抬起前自动先做零力交接
 （--handover 开启时）"。climb_walk 同步。
+两个脚本另有 `--handover-rate`（08-26 起）：铺设速率 mm/s，默认 10=n=3
+基线口径，须同开 `--handover`；CLI 校验 0<r≤50 + 引擎再验，铺设速率写进
+日志参数行（`handover_rate=`）供量化溯源。D′ 判别实验=20（协议 §9）。
 
 ## 7. 测试清单（tests/test_climb.py，照现有风格）
 

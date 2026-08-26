@@ -9,7 +9,8 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
            发生在放气密封破裂一瞬——被抬腿吸附以来攒的弹性势能一步释放，
            慢放气无效（力的释放不随泄压渐进）。吸住的脚不能滑 ⇒ 改指令=
            改力不改位：本腿指令沿"上坡"还 δ（卸载自己），其余支撑腿各沿
-           "下坡"接 δ/5（均值不变=身体指令不动），HANDOVER_SPEED_MMS
+           "下坡"接 δ/5（均值不变=身体指令不动），按 cfg.handover_rate_mms
+           （默认=HANDOVER_SPEED_MMS 10mm/s；D′ 判别实验 20，协议 §9）
            匀速铺完才放气进 VENT——密封破裂时无能量可释放。本足全程仍
            吸附贴面，须随支撑场平移（update() 4.7 步驱动交接位移）。
            三道守卫（审核补）：漏气监护覆盖交接腿本身；位移逐 tick 过包络
@@ -118,10 +119,12 @@ LEAN_SPEED_MMS = 10.0        # 倾身平移速率 mm/s（body_lean 实验）：�
                              # 支撑足不能滑，身体平移=支撑目标连续重解，与
                              # 支撑场同量级的慢速率；按键请求排队后按此匀速
                              # 铺完（update() 4.6 步），不做阶跃
-HANDOVER_SPEED_MMS = 10.0    # 零力交接铺设速率 mm/s（update() 4.7 步）：
-                             # 吸住的脚改指令=改力，载荷重分配要留准静态
-                             # 时间，与 LEAN_SPEED_MMS 同量级；δ=17 时
-                             # 交接段 ~1.7s（docs/HANDOVER-DESIGN.md §3.1）
+HANDOVER_SPEED_MMS = RobotConfig.handover_rate_mms
+                             # 交接铺设速率的默认别名（单源在 config.
+                             # handover_rate_mms=10；本名保留给测试/文案的
+                             # 时长账）。实际速率逐引擎取 cfg.handover_rate_
+                             # mms（__init__ 验 0<r≤50），物理量纲注释见
+                             # config 字段;D′ 判别实验=20（协议 §9）
 VENT_STAGGER_S = 0.4         # 双摆动窗对内放气最小间隔 s（DUAL-SWING §3.3）：
                              # 两腿同刻密封破裂=双倍储能砸进 4 只支撑盘（最坏
                              # 弹跳 ×2.5），且 ab_quant 逐腿 vent 跳变需要视频
@@ -462,6 +465,16 @@ class ClimbEngine:
             self._slot_w = tuple(v / sum(w) for v in w)
         else:
             self._slot_w = ()
+        # 铺设速率引擎口再验（与权重同教训：CLI 之外直设 config 的路径也要
+        # 拦）：准静态是 4.7 步的物理前提，速率是它唯一的时间旋钮。
+        # 0<rate≤50 是理智护栏（50=5×默认，再上去每 tick 步长与动态效应明显
+        # 出设计包络），不是物理许可证——D′ 判别实验用 20（协议 §9）。
+        # nan/inf 一并拒
+        r = cfg.handover_rate_mms
+        if not (math.isfinite(r) and 0.0 < r <= 50.0):
+            raise ValueError(f"handover_rate_mms 非法（{r!r}）：须有限且 "
+                             "0<rate≤50mm/s（默认 10；D′ 判别实验 20）")
+        self._ho_rate = float(r)
         # {腿: True}：本次交接套权重（放行瞬间由 _weights_ok 定夺，含轮转
         # 口径守卫）；份额本身由 _share_now 每 tick 按当前 STANCE 集合现算
         # ——权重档按前向轮转距离取值+就地归一（单足铺设期支撑恒 5、权重和
@@ -816,7 +829,7 @@ class ClimbEngine:
             for cur in list(self._vent_queue):
                 if self.phase_of[cur] != LegPhase.HANDOVER:
                     continue                   # 防御：放气才出队，不应到达
-                step = min(self._ho_left[cur], HANDOVER_SPEED_MMS * dt)
+                step = min(self._ho_left[cur], self._ho_rate * dt)
                 dx, dy = self._down
                 sup = [n for n in LEG_NAMES
                        if self.phase_of[n] == LegPhase.STANCE]

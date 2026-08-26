@@ -79,8 +79,7 @@ from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import (ClimbEngine, LegPhase, LEAN_SPEED_MMS,
                            parse_handover, parse_handover_weights,
-                           parse_leg_order, gait_with_slot_order,
-                           HANDOVER_SPEED_MMS)
+                           parse_leg_order, gait_with_slot_order)
 from hexapod.gait import CLIMB, CLIMB_DUAL
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
@@ -190,6 +189,16 @@ def main():
                          "的抬腿由引擎守卫自动退回均分并提示——权重工况标 δ "
                          "要按环序轮抬（对序 L1+R2→L3+R1→L2+R3，协议 §8.1）。"
                          "⚠ 非单调，且改变稳态运行点，δ 表按开权重工况标")
+    ap.add_argument("--handover-rate", type=float, default=None,
+                    help="交接铺设速率 mm/s（默认 10=n=3 数据的准静态基线；"
+                         "须同开 --handover）。D′ 判别实验=20（一次一变量）："
+                         "T1 拟合发现交接段 ~九成是'共模下沉≈蠕变率×窗时长'，"
+                         "而窗时长≈0.5+δ/rate 与 δ 完全共线——提速后下沉按"
+                         "比例降=时间蠕变（预测 C 交接段 39.7→~25mm），不降"
+                         "=逐 mm 损耗（模型改写），两个结果都有效（html/"
+                         "stiffness-fit-20260826.html §5、协议 §9）。范围 "
+                         "0<r≤50（引擎再验）；提速=不那么准静态，判据 4"
+                         "（交接段平滑）/漏气挽救/越界截断照常兜底")
     ap.add_argument("--leg-order", default=None,
                     help="抬腿窗序（含启动吸附序）：六腿排列如 "
                          "L1_R1_L2_R2_L3_R3（下划线或逗号分隔，不分大小写，"
@@ -244,6 +253,13 @@ def main():
             ho_w = parse_handover_weights(args.handover_weights)
         except ValueError as e:
             ap.error(str(e))
+    if args.handover_rate is not None:
+        if handover is None:
+            ap.error("--handover-rate 需要同时开 --handover（速率只作用于"
+                     "交接铺设）")
+        if not 0.0 < args.handover_rate <= 50.0:  # nan/inf 比较为假一并拒
+            ap.error(f"--handover-rate {args.handover_rate:g} 非法：范围 "
+                     "0<r≤50mm/s（默认 10；D′ 判别实验 20）")
     leg_order = None
     if args.leg_order is not None:
         try:
@@ -265,6 +281,8 @@ def main():
             replace(l, handover_mm=handover[l.name]) for l in cfg.legs))
     if ho_w is not None:
         cfg = replace(cfg, handover_slot_w=ho_w)
+    if args.handover_rate is not None:
+        cfg = replace(cfg, handover_rate_mms=args.handover_rate)
 
     log = RunLog(os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs"),
@@ -280,7 +298,8 @@ def main():
     log.note(f"参数: lean_step={args.lean_step:g}mm lean_speed={LEAN_SPEED_MMS:g}mm/s"
              f" press_delta={cfg.legs[0].press_delta_mm:g}mm"
              f" stand={cfg.stand_height:g} tilt_trim={cfg.cup_tilt_trim_deg:g}°"
-             f" handover={ho_txt} dual={int(args.dual)}"
+             f" handover={ho_txt} handover_rate={cfg.handover_rate_mms:g}"
+             f" dual={int(args.dual)}"
              + (f" leg_order={'_'.join(leg_order)}" if leg_order else ""))
     _prev_hook = sys.excepthook
 
@@ -392,8 +411,8 @@ def main():
             print("零力交接开启：δ "
                   + " ".join(f"{n}={cfg.leg(n).handover_mm:g}"
                              for n in LEG_NAMES if cfg.leg(n).handover_mm > 0)
-                  + f"mm，铺设 {HANDOVER_SPEED_MMS:g}mm/s"
-                  f"（最长 {ho_max / HANDOVER_SPEED_MMS:.1f}s/次抬起）。"
+                  + f"mm，铺设 {cfg.handover_rate_mms:g}mm/s"
+                  f"（最长 {ho_max / cfg.handover_rate_mms:.1f}s/次抬起）。"
                   "A/B 判据：vent 无可见弹跳、每轮下滑 <10mm、电流不再爬升")
             if cfg.handover_slot_w:
                 print("交接载荷分配：按窗序轮转距离加权（晚轮到→先轮到）"

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T1 刚度拟合与交接段分解(2026-08-26)</title>
+<style>
+  body { font-family: "Noto Sans CJK SC", "PingFang SC", sans-serif; margin: 2em auto;
+         max-width: 64em; line-height: 1.55; color: #222; background: #fff; padding: 0 1em; }
+  h1 { font-size: 1.5em; border-bottom: 3px solid #26a; padding-bottom: .3em; }
+  h2 { font-size: 1.2em; margin-top: 1.6em; border-left: 5px solid #26a; padding-left: .5em; }
+  table { border-collapse: collapse; margin: .8em 0; font-size: .92em; }
+  th, td { border: 1px solid #bbb; padding: .26em .55em; text-align: right; }
+  th { background: #eef1f7; }
+  td:first-child, th:first-child { text-align: left; }
+  .good { color: #1a7a3a; font-weight: 600; }
+  .bad { color: #a33; font-weight: 600; }
+  .big { font-size: 1.05em; font-weight: 700; }
+  .finding { background: #fff8ec; border: 1px solid #e0c080; padding: .7em 1em;
+             margin: .8em 0; border-radius: 6px; }
+  code { background: #f0f0f0; padding: 0 .3em; border-radius: 3px; font-size: .92em; }
+  .small { font-size: .85em; color: #555; }
+</style>
+</head>
+<body>
+<h1>T1 第 1 步:交接段并联弹簧模型拟合——模型闭环、门控判定与新杠杆</h1>
+<p class="small">2026-08-26。数据=n=3 拉丁方 B/C 六份报告的逐腿交接段(54+54 点,
+C2 经对时更正后,见 n=3 报告偏差①);工具 <code>software/logs_analysis/fit_stiffness.py</code>。
+模型:Δb<sub>j,r</sub> = c0·δ<sub>j</sub>·(k<sub>j</sub> − Σk<sub>i</sub>s<sub>i</sub>)·(1+γ(r−1)) + 共模项,Σk̂=1。</p>
+
+<h2>0. 结论速查</h2>
+<ul>
+<li><b>模型闭环达成</b>:B 组内 18 单元(×3 重复)拟合 RMSE 0.85mm(信号 6.8~12.6mm),
+  留一重复 CV-RMSE 0.99mm;k̂ 与 08-24 斜率折算 k̂ Pearson r=0.938。</li>
+<li><b>k̂(B+C 联合,M8)</b>:L1 0.235 / R1 0.217 / L3 0.143 / R3 0.138 / R2 0.138 /
+  L2 0.129——L1 仍最硬但 <b>L1−R1 差远小于斜率表</b>(0.018~0.028 vs 0.07),
+  排序跨模型稳定。</li>
+<li><b>翻案的分解账</b>:B 交接段 60.2mm = 刚度再分配项 <b>~6.7</b> + 共模项 <b>~55.5</b>;
+  C 39.7 = 7.7 + 30.0。<b>约九成损失是"每次交接的共模下沉",不是刚度不均</b>;
+  权重(C)把共模率砍了 ~46%(ρ 0.80→0.43mm/s)。</li>
+<li class="bad"><b>门控判定:原 D 设计(刚度感知份额)不上墙</b>——份额只动再分配项,
+  B 收益 ~3mm、C 收益 ~4.4mm,"交接段 60→10"预期不成立。计划的 L1 无解/全压 R1
+  焦虑随 k̂ 修正基本消失(残余系数仅 0.019),但整个杠杆本身太小。</li>
+<li class="good"><b>新杠杆 D′(纯软件)</b>:共模项 ∝ 交接窗时长(3.2±0.4s,其中 δ/10mm·s⁻¹
+  的铺设占大头)。铺设速率 10→20mm/s 预测 C 交接段 39.7→<b>~25mm</b>(C 总账 72.9→~58)。
+  ⚠ 窗时长与 δ 完全共线,"时间蠕变"vs"逐 mm 损耗"离线不可辨——<b>D′ 同时是机制判别
+  实验</b>:提速后降=时间蠕变(白捡 12mm),不降=逐 mm 损耗(模型改写),两个结果都值钱。</li>
+</ul>
+
+<h2>1. 前置:C2 对时修正</h2>
+<p>拟合前核对九组分解表时发现 C2(0825pm/C)逐腿模式整体错位一槽(伪"R2/L2 大坠"),
+追查为阶跃救援锁错周期梳齿(轮内间距 17.5~18.5s 高度周期化,错位一格 R² 仅差 &lt;0.001)。
+两个独立锚点定真齿+裁剪窗标记拟合 off=59.34(R²=0.99,幅值 4.23mm=传递比 42.3% 独立互证);
+报告已重生成,n=3 主表 C 列已刷新(总量守恒 70.2→70.5,拆分与逐腿归因修正,标准差收紧;
+传递比样本 8→9 个)。全过程与教训:n=3 报告偏差①;新工具
+<code>marker_off_clip.py</code>(通用裁剪窗标记对时)。</p>
+
+<h2>2. B 组内拟合:模型族与 k̂ 交叉验证</h2>
+<table>
+<tr><th>模型(共模项)</th><th>SSE</th><th>RMSE</th><th>AICc</th><th>留一重复 CV</th><th>参数</th></tr>
+<tr><td>M1 无</td><td>474.9</td><td>2.97</td><td>131.2</td><td>2.98</td><td>c0=1.71</td></tr>
+<tr><td>M2 无(+γ)</td><td>460.9</td><td>2.92</td><td>132.2</td><td>2.96</td><td>c0=1.55 γ=0.16</td></tr>
+<tr><td class="big">M3 α+β(r−1)</td><td>39.1</td><td class="big">0.85</td><td class="big">4.7</td><td>0.99</td><td>c0=1.69 γ=0.16 α=2.27 β=0.53</td></tr>
+<tr><td>M4 α+β(无 γ)</td><td>50.1</td><td>0.96</td><td>15.2</td><td>1.02</td><td>c0=2.63 α=2.20 β=0.60</td></tr>
+</table>
+<p><b>k̂ 交叉验证(M3 vs 08-24 斜率折算)</b>:L1 0.257/0.290、R1 0.246/0.220、
+L3 0.139/0.140、R3 0.128/0.160、R2 0.112/0.090、L2 0.119/0.100,r=0.938——两条完全独立的
+标定路径(交接段下坠 vs 弹跳-δ 斜率)给出一致的刚度排序,附录 A 模型的位移域口径成立。
+主要分歧:<b>R1 比斜率表更接近 L1</b>(跨模型稳定),斜率表的 R1 0.22 偏低。</p>
+<p><b>预测 vs 实测(B,三重复均值,mm;M3)</b>:</p>
+<table>
+<tr><th>腿</th><th>轮1 实/预</th><th>轮2 实/预</th><th>轮3 实/预</th></tr>
+<tr><td>L1</td><td>+6.8/+7.9</td><td>+9.2/+9.3</td><td>+11.7/+10.7</td></tr>
+<tr><td>R1</td><td>+9.2/+7.6</td><td>+8.2/+8.9</td><td>+9.7/+10.3</td></tr>
+<tr><td>L3</td><td>+0.3/+0.6</td><td>+1.4/+0.9</td><td>+1.0/+1.2</td></tr>
+<tr><td>R3</td><td>+0.4/+0.5</td><td>+1.0/+0.8</td><td>+0.9/+1.0</td></tr>
+<tr><td>R2</td><td>−0.3/−0.2</td><td>+0.0/−0.0</td><td>+0.1/+0.1</td></tr>
+<tr><td>L2</td><td>+0.0/−0.0</td><td>+0.1/+0.1</td><td>+0.2/+0.3</td></tr>
+</table>
+
+<h2>3. C 样本外证伪与联合拟合</h2>
+<p>用 B 拟合参数+轮转权重份额预测 C:总量预测 61.8 vs 实测 39.5mm——
+<b>"共模项与份额/工况无关"被 C 当场证伪</b>:权重不只稀释 vent 残余,还把交接段共模项
+砍掉了 ~20mm。B+C 联合拟合(108 点)四种共模机制赛马:</p>
+<table>
+<tr><th>机制</th><th>SSE</th><th>RMSE</th><th>AICc</th><th>参数</th></tr>
+<tr><td>M5 分条件 α,β</td><td>150.6</td><td>1.18</td><td>60.7</td><td>c0=1.02 γ=0.12;α_B 2.37/α_C 1.48</td></tr>
+<tr><td>M7 kI·ΔI(电流)</td><td>192.4</td><td>1.33</td><td>79.8</td><td>kI=1.29mm/A</td></tr>
+<tr><td class="big">M8 ρ·(1+β′(r−1))·T窗</td><td class="big">135.2</td><td class="big">1.12</td><td class="big">46.5</td><td>c0=1.78 γ=0.12;ρ_B 0.801/ρ_C 0.434mm/s,β′=0.21</td></tr>
+<tr><td>M9 kI·ΔI·T窗</td><td>188.2</td><td>1.32</td><td>77.4</td><td>kIT=0.414</td></tr>
+</table>
+<p>M8 胜:共模项 = 蠕变率 × 交接窗时长,窗内时长随 δ 逐腿变化(2.7~3.6s)提供了
+条件内判据。电流(M7/M9)方向对但只是粗代理——ΔI B 2.00 vs C 1.58A(−21%)对不上
+共模率 −46%,权重对共模的压制超出电流可见的部分(机制候选:内应力的非线性效应/
+份额落在新鲜吸盘上蠕变更小,待辨)。</p>
+
+<h2>4. 统一账目与"发现 1"的重新解读</h2>
+<table>
+<tr><th>工况</th><th>再分配项</th><th>共模项</th><th>合计(模型)</th><th>实测</th></tr>
+<tr><td>B(均分)</td><td>+6.7</td><td>+55.5</td><td>+62.1</td><td>60.2</td></tr>
+<tr><td>C(权重)</td><td>+7.7</td><td>+30.0</td><td>+37.8</td><td>39.7</td></tr>
+</table>
+<div class="finding"><b>"下坠集中在最硬的 L1/R1"的真实构成</b>:蠕变基座是共模的
+(每窗 ~2.4mm 起),但卸载软腿时再分配项为<b>负</b>(身体微升)恰好抵消基座——
+软腿窗表观 ≈0;硬腿窗=正再分配+基座叠加。刚度不均决定的是<b>分布形状</b>
+(±2~5mm),<b>量级</b>(~55mm)由蠕变决定。发现 1 的机理表述要照此改写;
+逐轮增长=γ(再分配)与 β′(蠕变率)双爬坡,与电流爬坡同源,3 轮内未见饱和
+(8~10 轮长跑仍必要)。</div>
+
+<h2>5. 门控判定与下一步</h2>
+<p class="bad"><b>原 D 设计(刚度感知份额)按"模型先给数,不达预期不上墙"判:不上墙。</b>
+份额可动的只有再分配项:B 6.7→3.5、C 7.7→3.3mm(L1 仍无解但残余系数仅 0.019,
+计划担心的"全压 R1 撞扭矩饱和"随 k̂ 修正一并消失——R1 不再需要吃满份额)。
+收益 ~3-4mm,不值一个上墙条件;份额解保留为 D′ 之后的合并微优化。</p>
+<p class="good"><b>新实验 D′:交接铺设速率 10→20mm/s(C 工况,一次一变量)。</b>
+预测(时间蠕变假说):C 交接段 39.7→~25mm、C 总账 72.9→~58mm;若不降则判
+"逐 mm 损耗"、模型改写——机制判别与性能收益二合一。风险与守卫:提速=不那么
+准静态,协议 §1 判据 4(交接段平滑)与漏气挽救暂停照常;先 pty/地面冒烟。
+配套:<b>T4a 挂重刚度实验顺带直测蠕变率</b>(挂载静置看 y(t) 斜率 vs 载荷,
+把 ρ 从拟合参数变成独立实测,并给绝对 k)。</p>
+
+<h2>6. 局限(如实)</h2>
+<ul>
+<li><b>T窗与 δ 完全共线</b>(T≈0.5+δ/10):M8 的"×时长"与"×铺设量"离线等价,
+  D′ 是唯一的判别手段;在此之前"蠕变率"是现象学参数。</li>
+<li>c0(1.0~2.6 随模型)吸收未知增益(传递比/单位账),模型间 k̂ 有 ±0.03 漂移,
+  但排序与 L1−R1 差稳定;绝对刚度待 T4a。</li>
+<li>ρ_C&lt;ρ_B 的机制(应力非线性 vs 吸盘新鲜度)未辨——需要设计份额扰动实验
+  才能分离,暂不阻塞。</li>
+<li>3 轮看不到 γ/β′ 饱和;长距离外推无效,长跑实验补。</li>
+<li>C2 修正后数据(见 §1);B 组不受影响。</li>
+</ul>
+<p class="small">素材:拟合脚本 software/logs_analysis/fit_stiffness.py(含 C 样本外与
+联合赛马,可复跑);对时工具 marker_off_clip.py;C2 旧分解表
+~/ab_cache/0825pm/C/report_off77.25_mistooth.txt;n=3 主表已同步刷新
+(html/handover-ab-n3-20260826.html)。</p>
+</body>
+</html>

@@ -1,0 +1,541 @@
+% =========================================================================
+% refs.bib — built from docs/RELATED-WORK.md (T5 search report, 2026-08-26).
+% Entries marked "TODO(verify)" have fields not yet confirmed against the
+% full text / publisher page — check RELATED-WORK.md §7 before submission.
+% =========================================================================
+
+% ---------- A: climbing-robot detachment management (nearest neighbors) ---
+
+@patent{cutkosky2010patent,
+  author       = {Cutkosky, Mark R. and Kim, Sangbae},
+  title        = {Climbing with dry adhesives},
+  number       = {US7762362B2},
+  year         = {2010},
+  note         = {U.S. Patent, filed 2007. Tangential unloading before
+                  lift-off with force-sensor stiffness control},
+  url          = {https://patents.google.com/patent/US7762362B2/en}
+}
+
+@article{kim2008smooth,
+  author  = {Kim, Sangbae and Spenko, Matthew and Trujillo, Salomon and
+             Heyneman, Barrett and Santos, Daniel and Cutkosky, Mark R.},
+  title   = {Smooth Vertical Surface Climbing With Directional Adhesion},
+  journal = {IEEE Transactions on Robotics},
+  volume  = {24},
+  number  = {1},
+  pages   = {65--74},
+  year    = {2008},
+  doi     = {10.1109/TRO.2007.909786}
+}
+
+@inproceedings{nadan2024loris,
+  author    = {Nadan, Paul and Backus, Spencer and Johnson, Aaron M.},
+  title     = {{LORIS}: A Lightweight Free-Climbing Robot for Extreme
+               Terrain Exploration},
+  booktitle = {Proc. IEEE Int. Conf. Robotics and Automation (ICRA)},
+  year      = {2024},
+  note      = {Explicit Unload step: contact force constrained to zero in
+               online force optimization}
+}
+
+@article{boscariol2013optimal,
+  author  = {Boscariol, Paolo and Henrey, Michael A. and Li, Yasong and
+             Menon, Carlo},
+  title   = {Optimal Gait for Bioinspired Climbing Robots Using Dry
+             Adhesion: A Quasi-Static Investigation},
+  journal = {Journal of Bionic Engineering},
+  volume  = {10},
+  number  = {1},
+  pages   = {1--11},
+  year    = {2013},
+  doi     = {10.1016/S1672-6529(13)60193-6}
+}
+
+@article{wang2021compliant,
+  author  = {Wang, Bingcheng and Xiong, Xiaofeng and Duan, Jinjun and
+             Wang, Zhouyi and Dai, Zhendong},
+  title   = {Compliant Detachment of Wall-Climbing Robot Unaffected by
+             Adhesion State},
+  journal = {Applied Sciences},
+  volume  = {11},
+  number  = {13},
+  pages   = {5860},
+  year    = {2021},
+  doi     = {10.3390/app11135860}
+}
+
+@article{wen2025force,
+  author  = {Wen, Qingsong and Zheng, Yisheng and Jing, Wenchao and
+             Guo, Weizhong and Chen, Feifei},
+  title   = {Force--Position Coordinated Compliance Control in the
+             Adhesion/Detachment Process of Space Climbing Robot},
+  journal = {Aerospace},
+  volume  = {12},
+  number  = {1},
+  pages   = {20},
+  year    = {2025},
+  doi     = {10.3390/aerospace12010020},
+  note    = {TODO(verify): author list against publisher page}
+}
+
+@misc{xiao2025ftfof,
+  author = {Xiao, Shaoxiang and Nie, Cong and Hao, Yufei and Li, Wenbo},
+  title  = {An End-to-End Framework for Optimizing Foot Trajectory and
+            Force in Dry Adhesion Legged Wall-Climbing Robots},
+  year   = {2025},
+  note   = {arXiv:2504.19448. TODO(verify): author list and open/closed-loop
+            execution details from full text (RELATED-WORK \S7.2)},
+  eprint = {2504.19448},
+  archivePrefix = {arXiv}
+}
+
+@inproceedings{imai2024admittance,
+  author    = {Imai, Chihiro and Uno, Kentaro and Yoshida, Kazuya},
+  title     = {Admittance Control-Based Floating Base Reaction Mitigation
+               for Limbed Climbing Robots},
+  booktitle = {Proc. Int. Conf. Climbing and Walking Robots (CLAWAR)},
+  year      = {2024},
+  note      = {arXiv:2409.13218. TODO(verify): final CLAWAR version vs
+               arXiv v1; author list}
+}
+
+@inproceedings{ribeiro2023ramp,
+  author    = {Ribeiro, Warley F. R. and Uno, Kentaro and Imai, Chihiro and
+               Murase, Kenta and Yoshida, Kazuya},
+  title     = {{RAMP}: Reaction-Aware Motion Planning of Multi-Legged
+               Robots for Locomotion in Microgravity},
+  booktitle = {Proc. IEEE Int. Conf. Robotics and Automation (ICRA)},
+  year      = {2023},
+  note      = {arXiv:2301.07996}
+}
+
+@article{parness2017lemur,
+  author    = {Parness, Aaron and Abcouwer, Neil and Fuller, Christine and
+               Wiltsie, Nick and Nash, Jaret and Kennedy, Brett},
+  title     = {{LEMUR} 3: A Limbed Climbing Robot for Extreme Terrain
+               Mobility in Space},
+  journal   = {Proc. IEEE Int. Conf. Robotics and Automation (ICRA)},
+  pages     = {5467--5473},
+  year      = {2017},
+  doi       = {10.1109/ICRA.2017.7989643},
+  note      = {TODO(verify): author list}
+}
+
+@inproceedings{unver2006geckobot,
+  author    = {Unver, Ozgur and Uneri, Ali and Aydemir, Alper and
+               Sitti, Metin},
+  title     = {Geckobot: A Gecko Inspired Climbing Robot Using Elastomer
+               Adhesives},
+  booktitle = {Proc. IEEE Int. Conf. Robotics and Automation (ICRA)},
+  pages     = {2329--2335},
+  year      = {2006},
+  doi       = {10.1109/ROBOT.2006.1642050}
+}
+
+@article{henrey2014abigaille,
+  author  = {Henrey, Michael and Ahmed, Aleksander and Boscariol, Paolo and
+             Shannon, Lesley and Menon, Carlo},
+  title   = {Abigaille-{III}: A Versatile, Bioinspired Hexapod for Scaling
+             Smooth Vertical Surfaces},
+  journal = {Journal of Bionic Engineering},
+  volume  = {11},
+  number  = {1},
+  pages   = {1--17},
+  year    = {2014},
+  note    = {TODO(verify): author list, volume/pages}
+}
+
+% ---------- B: force distribution in walking machines --------------------
+
+@article{waldron1986force,
+  author  = {Waldron, Kenneth J.},
+  title   = {Force and Motion Management in Legged Locomotion},
+  journal = {IEEE Journal on Robotics and Automation},
+  volume  = {RA-2},
+  number  = {4},
+  pages   = {214--220},
+  year    = {1986}
+}
+
+@article{kumar1988force,
+  author  = {Kumar, Vijay R. and Waldron, Kenneth J.},
+  title   = {Force Distribution in Closed Kinematic Chains},
+  journal = {IEEE Journal on Robotics and Automation},
+  volume  = {4},
+  number  = {6},
+  pages   = {657--664},
+  year    = {1988}
+}
+
+@article{klein1990optimal,
+  author  = {Klein, Charles A. and Kittivatcharapong, Sakon},
+  title   = {Optimal Force Distribution for the Legs of a Walking Machine
+             with Friction Cone Constraints},
+  journal = {IEEE Transactions on Robotics and Automation},
+  volume  = {6},
+  number  = {1},
+  pages   = {73--85},
+  year    = {1990}
+}
+
+@article{gorinevsky1990force,
+  author  = {Gorinevsky, Dimitry M. and Shneider, A. Yu.},
+  title   = {Force Control in Locomotion of Legged Vehicles over Rigid and
+             Soft Surfaces},
+  journal = {The International Journal of Robotics Research},
+  volume  = {9},
+  number  = {2},
+  pages   = {4--23},
+  year    = {1990}
+}
+
+@article{chen1999optimal,
+  author  = {Chen, Jing-Sin and Cheng, Fan-Tien and Yang, Kai-Tarng and
+             Kung, Fan-Chu and Sun, York-Yih},
+  title   = {Optimal Force Distribution in Multilegged Vehicles},
+  journal = {Robotica},
+  volume  = {17},
+  number  = {2},
+  pages   = {159--172},
+  year    = {1999},
+  note    = {``Does not require force sensors'' refers to setpoint
+             computation only; execution assumes force-tracking actuation}
+}
+
+@article{zhou2000fricom,
+  author  = {Zhou, Debao and Low, Kin Huat and Zielinska, Teresa},
+  title   = {An Efficient Foot-Force Distribution Algorithm for Quadruped
+             Walking Robots},
+  journal = {Robotica},
+  volume  = {18},
+  number  = {4},
+  pages   = {403--413},
+  year    = {2000}
+}
+
+@article{erden2007torque,
+  author  = {Erden, Mustafa Suphi and Leblebicio{\u{g}}lu, Kemal},
+  title   = {Torque Distribution in a Six-Legged Robot},
+  journal = {IEEE Transactions on Robotics},
+  volume  = {23},
+  number  = {1},
+  pages   = {179--186},
+  year    = {2007}
+}
+
+@article{gorner2009dlr,
+  author  = {G{\"o}rner, Martin and Wimb{\"o}ck, Thomas and Hirzinger, Gerd},
+  title   = {The {DLR} Crawler: Evaluation of Gaits and Control of an
+             Actively Compliant Six-Legged Walking Robot},
+  journal = {Industrial Robot},
+  volume  = {36},
+  number  = {4},
+  pages   = {344--351},
+  year    = {2009},
+  doi     = {10.1108/01439910910957101},
+  note    = {TODO(verify): author list and volume/issue (RELATED-WORK \S7.10)}
+}
+
+@article{righetti2013optimal,
+  author  = {Righetti, Ludovic and Buchli, Jonas and Mistry, Michael and
+             Kalakrishnan, Mrinal and Schaal, Stefan},
+  title   = {Optimal Distribution of Contact Forces with Inverse-Dynamics
+             Control},
+  journal = {The International Journal of Robotics Research},
+  volume  = {32},
+  number  = {3},
+  pages   = {280--298},
+  year    = {2013},
+  doi     = {10.1177/0278364912469821}
+}
+
+@article{focchi2017high,
+  author  = {Focchi, Michele and del Prete, Andrea and Havoutis, Ioannis and
+             Featherstone, Roy and Caldwell, Darwin G. and
+             Semini, Claudio},
+  title   = {High-Slope Terrain Locomotion for Torque-Controlled Quadruped
+             Robots},
+  journal = {Autonomous Robots},
+  volume  = {41},
+  pages   = {259--272},
+  year    = {2017},
+  doi     = {10.1007/s10514-016-9573-1}
+}
+
+@inproceedings{bellicoso2016perception,
+  author    = {Bellicoso, C. Dario and Gehring, Christian and
+               Hwangbo, Jemin and Fankhauser, P{\'e}ter and Hutter, Marco},
+  title     = {Perception-Less Terrain Adaptation Through Whole Body
+               Control and Hierarchical Optimization},
+  booktitle = {Proc. IEEE-RAS Int. Conf. Humanoid Robots},
+  pages     = {558--564},
+  year      = {2016}
+}
+
+@inproceedings{dicarlo2018dynamic,
+  author    = {Di Carlo, Jared and Wensing, Patrick M. and Katz, Benjamin
+               and Bledt, Gerardo and Kim, Sangbae},
+  title     = {Dynamic Locomotion in the {MIT} {Cheetah} 3 Through Convex
+               Model-Predictive Control},
+  booktitle = {Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems
+               (IROS)},
+  pages     = {7440--7447},
+  year      = {2018},
+  doi       = {10.1109/IROS.2018.8594448}
+}
+
+@article{dallmann2017load,
+  author  = {Dallmann, Chris J. and D{\"u}rr, Volker and Schmitz, Josef},
+  title   = {A Load-Based Mechanism for Inter-Leg Coordination in Insects},
+  journal = {Proceedings of the Royal Society B},
+  volume  = {284},
+  number  = {1868},
+  pages   = {20171755},
+  year    = {2017},
+  note    = {TODO(verify): author list}
+}
+
+@article{kurazume2002feedforward,
+  author  = {Kurazume, Ryo and Yoneda, Kan and Hirose, Shigeo},
+  title   = {Feedforward and Feedback Dynamic Trot Gait Control for
+             Quadruped Walking Vehicle},
+  journal = {Autonomous Robots},
+  volume  = {12},
+  pages   = {157--172},
+  year    = {2002},
+  doi     = {10.1023/A:1014045326702},
+  note    = {TODO(verify): pages}
+}
+
+% ---------- C: displacement-domain feed-forward for compliance -----------
+
+@inproceedings{doi2005titan,
+  author    = {Doi, Tomoyuki and Hodoshima, Ryuichi and Hirose, Shigeo and
+               Fukuda, Yasushi and Okamoto, Takashi and Mori, Junichi},
+  title     = {Development of a Quadruped Walking Robot to Work on Steep
+               Slopes, {TITAN} {XI} (Walking Motion with Compensation for
+               Compliance)},
+  booktitle = {Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems
+               (IROS)},
+  pages     = {2067--2072},
+  year      = {2005},
+  doi       = {10.1109/IROS.2005.1545498}
+}
+
+@inproceedings{ota2006deformation,
+  author    = {Ota, Yusuke and Kuga, Tatsuya and Yoneda, Kan},
+  title     = {Deformation Compensation for Continuous Force Control of a
+               Wall Climbing Quadruped with Reduced-{DOF}},
+  booktitle = {Proc. IEEE Int. Conf. Robotics and Automation (ICRA)},
+  pages     = {468--474},
+  year      = {2006},
+  doi       = {10.1109/ROBOT.2006.1641755},
+  note      = {TODO(verify): implementation details from full text
+               (RELATED-WORK \S7.4)}
+}
+
+@inproceedings{wang2009machining,
+  author    = {Wang, Jianjun and Zhang, Hui and Fuhlbrigge, Thomas},
+  title     = {Improving Machining Accuracy with Robot Deformation
+               Compensation},
+  booktitle = {Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems
+               (IROS)},
+  pages     = {3826--3831},
+  year      = {2009},
+  doi       = {10.1109/IROS.2009.5353988}
+}
+
+@incollection{klimchik2014compliance,
+  author    = {Klimchik, Alexandr and Bondarenko, Dmitry and
+               Pashkevich, Anatol and Briot, S{\'e}bastien and
+               Furet, Benoit},
+  title     = {Compliance Error Compensation in Robotic-Based Milling},
+  booktitle = {Informatics in Control, Automation and Robotics},
+  series    = {Lecture Notes in Electrical Engineering},
+  year      = {2014},
+  note      = {arXiv:1409.6231}
+}
+
+@patent{takenaka2005floor,
+  author  = {Takenaka, Toru and others},
+  title   = {Floor Shape Estimation System of Legged Mobile Robot},
+  number  = {US6922609},
+  year    = {2005},
+  note    = {Honda; feed-forward compensation of compliant-mechanism and
+             sole deformation. TODO(verify): inventor list},
+  url     = {https://patents.google.com/patent/US6922609}
+}
+
+@article{wang2024gecko,
+  author  = {Wang, Bingcheng and Weng, Zhiyuan and Wang, Zhouyi and
+             Wang, Shuai and Wang, Zhirong and Dai, Zhendong and
+             Jusufi, Ardian},
+  title   = {Wall-Climbing Performance of Gecko-Inspired Robot with Soft
+             Feet and Digits Enhanced by Gravity Compensation},
+  journal = {Bioinspiration \& Biomimetics},
+  year    = {2024},
+  doi     = {10.1088/1748-3190/ad5899},
+  note    = {TODO(verify): author list; arXiv:2405.02639}
+}
+
+% ---------- D: platforms and alternative routes ---------------------------
+
+@inproceedings{hirose1991ninja,
+  author    = {Hirose, Shigeo and Nagakubo, Akihiko and Toyama, Ryosei},
+  title     = {Machine That Can Walk and Climb on Floors, Walls and
+               Ceilings},
+  booktitle = {Proc. Int. Conf. Advanced Robotics (ICAR)},
+  pages     = {753--758},
+  year      = {1991},
+  note      = {NINJA-I, valve-controlled multi-sucker legged climber}
+}
+
+@article{zhang2006sky,
+  author  = {Zhang, Houxiang and Zhang, Jianwei and Zong, Guanghua and
+             Wang, Wei and Liu, Rong},
+  title   = {Sky Cleaner 3: A Real Pneumatic Climbing Robot for
+             Glass-Wall Cleaning},
+  journal = {IEEE Robotics \& Automation Magazine},
+  volume  = {13},
+  number  = {1},
+  pages   = {32--41},
+  year    = {2006},
+  doi     = {10.1109/MRA.2006.1598051}
+}
+
+@article{guan2013wclimbot,
+  author  = {Guan, Yisheng and Zhu, Haifei and Wu, Wenqiang and
+             Zhou, Xuefeng and Jiang, Li and Cai, Chuanxin and
+             Zhang, Xianmin and Zhang, Hong},
+  title   = {A Modular Biped Wall-Climbing Robot with High Mobility and
+             Manipulating Function},
+  journal = {IEEE/ASME Transactions on Mechatronics},
+  volume  = {18},
+  number  = {6},
+  pages   = {1787--1798},
+  year    = {2013},
+  note    = {W-Climbot. TODO(verify): title/author/volume against
+             publisher page (IROS 2010 companion exists)}
+}
+
+@article{li2025biped,
+  author  = {Li, Rui and Zhang, Xiaotian and Huang, Yingying and
+             Xu, Qingsong},
+  title   = {Development of a New Biped Robot With Adaptive Suction
+             Modules for Curved-Surface Climbing},
+  journal = {IEEE Robotics and Automation Letters},
+  year    = {2025},
+  note    = {TODO(verify): author list, volume/pages (ieeexplore 11027566)}
+}
+
+@article{longo2004alicia,
+  author  = {Longo, Domenico and Muscato, Giovanni},
+  title   = {The {Alicia}$^3$ Climbing Robot},
+  journal = {Industrial Robot},
+  volume  = {31},
+  number  = {2},
+  year    = {2004},
+  doi     = {10.1108/01439910410522838},
+  note    = {Sliding-suction three-module climber. TODO(verify): pages}
+}
+
+@article{yue2024snail,
+  author  = {Yue, Tianqi and Bloomfield-Gad{\^e}lha, Hermes and
+             Rossiter, Jonathan},
+  title   = {Snail-Inspired Water-Enhanced Soft Sliding Suction for
+             Climbing Robots},
+  journal = {Nature Communications},
+  volume  = {15},
+  year    = {2024},
+  doi     = {10.1038/s41467-024-48293-2},
+  note    = {Introduction lists the repeated destroy-and-rebuild adhesion
+             of discrete gaits as a key drawback}
+}
+
+@article{pan2005suction,
+  author  = {Pan, Lei and Zhao, Yanzheng and Qian, Zhiyuan and Fu, Zhuang
+             and Cao, Qixin},
+  title   = {Adhesion Characteristics of a Wall-Climbing Robot with Double
+             Negative-Pressure Suckers},
+  journal = {Journal of Shanghai Jiaotong University},
+  volume  = {39},
+  number  = {6},
+  pages   = {873--876},
+  year    = {2005},
+  note    = {In Chinese. Cavity-pressure dynamic response under abrupt
+             start/obstacle/stop}
+}
+
+@article{pei2023review,
+  author  = {Pei, Xiangli and others},
+  title   = {Research Progress of Bionic Adhesive Climbing Robots},
+  journal = {Chinese Science Bulletin},
+  year    = {2023},
+  note    = {In Chinese (科学通报, Dai group). Names trunk shudder from
+             detachment transients an open problem. TODO(verify): full
+             author list, volume/pages, exact title translation}
+}
+
+@article{nansai2016survey,
+  author  = {Nansai, Shunsuke and Mohan, Rajesh Elara},
+  title   = {A Survey of Wall Climbing Robots: Recent Advances and
+             Challenges},
+  journal = {Robotics},
+  volume  = {5},
+  number  = {3},
+  pages   = {14},
+  year    = {2016},
+  doi     = {10.3390/robotics5030014}
+}
+
+@article{tao2023climbing,
+  author  = {Tao, Bo and Gong, Zeyu and Ding, Han},
+  title   = {Climbing Robots for Manufacturing},
+  journal = {National Science Review},
+  volume  = {10},
+  number  = {5},
+  year    = {2023},
+  doi     = {10.1093/nsr/nwad042}
+}
+
+% ---------- E: contrast physics and sensing substitutes -------------------
+
+@article{tang2020spine,
+  author  = {Tang, Yichao and Chi, Yinding and Sun, Jiefeng and
+             Huang, Tzu-Hao and Maghsoudi, Omid H. and
+             Spence, Andrew and Zhao, Jianguo and Su, Hao and
+             Yin, Jie},
+  title   = {Leveraging Elastic Instabilities for Amplified Performance:
+             Spine-Inspired High-Speed and High-Force Soft Robots},
+  journal = {Science Advances},
+  volume  = {6},
+  number  = {19},
+  pages   = {eaaz6912},
+  year    = {2020},
+  note    = {TODO(verify): author list}
+}
+
+@article{wahrburg2018motor,
+  author  = {Wahrburg, Arne and B{\"o}s, Johannes and Listmann, Kim D. and
+             Dai, Fan and Matthias, Bj{\"o}rn and Ding, Hao},
+  title   = {Motor-Current-Based Estimation of Cartesian Contact Forces
+             and Torques for Robotic Manipulators and Its Application to
+             Force Control},
+  journal = {IEEE Transactions on Automation Science and Engineering},
+  volume  = {15},
+  number  = {2},
+  pages   = {879--886},
+  year    = {2018},
+  note    = {TODO(verify): pages}
+}
+
+@article{autumn2006frictional,
+  author  = {Autumn, Kellar and Dittmore, Andrew and Santos, Daniel and
+             Spenko, Matthew and Cutkosky, Mark},
+  title   = {Frictional Adhesion: A New Angle on Gecko Attachment},
+  journal = {Journal of Experimental Biology},
+  volume  = {209},
+  pages   = {3569--3579},
+  year    = {2006},
+  note    = {TODO(verify): author list}
+}

@@ -37,7 +37,15 @@ RUNS = {  # (重复, 条件) -> (缓存目录, 日志戳)
     (1, "C"): ("0825/C", "20260825_105827"),
     (2, "C"): ("0825pm/C", "20260825_155727"),
     (3, "C"): ("0826/C", "20260826_101200"),
+    # 08-31 D′ 判别实验(协议 §9):C31=对照(10mm/s),D31=铺设 20mm/s,份额同 C(轮转权重)
+    (1, "C31"): ("0831/C1", "20260831_170013"),
+    (2, "C31"): ("0831/C2", "20260831_171453"),
+    (3, "C31"): ("0831/C3", "20260831_175215"),
+    (1, "D31"): ("0831/D1", "20260831_164136"),
+    (2, "D31"): ("0831/D2", "20260831_172720"),
+    (3, "D31"): ("0831/D3", "20260831_174013"),
 }
+GROUP = {"B": "B", "C": "C", "C31": "31", "D31": "31"}   # 共模系数分组:同日同工况共享
 # 08-24 斜率表(协议 §6)折算 k̂ ∝ 斜率/(1+斜率) 归一(PAPER-PLAN §3)
 K_SLOPE = {"L1": 0.29, "R1": 0.22, "R3": 0.16, "L3": 0.14,
            "L2": 0.10, "R2": 0.09}
@@ -84,6 +92,7 @@ def shares(cond, leg):
     """抬 leg 时 5 支撑腿的份额 {腿:s}(B=均分;C=轮转距离权重)。"""
     if cond == "B":
         return {n: 0.2 for n in LEGS if n != leg}
+    # C / C31 / D31 均为轮转距离权重 0.6/0.25/0.1/0.05/0(08-31 两组命令行同开 --handover-weights)
     k0 = SLOTS.index(leg)
     raw = {n: W_C[(SLOTS.index(n) - k0) % 6] for n in LEGS if n != leg}
     tot = sum(raw.values())
@@ -155,35 +164,42 @@ def aicc(sse, n, p):
 
 
 def fit_joint(jdata, model, k0):
-    """B+C 联合拟合。jdata=[(cond, delta, lr, y, dI, tw)]。
-    M5: Δb = c0·F·g_r + α_cond + β_cond·(r−1)(共模分条件,11 参)
-    M7: Δb = c0·F·g_r + kI·ΔI_win(共模=电流回归,8 参)
-    M8: Δb = c0·F·g_r + ρ_cond·(1+β'(r−1))·T_win(共模=蠕变率×时长,10 参)
-    M9: Δb = c0·F·g_r + kI·ΔI_win·T_win(共模=电流×时长,8 参)"""
-    NP = {"M5": 11, "M7": 8, "M8": 10, "M9": 8}
+    """联合拟合(任意条件集)。jdata=[(cond, delta, lr, y, dI, tw)]。共模项按 GROUP 分组
+    共享系数(B / C / 31——08-31 的 C31 与 D31 同日同工况,系数共享,唯一差别是 D31 的
+    窗时长减半:M8 预测其共模减半、M10 预测不变,数据裁决)。
+    M5 : Δb = c0·F·g_r + α_g + β_g·(r−1)          (分组常数,2 参/组)
+    M7 : Δb = c0·F·g_r + kI·ΔI_win                 (电流回归,1 参)
+    M8 : Δb = c0·F·g_r + ρ_g·(1+β′(r−1))·T_win     (蠕变率×窗时长,1 参/组+β′)
+    M9 : Δb = c0·F·g_r + kI·ΔI_win·T_win           (电流×时长,1 参)
+    M10: Δb = c0·F·g_r + κ_g·(1+β′(r−1))·δ_j       (逐 mm 损耗∝铺设量,1 参/组+β′)"""
+    groups = sorted({GROUP[t[0]] for t in jdata})
+    gi = {g: i for i, g in enumerate(groups)}
+    ng = len(groups)
+    NP = {"M5": 7 + 2 * ng, "M7": 8, "M8": 8 + ng, "M9": 8, "M10": 8 + ng}
 
     def unpack(x):
         k = np.abs(x[:6]); k = k / k.sum()
-        if model == "M5":
-            return k, x[6], x[7], {"B": (x[8], x[9]), "C": (x[10], x[11])}
-        if model == "M8":
-            return k, x[6], x[7], {"B": x[8], "C": x[9], "bp": x[10]}
-        return k, x[6], x[7], x[8]
+        c0, gam = x[6], x[7]
+        ex = x[8:]
+        return k, c0, gam, ex
 
     def pred(x, cond, delta, lr, dI, tw):
         k, c0, gam, ex = unpack(x)
         F = redis_factor(k, delta, cond)
+        g_ = gi[GROUP[cond]]
         out = []
         for (j, r), di, t in zip(lr, dI, tw):
             g = 1.0 + gam * (r - 1)
             if model == "M5":
-                add = ex[cond][0] + ex[cond][1] * (r - 1)
+                add = ex[2 * g_] + ex[2 * g_ + 1] * (r - 1)
             elif model == "M7":
-                add = ex * di
+                add = ex[0] * di
             elif model == "M8":
-                add = ex[cond] * (1.0 + ex["bp"] * (r - 1)) * t
-            else:
-                add = ex * di * t
+                add = ex[g_] * (1.0 + ex[ng] * (r - 1)) * t
+            elif model == "M9":
+                add = ex[0] * di * t
+            else:  # M10
+                add = ex[g_] * (1.0 + ex[ng] * (r - 1)) * delta[j]
             out.append(c0 * F[j] * g + add)
         return np.array(out)
 
@@ -192,21 +208,19 @@ def fit_joint(jdata, model, k0):
                    for c, d, lr, y, dI, tw in jdata)
 
     base = list(k0)
-    starts = {
-        "M5": [base + [1.7, 0.16, 2.3, 0.5, 1.2, 0.3],
-               base + [1.0, 0.1, 1.0, 0.2, 0.5, 0.1]],
-        "M7": [base + [1.7, 0.16, 1.2], base + [1.0, 0.1, 0.5]],
-        "M8": [base + [1.0, 0.1, 0.3, 0.2, 0.2],
-               base + [1.7, 0.16, 0.5, 0.3, 0.1]],
-        "M9": [base + [1.0, 0.1, 0.15], base + [1.7, 0.16, 0.05]],
-    }[model]
+    ex0 = {"M5": [2.0, 0.4] * ng, "M7": [1.2], "M8": [0.5] * ng + [0.2],
+           "M9": [0.15], "M10": [0.06] * ng + [0.2]}[model]
+    starts = [base + [1.0, 0.12] + ex0, base + [1.7, 0.16] + [v * 0.5 for v in ex0]]
     best = None
     for x0 in starts:
         r = minimize(sse, np.array(x0), method="Nelder-Mead",
-                     options={"maxiter": 40000, "xatol": 1e-6, "fatol": 1e-9})
+                     options={"maxiter": 60000, "xatol": 1e-6, "fatol": 1e-9})
         if best is None or r.fun < best.fun:
             best = r
-    return unpack(best.x), best.fun, NP[model]
+    k, c0, gam, ex = unpack(best.x)
+    extra = {"groups": groups, "ex": ex, "ng": ng}
+    return (k, c0, gam, extra), best.fun, NP[model], \
+        (lambda cond, delta, lr, dI, tw, x=best.x: pred(x, cond, delta, lr, dI, tw))
 
 
 def main():
@@ -301,39 +315,61 @@ def main():
     print(f"  C 交接段总量:实测均值 {mC:+.1f} vs 预测 {pC:+.1f}mm")
     print("  → 若差距大:'共模项与份额无关'被 C 证伪,进入联合拟合。\n")
 
-    # ---- B+C 联合拟合:共模项四种机制赛马 ----
-    jdata = [("B", d, lr, y,
-              np.array([ball[i][2][j][r] for j, r in lr]),
-              np.array([ball[i][3][j][r] for j, r in lr]))
-             for i, (d, lr, y) in enumerate(bdata)]
-    jdata += [("C", d, lr, y, np.array([di[j][r] for j, r in lr]),
-               np.array([tw[j][r] for j, r in lr]))
-              for d, lr, y, di, tw in cdata]
+    # ---- 联合拟合:共模项机制赛马(B+C;--d31 时并入 08-31 的 C31/D31)----
+    def pack(cond, d, lr, y, di, tw):
+        return (cond, d, lr, y, np.array([di[j][r] for j, r in lr]),
+                np.array([tw[j][r] for j, r in lr]))
+    jdata = [pack("B", d, lr, y, ball[i][2], ball[i][3]) for i, (d, lr, y) in enumerate(bdata)]
+    jdata += [pack("C", d, lr, y, di, tw) for d, lr, y, di, tw in cdata]
+    with31 = "--d31" in sys.argv
+    if with31:
+        for cond in ("C31", "D31"):
+            for rep in (1, 2, 3):
+                try:
+                    db, dd, di, tw = load(rep, cond)
+                except Exception as e:
+                    print(f"  {cond}#{rep} 缺:{e}"); continue
+                lr = [(j, r) for j in LEGS for r in (1, 2, 3)]
+                jdata.append(pack(cond, dd, lr, np.array([db[j][r] for j, r in lr]), di, tw))
     n_j = sum(len(t[3]) for t in jdata)
-    twB = np.concatenate([t[5] for t in jdata if t[0] == "B"])
-    twC = np.concatenate([t[5] for t in jdata if t[0] == "C"])
-    print(f"B+C 联合拟合({n_j} 点)。交接窗时长:B {twB.mean():.1f}"
-          f"±{twB.std():.1f}s / C {twC.mean():.1f}±{twC.std():.1f}s")
+    conds = sorted({t[0] for t in jdata}, key=lambda c: ("B", "C", "C31", "D31").index(c))
+    print(f"联合拟合({n_j} 点;条件 {'/'.join(conds)})。交接窗时长:" + "  ".join(
+        f"{c} {np.concatenate([t[5] for t in jdata if t[0]==c]).mean():.2f}s" for c in conds))
     fits = {}
-    for model in ("M5", "M7", "M8", "M9"):
-        (kJ, c0J, gamJ, extra), sseJ, p_n = fit_joint(jdata, model, k)
+    models = ("M5", "M7", "M8", "M9", "M10")
+    for model in models:
+        (kJ, c0J, gamJ, extra), sseJ, p_n, predJ = fit_joint(jdata, model, k)
         kdJ = dict(zip(LEGS, kJ))
-        tag = {"M5": lambda e: (f"α_B={e['B'][0]:.2f} β_B={e['B'][1]:.2f}"
-                                f" α_C={e['C'][0]:.2f} β_C={e['C'][1]:.2f}"),
-               "M7": lambda e: f"kI={e:.2f}mm/A",
-               "M8": lambda e: (f"ρ_B={e['B']:.3f} ρ_C={e['C']:.3f}mm/s"
-                                f" β'={e['bp']:.2f}"),
-               "M9": lambda e: f"kIT={e:.3f}mm/(A·s)"}[model](extra)
+        ex, groups = extra["ex"], extra["groups"]
+        if model == "M5":
+            tag = " ".join(f"α_{g}={ex[2*i]:.2f} β_{g}={ex[2*i+1]:.2f}" for i, g in enumerate(groups))
+        elif model == "M8":
+            tag = " ".join(f"ρ_{g}={ex[i]:.3f}mm/s" for i, g in enumerate(groups)) + f" β'={ex[len(groups)]:.2f}"
+        elif model == "M10":
+            tag = " ".join(f"κ_{g}={ex[i]:.4f}mm/mm" for i, g in enumerate(groups)) + f" β'={ex[len(groups)]:.2f}"
+        elif model == "M7":
+            tag = f"kI={ex[0]:.2f}mm/A"
+        else:
+            tag = f"kIT={ex[0]:.3f}mm/(A·s)"
         a = aicc(sseJ, n_j, p_n)
-        fits[model] = (a, kJ, c0J, gamJ, extra)
-        print(f"  {model}: SSE={sseJ:6.1f} RMSE={np.sqrt(sseJ/n_j):.2f} "
-              f"AICc={a:6.1f} | c0={c0J:.2f} γ={gamJ:.2f} | " + tag)
+        fits[model] = (a, kJ, c0J, gamJ, extra, predJ)
+        print(f"  {model}: SSE={sseJ:6.1f} RMSE={np.sqrt(sseJ/n_j):.2f} AICc={a:6.1f} | "
+              f"c0={c0J:.2f} γ={gamJ:.2f} | " + tag)
         print("    k̂:", {n: round(kdJ[n], 3) for n in LEGS})
     best = min(fits, key=lambda m: fits[m][0])
-    print(f"  联合选型:{best}(AICc 最小)\n")
+    print(f"  联合选型:{best}(AICc 最小)")
+    if with31:
+        print("\n  判别核心——各条件交接段三轮总量:实测 vs 各模型预测(mm;M8=∝窗时长,M10=∝铺设量):")
+        for c in conds:
+            rows_c = [t for t in jdata if t[0] == c]
+            meas = np.mean([t[3].sum() for t in rows_c])
+            preds = {m: np.mean([fits[m][5](t[0], t[1], t[2], t[4], t[5]).sum() for t in rows_c])
+                     for m in ("M5", "M8", "M10")}
+            print(f"    {c:>4}: 实测 {meas:5.1f} | " + " ".join(f"{m} {v:5.1f}" for m, v in preds.items()))
+    print()
 
     # ---- T1 第 2 步预解:刚度感知份额 + D 条件门控账 ----
-    _, kJ, c0J, gamJ, extra = fits[best]
+    _, kJ, c0J, gamJ, extra, _ = fits[best]
     kdJ = dict(zip(LEGS, kJ))
     print(f"D 条件门控账(按联合选型 {best} 的 k̂):")
     redis_B = redis_D = 0.0
@@ -355,16 +391,13 @@ def main():
     print(f"  刚度感知份额(原 D 设计)只动再分配项:{redis_B:.1f}→"
           f"{redis_D:.1f}mm——**对 B 总账收益 ~{redis_B-redis_D:.0f}mm,"
           f"对 C 更少,'交接段 60→10'的预期不成立,按门控不上墙**。")
-    if best in ("M8", "M9"):
-        print(f"  共模项机制=蠕变率×窗时长(B 率 {extra['B']:.3f}mm/s 级):"
-              f"缩短交接窗(铺设加速/错峰等待压缩)是纯软件第四代杠杆——"
-              f"窗时长若 {twB.mean():.0f}s→"
-              f"{twB.mean()/2:.0f}s,共模项约砍半(~{common_B/2:.0f}mm),"
-              f"收益一个量级大于份额解。")
+    if best == "M10":
+        print("  共模项机制=逐 mm 损耗(∝铺设量 δ,与铺设用时无关):提速无净收益,"
+              "杠杆只剩 δ 本身与份额分配(权重已证明能压 κ);见 08-31 D′ 报告。")
+    elif best in ("M8", "M9"):
+        print("  共模项机制=蠕变率×窗时长:缩短交接窗是纯软件杠杆(D′ 实验验证)。")
     else:
-        print(f"  共模项分条件(α_C/α_B≈"
-              f"{fits['M5'][4]['C'][0]/fits['M5'][4]['B'][0]:.2f})即权重已"
-              f"在砍共模——机制指向内应力/蠕变,窗时长与应力两个杠杆见报告。")
+        print("  共模项分条件常数即权重已在砍共模——机制指向内应力/蠕变,见报告。")
 
 
 if __name__ == "__main__":

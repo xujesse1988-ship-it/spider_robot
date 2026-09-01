@@ -6,6 +6,12 @@
 ## 文件
 
 - `main.tex` — 正文(IEEEtran journal 模式,RA-L 口径;红色 `\TODO{}` 为待办标记)
+- `main_zh.tex` / `main_zh.pdf` — **中文对照版**(供内部审阅/交流,非投稿稿;
+  与 08-31 英文稿逐节对应,数字/公式/引文/图表一致)。⚠ 投稿以英文为准,
+  改英文后中文不自动同步——大改后要么重译要么在中文版头注明滞后。
+  编译需 XeTeX+中文字体:本机 Noto Serif/Sans CJK SC 已放 `~/.fonts`
+  (仓库不含字体,新机器 fc-list 查无则从 notofonts/noto-cjk 下载);
+  Overleaf 上传时选 XeLaTeX 编译器
 - `refs.bib` — 45 条引文(源自 `docs/RELATED-WORK.md` 判级表;
   条目内 `TODO(verify)` = 投稿前须人工核全文的字段,总清单在 RELATED-WORK §7)
 - `figures/` — 插图(生成脚本与来源见各文件头/下表)

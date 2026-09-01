@@ -9,6 +9,10 @@
 - `refs.bib` — 45 条引文(源自 `docs/RELATED-WORK.md` 判级表;
   条目内 `TODO(verify)` = 投稿前须人工核全文的字段,总清单在 RELATED-WORK §7)
 - `figures/` — 插图(生成脚本与来源见各文件头/下表)
+- `references/` — 参考文献 PDF,**文件名=refs.bib 引用键**(现有
+  nadan2024loris.pdf=LORIS ICRA 2024,CMU 作者公开版——写作范本兼
+  贡献③划界近邻;写作范本首选另见 kim2008smooth=Stickybot T-RO 2008,
+  叙事弧同构:同一个敌人"脱附瞬态"、同款"脱开时刻本来就没力"哲学)
 
 ## 编译
 

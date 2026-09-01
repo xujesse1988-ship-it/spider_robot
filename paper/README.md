@@ -71,6 +71,14 @@
     "winding"→loading;"gait engine"→gait controller;M10/M8→H2/H1;
     定义处:leg names(III-A)、round/rotation(III-C)、body lean(III-B)、
     discovery run(I)、rupture-segment slip(III-B)、leak-rescue(V-D)。
+11. **靶标交叉验证跑 + 核对图整理(09-01 新增,详见 PAPER-PLAN T4d)**:
+    贴 Ø20 同心圆靶标(`html/tracking-targets-printable.html`)跑一组原地
+    基线,同一视频板模板 vs 靶标两种追踪比对,III-B 改写为"两种追踪一致到
+    X mm";此后所有上墙视频一律贴靶标。**不重做 n=3/D′**(理由见 T4d)。
+    在此之前:III-B 那句"人工对 188 张核对图核查"要改为不带张数、不称
+    人工(操作者确认过的只有皮尺 4 帧);`images/ab-verify-202608/` 只有
+    board_scale×9 + locate×15 + 皮尺 12 张是自解释核对图,开源包只放这
+    36 张 + 索引 README,其余 ~150 张读角过程图挪子目录。
 
 ## 09-01 事实核查修正清单(改回去就是错的,动这些句子前先看源)
 

@@ -1,0 +1,101 @@
+/*
+* Copyright (C) 2026 Seeed Studio
+*
+* MIT License
+* Device Tree Overlay for ReSpeaker with WM8960 Codec
+*
+*/
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2835", "brcm,bcm2708", "brcm,bcm2709", "brcm,bcm2711", "brcm,bcm2712";
+	
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			hardware = "reSpeaker V1.0";
+		};
+	};
+	
+	fragment@1 {
+		target-path = "/";
+		__overlay__ {
+			wm8960_mclk: wm8960_mclk {
+				#clock-cells = <0>;
+				compatible = "fixed-clock";
+				clock-frequency = <24000000>;
+			};
+		};
+	};
+	
+	fragment@2 {
+		target = <&i2c1>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+			
+			wm8960: wm8960@1a {
+				#sound-dai-cells = <0>;
+				compatible = "wlf,wm8960";
+				reg = <0x1a>;
+				AVDD-supply = <&vdd_3v3_reg>;
+				clocks = <&wm8960_mclk>;
+				clock-names = "mclk";
+				wlf,shared-lrclk;
+			};
+		};
+	};
+	
+	fragment@3 {
+		target = <&i2s_clk_consumer>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+	
+	fragment@4 {
+		target = <&sound>;
+		__overlay__ {
+			compatible = "simple-audio-card";
+			simple-audio-card,format = "i2s";
+			simple-audio-card,name = "seeed2micvoicec";
+			i2s-controller = <&i2s_clk_consumer>;
+			status = "okay";
+			
+			simple-audio-card,widgets =
+			"Microphone", "Mic Jack",
+			"Line", "Line In",
+			"Line", "Line Out",
+			"Speaker", "Speaker",
+			"Headphone", "Headphone Jack";
+			simple-audio-card,routing =
+			"Headphone Jack", "HP_L",
+			"Headphone Jack", "HP_R",
+			"Speaker", "SPK_LP",
+			"Speaker", "SPK_LN",
+			"LINPUT1", "Mic Jack",
+			"LINPUT3", "Mic Jack",
+			"RINPUT1", "Mic Jack",
+			"RINPUT2", "Mic Jack";
+			
+			simple-audio-card,bitclock-master = <&sound_master>;
+			simple-audio-card,frame-master = <&sound_master>;
+			
+			simple-audio-card,cpu {
+				sound-dai = <&i2s_clk_consumer>;
+			};
+			
+			sound_master: simple-audio-card,codec {
+				#sound-dai-cells = <0>;
+				sound-dai = <&wm8960>;
+				clocks = <&wm8960_mclk>;
+				clock-names = "mclk";
+			};
+		};
+	};
+	
+	__overrides__ {
+	};
+};

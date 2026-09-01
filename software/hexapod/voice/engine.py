@@ -1,0 +1,242 @@
+"""语音引擎线程：KWS 常驻（唤醒词 + 急停词）→ VAD 切句 → SenseVoice → 意图事件。
+
+两层设计的原因：
+- 急停要快、要随时有效：KWS 是流式的，"停下/别动"一出口 ~0.3s 内就有事件，
+  不用等 VAD 判断句尾，也不需要先喊唤醒词。误触的代价只是多停一次，安全方向。
+- 其它指令走"唤醒词 → 整句识别"：SenseVoice 对短句准确率远高于关键词表，
+  且指令可以自由组合（"快点往前走三秒"）。唤醒后 follow_up_s 内可连说多条。
+
+事件（VoiceEvent.kind）：
+  ready   模型加载完成，开始听
+  wake    听到唤醒词（text=哪个词）
+  asleep  听令窗口超时，回到只听唤醒词
+  stop    KWS 急停词命中（text=哪个词）——调用方必须立即停
+  command 一句识别完成（text=原文，intent=解析结果；unknown 也会给，供打印）
+  eof     音源结束（wav 顶替麦克风时）
+  error   模型加载/运行异常（text=原因），引擎线程随之退出
+
+线程模型：本线程只做音频→事件；机器人动作在调用方主线程里做（舵机串口
+不跨线程）。TTS 通过 Speaker 线程播，播放期间麦克风数据丢弃。
+"""
+import glob
+import os
+import queue
+import threading
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Optional
+
+from .intents import Intent, parse
+from .keywords import parse_result
+
+RATE = 16000
+
+
+@dataclass
+class ModelPaths:
+    kws_dir: Path
+    asr_dir: Path
+    vad_model: Path
+    keywords_file: Path
+    tts_dir: Optional[Path] = None
+
+    @staticmethod
+    def default_root() -> Path:
+        return Path(os.environ.get("HEXAPOD_VOICE_MODELS") or Path.home() / "models" / "voice")
+
+    @classmethod
+    def discover(cls, root=None, tts_name: Optional[str] = None) -> "ModelPaths":
+        root = Path(root) if root else cls.default_root()
+
+        def one(pattern, what):
+            hits = sorted(glob.glob(str(root / pattern)))
+            if not hits:
+                raise FileNotFoundError(f"{root} 下找不到{what}（{pattern}）——先跑 "
+                                        f"scripts/voice_setup.sh，或设 HEXAPOD_VOICE_MODELS")
+            return Path(hits[-1])
+
+        kws = one("sherpa-onnx-kws-zipformer-wenetspeech-*", "KWS 模型")
+        asr = one("sherpa-onnx-sense-voice-*", "SenseVoice 模型")
+        vad = one("silero_vad.onnx", "VAD 模型")
+        kw = kws / "keywords_hexapod.txt"
+        if not kw.exists():
+            kw = kws / "keywords.txt"          # 模型自带样例词表（小爱同学…），只能应急
+        tts = None
+        if tts_name:
+            tts = root / tts_name
+        else:
+            for pat in ("matcha-icefall-zh-*", "vits-melo-tts-zh_en", "sherpa-onnx-vits-zh-*",
+                        "vits-zh-*"):
+                hits = sorted(glob.glob(str(root / pat)))
+                if hits:
+                    tts = Path(hits[0])
+                    break
+        return cls(kws_dir=kws, asr_dir=asr, vad_model=vad, keywords_file=kw, tts_dir=tts)
+
+    def kws_files(self):
+        d = self.kws_dir
+
+        def pick(prefix):
+            c = sorted(d.glob(f"{prefix}-epoch-12-*.int8.onnx")) or sorted(d.glob(f"{prefix}-*.int8.onnx")) \
+                or sorted(d.glob(f"{prefix}-*.onnx"))
+            if not c:
+                raise FileNotFoundError(f"{d} 缺 {prefix} onnx")
+            return str(c[0])
+        return str(d / "tokens.txt"), pick("encoder"), pick("decoder"), pick("joiner")
+
+    def asr_files(self):
+        d = self.asr_dir
+        m = d / "model.int8.onnx"
+        if not m.exists():
+            m = d / "model.onnx"
+        return str(m), str(d / "tokens.txt")
+
+
+@dataclass
+class VoiceEvent:
+    kind: str
+    text: str = ""
+    intent: Optional[Intent] = None
+    t: float = field(default_factory=time.time)
+
+
+class VoiceEngine(threading.Thread):
+    def __init__(self, paths: ModelPaths, source, speaker=None, *,
+                 wake_required: bool = True, follow_up_s: float = 8.0,
+                 listen_timeout_s: float = 6.0, num_threads: int = 2,
+                 kws_threshold: float = 0.25, wake_ack: str = "在",
+                 chunk_s: float = 0.1, log: Optional[Callable[[str], None]] = None):
+        super().__init__(name="voice-engine", daemon=True)
+        self.paths, self.source, self.speaker = paths, source, speaker
+        self.wake_required, self.follow_up_s = wake_required, follow_up_s
+        self.listen_timeout_s, self.num_threads = listen_timeout_s, num_threads
+        self.kws_threshold, self.wake_ack, self.chunk_s = kws_threshold, wake_ack, chunk_s
+        self.log = log or (lambda s: None)
+        self.events: "queue.Queue[VoiceEvent]" = queue.Queue()
+        self._stop = threading.Event()
+        self._awake_until = 0.0
+        self.load_s = 0.0
+
+    # ---- 对外 ----
+    @property
+    def awake(self) -> bool:
+        return (not self.wake_required) or time.time() < self._awake_until
+
+    def say(self, text: str, block: bool = False) -> None:
+        if self.speaker:
+            self.speaker.say(text, block=block)
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    # ---- 主循环 ----
+    def run(self) -> None:
+        try:
+            kws, vad, asr = self._load()
+        except Exception as e:
+            self.events.put(VoiceEvent("error", f"模型加载失败: {e}"))
+            return
+        self.events.put(VoiceEvent("ready"))
+        n = int(self.chunk_s * RATE)
+        ks = kws.create_stream()
+        was_awake = False
+        try:
+            while not self._stop.is_set():
+                chunk = self.source.read(n)
+                if chunk is None:
+                    vad.flush()
+                    self._drain_vad(vad, asr)
+                    self.events.put(VoiceEvent("eof"))
+                    break
+                if self.speaker is not None and self.speaker.is_muting():
+                    if getattr(self.source, "live", True):
+                        continue                         # 自己在说话：麦克风数据丢弃
+                    self.speaker.wait(10.0)              # 文件音源：等说完再处理这段
+
+                # 1) KWS：唤醒词 + 急停词，常驻
+                ks.accept_waveform(RATE, chunk)
+                while kws.is_ready(ks):
+                    kws.decode_stream(ks)
+                    r = kws.get_result(ks)
+                    if r:
+                        kws.reset_stream(ks)
+                        tag, word = parse_result(r)
+                        if tag == "STOP":
+                            self.log(f"[kws] 急停词 {word}")
+                            self.events.put(VoiceEvent("stop", word))
+                            self._awake_until = 0.0
+                            vad.reset()
+                        elif tag == "WAKE" or not tag:
+                            self.log(f"[kws] 唤醒 {word}")
+                            self._awake_until = time.time() + self.listen_timeout_s
+                            vad.reset()
+                            self.events.put(VoiceEvent("wake", word))
+                            if self.speaker is not None and self.wake_ack:
+                                # 应答不屏蔽麦克风：用户常一口气说"小蜘蛛，前进三秒"
+                                self.speaker.say(self.wake_ack, mute=False)
+
+                # 2) 听令状态：VAD 切句 → ASR → 意图
+                if self.awake:
+                    was_awake = True
+                    vad.accept_waveform(chunk)
+                    if self._drain_vad(vad, asr):
+                        self._awake_until = max(self._awake_until,
+                                                time.time() + self.follow_up_s)
+                elif was_awake:
+                    was_awake = False
+                    vad.reset()
+                    self.log("[engine] 听令窗口结束")
+                    self.events.put(VoiceEvent("asleep"))
+        except Exception as e:
+            self.events.put(VoiceEvent("error", f"引擎异常: {e!r}"))
+        finally:
+            try:
+                self.source.close()
+            except Exception:
+                pass
+
+    def _drain_vad(self, vad, asr) -> bool:
+        """把 VAD 攒好的整句都识别掉；返回是否识别出至少一条有效指令。"""
+        import numpy as np
+        got = False
+        while not vad.empty():
+            seg = vad.front
+            samples = np.asarray(seg.samples, dtype=np.float32)
+            vad.pop()
+            t0 = time.time()
+            s = asr.create_stream()
+            s.accept_waveform(RATE, samples)
+            asr.decode_stream(s)
+            text = s.result.text.strip()
+            intent = parse(text)
+            self.log(f"[asr] {len(samples)/RATE:.1f}s → {text!r} → {intent.kind}"
+                     f" ({time.time()-t0:.2f}s)")
+            self.events.put(VoiceEvent("command", text, intent))
+            if intent.kind != "unknown":
+                got = True
+        return got
+
+    def _load(self):
+        import sherpa_onnx as so
+        t0 = time.time()
+        tokens, enc, dec, joi = self.paths.kws_files()
+        kws = so.KeywordSpotter(tokens=tokens, encoder=enc, decoder=dec, joiner=joi,
+                                keywords_file=str(self.paths.keywords_file),
+                                num_threads=1, keywords_threshold=self.kws_threshold,
+                                num_trailing_blanks=1, provider="cpu")
+        vad = so.VoiceActivityDetector(
+            so.VadModelConfig(
+                silero_vad=so.SileroVadModelConfig(
+                    model=str(self.paths.vad_model), threshold=0.5,
+                    min_silence_duration=0.4, min_speech_duration=0.2,
+                    max_speech_duration=6.0),
+                sample_rate=RATE),
+            buffer_size_in_seconds=30)
+        model, atok = self.paths.asr_files()
+        asr = so.OfflineRecognizer.from_sense_voice(
+            model=model, tokens=atok, num_threads=self.num_threads,
+            language="zh", use_itn=True)
+        self.load_s = time.time() - t0
+        self.log(f"[engine] 模型加载 {self.load_s:.1f}s，关键词表 {self.paths.keywords_file}")
+        return kws, vad, asr

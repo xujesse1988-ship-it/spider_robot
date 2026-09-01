@@ -9,10 +9,14 @@ dependencies = ["pyserial>=3.5"]
 sim = ["matplotlib", "numpy"]
 dev = ["pytest"]
 pi = ["lgpio", "smbus2"]
+voice = ["sherpa-onnx>=1.12", "numpy", "pypinyin"]
 
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["hexapod"]
+packages = ["hexapod", "hexapod.voice"]
+
+[tool.setuptools.package-data]
+"hexapod.voice" = ["keywords_raw.txt"]

@@ -47,21 +47,23 @@ place, so that a robot stepping in place with zero net command descends by
 a ratchet. Using a low-cost phone-video pipeline (normalized cross-correlation
 tracking, per-run metric scale, command-marker time synchronization), we
 quantify the effect at millimeter and per-leg resolution: $93\%$ of the
-per-cycle position loss occurs within $100$\,ms of rupture, while during
-venting itself the body is stationary---so slower venting provably
-cannot help. A one-dimensional parallel-spring model explains the
-loss and makes four predictions that we verify, including strict linearity
-of the rupture bounce in a pre-laid unloading displacement. Building on
-this, we propose the \emph{zero-force handover}: before venting, the
-lifting leg's foot command walks back a per-leg calibrated displacement
-$\delta_j$ while the supporting legs absorb it under a mean-invariant
-apportionment with rotation-distance weights---purely kinematic, open
-loop, and using no force, tactile, pressure, or current feedback. In an
-$n{=}3$ Latin-square study the method cuts total slip by $43\%$
-($\delta$ alone) and $61\%$ (with weights), and rupture-segment slip by
-$82\%$/$88\%$ (paired $p\le0.0022$). A pre-registered rate-discrimination
-experiment shows the residual transfer loss scales with laid millimeters,
-not elapsed time ($\Delta b=\kappa\,\delta_j$, $\kappa$ reproduced to
+per-cycle position loss occurs within $100$\,ms of seal rupture. A
+one-dimensional parallel-spring model explains the loss and makes four
+predictions that we verify, including strict linearity of the rupture
+bounce in an unloading displacement applied before venting. Building on
+this, we propose the \emph{zero-force handover}: before a leg is vented,
+its foot is commanded up the wall by a per-leg calibrated amount
+$\delta_j$---the deflection its leg chain has stored---while the
+supporting feet are commanded down the wall by the same total amount,
+split by weights that favor the legs farthest from their own next lift,
+so that the commanded body position is unchanged. The scheme is purely
+kinematic and open loop, using no force, tactile, pressure, or current
+feedback. In an $n{=}3$ Latin-square study it cuts total slip by $43\%$
+($\delta$ alone) and $61\%$ (with weights), and slip at the rupture
+instants by $82\%$/$88\%$ (paired $p\le0.0022$). A pre-registered
+rate-discrimination experiment shows that the residual loss incurred
+during the handover scales with the displacement transferred, not with
+the time taken ($\Delta b=\kappa\,\delta_j$, $\kappa$ reproduced to
 $4\%$ across five days), identifying load-share allocation---not
 speed---as the remaining lever ($\kappa$ reduced $44\%$ by the weights).
 Data, logs, and the measurement pipeline are released.
@@ -90,23 +92,28 @@ On a stiff robot this would matter little. But small wall-climbing
 platforms are not stiff: safety margins are bought with lightweight,
 3D-printed leg chains, bellows cups that conform to the surface, and
 low-cost position-controlled servos with no torque feedback. On such a
-platform we observed that a hexapod commanded to \emph{step in place} on
-vertical glass---lift each foot and put it back exactly where it
-was---slides down the wall by $57$--$74$\,mm per gait cycle, with zero
-interfacial slip of the attached cups and zero drift at rest.
+platform---a six-legged walker with a suction cup on each foot
+(Fig.~\ref{fig:platform})---we observed that when the robot is commanded
+to \emph{step in place} on vertical glass---lift one foot at a time and
+put it back exactly where it was---it slides down the wall by
+$57$--$74$\,mm per gait cycle, although the attached cups never slip on
+the glass and the body never drifts while all six feet are attached.
 Frame-by-frame decomposition shows that in the $n{=}3$ study of this
 letter $93\%$ of the loss occurs within $100$\,ms of seal rupture
-($83\%$ in the initial discovery run, whose segmentation attributed more
-to post-bounce re-equilibration), while during active venting, before
-the seal lets go, the body moves less than $0.15$\,mm. The
-mechanism is elastic: as the body sags, each attached leg chain is wound
-up like a spring; venting a loaded leg cuts that spring at full tension,
-the body falls until the remaining legs' additional deflection catches
-it, and the next zero-preload adhesion locks the new position in. We call
-the resulting staircase descent the \emph{vent-snap ratchet}. Servo
-current corroborates the picture: bus current climbs step-wise from
-$0.7$\,A to ${\sim}1.9$\,A over two cycles and does not relax---the legs
-are increasingly fighting each other.
+($83\%$ in the \emph{discovery run}, the earlier run in which we first
+observed the effect, which used wider segmentation windows), while
+during active venting, before the seal lets go, the body moves less
+than $0.15$\,mm. The mechanism is elastic: the attached feet stay put
+while the body sags under its own weight, so each attached leg
+chain---the printed links, joints, and servo gear trains between foot
+and body---is stretched like a loaded spring; venting a loaded leg cuts
+that spring at full tension, the body falls until the additional stretch
+of the remaining legs catches it, and the next adhesion, which grips
+wherever the body then hangs, locks the new position in. We call the
+resulting staircase descent the \emph{vent-snap ratchet}. The current
+drawn by the servos corroborates the picture: the total bus current
+climbs step-wise from $0.7$\,A to ${\sim}1.9$\,A over two cycles and
+does not relax---the legs are increasingly fighting each other.
 
 The failure combination---compliant support chains, rupture-type
 detachment, and position-domain actuation that accumulates internal
@@ -124,12 +131,15 @@ Instead we exploit the one fact that makes the problem tractable: an
 attached foot cannot slip, so \emph{changing its position command changes
 force, not position}. The unloading condition ``lift only a force-free
 leg'' can therefore be translated from the force domain into the
-displacement domain and executed open loop: before venting leg $j$, walk
-its foot command back up-slope by a per-leg constant $\delta_j$---the
+displacement domain and executed open loop: before venting leg $j$,
+command its foot up the wall by a per-leg constant $\delta_j$---the
 stored deflection, calibrated offline by linear extrapolation of the
-rupture bounce---while the supporting feet absorb the same displacement
-under weights that keep the six-leg command mean invariant, so the body
-is commanded to stay put. We call this the \emph{zero-force handover}.
+rupture bounce---which, because the foot itself cannot move, relaxes
+the leg's spring; at the same time command the supporting feet down the
+wall by the same total displacement, split by weights, so that the mean
+of the six foot commands---and with it the commanded body
+position---is unchanged. We call this the \emph{zero-force handover}
+(Fig.~\ref{fig:platform}c).
 
 The contributions of this letter are:
 \begin{enumerate}
@@ -142,12 +152,14 @@ qualitative for body motion, or quantify foot forces, accelerations, or
 cavity pressure instead \cite{kim2008smooth,pei2023review,pan2005suction}.
 \item \textbf{A parallel-spring account with verified predictions.} A
 one-line elastic model explains the loss, predicts strict linearity of
-the rupture bounce in the pre-laid displacement (verified; per-leg slopes
+the rupture bounce in the unloading displacement applied before venting
+(verified; per-leg slopes
 spread $4\times$ and furnish a stiffness estimate that agrees with an
 independent route, $r=0.938$), predicts the dilution effect of load-share
 weights ($-32\%$ predicted vs.\ $-31$--$33\%$ measured), and---via a
 pre-registered discrimination experiment---yields a transfer-loss law
-$\Delta b=\kappa\,\delta_j(1+0.20(r{-}1))$ in which time plays no role.
+$\Delta b=\kappa\,\delta_j(1+0.20(r{-}1))$ ($r$ the gait-cycle index) in
+which time plays no role.
 \item \textbf{A sensor-free, open-loop, software-only remedy with
 $n{=}3$ evidence.} The zero-force handover converts pre-detachment
 unloading---known in force-sensing closed-loop forms
@@ -270,8 +282,8 @@ physics used in the opposite direction. Directional dry adhesives detach
 at near-zero force by material design \cite{kim2008smooth,
 autumn2006frictional}; vacuum cups cannot inherit that trick, which is
 precisely why the stored energy must be \emph{returned before rupture}.
-Slow venting, the intuitive remedy, is refuted by our data
-(Sec.~\ref{sec:phenomenon}).
+Slow venting, the intuitive remedy, does not help on our data
+(Sec.~\ref{sec:ratchet}).
 
 % =========================================================================
 \section{Platform, Pipeline, and the Phenomenon}
@@ -280,32 +292,48 @@ Slow venting, the intuitive remedy, is refuted by our data
 \subsection{Platform}
 \label{sec:platform}
 
-The testbed (Fig.~\ref{fig:platform}) is a 3D-printed hexapod derived
-from an open-source walking platform, with self-designed suction feet:
-each 3-DOF leg (coxa/femur/tibia $43/80/124$\,mm) ends in a 30\,mm
-bellows suction cup fed through a normally-closed 3-way solenoid valve
-and a per-foot check valve. Two diaphragm pumps hold the attached cups
-between $-60$ and $-75$\,kPa by bang-bang hysteresis; adhesion is
-declared below $-30$\,kPa; a leg may lift only when the five other cups
-are attached and deeper than a $-50$\,kPa gate. Eighteen 35\,kg$\cdot$cm
-position-controlled hobby servos (no torque, force, tactile, or
-per-joint current feedback of any kind) are driven by a Raspberry~Pi~5
-through an RP2040 servo board; total mass is ${\sim}2.7$\,kg
-\TODO{final weigh-in of assembled robot}. All experiments run on
-vertical glass with a safety rope. The platform's compliance is not
-incidental: printed legs, bellows cups, and servo gear trains together
-make the body-to-anchor chain soft enough that commanded body motion is
-only $42\%$ realized (Sec.~\ref{sec:finding2})---typical of the
-lightweight construction this robot class requires.
+The testbed (Fig.~\ref{fig:platform}) is a six-legged 3D-printed
+walker derived from an open-source hexapod kit, fitted with
+self-designed suction feet. The robot climbs facing up the wall; legs
+are named L/R for the left/right side and $1/2/3$ from front to rear,
+so L1 and R1 are the uppermost pair and L3/R3 the lowest
+(Fig.~\ref{fig:platform}a). Each leg has three position-controlled
+joints (coxa/femur/tibia links $43/80/124$\,mm) and ends in a 30\,mm
+bellows suction cup. A normally-closed 3-way solenoid valve per foot
+connects the cup either to a vacuum reservoir (attach) or to atmosphere
+(vent), and a per-foot check valve isolates the cups from one another.
+Two diaphragm pumps hold the attached cups between $-60$ and $-75$\,kPa
+by bang-bang hysteresis; a cup counts as attached below $-30$\,kPa; a
+leg may lift only when the five other cups are attached and deeper than
+a $-50$\,kPa gate. The gait moves one leg at a time: at any moment five
+feet are attached and at most one is in the air. Eighteen
+35\,kg$\cdot$cm position-controlled hobby servos (no torque, force,
+tactile, or per-joint current feedback of any kind) are driven by a
+Raspberry~Pi~5 through an RP2040 servo board; total mass is
+${\sim}2.7$\,kg \TODO{final weigh-in of assembled robot}. All
+experiments run on vertical glass with a safety rope. The platform's
+compliance is not incidental: printed legs, bellows cups, and servo
+gear trains together make the chain from body to foot anchor soft
+enough that commanded body motion is only $42\%$ realized
+(Sec.~\ref{sec:finding2})---typical of the lightweight construction
+this robot class requires.
 
 \begin{figure}[t]
 \centering
-\fbox{\parbox[c][4.2cm][c]{0.95\linewidth}{\centering
-\TODO{Fig.~1: (a) robot on glass wall, (b) leg chain schematic with
-compliance sources and suction foot cutaway, (c) handover kinematics
-sketch (lifting leg walks back $\delta_j$ up-slope, supports absorb
-$w_i\delta_j$ down-slope).}}}
-\caption{Platform and the zero-force handover.}
+\includegraphics[width=\linewidth]{figures/fig_platform.pdf}
+\caption{Platform and the zero-force handover (schematic).
+(a)~Top view and leg naming: the robot faces up the wall, so legs 1 are
+the top pair. (b)~Side view: each attached leg chain acts as a spring
+$k_i$ between the body and a foot anchor $a_i$ that cannot slip; the
+body hangs on the springs under its weight $mg$; $x$ is measured down
+the wall. (c)~Zero-force handover, shown for a top leg $j$: every
+attached foot sits above its commanded position (open circles), i.e.\
+every leg is stretched. Before venting $j$, its foot command moves up
+the wall by $\delta_j$ until the spring is relaxed ($f_j=0$), while the
+supporting feet's commands move down the wall by $w_i\delta_j$,
+$\sum_i w_i=1$; the commanded body position is unchanged and the seal
+then breaks with nothing to release. \TODO{add (d): photograph of the
+robot on the glass wall.}}
 \label{fig:platform}
 \end{figure}
 
@@ -320,14 +348,18 @@ patch. Metric scale is taken \emph{per run} from the long edge
 (93.0\,mm) of a PCB rigidly mounted on the robot, localized by
 four-corner sub-pixel fits ($0.288$--$0.296$\,mm/px across runs;
 top/bottom edge disagreement $0.2$--$1.9\%$). Video time is registered
-to the robot's on-board event log by a commanded time-sync marker: a
-$\pm10$\,mm body lean executed at the start of each run and fit in shape
-to the tracked trajectory ($R^2$ $0.95$--$1.00$ per run); the same
-marker doubles as a compliance probe (Sec.~\ref{sec:finding2}). Every
-lift event is then decomposed into \emph{handover} (displacement laying,
-when enabled), \emph{vent} (a fixed $[-1,+0.4]$\,s window around the
-logged pressure-zero event, containing the seal rupture), \emph{swing},
-\emph{press} (touchdown), and \emph{settle} segments. The pipeline was verified against a manual tape-ruler reading
+to the robot's on-board event log by a commanded time-sync marker, the
+\emph{body lean}: with all six feet attached, the body is commanded
+$10$\,mm up the wall and back at the start of each run, and the
+commanded profile is fit in shape to the tracked trajectory ($R^2$
+$0.95$--$1.00$ per run); the same marker doubles as a compliance probe
+(Sec.~\ref{sec:finding2}). Every lift event is then decomposed into
+five consecutive time segments: \emph{handover} (the pre-vent
+displacement transfer of Sec.~\ref{sec:method}, when enabled),
+\emph{vent} (a fixed $[-1,+0.4]$\,s window around the logged
+pressure-zero event, containing the seal rupture; we call the slip
+accrued in it the \emph{rupture-segment slip}), \emph{swing} (foot in
+the air), \emph{press} (touchdown), and \emph{settle}. The pipeline was verified against a manual tape-ruler reading
 ($131$\,mm total vs.\ $131.3$\,mm tracked) and 188 archived localization
 crops; all scale boards and template locks were human-checked
 \TODO{exact vent-window definition: confirm $-1$\,s/$+0.4$\,s bounds
@@ -336,15 +368,16 @@ from ab\_quant before submission}.
 \subsection{The vent-snap ratchet}
 \label{sec:ratchet}
 
-Stepping in place is the cleanest probe: each leg in the fixed rotation
-order (R3$\to$L1$\to$R2$\to$L3$\to$R1$\to$L2) is lifted $33$\,mm,
-hovers $1$\,s, and is put back at exactly its former station; the
-commanded net body motion is zero, so any systematic displacement must
-come from elastic strain release and re-locking. Two controls verify the
-premises: ink marks on the glass beside each attached cup do not move
-(zero interfacial slip), and the body is stationary during all-feet
-attached dwell (zero time-type creep; see also
-Sec.~\ref{sec:mechanism}). Yet the body descends $57$--$74$\,mm per cycle
+Stepping in place is the cleanest probe: each leg in turn, in a fixed
+\emph{rotation} order (R3$\to$L1$\to$R2$\to$L3$\to$R1$\to$L2; one pass
+through all six legs is a \emph{round}, i.e.\ one gait cycle), is
+lifted $33$\,mm off the glass, hovers $1$\,s, and is put back at exactly
+its former station; the commanded net body motion is zero, so any
+systematic displacement must come from elastic strain release and
+re-locking. Two controls verify the premises: ink marks on the glass
+beside each attached cup do not move (the cups do not slip), and the
+body is stationary whenever all six feet are attached (no slow drift;
+see also Sec.~\ref{sec:mechanism}). Yet the body descends $57$--$74$\,mm per cycle
 (discovery run; $63.9\pm0.9$\,mm in the $n{=}3$ baseline,
 Sec.~\ref{sec:results}), in a staircase whose every step coincides with
 a seal rupture (Fig.~\ref{fig:staircase}).
@@ -369,22 +402,27 @@ video carries the sync uncertainty (a few tenths of a second).}
 Three time scales matter. (i)~While residual vacuum drains after the
 venting command, the body does not move ($<0.15$\,mm). (ii)~At seal
 rupture the entire drop completes within $1$--$2$ frames
-($33$--$67$\,ms), with an underdamped overshoot (L1: peak $23.8$\,mm,
-settle $21.5$\,mm)---a textbook elastic release. (iii)~Between events
+($33$--$67$\,ms), with an underdamped overshoot
+(Fig.~\ref{fig:staircase}b: peak $26.7$\,mm, settling at
+$21.5$\,mm)---a textbook elastic release. (iii)~Between events
 the trajectory is flat. In the $n{=}3$ baseline the vent segments sum to
 $172.9\pm3.4$ of $185.5\pm3.0$\,mm total---$93\%$; touchdown press
 contributes $4\%$ (discovery-run decomposition: $83\%$/$4\%$ with wider
 re-equilibration windows). The released foot itself recoils
 $9$--$15$\,mm down-wall at the same instant. Per-leg single-event
-bounces reach $20.9$\,mm (L1) and $19.2$\,mm (R1)---the top (front)
-legs, where peel moments concentrate---versus $5.8$\,mm for the softest
-legs, a first sign that leg-chain stiffness is strongly unequal.
+bounces reach $20.9$\,mm (L1) and $19.2$\,mm (R1)---the top pair,
+where the body's weight exerts the largest peel moment on the
+cups---versus $5.8$\,mm for the softest legs, a first sign that
+leg-chain stiffness is strongly unequal.
 
 Two corollaries fix the design space. First, \emph{slow venting cannot
-work}: the force release is not distributed over the pressure decay but
-compressed into the lip's peel instant; the data show zero motion while
-residual vacuum drains. Any remedy must ensure the leg carries no force
-\emph{at the moment the seal lets go}. Second, the loss is locked in by
+help}: the data show no motion while residual vacuum drains, so the
+force is not released gradually as the pressure decays but all at once
+when the lip peels; venting more slowly would only postpone the same
+step. (We did not test slower venting directly; the inference rests on
+the flat pre-rupture trace and the no-slip control.) Any remedy must
+therefore ensure the leg carries no force \emph{at the moment the seal
+lets go}. Second, the loss is locked in by
 the next adhesion: a fresh cup grips wherever the body then hangs, at
 zero preload (Sec.~\ref{sec:model}), so the drops accumulate as a
 ratchet rather than averaging out. Servo bus current tells the same
@@ -399,10 +437,12 @@ locked-in drop leaves the support legs fighting a larger internal force.
 \subsection{Model}
 
 Collapse each attached leg chain $i$ to a linear spring of stiffness
-$k_i$ along the wall's gravity axis ($x$ positive down). Let $a_i$ be
-the (immovable) anchor of foot $i$ and $c_i$ its commanded position in
-the body frame, and define $y_i \equiv a_i - c_i$: the body position at
-which leg $i$ would carry zero force. Leg $i$ then exerts the shear
+$k_i$ along the wall's gravity axis ($x$ positive down;
+Fig.~\ref{fig:platform}b). Let $a_i$ be the (immovable) anchor of foot
+$i$ and $c_i$ the foot position the controller commands, expressed
+relative to the body, and define $y_i \equiv a_i - c_i$: the body
+position at which the foot would sit exactly where commanded, so that
+leg $i$ carries zero force. Leg $i$ then exerts the shear
 force $f_i = k_i\,(x - y_i)$ on the body (positive up-wall), and static
 equilibrium of the attached set $S$ gives
 \begin{equation}
@@ -430,13 +470,14 @@ deflection $e_j = f_j/k_j$. The ratio $e_j/b_j = (K-k_j)/k_j$ is
 $5$--$8$ on our platform, a distinction that matters for calibration
 (Sec.~\ref{sec:calib}).
 
-\emph{Winding.} Between adhesion and lift, every millimeter the body
-descends winds each attached leg by one millimeter ($x-y_i$ grows);
-older anchors are wound tighter, so the legs' stored forces differ even
-under identical commands.
+\emph{Loading.} Between adhesion and lift, every millimeter the body
+descends stretches each attached leg by one millimeter ($x-y_i$ grows);
+legs attached longer ago are stretched more, so the legs' stored forces
+differ even under identical commands.
 
-Iterating lock-in, winding, and rupture over the gait reproduces the
-ratchet: in the 1-D simulation the steady-state in-place loss is
+Iterating lock-in, loading, and rupture over the gait in a
+one-dimensional simulation reproduces the ratchet: the steady-state
+in-place loss is
 ${\approx}0.4\,mg/\bar{k}$ per cycle, and matching the observed
 $74$\,mm/cycle gives a whole-robot compliance scale of
 $mg/\bar{k}\approx185$\,mm. The measured single-event bounce saturates
@@ -448,13 +489,14 @@ ground \TODO{net-advance demo (T4b) will refresh this number}.
 \subsection{Four verified predictions}
 \label{sec:predictions}
 
-\emph{P1: The rupture bounce is strictly linear in a pre-laid unloading
-displacement, with slope encoding leg stiffness.} If, before venting,
-$y_j$ is walked toward $x$ by $\delta$ (Sec.~\ref{sec:method}), the
-residual tension falls by $k_j\delta$, so
+\emph{P1: The rupture bounce is strictly linear in an unloading
+displacement applied before venting, with slope encoding leg
+stiffness.} If, before venting, the foot of leg $j$ is commanded
+$\delta$ up the wall, moving $y_j$ toward $x$ by $\delta$
+(Sec.~\ref{sec:method}), the residual tension falls by $k_j\delta$, so
 $b_j(\delta) = b_j(0) - s_j\,\delta$ with
 $s_j = k_j/(K-k_j)$. A three-dose calibration experiment
-($\delta = 0/12/24$\,mm uniform; Sec.~\ref{sec:calib},
+($\delta = 0/12/24$\,mm, the same for all six legs; Sec.~\ref{sec:calib},
 Fig.~\ref{fig:linearity}) finds all six legs strictly linear (mid-dose
 residual $\le1$\,mm), with slopes $0.13$--$0.57$---a $4\times$ per-leg
 spread that directly measures the stiffness imbalance. The normalized
@@ -466,7 +508,7 @@ Sec.~\ref{sec:mechanism}) at Pearson $r=0.938$.
 lock-in implies the first lift of a just-attached leg releases only the
 force accrued since lock-in: measured first-round first-lift bounces are
 ${\approx}0$ ($-0.0$ and $+1.8$\,mm in two independent runs), rising in
-later rounds as winding accumulates.
+later rounds as loading accumulates.
 
 \emph{P3: Equilibrium is stiffness-weighted, so mean-invariant commands
 do not perfectly freeze the body.} By \eqref{eq:equilibrium}, a
@@ -498,9 +540,9 @@ residual slip is $-31$--$33\%$ across metrics
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{figures/fig_bounce_delta.pdf}
-\caption{P1 verified: rupture bounce vs.\ pre-laid displacement
-$\delta$ (round 2 of the three-dose calibration, $\delta=0/12/24$\,mm
-uniform). All six legs are strictly linear (mid-dose residual
+\caption{P1 verified: rupture bounce vs.\ unloading displacement
+$\delta$ applied before venting (round 2 of the three-dose calibration,
+$\delta=0/12/24$\,mm, the same for all legs). All six legs are strictly linear (mid-dose residual
 $\le1$\,mm); the slopes spread $4\times$ across legs (stiffness
 imbalance), and the dashed extrapolations to zero bounce define the
 calibration targets $\dstar_j=28$--$42$\,mm (triangles).}
@@ -515,22 +557,23 @@ calibration targets $\dstar_j=28$--$42$\,mm (triangles).}
 
 The remedy follows from one invariant: an attached cup does not slip
 (verified, Sec.~\ref{sec:ratchet}), so foot commands move forces, not
-feet. Before venting leg $j$, the gait engine inserts a HANDOVER phase:
-the lifting leg's foot command walks \emph{up-slope} by $\delta_j$
-(returning its stored deflection), while each supporting foot command
-walks \emph{down-slope} by $w_i\,\delta_j$ with $\sum_{i} w_i = 1$
-(absorbing the load), both laid quasi-statically at $10$\,mm/s along the
-gravity direction maintained by the engine. The six-command mean is
-invariant, so the body is commanded to stay put; the lifted leg's force
-is walked to zero; the seal then ruptures with nothing to release. The
-supports never carry more than they would carry \emph{after} the lift
-anyway---the handover only moves the transfer earlier and makes it
-lossless. Commands remain bounded: over one gait cycle a support absorbs
-${\approx}\delta$ down-slope in shares and returns $+\delta_j$ when its
-own turn comes, so offsets do not diverge (with per-leg tables the
-touchdown reset absorbs the small residual; the first-round command
-artifact this causes is bounded at ${\sim}5$\,mm and vanishes in steady
-state).
+feet. Before venting leg $j$, the gait controller inserts a HANDOVER
+phase (Fig.~\ref{fig:platform}c): the lifting leg's foot command moves
+\emph{up the wall} by $\delta_j$ (returning its stored deflection),
+while each supporting foot command moves \emph{down the wall} by
+$w_i\,\delta_j$ with $\sum_{i} w_i = 1$ (taking over the load); both
+are applied quasi-statically at $10$\,mm/s along the wall's vertical
+axis (the robot's forward axis, since it faces up the wall). The mean of
+the six foot commands is unchanged, so the body is commanded to stay
+put; the lifting leg's force is driven to zero; the seal then ruptures
+with nothing to release. The supports never carry more than they would
+carry \emph{after} the lift anyway---the handover only moves the
+transfer earlier and makes it lossless. Commands remain bounded: over
+one gait cycle each leg receives shares totalling roughly one $\delta$
+down the wall and gives back its own $\delta_j$ when its turn comes, so
+offsets do not diverge; the small per-leg mismatch is cleared when the
+foot is placed again at touchdown (this causes a ${\le}5$\,mm command
+artifact in the first round only).
 
 \subsection{Per-leg calibration: bounce is not stored energy}
 \label{sec:calib}
@@ -543,9 +586,10 @@ $\times0.8$, reduced per-cycle slip only $74\to50$\,mm at full dose.)
 The correct, scale-free procedure drops out of P1: run three doses
 ($\delta = 0$, half, full), fit the per-leg line, and extrapolate to the
 zero-bounce intercept $\dstar_j = b_j(0)/s_j$. Measured
-$\dstar = 28$--$42$\,mm per leg; we deploy $\delta_j = 0.8\,\dstar_j$
-(under-shoot discipline: a small residual bounce is benign, overshooting
-pre-loads the leg in reverse), giving the table
+$\dstar = 28$--$42$\,mm per leg; we deploy $\delta_j = 0.8\,\dstar_j$,
+deliberately under-shooting (a small residual bounce is benign, whereas
+overshooting would pre-load the leg in the opposite direction), giving
+the table
 L1/R1/L3/R3/R2/L2 $= 31/33/29/22/22/24$\,mm. Because $\dstar$ is a
 ratio of same-unit quantities, it is independent of the video scale
 calibration---the most robust number in this letter. Doses respond
@@ -556,29 +600,33 @@ not its timing.
 \subsection{Rotation-distance load-share weights}
 
 P4 fixes the apportionment: shares are assigned by \emph{rotation
-distance}---the support that just lifted (farthest from its next lift)
-receives the largest share, the next-to-lift receives none
-($0.6/0.25/0.1/0.05/0$ in rotation order). The engine re-normalizes over
-the current support set each tick and falls back to uniform shares (with
-a logged note) if the lift order ever deviates from the rotation---the
-weights assume the cyclic gait, and misapplying them would pile load
-onto one leg. Weights change the steady-state operating point, so the
+distance}, i.e.\ by how many lifts away each support is from its own
+next lift---the support that lifted most recently (farthest from its
+next lift) receives the largest share and the next leg due to lift
+receives none ($0.6/0.25/0.1/0.05/0$, listed from most recently lifted
+to next-to-lift). The controller re-normalizes the shares over the
+current support set at every control tick and falls back to uniform
+shares (with a logged note) if the lift order ever deviates from the
+rotation---the weights assume the cyclic gait, and misapplying them
+would pile load onto one leg. Weights change the steady-state operating point, so the
 $\delta$ table is calibrated \emph{under} the weight schedule
 (Sec.~\ref{sec:protocol}).
 
 \subsection{Implementation and guards}
 
-The method is ${\sim}200$ lines in the gait engine: one new phase
-between the lift decision and VENT, one per-tick displacement update, no
-new hardware, no sensing, no per-robot tuning beyond the $\delta$ table.
-Safety guards (none of which fired in any run reported here): the laying
-pauses during leak-rescue; every per-tick target is envelope-checked and
-the handover is truncated (partial unloading, logged) rather than
-driving a support out of workspace; and the $-50$\,kPa lift gate is
-re-checked after laying, since seconds have passed since the lift
-decision. Handover adds $\delta_j/10$\,mm/s $\approx2.2$--$3.3$\,s per
-step at the deployed table---the price in cycle time; the energy price
-is quantified in Sec.~\ref{sec:cost}.
+The method is ${\sim}200$ lines in the gait controller: one new phase
+between the lift decision and VENT, one per-tick displacement update,
+no new hardware, no sensing, no per-robot tuning beyond the $\delta$
+table. Safety guards (none of which fired in any run reported here):
+the displacement transfer pauses while the automatic leak-rescue
+routine re-pumps a cup whose vacuum is decaying; every per-tick foot
+target is checked against the leg's workspace envelope, and the
+handover is truncated (partial unloading, logged) rather than driving a
+support out of its workspace; and the $-50$\,kPa lift gate is
+re-checked after the transfer, since seconds have passed since the lift
+decision. The handover adds $\delta_j/(10$\,mm/s$)\approx2.2$--$3.3$\,s
+per step at the deployed table---the price in cycle time; the energy
+price is quantified in Sec.~\ref{sec:cost}.
 
 % =========================================================================
 \section{Experiments}
@@ -588,9 +636,9 @@ is quantified in Sec.~\ref{sec:cost}.
 \label{sec:protocol}
 
 \emph{Conditions.} A: baseline stepping in place; B: A $+$ zero-force
-handover with the calibrated table ($\delta_j = 0.8\dstar_j$); C: B $+$
-rotation-distance weights (table calibrated under weights). One variable
-changes per condition.
+handover with the calibrated table ($\delta_j = 0.8\dstar_j$) and
+uniform shares ($w_i = 1/5$); C: B $+$ rotation-distance weights (table
+re-calibrated under the weights). One variable changes per condition.
 
 \emph{Design.} $n{=}3$ full-protocol replications, each an independent
 mount--run--dismount of all three conditions, ordered by a $3\times3$
@@ -599,11 +647,12 @@ so that condition is decoupled from within-session order, battery
 state, and glass condition. Each run: one keypress launches a fixed
 automated sequence---$60$\,s settle, $\pm10$\,mm time-sync marker,
 then $3$ rounds $\times$ $6$ legs of lift--hover--replace with
-pressure-gated pacing (next lift waits for pump-off at $-75$\,kPa),
-$15$\,s between rounds, $30$\,s final settle---so pacing is identical
-across runs by construction. Battery $\ge7.9$\,V at each session start;
-camera untouched within a session; scale re-measured per run. All nine
-logs show zero freezes, zero envelope truncations, zero gate waits.
+pressure-gated pacing (the next lift waits until the pumps have
+switched off at $-75$\,kPa), $15$\,s between rounds, $30$\,s final
+settle---so pacing is identical across runs by construction. Battery
+$\ge7.9$\,V at each session start; camera untouched within a session;
+scale re-measured per run. All nine logs show no safety freezes or
+leak-rescue pauses, no envelope truncations, and no lift-gate waits.
 Judgment uses round 2 by protocol (round 1 contains the known ramp-up
 and command-reset artifacts; round 3 is the replicate check).
 
@@ -612,7 +661,10 @@ and command-reset artifacts; round 3 is the replicate check).
 
 \begin{table}[t]
 \caption{Main results, $n{=}3$ Latin square (mm; mean $\pm$ sample SD
-over replications). Percentages vs.\ A.}
+over replications). Percentages vs.\ A. A round is one pass through all
+six legs; rupture segment = slip accrued in the vent windows; handover
+segment = slip during the pre-vent transfer; current rise = servo bus
+current at the end of a run minus at its start.}
 \label{tab:main}
 \centering
 \footnotesize
@@ -724,18 +776,19 @@ stiff legs the two add.
 
 \subsubsection{What is the common mode? A pre-registered
 discrimination} Two hypotheses fit the $n{=}3$ data equally well,
-because laying time and laid displacement are perfectly collinear at
-fixed rate ($T \approx 0.5 + \delta_j/10$): (H1) \emph{time creep}
+because transfer time and transferred displacement are perfectly
+collinear at a fixed rate ($T \approx 0.5 + \delta_j/10$): (H1) \emph{time creep}
 ($\Delta b^{\mathrm{cm}} = \rho\,T$, loss $\propto$ window duration)
 vs.\ (H2) \emph{per-millimeter transfer loss}
 ($\Delta b^{\mathrm{cm}} = \kappa\,\delta_j$). Model selection on
 observational data alone is provably helpless here---indeed on the
 $n{=}3$ data H1 narrowly ``won'' the information criterion, a
 collinearity masquerade. The only discriminator is intervention: change
-the laying \emph{rate}. We pre-registered the experiment in the lab
+the transfer \emph{rate}. We pre-registered the experiment in the lab
 protocol with interpretation tables for both outcomes before touching
 the wall: three same-day C-vs-D$'$ pairs in alternating order, D$'$
-identical to C except laying at $20$\,mm/s (measured window
+identical to C except that the handover displacement is applied at
+$20$\,mm/s instead of $10$\,mm/s (measured handover window
 $3.18\to1.83$\,s), predictions H1: handover segment
 $39.7\to{\sim}26$\,mm (and ${\sim}12$\,mm/run of free performance);
 H2: unchanged.
@@ -743,7 +796,8 @@ H2: unchanged.
 \begin{table}[t]
 \caption{Rate discrimination (D$'$): predictions vs.\ outcome
 (handover-segment slip per run, mm), and joint model selection over
-four conditions (B/C/C$_{31}$/D$'$, $216$ cells).}
+four conditions (B, C, D$'$, and C$_{31}$, the three control runs of
+the discrimination day; $216$ leg$\times$round cells).}
 \label{tab:dprime}
 \centering
 \small
@@ -755,7 +809,7 @@ H1 time creep ($\rho T$) & $26.0$ & \multirow{2}{*}{$36.6\pm1.6$} \\
 H2 per-mm ($\kappa\delta$) & $\approx39.5$ & \\
 \midrule
 \multicolumn{3}{@{}l@{}}{Joint fit ($\Delta$AICc; lower is better):
-\textbf{M10} $\kappa\delta$: $\mathbf{0.0}$;\; M8 $\rho T$: $17.8$;}\\
+\textbf{H2} $\kappa\delta$: $\mathbf{0.0}$;\; H1 $\rho T$: $17.8$;}\\
 \multicolumn{3}{@{}l@{}}{\quad per-condition constants: $31.6$;\;
 current-based: $70.6$/$73.0$.}\\
 \bottomrule
@@ -765,21 +819,20 @@ current-based: $70.6$/$73.0$.}\\
 The outcome (Table~\ref{tab:dprime}, Fig.~\ref{fig:dprime}) is
 unambiguous: doubling the rate leaves the handover segment at
 $36.6\pm1.6$\,mm (paired D$'{-}$C $=-2.9\pm2.1$\,mm, $p=0.14$; totals
-$-1.7\pm0.7$\,mm, $-3\%$), far from H1's $26.0$; the landing point
-sits at $0.21$ on the H1--H2 axis, and the small paired difference is
-itself largely window attribution (a ${\sim}1$\,mm relaxation tail
+$-1.7\pm0.7$\,mm, $-3\%$), far from H1's $26.0$; the outcome lands only $0.21$ of the way from
+the H2 prediction toward the H1 prediction, and the small paired
+difference is itself largely window attribution (a ${\sim}1$\,mm relaxation tail
 crossing into the vent window at the faster rate; the merged-segment
 comparison is stable). Aligning every handover on its vent instant
 (Fig.~\ref{fig:dprime}) shows the mechanism directly: the D$'$ ramp is
 twice as steep and the \emph{plateau is identical} (L1
-$7.9$--$8.8$\,mm across all six runs)---the descent tracks laid
-millimeters quasi-instantaneously and does not accumulate with window
-time. Sanity checks confirm no new physics entered at $20$\,mm/s:
+$7.9$--$8.8$\,mm across all six runs)---the descent tracks the millimeters transferred
+quasi-instantaneously and does not accumulate with window time. Sanity checks confirm no new physics entered at $20$\,mm/s:
 per-leg rupture bounces, transfer ratio ($4.30/4.42$\,mm), and current
 increments are unchanged between conditions.
 
 \subsubsection{The transfer-loss law and its lever}
-The joint four-condition fit (M10) settles the common mode as
+The joint four-condition fit (H2) settles the common mode as
 \begin{equation}
 \Delta b^{\mathrm{cm}}_{j,r} \;=\; \kappa\,\delta_j\,
 \bigl(1 + 0.20\,(r{-}1)\bigr),
@@ -794,10 +847,10 @@ $\kappa$ by $44\%$}. Mechanistically the law points to a quasi-static
 per-millimeter loss at the cup/leg-chain interface during load transfer
 (micro-slip or structural nonlinearity)---categorically not time creep,
 consistent with the zero-drift dwell control. The practical reading:
-laying speed buys nothing (the rate parameter is kept only as a
-validated-harmless option); share allocation is the remaining lever;
-and the residual handover segment ${\sim}37$--$40$\,mm is the intrinsic
-price of pre-laying $\sum_j\delta_j = 161$\,mm per round at the current
+the speed of the displacement transfer buys nothing; share allocation
+is the remaining lever; and the residual handover segment
+${\sim}37$--$40$\,mm is the intrinsic price of transferring
+$\sum_j\delta_j = 161$\,mm per round at the current
 $\kappa$ ($\kappa\sum\delta\times3 \approx 26$\,mm $+$ redistribution
 ${\sim}8$ $+$ round growth).
 
@@ -806,10 +859,10 @@ ${\sim}8$ $+$ round growth).
 \includegraphics[width=\linewidth]{figures/dprime_profile.png}
 \caption{The discrimination result, seen directly: handover profiles
 of all six runs aligned on the vent command ($t{=}0$), per-leg means
-over rounds (left L1, right R1). At double laying rate (D$'$, solid)
+over rounds (left L1, right R1). At double transfer rate (D$'$, solid)
 the descent ramp is twice as steep as the control (C, dashed) but ends
-at the \emph{same} plateau---the descent tracks laid millimeters, not
-elapsed time. \TODO{restyle to match the other figures (fonts/colors);
+at the \emph{same} plateau---the descent tracks the millimeters
+transferred, not elapsed time. \TODO{restyle to match the other figures (fonts/colors);
 currently the analysis-report rendering}.}
 \label{fig:dprime}
 \end{figure}
@@ -821,7 +874,7 @@ The handover converts an impulsive loss into sustained servo load:
 current increase over a run rises from $+0.97\pm0.02$\,A (A) to
 $+2.40\pm0.08$\,A (B), which the weights claw back to $+1.85\pm0.08$\,A
 (C, $-23\%$ vs.\ B---direction and roughly two-thirds of the modeled
-$-32\%$ stored-energy dilution). Cycle time grows by the laying
+$-32\%$ stored-energy dilution). Cycle time grows by the transfer
 duration ($2.2$--$3.3$\,s per step at $10$\,mm/s). Both costs are the
 explicit price of zero sensing; Sec.~\ref{sec:discussion} argues the
 trade.
@@ -830,13 +883,13 @@ trade.
 \label{sec:deviations}
 
 We record all deviations. (i)~One run's video started late, cropping
-the time-sync marker; the initial rescue (periodic-comb step
-regression) locked one tooth off and mis-attributed per-leg slip; the
+the time-sync marker; the initial fallback synchronization (regression on the periodic
+step pattern) locked one period off and mis-attributed per-leg slip; the
 error was caught by physical implausibility of the per-leg pattern,
 re-synchronized by a crop-tolerant marker fit ($R^2=0.99$, amplitude
 independently matching the other eight markers), and the corrected run
-agrees with all cross-checks. Lesson embedded in the pipeline: check
-comb periodicity before step-based sync; the $60$\,s pre-run settle is
+agrees with all cross-checks. Lesson embedded in the pipeline: verify the step periodicity before
+using step-based synchronization; the $60$\,s pre-run settle is
 now built into the launch sequence. (ii)~The camera moved between two
 sessions (never within one); metric scale is per-run by design, and
 in-run drift is compensated by the static reference
@@ -864,9 +917,9 @@ combination---compliant support chains, rupture-type detachment,
 position-domain actuation---recurs across the platform class
 (Sec.~\ref{sec:related}). What the analysis adds beyond the fix is a
 design rule: compensability is bounded by the support set's stiffness
-profile. The redistribution term \eqref{eq:redistribution} vanishes
-under no weighting for the stiffest leg (L1's residual coefficient is
-$0.019$ but cannot reach zero)---so a designer who wants software-only
+profile. No choice of weights can zero the redistribution term
+\eqref{eq:redistribution} for the stiffest leg (L1's coefficient is
+bounded below at $0.019$)---so a designer who wants software-only
 detachment management should bound the \emph{spread} of leg stiffnesses,
 not just their level. Conversely, because the remedy is a
 ${\sim}200$-line, zero-hardware retrofit, it is deployable on the
@@ -909,10 +962,11 @@ which is why the gecko lineage never needed this letter. Our evidence
 is one platform, one surface, an in-place proxy task, three rounds, and
 $n{=}3$: the effects are huge and internally consistent, but absolute
 stiffness (a hang-weight calibration), net-advance climbing with the
-handover engaged, longer runs (round-growth factors $\gamma,\beta'$
-unsaturated at $r{=}3$), and the micro-mechanism of $\kappa$
-(share-concentration vs.\ cup freshness, separable by a
-share-perturbation experiment) remain open
+handover engaged, longer runs (the round-growth factors $\gamma$ in \eqref{eq:fit} and
+$0.20$ in \eqref{eq:kappa} have not saturated at $r{=}3$), and the
+micro-mechanism of $\kappa$ (whether it depends on how concentrated the
+shares are or on how recently the receiving cup attached, separable by
+a share-perturbation experiment) remain open
 \TODO{fold in T4a/T4b results when available}. The $\delta$ table is an
 open-loop calibration: payload or posture changes outside the
 calibrated regime require re-running the three-dose procedure (one
@@ -925,8 +979,10 @@ Every discrete-gait suction climber pays a tax at the moment its seals
 break. On a compliant, position-controlled hexapod we measured the tax
 precisely---$93\%$ of a $64$\,mm/cycle in-place descent concentrated
 into post-rupture milliseconds---traced it to elastic energy stored by
-the robot's own weight in its leg chains, and showed that the intuitive
-remedy (vent slower) cannot work even in principle. Because attached
+the robot's own weight in its leg chains, and showed why the intuitive
+remedy---venting more slowly---cannot help: the force is released in one
+step when the lip peels, not gradually as the pressure decays. Because
+attached
 feet cannot slip, the cure fits in the command stream: return each
 leg's stored deflection before venting it, hand the load to the
 remaining legs under mean-invariant, rotation-weighted shares, and the

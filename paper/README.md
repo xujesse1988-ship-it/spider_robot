@@ -1,7 +1,8 @@
 # RA-L 论文草稿(T6)
 
-状态:**英文全文初稿 v0(2026-08-31)**——全部章节成文、核心数字已嵌入,
-待补图/待办见下。总纲 `docs/PAPER-PLAN.md`;本目录只放论文本身。
+状态:**英文全文初稿 v0(2026-08-31)+ 09-01 读者视角修订**(面向没参与造机器人
+的读者:腿命名/术语/隐喻全部落地,图 1 示意图已画,摘要删去"慢放气"跳跃句;
+中文版同步)——全部章节成文、核心数字已嵌入,待补图/待办见下。总纲 `docs/PAPER-PLAN.md`;本目录只放论文本身。
 
 ## 文件
 
@@ -14,7 +15,8 @@
   Overleaf 上传时选 XeLaTeX 编译器
 - `refs.bib` — 45 条引文(源自 `docs/RELATED-WORK.md` 判级表;
   条目内 `TODO(verify)` = 投稿前须人工核全文的字段,总清单在 RELATED-WORK §7)
-- `figures/` — 插图(生成脚本与来源见各文件头/下表)
+- `figures/` — 插图(生成脚本与来源见各文件头/下表;`make_fig1.py` 生成图 1
+  示意图 (a)(b)(c),纯几何不依赖实验数据;`make_figs.py` 生成图 2–5)
 - `references/` — 参考文献 PDF,**文件名=refs.bib 引用键**(现有
   nadan2024loris.pdf=LORIS ICRA 2024,CMU 作者公开版——写作范本兼
   贡献③划界近邻;写作范本首选另见 kim2008smooth=Stickybot T-RO 2008,
@@ -27,7 +29,9 @@
 1. **Overleaf(推荐)**:上传 `main.tex` + `refs.bib` + `figures/`,
    编译器选 pdfLaTeX,IEEEtran 类 Overleaf 自带;
 2. 本机装 `texlive-publishers`(含 IEEEtran)后:
-   `pdflatex main && bibtex main && pdflatex main && pdflatex main`。
+   `pdflatex main && bibtex main && pdflatex main && pdflatex main`;
+3. **本机实际在用的路**:`~/.local/bin/tectonic main.tex`(单命令,自动多遍+bibtex;
+   中文版 `tectonic main_zh.tex`,XeTeX 自动选中)。
 
 ## 数字溯源(写作时改数必查源)
 
@@ -35,7 +39,7 @@
 |---|---|---|
 | 摘要/主表 Table I | −43%/−61%,−82%/−88%,p=0.0013/0.00092/0.0022 | html/handover-ab-n3-20260826.html §1 |
 | 头条口径 | 93%(n=3 A 组 vent 段 172.9/185.5);83%=08-20 首次发现口径 | 同上 + html/vent-snap-20260820.html(口径差异=分段窗定义,正文已注) |
-| 破裂剖面 | 0.4s 泄压 <0.15mm;33~67ms 完成;L1 过冲 23.8→21.5 | html/vent-snap-20260820.html §4 |
+| 破裂剖面 | 0.4s 泄压 <0.15mm;33~67ms 完成;正文与图 2b 同一事件:L1 过冲 26.7→21.5(0825/A 重复#1,`ab_quant --zoom`);08-20 首次发现事件为 23.8→21.5(正文不再引用,避免两套数字) | html/vent-snap-20260820.html §4;PAPER-PLAN T3 |
 | δ 标定 | 斜率 −0.57~−0.13;δ* 28~42;表 31/33/29/22/22/24;66→50→39mm | html/handover-delta-calib-20260824.html |
 | 传递比 | 42.2±3.0%(9 标记/3 天/3 机位) | n=3 报告发现 2 |
 | 模型拟合 | RMSE 0.85/CV 0.99;两路 k̂ r=0.938;B 60.2=6.7+55.5;C 39.7=7.7+30.0 | html/stiffness-fit-20260826.html |
@@ -48,7 +52,7 @@
 
 1. **作者/单位/邮箱/资助**(main.tex 头部)。
 2. **整机称重**——Sec III-A 的 ~2.7kg 是估计,P4-GUIDE 验收表本就欠着这项。
-3. **图**:Fig.1 平台照片+交接示意(要拍/画);Fig.2 阶梯轨迹+破裂剖面
+3. **图**:Fig.1 示意图 (a)(b)(c) 已由 `make_fig1.py` 生成,**真机照片 (d) 待拍**;Fig.2 阶梯轨迹+破裂剖面
    (T3,`ab_quant --zoom`);Fig.3 弹跳-δ 线性;Fig.4 分解瀑布+逐腿弹跳;
    Fig.5 D′ 对齐剖面。figures/ 里已生成的见文件头注释,其余 `\TODO`。
 4. **vent 窗定义核对**(Sec III-B 的 −1s/+0.4s 界,从 ab_quant 源码确认后定稿)。
@@ -58,10 +62,14 @@
 7. **开源数据包**:日志/traj/report/188 张核对图/管线脚本打包,定托管处与许可证。
 8. **refs.bib 逐条核全文**(`TODO(verify)` 字段 + RELATED-WORK §7 清单:
    Kumar&Waldron 1990 措辞、FTFOF 开/闭环细节、Ota 2006 正文、CNKI 硕博)。
-9. **篇幅**:RA-L 8 页含引文;当前草稿约 9~10 页量级,定稿时砍
+9. **篇幅**:RA-L 8 页含引文;当前英文稿 10 页(09-01 加图 1 + 术语解释后从 9 页涨到 10),定稿时砍
    (候选:Related Work 六段压四段、P1-P4 合并表述、偏差清单压缩)。
 10. 术语统一自查:vent-snap ratchet / zero-force handover / handover segment /
     rupture segment / transfer ratio / per-mm transfer loss(κ)。
+    09-01 已统一:"laid/laying"→transfer(ed);"up/down-slope"→up/down the wall;
+    "winding"→loading;"gait engine"→gait controller;M10/M8→H2/H1;
+    定义处:leg names(III-A)、round/rotation(III-C)、body lean(III-B)、
+    discovery run(I)、rupture-segment slip(III-B)、leak-rescue(V-D)。
 
 ## 措辞红线(T5 定界,动 Related Work/贡献段前必读)
 

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>机器人视觉追踪靶标 A4 打印页 (1:1 物理比例)</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+  @media print {
+    body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+    }
+    .no-print {
+      display: none;
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    color: #111;
+    background: #f8f9fa;
+    margin: 0 auto;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  .page {
+    background: #fff;
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 12mm;
+    box-sizing: border-box;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+  @media print {
+    .page {
+      box-shadow: none;
+      padding: 0;
+      width: 100%;
+      min-height: auto;
+    }
+  }
+  .header {
+    border-bottom: 2px solid #222;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+  .header h1 {
+    font-size: 16pt;
+    margin: 0 0 4px 0;
+  }
+  .header p {
+    font-size: 9pt;
+    color: #555;
+    margin: 0;
+  }
+  .instructions {
+    background: #f0f4f8;
+    border-left: 4px solid #0066cc;
+    padding: 8px 12px;
+    font-size: 8.5pt;
+    margin-bottom: 15px;
+    line-height: 1.4;
+  }
+  .calibration-bar-container {
+    margin-bottom: 18px;
+    padding: 8px;
+    background: #fff;
+    border: 1px dashed #999;
+  }
+  .section-title {
+    font-size: 11pt;
+    font-weight: bold;
+    border-left: 3px solid #222;
+    padding-left: 6px;
+    margin: 14px 0 10px 0;
+    color: #111;
+  }
+  .grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .target-card {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    text-align: center;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .target-card .label {
+    font-size: 8pt;
+    font-weight: 600;
+    color: #333;
+    margin-top: 4px;
+  }
+  .target-card .dim {
+    font-size: 7.5pt;
+    color: #666;
+  }
+  .cut-guide {
+    stroke: #bbb;
+    stroke-width: 0.3;
+    stroke-dasharray: 2, 2;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="header">
+    <h1>爬壁机器人 PCB 视觉追踪高精度靶标 (1:1 打印页)</h1>
+    <p>用于 NCC 模板匹配与亚像素追踪 · 提升 body_score · 抵抗平面微旋转</p>
+  </div>
+
+  <div class="instructions no-print">
+    <b>🖨️ 打印设置指南（极其重要）：</b><br>
+    1. 在浏览器中打开本文件，按快捷键 <code>Cmd + P</code> (Mac) 或 <code>Ctrl + P</code> (Windows) 调出打印窗口。<br>
+    2. <b>缩放比例（Scale）务必选择 “100%” 或 “实际大小”（Actual Size）</b>，严禁勾选“适合页面大小”或“适应纸张”！<br>
+    3. 打印完成后，请先用直尺测量下方的 <b>100 mm 校验标尺</b>。若正好等于 10.0 cm，证明打印出的靶标尺寸 100% 精确。<br>
+    4. 剪裁一个尺寸适中的靶标，用双面胶平整贴于 PCB 表面。<b>请勿在正面贴透明胶带</b>以防反光。
+  </div>
+
+  <!-- 100mm 标尺校验区 -->
+  <div class="calibration-bar-container">
+    <div style="font-size: 8.5pt; font-weight: bold; margin-bottom: 4px;">📏 100 mm 打印比例校验标尺（打印后请用直尺核对，确保未被缩放）：</div>
+    <svg width="105mm" height="15mm" viewBox="0 0 105 15">
+      <!-- 100mm 主线 -->
+      <rect x="2" y="5" width="100" height="2" fill="#111" />
+      <!-- 刻度 -->
+      <line x1="2" y1="2" x2="2" y2="12" stroke="#111" stroke-width="0.8" />
+      <line x1="12" y1="3" x2="12" y2="9" stroke="#111" stroke-width="0.4" />
+      <line x1="22" y1="3" x2="22" y2="9" stroke="#111" stroke-width="0.4" />
+      <line x1="32" y1="3" x2="32" y2="9" stroke="#111" stroke-width="0.4" />
+      <line x1="42" y1="3" x2="42" y2="9" stroke="#111" stroke-width="0.4" />
+      <line x1="52" y1="2" x2="52" y2="11" stroke="#111" stroke-width="0.6" />
+      <line x1="62" y1="3" x2="62" y2="9" stroke="#111" stroke-width="0.4" />
+      <line x1="72" y1="3" x2="72" y2="9" stroke="#111" stroke-width="0.4" />
+      <line x1="82" y1="3" x2="82" y2="9" stroke="#111" stroke-width="0.4" />
+      <line x1="92" y1="3" x2="92" y2="9" stroke="#111" stroke-width="0.4" />
+      <line x1="102" y1="2" x2="102" y2="12" stroke="#111" stroke-width="0.8" />
+      <text x="2" y="14" font-size="2.5" font-family="sans-serif" text-anchor="middle">0</text>
+      <text x="52" y="14" font-size="2.5" font-family="sans-serif" text-anchor="middle">50 mm</text>
+      <text x="102" y="14" font-size="2.5" font-family="sans-serif" text-anchor="middle">100 mm</text>
+    </svg>
+  </div>
+
+  <!-- 样式 A: 经典黑白同心圆（360度各向同性，最强抗旋转） -->
+  <div class="section-title">样式 A：经典黑白同心圆 (Bullseye Target) —— 360° 完全各向同性，彻底消除旋转影响</div>
+  <div class="grid">
+    <!-- 25mm -->
+    <div class="target-card">
+      <svg width="32mm" height="32mm" viewBox="0 0 32 32">
+        <rect x="0.5" y="0.5" width="31" height="31" fill="none" class="cut-guide" />
+        <!-- 外黑圆 R=12.5 (D=25) -->
+        <circle cx="16" cy="16" r="12.5" fill="#111" />
+        <!-- 白环 R=9.375 -->
+        <circle cx="16" cy="16" r="9.375" fill="#fff" />
+        <!-- 黑环 R=6.25 -->
+        <circle cx="16" cy="16" r="6.25" fill="#111" />
+        <!-- 白环 R=3.125 -->
+        <circle cx="16" cy="16" r="3.125" fill="#fff" />
+        <!-- 中心黑点 R=1.2 -->
+        <circle cx="16" cy="16" r="1.2" fill="#111" />
+      </svg>
+      <div class="label">同心圆</div>
+      <div class="dim">Ø 25.0 mm</div>
+    </div>
+
+    <!-- 20mm -->
+    <div class="target-card">
+      <svg width="26mm" height="26mm" viewBox="0 0 26 26">
+        <rect x="0.5" y="0.5" width="25" height="25" fill="none" class="cut-guide" />
+        <!-- D=20mm -->
+        <circle cx="13" cy="13" r="10.0" fill="#111" />
+        <circle cx="13" cy="13" r="7.5" fill="#fff" />
+        <circle cx="13" cy="13" r="5.0" fill="#111" />
+        <circle cx="13" cy="13" r="2.5" fill="#fff" />
+        <circle cx="13" cy="13" r="1.0" fill="#111" />
+      </svg>
+      <div class="label">同心圆 (推荐)</div>
+      <div class="dim">Ø 20.0 mm</div>
+    </div>
+
+    <!-- 16mm -->
+    <div class="target-card">
+      <svg width="22mm" height="22mm" viewBox="0 0 22 22">
+        <rect x="0.5" y="0.5" width="21" height="21" fill="none" class="cut-guide" />
+        <!-- D=16mm -->
+        <circle cx="11" cy="11" r="8.0" fill="#111" />
+        <circle cx="11" cy="11" r="6.0" fill="#fff" />
+        <circle cx="11" cy="11" r="4.0" fill="#111" />
+        <circle cx="11" cy="11" r="2.0" fill="#fff" />
+        <circle cx="11" cy="11" r="0.8" fill="#111" />
+      </svg>
+      <div class="label">同心圆</div>
+      <div class="dim">Ø 16.0 mm</div>
+    </div>
+
+    <!-- 12mm -->
+    <div class="target-card">
+      <svg width="18mm" height="18mm" viewBox="0 0 18 18">
+        <rect x="0.5" y="0.5" width="17" height="17" fill="none" class="cut-guide" />
+        <!-- D=12mm -->
+        <circle cx="9" cy="9" r="6.0" fill="#111" />
+        <circle cx="9" cy="9" r="4.5" fill="#fff" />
+        <circle cx="9" cy="9" r="3.0" fill="#111" />
+        <circle cx="9" cy="9" r="1.5" fill="#fff" />
+        <circle cx="9" cy="9" r="0.6" fill="#111" />
+      </svg>
+      <div class="label">同心圆 (小巧)</div>
+      <div class="dim">Ø 12.0 mm</div>
+    </div>
+
+    <!-- 10mm -->
+    <div class="target-card">
+      <svg width="15mm" height="15mm" viewBox="0 0 15 15">
+        <rect x="0.5" y="0.5" width="14" height="14" fill="none" class="cut-guide" />
+        <!-- D=10mm -->
+        <circle cx="7.5" cy="7.5" r="5.0" fill="#111" />
+        <circle cx="7.5" cy="7.5" r="3.5" fill="#fff" />
+        <circle cx="7.5" cy="7.5" r="2.0" fill="#111" />
+        <circle cx="7.5" cy="7.5" r="0.8" fill="#fff" />
+      </svg>
+      <div class="label">同心圆 (微型)</div>
+      <div class="dim">Ø 10.0 mm</div>
+    </div>
+  </div>
+
+  <!-- 样式 B: 四象限黑白圆 (Crash-Test / Photogrammetry Target) —— 尖锐中心交点 + 4重对称 -->
+  <div class="section-title">样式 B：黑白四象限十字靶标 (Quadrant Target) —— 尖锐角点定位，高对比度梯度</div>
+  <div class="grid">
+    <!-- 25mm -->
+    <div class="target-card">
+      <svg width="32mm" height="32mm" viewBox="0 0 32 32">
+        <rect x="0.5" y="0.5" width="31" height="31" fill="none" class="cut-guide" />
+        <circle cx="16" cy="16" r="12.5" fill="#fff" stroke="#111" stroke-width="0.3" />
+        <path d="M 16 16 L 3.5 16 A 12.5 12.5 0 0 1 16 3.5 Z" fill="#111" />
+        <path d="M 16 16 L 28.5 16 A 12.5 12.5 0 0 1 16 28.5 Z" fill="#111" />
+        <circle cx="16" cy="16" r="12.5" fill="none" stroke="#111" stroke-width="0.5" />
+      </svg>
+      <div class="label">四象限靶标</div>
+      <div class="dim">Ø 25.0 mm</div>
+    </div>
+
+    <!-- 20mm -->
+    <div class="target-card">
+      <svg width="26mm" height="26mm" viewBox="0 0 26 26">
+        <rect x="0.5" y="0.5" width="25" height="25" fill="none" class="cut-guide" />
+        <circle cx="13" cy="13" r="10.0" fill="#fff" stroke="#111" stroke-width="0.3" />
+        <path d="M 13 13 L 3.0 13 A 10.0 10.0 0 0 1 13 3.0 Z" fill="#111" />
+        <path d="M 13 13 L 23.0 13 A 10.0 10.0 0 0 1 13 23.0 Z" fill="#111" />
+        <circle cx="13" cy="13" r="10.0" fill="none" stroke="#111" stroke-width="0.5" />
+      </svg>
+      <div class="label">四象限 (推荐)</div>
+      <div class="dim">Ø 20.0 mm</div>
+    </div>
+
+    <!-- 16mm -->
+    <div class="target-card">
+      <svg width="22mm" height="22mm" viewBox="0 0 22 22">
+        <rect x="0.5" y="0.5" width="21" height="21" fill="none" class="cut-guide" />
+        <circle cx="11" cy="11" r="8.0" fill="#fff" stroke="#111" stroke-width="0.3" />
+        <path d="M 11 11 L 3.0 11 A 8.0 8.0 0 0 1 11 3.0 Z" fill="#111" />
+        <path d="M 11 11 L 19.0 11 A 8.0 8.0 0 0 1 11 19.0 Z" fill="#111" />
+        <circle cx="11" cy="11" r="8.0" fill="none" stroke="#111" stroke-width="0.4" />
+      </svg>
+      <div class="label">四象限</div>
+      <div class="dim">Ø 16.0 mm</div>
+    </div>
+
+    <!-- 12mm -->
+    <div class="target-card">
+      <svg width="18mm" height="18mm" viewBox="0 0 18 18">
+        <rect x="0.5" y="0.5" width="17" height="17" fill="none" class="cut-guide" />
+        <circle cx="9" cy="9" r="6.0" fill="#fff" stroke="#111" stroke-width="0.3" />
+        <path d="M 9 9 L 3.0 9 A 6.0 6.0 0 0 1 9 3.0 Z" fill="#111" />
+        <path d="M 9 9 L 15.0 9 A 6.0 6.0 0 0 1 9 15.0 Z" fill="#111" />
+        <circle cx="9" cy="9" r="6.0" fill="none" stroke="#111" stroke-width="0.4" />
+      </svg>
+      <div class="label">四象限 (小巧)</div>
+      <div class="dim">Ø 12.0 mm</div>
+    </div>
+
+    <!-- 10mm -->
+    <div class="target-card">
+      <svg width="15mm" height="15mm" viewBox="0 0 15 15">
+        <rect x="0.5" y="0.5" width="14" height="14" fill="none" class="cut-guide" />
+        <circle cx="7.5" cy="7.5" r="5.0" fill="#fff" stroke="#111" stroke-width="0.3" />
+        <path d="M 7.5 7.5 L 2.5 7.5 A 5.0 5.0 0 0 1 7.5 2.5 Z" fill="#111" />
+        <path d="M 7.5 7.5 L 12.5 7.5 A 5.0 5.0 0 0 1 7.5 12.5 Z" fill="#111" />
+        <circle cx="7.5" cy="7.5" r="5.0" fill="none" stroke="#111" stroke-width="0.3" />
+      </svg>
+      <div class="label">四象限 (微型)</div>
+      <div class="dim">Ø 10.0 mm</div>
+    </div>
+  </div>
+
+  <!-- 样式 C: 复合十字同心圆靶标 -->
+  <div class="section-title">样式 C：复合十字同心圆靶标 (Crosshair Bullseye) —— 兼顾多尺度纹理与中心精确定位</div>
+  <div class="grid">
+    <!-- 24mm -->
+    <div class="target-card">
+      <svg width="30mm" height="30mm" viewBox="0 0 30 30">
+        <rect x="0.5" y="0.5" width="29" height="29" fill="none" class="cut-guide" />
+        <circle cx="15" cy="15" r="12.0" fill="#111" />
+        <circle cx="15" cy="15" r="9.0" fill="#fff" />
+        <circle cx="15" cy="15" r="6.0" fill="#111" />
+        <circle cx="15" cy="15" r="3.0" fill="#fff" />
+        <circle cx="15" cy="15" r="1.2" fill="#111" />
+        <!-- 十字延伸线 -->
+        <line x1="1" y1="15" x2="29" y2="15" stroke="#fff" stroke-width="0.6" />
+        <line x1="15" y1="1" x2="15" y2="29" stroke="#fff" stroke-width="0.6" />
+        <line x1="9" y1="15" x2="21" y2="15" stroke="#111" stroke-width="0.6" />
+        <line x1="15" y1="9" x2="15" y2="21" stroke="#111" stroke-width="0.6" />
+      </svg>
+      <div class="label">复合十字圆</div>
+      <div class="dim">Ø 24.0 mm</div>
+    </div>
+
+    <!-- 20mm -->
+    <div class="target-card">
+      <svg width="26mm" height="26mm" viewBox="0 0 26 26">
+        <rect x="0.5" y="0.5" width="25" height="25" fill="none" class="cut-guide" />
+        <circle cx="13" cy="13" r="10.0" fill="#111" />
+        <circle cx="13" cy="13" r="7.5" fill="#fff" />
+        <circle cx="13" cy="13" r="5.0" fill="#111" />
+        <circle cx="13" cy="13" r="2.5" fill="#fff" />
+        <circle cx="13" cy="13" r="1.0" fill="#111" />
+        <line x1="1" y1="13" x2="25" y2="13" stroke="#fff" stroke-width="0.5" />
+        <line x1="13" y1="1" x2="13" y2="25" stroke="#fff" stroke-width="0.5" />
+        <line x1="8" y1="13" x2="18" y2="13" stroke="#111" stroke-width="0.5" />
+        <line x1="13" y1="8" x2="13" y2="18" stroke="#111" stroke-width="0.5" />
+      </svg>
+      <div class="label">复合十字圆</div>
+      <div class="dim">Ø 20.0 mm</div>
+    </div>
+
+    <!-- 16mm -->
+    <div class="target-card">
+      <svg width="22mm" height="22mm" viewBox="0 0 22 22">
+        <rect x="0.5" y="0.5" width="21" height="21" fill="none" class="cut-guide" />
+        <circle cx="11" cy="11" r="8.0" fill="#111" />
+        <circle cx="11" cy="11" r="6.0" fill="#fff" />
+        <circle cx="11" cy="11" r="4.0" fill="#111" />
+        <circle cx="11" cy="11" r="2.0" fill="#fff" />
+        <circle cx="11" cy="11" r="0.8" fill="#111" />
+        <line x1="1" y1="11" x2="21" y2="11" stroke="#fff" stroke-width="0.4" />
+        <line x1="11" y1="1" x2="11" y2="21" stroke="#fff" stroke-width="0.4" />
+      </svg>
+      <div class="label">复合十字圆</div>
+      <div class="dim">Ø 16.0 mm</div>
+    </div>
+  </div>
+
+  <!-- 备用多张组（便于一次性剪下备用） -->
+  <div class="section-title">常用规格备用组合 (Ø 20mm & Ø 16mm，直接剪裁使用)</div>
+  <div class="grid">
+    <div class="target-card">
+      <svg width="26mm" height="26mm" viewBox="0 0 26 26">
+        <rect x="0.5" y="0.5" width="25" height="25" fill="none" class="cut-guide" />
+        <circle cx="13" cy="13" r="10.0" fill="#111" />
+        <circle cx="13" cy="13" r="7.5" fill="#fff" />
+        <circle cx="13" cy="13" r="5.0" fill="#111" />
+        <circle cx="13" cy="13" r="2.5" fill="#fff" />
+        <circle cx="13" cy="13" r="1.0" fill="#111" />
+      </svg>
+      <div class="dim">备用 A-20mm</div>
+    </div>
+    <div class="target-card">
+      <svg width="26mm" height="26mm" viewBox="0 0 26 26">
+        <rect x="0.5" y="0.5" width="25" height="25" fill="none" class="cut-guide" />
+        <circle cx="13" cy="13" r="10.0" fill="#111" />
+        <circle cx="13" cy="13" r="7.5" fill="#fff" />
+        <circle cx="13" cy="13" r="5.0" fill="#111" />
+        <circle cx="13" cy="13" r="2.5" fill="#fff" />
+        <circle cx="13" cy="13" r="1.0" fill="#111" />
+      </svg>
+      <div class="dim">备用 A-20mm</div>
+    </div>
+    <div class="target-card">
+      <svg width="26mm" height="26mm" viewBox="0 0 26 26">
+        <rect x="0.5" y="0.5" width="25" height="25" fill="none" class="cut-guide" />
+        <circle cx="13" cy="13" r="10.0" fill="#fff" stroke="#111" stroke-width="0.3" />
+        <path d="M 13 13 L 3.0 13 A 10.0 10.0 0 0 1 13 3.0 Z" fill="#111" />
+        <path d="M 13 13 L 23.0 13 A 10.0 10.0 0 0 1 13 23.0 Z" fill="#111" />
+        <circle cx="13" cy="13" r="10.0" fill="none" stroke="#111" stroke-width="0.5" />
+      </svg>
+      <div class="dim">备用 B-20mm</div>
+    </div>
+    <div class="target-card">
+      <svg width="26mm" height="26mm" viewBox="0 0 26 26">
+        <rect x="0.5" y="0.5" width="25" height="25" fill="none" class="cut-guide" />
+        <circle cx="13" cy="13" r="10.0" fill="#fff" stroke="#111" stroke-width="0.3" />
+        <path d="M 13 13 L 3.0 13 A 10.0 10.0 0 0 1 13 3.0 Z" fill="#111" />
+        <path d="M 13 13 L 23.0 13 A 10.0 10.0 0 0 1 13 23.0 Z" fill="#111" />
+        <circle cx="13" cy="13" r="10.0" fill="none" stroke="#111" stroke-width="0.5" />
+      </svg>
+      <div class="dim">备用 B-20mm</div>
+    </div>
+  </div>
+
+  <div style="font-size: 8pt; color: #888; text-align: center; margin-top: 15px; border-top: 1px solid #eee; padding-top: 6px;">
+    Spider Robot Visual Tracking Fiducial Sheet · Generated for <code>ab_quant.py</code> NCC Tracking · 100% Metric Scale
+  </div>
+</div>
+
+</body>
+</html>

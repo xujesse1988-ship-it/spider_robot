@@ -127,6 +127,19 @@ class Speaker(threading.Thread):
             out.append(cur)
         return out
 
+    def cancel(self) -> None:
+        """立即闭嘴：清掉还没播的，掐断正在播的（急停用）。"""
+        try:
+            while True:
+                self._q.get_nowait()
+        except queue.Empty:
+            pass
+        player_stop = getattr(self.player, "stop", None)
+        if player_stop:
+            player_stop()
+        if not self._busy.is_set():
+            self._idle.set()
+
     def stop(self) -> None:
         self._stop = True
         self._q.put(("quit", "", False, False))

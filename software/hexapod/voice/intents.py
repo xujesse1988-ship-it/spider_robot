@@ -29,6 +29,12 @@ _STEP_RE = re.compile(r"(\d+|[一二两俩三四五六七八九十]+|几)步")
 
 WAKE_WORDS = ("小蜘蛛", "蜘蛛同学")   # 与 keywords_raw.txt 保持一致
 STOP_WORDS = ("停", "别动", "站住", "不要动", "别走", "别跑", "定住", "stop")
+INTRO_WORDS = ("自我介绍", "介绍一下", "介绍自己", "你是谁", "你叫什么")
+# 长回话（≈15s）。措辞注意：不能含 KWS 急停词（停下/停止/停下来/别动），
+# 否则机器人念到那儿自己触发急停；含"小蜘蛛"没事——引擎在说话期间忽略唤醒。
+INTRO_REPLY = ("我是小蜘蛛，一台会爬墙的六足机器人。十八个舵机管走路，"
+               "六个真空吸盘管吸墙。你可以让我前进、后退、平移、转向，"
+               "也可以问我电压。想让我停，喊一声就行。")
 CONFIRM_WORDS = {"确定", "确认", "是的", "是", "对", "对的", "好的", "好", "可以",
                  "嗯", "没错", "yes", "ok"}
 CANCEL_WORDS = {"取消", "不用", "不用了", "算了", "不要", "不", "no"}
@@ -50,8 +56,8 @@ _BACK = re.compile(r"后退|倒退|向后|往后|朝后|退后|倒车|back|退")
 
 @dataclass
 class Intent:
-    kind: str                     # stop/walk/stand/crouch/gait/status/greet/exit/
-                                  # confirm/cancel/unsupported/ignore/unknown
+    kind: str                     # stop/walk/stand/crouch/gait/status/greet/intro/
+                                  # exit/confirm/cancel/unsupported/ignore/unknown
     text: str = ""                # 归一化后的原文
     vx: float = 0.0               # 方向 ±1（前+）
     vy: float = 0.0               # 方向 ±1（左+）
@@ -154,6 +160,10 @@ def parse(text: str) -> Intent:
         return Intent("gait", t, gait="tripod", reply="换三角步态")
     if "波浪" in t or "wave" in t:
         return Intent("gait", t, gait="wave", reply="换波浪步态")
+    if any(w in t for w in INTRO_WORDS):
+        # 长回话，顺带是"说话期间急停"的试金石（放在步态之后，
+        # "介绍一下三角步态"仍归步态）
+        return Intent("intro", t, reply=INTRO_REPLY)
 
     # 移动：转向 > 平移 > 前后
     if _TURN_L.search(t):

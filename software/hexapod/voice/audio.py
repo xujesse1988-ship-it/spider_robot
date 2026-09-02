@@ -159,11 +159,13 @@ class WavSource:
 
 
 class AplayPlayer:
-    """aplay 阻塞播放；tmp_dir 放临时 wav（默认系统临时目录）。"""
+    """aplay 阻塞播放；tmp_dir 放临时 wav（默认系统临时目录）。
+    stop() 掐断正在播的（急停打断说话用），play_file 随之返回。"""
 
     def __init__(self, device: str, tmp_dir: Optional[str] = None):
         self.device = device
         self.tmp_dir = tmp_dir or tempfile.gettempdir()
+        self._proc: Optional[subprocess.Popen] = None
 
     def play(self, samples, rate: int) -> None:
         fd, path = tempfile.mkstemp(prefix="hexvoice-", suffix=".wav", dir=self.tmp_dir)
@@ -178,8 +180,18 @@ class AplayPlayer:
                 pass
 
     def play_file(self, path) -> None:
-        subprocess.run(["aplay", "-q", "-D", self.device, str(path)],
-                       check=False, stderr=subprocess.DEVNULL)
+        self._proc = subprocess.Popen(["aplay", "-q", "-D", self.device, str(path)],
+                                      stderr=subprocess.DEVNULL)
+        self._proc.wait()
+        self._proc = None
+
+    def stop(self) -> None:
+        p = self._proc
+        if p is not None and p.poll() is None:
+            try:
+                p.terminate()
+            except OSError:
+                pass
 
 
 class NullPlayer:

@@ -16,9 +16,11 @@
   error   模型加载/运行异常（text=原因），引擎线程随之退出
 
 线程模型：本线程只做音频→事件；机器人动作在调用方主线程里做（舵机串口
-不跨线程）。TTS 通过 Speaker 线程播，播放期间默认丢弃麦克风数据；
-ReSpeaker Lite 板载回声消除实测有效后可传 mute_during_tts=False，
-机器人自己说话时也能听见"停下"。
+不跨线程）。TTS 通过 Speaker 线程播。机器人自己说话期间：KWS 照听——急停词
+随时有效（长回话时不能聋），说话中冒出的唤醒词忽略（多半是自己念的
+"我是小蜘蛛"）；整句识别默认不做（板载 AEC 实测无效，回声会被完整听见），
+mute_during_tts=False（--trust-aec）时照做，识别结果先过自听过滤
+looks_like_echo 再出事件。
 """
 import difflib
 import glob
@@ -41,8 +43,9 @@ def looks_like_echo(text: str, said_texts) -> bool:
 
     09-02 实机：板载 AEC 没压住自听，"电压7.4伏电流1.0安"的回答被再次识别成
     status 指令，机器人自问自答死循环——所以不管 AEC 好坏，这层过滤都要有。
-    容错到回声被听歪的程度（"电流1.0安"→"电容1.0N"）；短回话（"停""在"≤2 字）
-    只认全等，免得把用户真喊的"停下"当回声丢掉。
+    容错到回声被听歪的程度（"电流1.0安"→"电容1.0N"），长回话（自我介绍）被
+    VAD 切成几段、每段再错几个字也能挡住（按短串覆盖率判）；短回话（"停""在"
+    ≤2 字）只认全等，免得把用户真喊的"停下"当回声丢掉。
     """
     a = normalize(text)
     if not a:
@@ -57,7 +60,9 @@ def looks_like_echo(text: str, said_texts) -> bool:
             continue
         if a in b or b in a:
             return True
-        if difflib.SequenceMatcher(None, a, b).ratio() >= 0.7:
+        m = difflib.SequenceMatcher(None, a, b)
+        matched = sum(bl.size for bl in m.get_matching_blocks())
+        if matched / min(len(a), len(b)) >= 0.7:
             return True
     return False
 
@@ -180,13 +185,9 @@ class VoiceEngine(threading.Thread):
                     self._drain_vad(vad, asr)
                     self.events.put(VoiceEvent("eof"))
                     break
-                if (self.mute_during_tts and self.speaker is not None
-                        and self.speaker.is_muting()):
-                    if getattr(self.source, "live", True):
-                        continue                         # 自己在说话：麦克风数据丢弃
-                    self.speaker.wait(10.0)              # 文件音源：等说完再处理这段
-
-                # 1) KWS：唤醒词 + 急停词，常驻
+                # 1) KWS：唤醒词 + 急停词常驻——机器人自己说话期间也听，
+                #    急停不能聋（长回话时尤其要紧）；说话期间的唤醒词多半是
+                #    自己念的"我是小蜘蛛"，忽略
                 ks.accept_waveform(RATE, chunk)
                 while kws.is_ready(ks):
                     kws.decode_stream(ks)
@@ -194,11 +195,15 @@ class VoiceEngine(threading.Thread):
                     if r:
                         kws.reset_stream(ks)
                         tag, word = parse_result(r)
+                        speaking = (self.speaker is not None
+                                    and self.speaker.is_muting())
                         if tag == "STOP":
                             self.log(f"[kws] 急停词 {word}")
                             self.events.put(VoiceEvent("stop", word))
                             self._awake_until = 0.0
                             vad.reset()
+                        elif speaking:
+                            self.log(f"[kws] 说话期间忽略唤醒 {word}")
                         elif tag == "WAKE" or not tag:
                             self.log(f"[kws] 唤醒 {word}")
                             self._awake_until = time.time() + self.listen_timeout_s
@@ -208,7 +213,14 @@ class VoiceEngine(threading.Thread):
                                 # 应答不屏蔽麦克风：用户常一口气说"小蜘蛛，前进三秒"
                                 self.speaker.say(self.wake_ack, mute=False)
 
-                # 2) 听令状态：VAD 切句 → ASR → 意图
+                # 2) 整句识别：机器人自己说话期间不做（回声会被 ASR 完整听见）
+                if (self.mute_during_tts and self.speaker is not None
+                        and self.speaker.is_muting()):
+                    if getattr(self.source, "live", True):
+                        continue                         # 麦克风数据只喂 KWS，不进 VAD
+                    self.speaker.wait(10.0)              # 文件音源：等说完再处理这段
+
+                # 3) 听令状态：VAD 切句 → ASR → 意图
                 if self.awake:
                     was_awake = True
                     vad.accept_waveform(chunk)

@@ -4,7 +4,7 @@
 回答被再次识别成 status 指令，机器人自问自答死循环。
 """
 from hexapod.voice.engine import looks_like_echo
-from hexapod.voice.intents import parse
+from hexapod.voice.intents import INTRO_REPLY, parse
 
 
 def test_wake_word_text_ignored():
@@ -31,3 +31,20 @@ def test_real_speech_not_dropped():
     assert not looks_like_echo("前进三秒", ["在"])
     assert not looks_like_echo("后退两秒", ["前进3秒"])
     assert not looks_like_echo("小蜘蛛", [])
+
+
+def test_intro_intent():
+    assert parse("自我介绍").kind == "intro"
+    assert parse("你是谁。").kind == "intro"
+    assert parse("自我介绍").reply == INTRO_REPLY
+    assert parse("介绍一下三角步态").kind == "gait"      # 步态优先于介绍
+    for w in ("停下", "停止", "停下来", "别动"):          # 长回话不能含 KWS 急停词
+        assert w not in INTRO_REPLY
+
+
+def test_long_reply_echo_segments():
+    # 长回话被 VAD 切成片段回来（自我介绍场景）
+    assert looks_like_echo("六个真空吸盘管吸墙", [INTRO_REPLY])      # 原文片段
+    assert looks_like_echo("六个真空锡盘管西墙。", [INTRO_REPLY])    # 听歪的片段
+    assert not looks_like_echo("停下", [INTRO_REPLY])               # 真急停不吃
+    assert not looks_like_echo("向左转两秒", [INTRO_REPLY])         # 真指令不吃

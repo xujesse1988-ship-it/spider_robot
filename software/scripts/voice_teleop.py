@@ -3,8 +3,10 @@
 
   说"小蜘蛛"唤醒 → 听令窗口内说指令，可连说：
     前进/后退/左移/右移/左转/右转 [N 秒 | N 步 | 一直] [快点 | 慢点]
-    站起来 / 趴下 / 三角步态 / 波浪步态 / 电压多少 / 你好 / 退出（要再说"确定"）
-  "停下 / 停止 / 别动"不用唤醒，随时生效（流式关键词急停，~0.3s）
+    站起来 / 趴下 / 三角步态 / 波浪步态 / 电压多少 / 你好 / 自我介绍（长回话）
+    退出（要再说"确定"）
+  "停下 / 停止 / 别动"不用唤醒，随时生效（流式关键词急停，~0.3s）——
+  机器人自己说话时也听得见，且急停会立即打断说话
   键盘（有终端时）：w/s/a/d/q/e 动，空格停，1/2 步态，ESC 退出，同 walk_teleop
 
 安全边界：
@@ -34,13 +36,14 @@ from hexapod.gait import GaitEngine
 from hexapod.voice.audio import (ArecordSource, WavSource, AplayPlayer, NullPlayer,
                                  find_card, alsa_device, list_cards)
 from hexapod.voice.engine import VoiceEngine, ModelPaths
+from hexapod.voice.intents import INTRO_REPLY
 from hexapod.voice.tts import Speaker
 
 POWER_PRINT_S = 0.5
 EXIT_CONFIRM_S = 10.0
 PREWARM = ("在", "停", "起立", "趴下", "在呢", "没听懂", "好", "再见",
            "确定退出吗？请说 确定", "前进3秒", "后退3秒", "左转3秒", "右转3秒",
-           "左移3秒", "右移3秒", "换三角步态", "换波浪步态")
+           "左移3秒", "右移3秒", "换三角步态", "换波浪步态", INTRO_REPLY)
 
 
 def read_key(timeout):
@@ -138,6 +141,8 @@ def main():
         k = it.kind
         if k == "stop":
             halt()
+            if speaker:
+                speaker.cancel()          # 急停连嘴一起停
             say(it.reply)
         elif k == "walk":
             if crouched:
@@ -179,7 +184,7 @@ def main():
         elif k == "cancel":
             pending_exit = None
             say(it.reply)
-        elif k in ("greet", "unsupported"):
+        elif k in ("greet", "unsupported", "intro"):
             say(it.reply)
         elif k == "unknown":
             if len(it.text) >= 2:            # 单字/空串多半是噪声，不回话
@@ -225,6 +230,8 @@ def main():
                     say("语音控制就绪，叫我小蜘蛛")
                 elif ev.kind == "stop":
                     halt()
+                    if speaker:
+                        speaker.cancel()  # 正在说话也立即闭嘴
                     log(f"[voice] 急停：{ev.text}")
                     say("停")
                 elif ev.kind == "command":

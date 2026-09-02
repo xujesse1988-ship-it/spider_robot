@@ -3,9 +3,19 @@
 
   w/s  前进/后退      a/d  左移/右移
   q/e  左转/右转      空格 停
-  1/2  三角/波浪步态   ESC  退出
+  1/2  三角/波浪步态   v    切换六阀 排气/通罐（对照用）
+  ESC  退出
 
-用法: python walk_teleop.py [--port /dev/ttyACM0] [--mock]
+用法: python walk_teleop.py [--port /dev/ttyACM0] [--mock] [--no-vent]
+
+阀（--vent/--no-vent，默认排气）：地面行走不吸附，但本机阀断电=通罐位，
+吸盘经每足单向阀接歧管——身体一压把盘里空气挤进歧管，抬腿时单向阀不让
+空气回流，盘内形成被动真空把脚吸在地上（09-02 实机：装气路后抬腿幅度极低、
+吸盘不离地）。默认站起前就把六阀拉到排气位（线圈通电，吸盘通大气），整段
+行走保持，代价≈25W 持续发热，长时间遛机留意阀温；--no-vent 不碰阀
+GPIO/I2C（装气路前的旧行为，做对照）。运行中按 v 随时切换（上电按足串行
+摊开约 1s，期间步态停拍）。退出时先断舵机电再断六线圈；线圈断电后吸盘回到
+通罐位，搬机时若脚被轻微吸住属正常，关 12V 即放开。
 """
 import argparse
 import select
@@ -16,6 +26,7 @@ import tty
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver, TRIPOD, WAVE
+from hexapod.adhesion import GroundVent, MockVacuumIO
 from hexapod.gait import GaitEngine
 
 SPEED = 40.0    # mm/s
@@ -28,11 +39,27 @@ def read_key(timeout):
     return sys.stdin.read(1) if r else None
 
 
+def vent_text(vent: GroundVent) -> str:
+    return "阀 排气" if vent.on else "阀 通罐"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--mock", action="store_true")
+    ap.add_argument("--vent", action=argparse.BooleanOptionalAction, default=True,
+                    help="六阀拉到排气位让吸盘通大气（默认开）；--no-vent 不碰阀，"
+                         "吸盘经单向阀通罐会被被动真空吸在地上（对照用，运行中 v 可切）")
     args = ap.parse_args()
+
+    # 阀先于舵机：站起时吸盘就已通大气，压下去不攒被动真空
+    vent = GroundVent(io_factory=(lambda: MockVacuumIO(6)) if args.mock else None,
+                      stagger_s=0.0 if args.mock else 0.2)
+    if args.vent:
+        vent.set(True)
+        print("六阀已拉到排气位（吸盘通大气）")
+    else:
+        print("阀未动（通罐位）：吸盘可能被被动真空吸在地上，按 v 切到排气对照")
 
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
@@ -49,7 +76,7 @@ def main():
     dt = 1.0 / bot.cfg.update_hz
     last_power_check = 0.0
     peak_a = 0.0
-    print("遥控就绪 (w/s/a/d/q/e, 空格停, ESC 退出)")
+    print("遥控就绪 (w/s/a/d/q/e, 空格停, 1/2 步态, v 阀排气/通罐, ESC 退出)")
     try:
         while True:
             k = read_key(0)
@@ -73,20 +100,27 @@ def main():
                 bot.engine = GaitEngine(bot.cfg, TRIPOD)
             elif k == "2":
                 bot.engine = GaitEngine(bot.cfg, WAVE)
+            elif k == "v":
+                vent.toggle()
+                print(f"\n{vent_text(vent)}"
+                      + ("（吸盘通大气）" if vent.on else "（吸盘经单向阀通罐）"))
 
             bot.move_feet(bot.engine.foot_targets(t, vx, vy, wz))
             if t - last_power_check > POWER_PRINT_S:
                 v, c = bot.check_power()  # 欠压直接抛异常停机
                 peak_a = max(peak_a, c)
-                print(f"\r电压 {v:.2f}V  电流 {c:5.2f}A  峰值 {peak_a:5.2f}A  ",
-                      end="", flush=True)
+                print(f"\r电压 {v:.2f}V  电流 {c:5.2f}A  峰值 {peak_a:5.2f}A  "
+                      f"{vent_text(vent)}  ", end="", flush=True)
                 last_power_check = t
             time.sleep(dt)
             t += dt
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
-        drv.close()
-        print("\n已断舵机电，退出。")
+        try:
+            drv.close()
+        finally:
+            vent.close()    # 六线圈断电再释放，绝不拉高着退（阀会一直通电发热）
+        print("\n已断舵机电、阀线圈已断电，退出。")
 
 
 if __name__ == "__main__":

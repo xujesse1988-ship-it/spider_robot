@@ -82,6 +82,9 @@ class MockVacuumIO:
     def read_tank_kpa(self):
         return self.tank_kpa
 
+    def close(self):
+        pass
+
     def step(self, dt):
         if self.pump:
             self.tank_kpa += (-80.0 - self.tank_kpa) * min(1.0, dt / 1.0)
@@ -228,6 +231,61 @@ class Pi5VacuumIO:
     def close(self):
         self._bus.close()
         self._lg.gpiochip_close(self._h)
+
+
+class GroundVent:
+    """地面**不吸附**行走时的六阀排气开关（walk_teleop 等不跑吸附状态机的脚本用）。
+
+    本机阀断电=通罐位：吸盘经每足单向阀接歧管。身体一压把盘里空气挤进歧管，
+    抬腿时单向阀不让空气回流，盘内形成被动真空把脚吸在地上（09-02 实机：装
+    气路后 walk_teleop 抬腿幅度极低、吸盘不离地；与 climb.py VENT 相位"残余
+    真空拽起"同源，爬墙步态靠 lift_vent_s 先通气再抬，地面步态没有这一步）。
+    set(True)  六线圈拉到排气位（通电，吸盘通大气）；代价≈25W 持续发热。
+    set(False) 全部断电=通罐位，电气上等同不碰 GPIO。
+    IO 懒加载：不开排气也从不切换时完全不碰阀 GPIO/I2C。上电按足串行摊开
+    （stagger_s，与 Pi5VacuumIO 构造/取机序列同口径，12V 轨不吃同刻阶跃）。
+    close() 先断六线圈再释放（climb_walk.coils_off 同口径：退进程引脚会停在
+    最后电平，拉高着退=六线圈一直通电发热，08-17 实机复现）。
+    """
+
+    def __init__(self, io_factory=None, n_feet=6, stagger_s=0.2):
+        self._factory = io_factory or (lambda: Pi5VacuumIO(n_feet))
+        self.n = n_feet
+        self.stagger_s = stagger_s
+        self.io = None
+        self.on = False
+
+    def set(self, on):
+        on = bool(on)
+        if self.io is None:
+            if not on:
+                self.on = False
+                return
+            self.io = self._factory()   # Pi5VacuumIO 构造即六阀排气位（已串行摊开）
+        wrote = 0
+        for i in range(self.n):
+            want = not on               # set_valve(False)=排气位（线圈通电）
+            if bool(self.io.valve[i]) == want:
+                continue
+            if on and wrote and self.stagger_s:
+                time.sleep(self.stagger_s)
+            self.io.set_valve(i, want)
+            wrote += 1
+        self.on = on
+
+    def toggle(self):
+        self.set(not self.on)
+        return self.on
+
+    def close(self):
+        if self.io is None:
+            return
+        for i in range(self.n):
+            self.io.set_valve(i, True)  # 断电=通罐位
+        self.io.set_pump(False)
+        self.io.close()
+        self.io = None
+        self.on = False
 
 
 class AdhesionController:

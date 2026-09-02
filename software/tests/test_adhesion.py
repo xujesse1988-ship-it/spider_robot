@@ -300,3 +300,58 @@ def test_bus_error_single_glitch_recovers_on_retry():
     kpa = io._kpa(adc)                     # 首读炸、重试成功：拿到新鲜值
     assert not seq and io.read_faults == 0
     assert abs(kpa - io.KPA_PER_V * (1.9 * io.V_DIV - io.V_ATM)) < 1e-9
+
+
+# ---------- GroundVent：地面不吸附行走的六阀排气开关 ----------
+
+class _SpyIO(MockVacuumIO):
+    def __init__(self):
+        super().__init__(6)
+        self.writes = []
+        self.closed = False
+
+    def set_valve(self, i, on):
+        super().set_valve(i, on)
+        self.writes.append((i, bool(on)))
+
+    def close(self):
+        self.closed = True
+
+
+def test_ground_vent_lazy_toggle_and_close():
+    from hexapod.adhesion import GroundVent
+    made = []
+
+    def factory():
+        io = _SpyIO()
+        made.append(io)
+        return io
+
+    gv = GroundVent(io_factory=factory, stagger_s=0.0)
+    # --no-vent：不开排气也从不切换 → 完全不碰阀 IO
+    gv.set(False)
+    assert not made and not gv.on and gv.io is None
+    # 首次开排气才构造 IO；IO 初态已是排气位（valve 全 False=不通真空）→ 不再重复写
+    gv.set(True)
+    assert len(made) == 1 and gv.on
+    io = made[0]
+    assert not any(io.valve) and io.writes == []
+    # v 键切回通罐：六阀 set_valve(True)=线圈断电
+    assert gv.toggle() is False
+    assert all(io.valve) and io.writes == [(i, True) for i in range(6)]
+    # 再切排气：六阀 set_valve(False)=线圈通电
+    assert gv.toggle() is True
+    assert not any(io.valve) and len(made) == 1
+    # 收尾：六线圈断电 + 泵停 + 释放；之后 set(False) 不会再建 IO
+    gv.close()
+    assert io.closed and all(io.valve) and not io.pump
+    assert gv.io is None and not gv.on
+    gv.set(False)
+    assert len(made) == 1
+
+
+def test_ground_vent_close_without_io_is_noop():
+    from hexapod.adhesion import GroundVent
+    gv = GroundVent(io_factory=lambda: (_ for _ in ()).throw(AssertionError("不该建 IO")))
+    gv.close()
+    assert gv.io is None and not gv.on

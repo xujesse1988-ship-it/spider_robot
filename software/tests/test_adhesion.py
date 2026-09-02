@@ -318,7 +318,7 @@ class _SpyIO(MockVacuumIO):
         self.closed = True
 
 
-def test_ground_vent_lazy_toggle_and_close():
+def _vent(stagger=0.0, settle=0.5):
     from hexapod.adhesion import GroundVent
     made = []
 
@@ -326,32 +326,97 @@ def test_ground_vent_lazy_toggle_and_close():
         io = _SpyIO()
         made.append(io)
         return io
+    return GroundVent(io_factory=factory, stagger_s=stagger, settle_s=settle), made
 
-    gv = GroundVent(io_factory=factory, stagger_s=0.0)
-    # --no-vent：不开排气也从不切换 → 完全不碰阀 IO
-    gv.set(False)
-    assert not made and not gv.on and gv.io is None
+
+def test_ground_vent_lazy_set_and_close():
+    gv, made = _vent()
+    # off：不开排气也从不切换 → 完全不碰阀 IO
+    gv.request(False)
+    assert not made and not gv.on and gv.ready and gv.io is None
     # 首次开排气才构造 IO；IO 初态已是排气位（valve 全 False=不通真空）→ 不再重复写
     gv.set(True)
-    assert len(made) == 1 and gv.on
+    assert len(made) == 1 and gv.on and gv.ready
     io = made[0]
     assert not any(io.valve) and io.writes == []
-    # v 键切回通罐：六阀 set_valve(True)=线圈断电
-    assert gv.toggle() is False
-    assert all(io.valve) and io.writes == [(i, True) for i in range(6)]
-    # 再切排气：六阀 set_valve(False)=线圈通电
-    assert gv.toggle() is True
-    assert not any(io.valve) and len(made) == 1
-    # 收尾：六线圈断电 + 泵停 + 释放；之后 set(False) 不会再建 IO
+    # 断电一次写完：六阀 set_valve(True)=通罐位
+    gv.set(False)
+    assert not gv.on and all(io.valve) and io.writes == [(i, True) for i in range(6)]
+    # 收尾：六线圈断电 + 泵停 + 释放；之后 request(False) 不会再建 IO
+    gv.set(True)
     gv.close()
     assert io.closed and all(io.valve) and not io.pump
     assert gv.io is None and not gv.on
-    gv.set(False)
+    gv.request(False)
     assert len(made) == 1
 
 
-def test_ground_vent_close_without_io_is_noop():
-    from hexapod.adhesion import GroundVent
-    gv = GroundVent(io_factory=lambda: (_ for _ in ()).throw(AssertionError("不该建 IO")))
+def test_ground_vent_staggered_energize_nonblocking():
+    """起步通电按 stagger 一路一路写，写完前 ready=False；中途撤回立即断电。"""
+    gv, made = _vent(stagger=0.2)
+    gv.set(True)                     # 构造 IO（Mock 初态即排气位）
+    io = made[0]
+    gv.request(False)
+    gv.update(now=0.0)               # 断电即时
+    assert all(io.valve) and gv.ready
+    io.writes.clear()
+    gv.request(True)
+    assert not gv.ready
+    gv.update(now=10.0)              # 第 1 路
+    gv.update(now=10.1)              # 未到 0.2s：不写
+    assert io.writes == [(0, False)] and not gv.ready
+    gv.update(now=10.25)
+    gv.update(now=10.5)
+    assert io.writes == [(0, False), (1, False), (2, False)] and not gv.ready
+    # 中途撤回：只断已通电的三路，立即完成
+    gv.request(False)
+    gv.update(now=10.6)
+    assert gv.ready and all(io.valve)
+    assert io.writes[3:] == [(0, True), (1, True), (2, True)]
+    # 再通电：从头串行；全部写完才 ready
+    gv.request(True)
+    for k in range(6):
+        assert not gv.ready
+        gv.update(now=20.0 + 0.25 * k)
+    assert gv.ready and not any(io.valve)
+
+
+def test_ground_vent_drive_policy():
+    """auto：走动通电、停走落稳 settle_s 后断电；通电未完成不许抬腿；on 常通；off 不碰。"""
+    gv, made = _vent(stagger=0.2, settle=0.5)
+    gv.set(True)                     # 站起前通电（脚本口径）
+    io = made[0]
+    # 站定不动：auto 立即断电（_last_move 未记录过）
+    assert gv.drive("auto", False, now=0.0) is True
+    assert not gv.on and all(io.valve)
+    # 起步：第一拍只写第 1 路，不许抬腿；≥0.2s 一路，六路齐才放行
+    assert gv.drive("auto", True, now=1.0) is False
+    assert io.valve[0] is False and all(io.valve[1:])
+    for k in range(1, 5):
+        assert gv.drive("auto", True, now=1.0 + 0.25 * k) is False
+    assert gv.drive("auto", True, now=2.25) is True
+    assert not any(io.valve) and gv.ready
+    # 走动中保持通电
+    assert gv.drive("auto", True, now=5.0) is True and gv.on
+    # 停走：落稳期内仍通电，过 settle_s 才断
+    assert gv.drive("auto", False, now=5.3) is True and gv.on and not any(io.valve)
+    assert gv.drive("auto", False, now=5.6) is True and not gv.on and all(io.valve)
+    # on：静止也常通（串行上电期间静止照样放行——不抬腿无所谓）
+    assert gv.drive("on", False, now=6.0) is True and gv.on
+    for k in range(1, 6):
+        gv.drive("on", False, now=6.0 + 0.25 * k)
+    assert gv.ready and not any(io.valve)
+    # off：立即断电、走动也放行（对照：脚会被吸住是用户要看的）
+    assert gv.drive("off", True, now=7.0) is True and not gv.on and all(io.valve)
+    assert gv.state_text() == "通罐"
+    gv.drive("auto", True, now=8.0)
+    assert gv.state_text() == "排气中"
+
+
+def test_ground_vent_off_never_touches_io():
+    """off 策略从头到尾不建 IO；close 也是空操作。"""
+    gv, made = _vent()
+    for k in range(10):
+        assert gv.drive("off", k % 2 == 0, now=float(k)) is True
     gv.close()
-    assert gv.io is None and not gv.on
+    assert not made and gv.io is None and not gv.on

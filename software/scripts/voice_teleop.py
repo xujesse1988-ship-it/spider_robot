@@ -7,7 +7,7 @@
     退出（要再说"确定"）
   "停下 / 停止 / 别动"不用唤醒，随时生效（流式关键词急停，~0.3s）——
   机器人自己说话时也听得见，且急停会立即打断说话
-  键盘（有终端时）：w/s/a/d/q/e 动，空格停，1/2 步态，v 阀排气/通罐，ESC 退出，
+  键盘（有终端时）：w/s/a/d/q/e 动，空格停，1/2 步态，v 轮换阀策略，ESC 退出，
   同 walk_teleop
 
 安全边界：
@@ -23,9 +23,10 @@
   python voice_teleop.py --mock --wav test.wav --no-tts   # 无硬件：wav 顶替麦克风
   python voice_teleop.py --no-wake                   # 不要唤醒词（安静环境）
   python voice_teleop.py --models ~/models/voice --card ReSpeakerLite
-  python voice_teleop.py --no-vent                   # 不碰阀（对照；默认六阀排气让吸盘
-                                                     # 通大气，否则被动真空锁脚抬不起，
-                                                     # 见 walk_teleop 模块头）
+  python voice_teleop.py --vent off                  # 阀策略（默认 auto：站起/走动时六阀
+                                                     # 通电排气让吸盘通大气、站着不动断电；
+                                                     # on 常通；off 不碰阀=被动真空锁脚抬不
+                                                     # 起，对照用。详见 walk_teleop 模块头）
 """
 import argparse
 import math
@@ -83,9 +84,9 @@ def main():
     ap.add_argument("--voiceprint", help="声纹档案路径（默认 <模型根>/voiceprint_owner.npz）")
     ap.add_argument("--spk-threshold", type=float, help="声纹阈值，覆盖档案里的建议值")
     ap.add_argument("--stand-secs", type=float, default=4.0)
-    ap.add_argument("--vent", action=argparse.BooleanOptionalAction, default=True,
-                    help="六阀拉到排气位让吸盘通大气（默认开）；--no-vent 不碰阀，"
-                         "吸盘经单向阀通罐会被被动真空吸在地上（对照用，运行中 v 可切）")
+    ap.add_argument("--vent", choices=GroundVent.MODES, default="auto",
+                    help="六阀策略：auto=站起/走动通电排气、静止断电（默认）；"
+                         "on=常通；off=不碰阀（脚会被被动真空吸住，对照用）。运行中 v 轮换")
     args = ap.parse_args()
 
     def log(s):
@@ -134,11 +135,12 @@ def main():
     # 阀先于舵机：站起时吸盘就已通大气，压下去不攒被动真空
     vent = GroundVent(io_factory=(lambda: MockVacuumIO(6)) if args.mock else None,
                       stagger_s=0.0 if args.mock else 0.2)
-    if args.vent:
+    vent_mode = args.vent
+    if vent_mode != "off":
         vent.set(True)
-        log("六阀已拉到排气位（吸盘通大气）")
+        log(f"阀策略 {vent_mode}：站起前六阀已拉到排气位（吸盘通大气）")
     else:
-        log("阀未动（通罐位）：吸盘可能被被动真空吸在地上，按 v 切到排气对照")
+        log("阀策略 off：不碰阀（通罐位），吸盘可能被被动真空吸在地上，按 v 切策略对照")
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
     bot.move_feet(bot.crouch_feet())
@@ -168,6 +170,15 @@ def main():
         vx = vy = wz = 0.0
         deadline = None
 
+    def stand_up():
+        """蹲→站：先通电排气再起身（蹲姿压扁的吸盘随身体升起会攒被动真空）。
+        阻塞约 1s+2s，站定后由 auto 策略在主环里落稳断电。"""
+        nonlocal crouched
+        if vent_mode != "off":
+            vent.set(True)
+        bot.stand(duration=2.0)
+        crouched = False
+
     def dispatch(it) -> bool:
         """执行一条意图；返回 True 表示要退出程序。"""
         nonlocal vx, vy, wz, deadline, crouched, pending_exit
@@ -179,8 +190,7 @@ def main():
             say(it.reply)
         elif k == "walk":
             if crouched:
-                bot.stand(duration=2.0)
-                crouched = False
+                stand_up()
             secs = args.default_secs if it.seconds is None else min(it.seconds, args.max_secs)
             if math.isinf(secs):
                 secs = args.max_secs
@@ -193,8 +203,7 @@ def main():
         elif k == "stand":
             halt()
             say(it.reply)
-            bot.stand(duration=2.0)
-            crouched = False
+            stand_up()
         elif k == "crouch":
             halt()
             say(it.reply)
@@ -252,8 +261,9 @@ def main():
                 elif k == "2":
                     bot.engine = GaitEngine(bot.cfg, WAVE)
                 elif k == "v":
-                    vent.toggle()
-                    log("阀 排气（吸盘通大气）" if vent.on else "阀 通罐（吸盘经单向阀通罐）")
+                    vent_mode = GroundVent.MODES[(GroundVent.MODES.index(vent_mode) + 1)
+                                                 % len(GroundVent.MODES)]
+                    log(f"阀策略 → {vent_mode}")
 
             quit_now = False
             while True:
@@ -291,13 +301,17 @@ def main():
                 halt()
                 log("[voice] 到时，停")
 
-            bot.move_feet(bot.engine.foot_targets(t, vx, vy, wz))
+            # auto：走动通电/静止断电；线圈没全部通电前脚不抬（原地等 ≈1s，急停照常处理）
+            if vent.drive(vent_mode, bool(vx or vy or wz)):
+                bot.move_feet(bot.engine.foot_targets(t, vx, vy, wz))
+            else:
+                bot.move_feet(bot.engine.foot_targets(t, 0.0, 0.0, 0.0))
             if t - last_power_check > POWER_PRINT_S:
                 v, c = bot.check_power()
                 peak_a = max(peak_a, c)
                 state = "听令中" if engine.awake else "待唤醒"
                 print(f"\r电压 {v:.2f}V  电流 {c:5.2f}A  峰值 {peak_a:5.2f}A  [{state}]  "
-                      f"{'阀 排气' if vent.on else '阀 通罐'}  ", end="", flush=True)
+                      f"阀[{vent_mode}] {vent.state_text()}  ", end="", flush=True)
                 last_power_check = t
             time.sleep(dt)
             t += dt

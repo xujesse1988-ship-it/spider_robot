@@ -20,6 +20,7 @@
   - Pi5VacuumIO        树莓派 5 实机：GPIO+YYNMOS-8 控 6 阀+泵，
                        2×ADS1115 读 6 足压 + 1 罐压（XGZP6847A）
 """
+import math
 import time
 from enum import Enum
 
@@ -234,48 +235,98 @@ class Pi5VacuumIO:
 
 
 class GroundVent:
-    """地面**不吸附**行走时的六阀排气开关（walk_teleop 等不跑吸附状态机的脚本用）。
+    """地面**不吸附**行走时的六阀排气开关（walk_teleop/voice_teleop 等不跑吸附状态机的脚本用）。
 
     本机阀断电=通罐位：吸盘经每足单向阀接歧管。身体一压把盘里空气挤进歧管，
     抬腿时单向阀不让空气回流，盘内形成被动真空把脚吸在地上（09-02 实机：装
     气路后 walk_teleop 抬腿幅度极低、吸盘不离地；与 climb.py VENT 相位"残余
     真空拽起"同源，爬墙步态靠 lift_vent_s 先通气再抬，地面步态没有这一步）。
-    set(True)  六线圈拉到排气位（通电，吸盘通大气）；代价≈25W 持续发热。
-    set(False) 全部断电=通罐位，电气上等同不碰 GPIO。
-    IO 懒加载：不开排气也从不切换时完全不碰阀 GPIO/I2C。上电按足串行摊开
-    （stagger_s，与 Pi5VacuumIO 构造/取机序列同口径，12V 轨不吃同刻阶跃）。
+    线圈通电=排气位（吸盘通大气）；断电=通罐位，电气上等同不碰 GPIO。
+
+    策略 drive(mode, moving)（每拍调用）：
+      auto  站起/走动时通电，停走后过 settle_s 落稳期断电，站着不动不耗
+            六线圈≈25W；起步时线圈按足串行上电（stagger_s，12V 轨不吃同刻
+            阶跃），**全部通电前不许抬腿**——drive 返回 False 时脚原地等
+      on    常通（对照/兜底）        off  不碰阀（装气路前旧行为，对照）
+    非阻塞：request() 设目标、update() 每拍最多写一路；set() 是阻塞版（站起
+    前用）。IO 懒加载：off 且从不切换时完全不碰阀 GPIO/I2C。
     close() 先断六线圈再释放（climb_walk.coils_off 同口径：退进程引脚会停在
     最后电平，拉高着退=六线圈一直通电发热，08-17 实机复现）。
     """
+    MODES = ("auto", "on", "off")
 
-    def __init__(self, io_factory=None, n_feet=6, stagger_s=0.2):
+    def __init__(self, io_factory=None, n_feet=6, stagger_s=0.2, settle_s=0.5):
         self._factory = io_factory or (lambda: Pi5VacuumIO(n_feet))
         self.n = n_feet
         self.stagger_s = stagger_s
+        self.settle_s = settle_s
         self.io = None
-        self.on = False
+        self.on = False              # 目标态：True=排气位（通电）
+        self._pending = []           # 待写足序（与目标态不一致的）
+        self._last_write = -math.inf
+        self._last_move = -math.inf
 
-    def set(self, on):
+    @property
+    def ready(self):
+        """目标态已全部写到阀上（起步用：False=还有线圈没通电，别抬腿）。"""
+        return not self._pending
+
+    def request(self, on):
+        """非阻塞设目标；由 update() 逐拍推进。"""
         on = bool(on)
+        self.on = on
         if self.io is None:
             if not on:
-                self.on = False
+                self._pending = []
                 return
-            self.io = self._factory()   # Pi5VacuumIO 构造即六阀排气位（已串行摊开）
-        wrote = 0
-        for i in range(self.n):
-            want = not on               # set_valve(False)=排气位（线圈通电）
-            if bool(self.io.valve[i]) == want:
-                continue
-            if on and wrote and self.stagger_s:
-                time.sleep(self.stagger_s)
-            self.io.set_valve(i, want)
-            wrote += 1
-        self.on = on
+            self.io = self._factory()   # Pi5VacuumIO 构造即六阀排气位（内部已串行摊开）
+        want = not on                   # set_valve(False)=排气位（线圈通电）
+        self._pending = [i for i in range(self.n) if bool(self.io.valve[i]) != want]
 
-    def toggle(self):
-        self.set(not self.on)
-        return self.on
+    def update(self, now=None):
+        """推进一拍：通电按 stagger_s 一路一路来；断电一次写完。"""
+        if not self._pending:
+            return
+        now = time.monotonic() if now is None else now
+        if self.on:
+            if now - self._last_write < self.stagger_s:
+                return
+            self.io.set_valve(self._pending.pop(0), False)
+            self._last_write = now
+        else:
+            for i in self._pending:
+                self.io.set_valve(i, True)
+            self._pending = []
+
+    def set(self, on):
+        """阻塞版：写到位才返回（通电约 n×stagger_s）。"""
+        self.request(on)
+        self.update()
+        while not self.ready:
+            time.sleep(self.stagger_s)
+            self.update()
+
+    def drive(self, mode, moving, now=None):
+        """按策略推进一拍，返回本拍是否允许抬腿（阀未全部通电时 False，原地等）。"""
+        now = time.monotonic() if now is None else now
+        if moving:
+            self._last_move = now
+        if mode == "auto":
+            want = moving or (now - self._last_move < self.settle_s)
+        elif mode == "on":
+            want = True
+        elif mode == "off":
+            want = False
+        else:
+            raise ValueError(f"未知阀策略 {mode!r}，可选 {self.MODES}")
+        self.request(want)
+        self.update(now)
+        return (not moving) or self.ready
+
+    def state_text(self):
+        if self.on:
+            return "排气" if self.ready else "排气中"
+        return "通罐"
 
     def close(self):
         if self.io is None:
@@ -286,6 +337,7 @@ class GroundVent:
         self.io.close()
         self.io = None
         self.on = False
+        self._pending = []
 
 
 class AdhesionController:

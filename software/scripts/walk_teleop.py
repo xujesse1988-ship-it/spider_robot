@@ -3,18 +3,20 @@
 
   w/s  前进/后退      a/d  左移/右移
   q/e  左转/右转      空格 停
-  1/2  三角/波浪步态   v    切换六阀 排气/通罐（对照用）
+  1/2  三角/波浪步态   v    切阀策略 auto→on→off（对照用）
   ESC  退出
 
-用法: python walk_teleop.py [--port /dev/ttyACM0] [--mock] [--no-vent]
+用法: python walk_teleop.py [--port /dev/ttyACM0] [--mock] [--vent auto|on|off]
 
-阀（--vent/--no-vent，默认排气）：地面行走不吸附，但本机阀断电=通罐位，
-吸盘经每足单向阀接歧管——身体一压把盘里空气挤进歧管，抬腿时单向阀不让
-空气回流，盘内形成被动真空把脚吸在地上（09-02 实机：装气路后抬腿幅度极低、
-吸盘不离地）。默认站起前就把六阀拉到排气位（线圈通电，吸盘通大气），整段
-行走保持，代价≈25W 持续发热，长时间遛机留意阀温；--no-vent 不碰阀
-GPIO/I2C（装气路前的旧行为，做对照）。运行中按 v 随时切换（上电按足串行
-摊开约 1s，期间步态停拍）。退出时先断舵机电再断六线圈；线圈断电后吸盘回到
+阀策略 --vent（默认 auto）：地面行走不吸附，但本机阀断电=通罐位，吸盘经每足
+单向阀接歧管——身体一压把盘里空气挤进歧管，抬腿时单向阀不让空气回流，盘内
+形成被动真空把脚吸在地上（09-02 实机：装气路后抬腿幅度极低、吸盘不离地）。
+  auto  站起时和走动时六阀通电（排气位，吸盘通大气），停走落稳 0.5s 后断电，
+        站着不动不耗六线圈≈25W。起步时线圈按足串行上电约 1s，**通电完成前
+        脚不抬**（状态行显示"排气中"），之后才开始走
+  on    整段常通（对照/兜底）
+  off   不碰阀 GPIO/I2C（装气路前旧行为，对照：脚会被吸住）
+运行中按 v 轮换三种策略。退出时先断舵机电再断六线圈；线圈断电后吸盘回到
 通罐位，搬机时若脚被轻微吸住属正常，关 12V 即放开。
 """
 import argparse
@@ -39,27 +41,24 @@ def read_key(timeout):
     return sys.stdin.read(1) if r else None
 
 
-def vent_text(vent: GroundVent) -> str:
-    return "阀 排气" if vent.on else "阀 通罐"
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--mock", action="store_true")
-    ap.add_argument("--vent", action=argparse.BooleanOptionalAction, default=True,
-                    help="六阀拉到排气位让吸盘通大气（默认开）；--no-vent 不碰阀，"
-                         "吸盘经单向阀通罐会被被动真空吸在地上（对照用，运行中 v 可切）")
+    ap.add_argument("--vent", choices=GroundVent.MODES, default="auto",
+                    help="六阀策略：auto=站起/走动通电排气、静止断电（默认）；"
+                         "on=常通；off=不碰阀（脚会被被动真空吸住，对照用）。运行中 v 轮换")
     args = ap.parse_args()
+    mode = args.vent
 
     # 阀先于舵机：站起时吸盘就已通大气，压下去不攒被动真空
     vent = GroundVent(io_factory=(lambda: MockVacuumIO(6)) if args.mock else None,
                       stagger_s=0.0 if args.mock else 0.2)
-    if args.vent:
+    if mode != "off":
         vent.set(True)
-        print("六阀已拉到排气位（吸盘通大气）")
+        print(f"阀策略 {mode}：站起前六阀已拉到排气位（吸盘通大气）")
     else:
-        print("阀未动（通罐位）：吸盘可能被被动真空吸在地上，按 v 切到排气对照")
+        print("阀策略 off：不碰阀（通罐位），吸盘可能被被动真空吸在地上，按 v 切策略对照")
 
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
@@ -76,7 +75,7 @@ def main():
     dt = 1.0 / bot.cfg.update_hz
     last_power_check = 0.0
     peak_a = 0.0
-    print("遥控就绪 (w/s/a/d/q/e, 空格停, 1/2 步态, v 阀排气/通罐, ESC 退出)")
+    print("遥控就绪 (w/s/a/d/q/e, 空格停, 1/2 步态, v 阀策略, ESC 退出)")
     try:
         while True:
             k = read_key(0)
@@ -101,16 +100,20 @@ def main():
             elif k == "2":
                 bot.engine = GaitEngine(bot.cfg, WAVE)
             elif k == "v":
-                vent.toggle()
-                print(f"\n{vent_text(vent)}"
-                      + ("（吸盘通大气）" if vent.on else "（吸盘经单向阀通罐）"))
+                mode = GroundVent.MODES[(GroundVent.MODES.index(mode) + 1) % len(GroundVent.MODES)]
+                print(f"\n阀策略 → {mode}")
 
-            bot.move_feet(bot.engine.foot_targets(t, vx, vy, wz))
+            moving = bool(vx or vy or wz)
+            # auto：走动通电/静止断电；线圈没全部通电前脚不抬（原地等 ≈1s）
+            if vent.drive(mode, moving):
+                bot.move_feet(bot.engine.foot_targets(t, vx, vy, wz))
+            else:
+                bot.move_feet(bot.engine.foot_targets(t, 0.0, 0.0, 0.0))
             if t - last_power_check > POWER_PRINT_S:
                 v, c = bot.check_power()  # 欠压直接抛异常停机
                 peak_a = max(peak_a, c)
                 print(f"\r电压 {v:.2f}V  电流 {c:5.2f}A  峰值 {peak_a:5.2f}A  "
-                      f"{vent_text(vent)}  ", end="", flush=True)
+                      f"阀[{mode}] {vent.state_text()}  ", end="", flush=True)
                 last_power_check = t
             time.sleep(dt)
             t += dt

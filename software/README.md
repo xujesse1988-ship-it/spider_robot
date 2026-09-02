@@ -31,7 +31,7 @@ python scripts/sim_walk.py --gif walk.gif        # 0. 无硬件仿真，先看�
 python scripts/servo_center.py                   # 1. 装配标定：全舵机回中，装舵盘
 python scripts/stand_up.py                       # 2. 站立测试 + 传感器读数
 python scripts/walk_teleop.py                    # 3. 键盘遥控行走 (wasd/qe)
-python scripts/voice_check.py                    # 4. 语音自检：录 5 秒→回放→识别→TTS（要 HAT，见 docs/VOICE-GUIDE.md）
+python scripts/voice_check.py                    # 4. 语音自检：录 5 秒→回放→识别→TTS（要 ReSpeaker Lite，见 docs/VOICE-GUIDE.md）
 python scripts/voice_teleop.py                   # 5. 语音遥控行走（“小蜘蛛，前进三秒”/“停下”；键盘照旧）
 ```
 

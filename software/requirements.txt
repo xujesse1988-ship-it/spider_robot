@@ -11,7 +11,7 @@ pytest>=8            # tests/ 测试（开发机用）
 lgpio>=0.2           # Pi5 GPIO：6 阀+泵的 MOSFET 板、舵机继电器 GPIO17
 smbus2>=0.4          # I2C：2×ADS1115 读 6 足压 + 1 罐压（XGZP6847A）
 
-# —— 语音交互（ReSpeaker 2-Mics HAT，docs/VOICE-GUIDE.md；scripts/voice_setup.sh 会装）——
+# —— 语音交互（ReSpeaker Lite USB 版，docs/VOICE-GUIDE.md；scripts/voice_setup.sh 会装）——
 # 开发机只装 pypinyin 就能跑 tests/test_voice_keywords.py 全部用例；sherpa-onnx 有 x86_64/aarch64 轮子
 sherpa-onnx>=1.12    # KWS 唤醒/急停 + Silero VAD + SenseVoice 识别 + Matcha 合成，全离线
 numpy>=1.24          # 音频缓冲（sherpa-onnx 输入输出）

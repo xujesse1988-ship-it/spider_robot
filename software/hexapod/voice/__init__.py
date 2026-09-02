@@ -1,4 +1,4 @@
-"""语音交互子包（ReSpeaker 2-Mics Pi HAT + sherpa-onnx 全离线）。
+"""语音交互子包（ReSpeaker Lite USB 麦克风/喇叭板 + sherpa-onnx 全离线）。
 
 - intents.py   识别文本 → 意图（纯规则，无三方依赖）
 - keywords.py  唤醒词/急停词 → KWS 关键词文件（只依赖 pypinyin）

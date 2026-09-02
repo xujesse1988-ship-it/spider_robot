@@ -1,7 +1,9 @@
 """ALSA 录音/放音：走 arecord / aplay 子进程（alsa-utils 树莓派自带）。
 
-不用 PortAudio/sounddevice：少一层依赖，plughw 自动做采样率/位深转换，
-HAT 双麦 16kHz S16_LE 立体声进来后在这里合成单声道 float32 给识别用。
+不用 PortAudio/sounddevice：少一层依赖，plughw 自动做采样率/位深/通道转换。
+声卡是 ReSpeaker Lite（USB 固件，UAC2 免驱，16kHz）：XU316 芯片在板上做完
+回声消除/噪声抑制/自动增益，送出来的已是处理后的人声，这里只取第 0 通道
+转 float32 给识别用（多通道时其余通道内容未必是同一路，取平均反而掺东西）。
 WavSource 用 wav 文件顶替麦克风，开发机上无声卡也能把整条链路跑通。
 """
 import os
@@ -14,7 +16,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 RATE = 16000
-PREFERRED_CARDS = ("seeed2micvoicec", "seeed-2mic", "wm8960", "seeed")
+PREFERRED_CARDS = ("respeaker", "lite", "xvf", "seeed2micvoicec", "wm8960", "seeed")
 
 
 def list_cards() -> List[Tuple[int, str, str]]:
@@ -30,7 +32,7 @@ def list_cards() -> List[Tuple[int, str, str]]:
 
 
 def find_card(prefer=PREFERRED_CARDS) -> Optional[str]:
-    """返回 HAT 声卡名（环境变量 HEXAPOD_AUDIO_CARD 可强制指定）。"""
+    """返回语音声卡名（环境变量 HEXAPOD_AUDIO_CARD 可强制指定）。"""
     env = os.environ.get("HEXAPOD_AUDIO_CARD")
     if env:
         return env
@@ -51,12 +53,14 @@ def alsa_device(card: Optional[str]) -> str:
     return f"plughw:CARD={card},DEV=0"
 
 
-def _to_float32(pcm: bytes, channels: int):
+def _to_float32(pcm: bytes, channels: int, pick: Optional[int] = None):
+    """pick=None 多通道取平均（wav 文件）；pick=k 只取第 k 通道（麦克风）。"""
     import numpy as np
     x = np.frombuffer(pcm, dtype=np.int16)
     if channels > 1:
         n = len(x) // channels * channels
-        x = x[:n].reshape(-1, channels).mean(axis=1)
+        x = x[:n].reshape(-1, channels)
+        x = x[:, pick] if pick is not None else x.mean(axis=1)
     return (x.astype(np.float32) / 32768.0)
 
 
@@ -87,7 +91,8 @@ def write_wav(path, samples, rate: int) -> str:
 
 
 class ArecordSource:
-    """麦克风：arecord 常驻子进程，read(n) 返回 n 个单声道 float32 样本。
+    """麦克风：arecord 常驻子进程，read(n) 返回 n 个单声道 float32 样本
+    （多通道只取第 0 通道，见模块头注释）。
 
     live=True：数据随真实时间流逝，引擎在机器人说话期间可以直接丢弃。
     """
@@ -103,7 +108,7 @@ class ArecordSource:
         if self._p.poll() is not None:
             err = self._p.stderr.read().decode(errors="replace").strip()
             raise RuntimeError(f"arecord 启动失败（{device}）：{err or '无输出'}\n"
-                               f"  查：arecord -l 有没有 HAT 声卡；当前用户在 audio 组吗")
+                               f"  查：arecord -l 有没有 ReSpeaker Lite；当前用户在 audio 组吗")
 
     def read(self, n: int):
         need = n * self.channels * 2
@@ -113,7 +118,7 @@ class ArecordSource:
             if not chunk:
                 return None                      # arecord 退出
             buf += chunk
-        return _to_float32(bytes(buf), self.channels)
+        return _to_float32(bytes(buf), self.channels, pick=0)
 
     def close(self):
         if self._p.poll() is None:

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 树莓派一次性安装语音交互（ReSpeaker 2-Mics Pi HAT + sherpa-onnx 全离线）。
-#   bash software/scripts/voice_setup.sh          # 全部 6 步
+# 树莓派一次性安装语音交互（ReSpeaker Lite USB 版 + sherpa-onnx 全离线）。
+# Lite 是 UAC2 标准 USB 声卡，免驱、不占 GPIO，插上就有 arecord/aplay 设备。
+#   bash software/scripts/voice_setup.sh          # 全部 5 步
 #   bash software/scripts/voice_setup.sh models   # 只下模型（网络断了重跑）
 # 可选环境变量：
 #   HEXAPOD_VOICE_MODELS  模型目录（默认 ~/models/voice）
@@ -9,11 +10,9 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)         # software/scripts
 SW=$(dirname "$HERE")                       # software
-ROOT=$(dirname "$SW")                       # 仓库根
 MODELS=${HEXAPOD_VOICE_MODELS:-$HOME/models/voice}
 VENV=${VENV:-$SW/.venv}
 CFG=/boot/firmware/config.txt; [ -f "$CFG" ] || CFG=/boot/config.txt
-OVL_DIR=/boot/firmware/overlays; [ -d "$OVL_DIR" ] || OVL_DIR=/boot/overlays
 ONLY=${1:-all}
 step() { echo; echo "==> $*"; }
 
@@ -30,29 +29,35 @@ fetch_tar() {  # <子目录名> <tag>
 }
 
 if [ "$ONLY" = all ]; then
-  step "1/6 系统包（dtc、alsa-utils、venv）"
+  step "1/5 系统包（alsa-utils、venv）"
   sudo apt-get update -qq
-  sudo apt-get install -y --no-install-recommends device-tree-compiler alsa-utils \
-       python3-venv python3-pip bzip2 curl i2c-tools
+  sudo apt-get install -y --no-install-recommends alsa-utils \
+       python3-venv python3-pip bzip2 curl
 
-  step "2/6 设备树覆盖层 respeaker-2mic-v1_0（Seeed 官方 dts，见 hardware/voice/README.md）"
-  dtc -@ -I dts -O dtb -o /tmp/respeaker-2mic-v1_0.dtbo \
-      "$ROOT/hardware/voice/respeaker-2mic-v1_0-overlay.dts"
-  sudo cp /tmp/respeaker-2mic-v1_0.dtbo "$OVL_DIR/"
-  if grep -q '^dtoverlay=respeaker-2mic-v1_0' "$CFG"; then echo "  $CFG 已有 dtoverlay 行"
-  else echo 'dtoverlay=respeaker-2mic-v1_0' | sudo tee -a "$CFG" >/dev/null; echo "  已追加 dtoverlay=respeaker-2mic-v1_0 → $CFG"; fi
-  grep -q '^dtparam=i2c_arm=on' "$CFG" || echo "  ⚠ $CFG 里没有 dtparam=i2c_arm=on（ADS1115 也靠它，正常应该已开）"
-  if grep -q '^dtoverlay=wm8960-soundcard' "$CFG"; then
-    echo "  ⚠ $CFG 里还有 dtoverlay=wm8960-soundcard（Waveshare 板用的，时钟配置和本板不符），请删掉"; fi
+  step "2/5 检查 ReSpeaker Lite 与 USB 供电"
+  if grep -qiE 'respeaker|lite' /proc/asound/cards 2>/dev/null; then
+    echo "  声卡已识别："; grep -iE 'respeaker|lite' /proc/asound/cards | sed 's/^/  /'
+  else
+    echo "  ⚠ /proc/asound/cards 里还没有 ReSpeaker Lite——USB-C 线插到 Pi 任一 USB 口"
+    echo "    （要数据线，不是纯充电线）；插上即插即用，无需重启。"
+  fi
+  # Pi 5 用降压模块供电时没有 USB-PD 协商，USB 口总电流默认限 600mA；
+  # Lite 带 3W 喇叭大音量峰值会超，放开到 1.6A（重启后生效）。
+  if grep -q '^usb_max_current_enable=1' "$CFG"; then
+    echo "  $CFG 已有 usb_max_current_enable=1"
+  else
+    echo 'usb_max_current_enable=1' | sudo tee -a "$CFG" >/dev/null
+    echo "  已追加 usb_max_current_enable=1 → $CFG（USB 口总电流 600mA→1.6A，重启后生效）"
+  fi
 
-  step "3/6 Python 包 → $VENV"
+  step "3/5 Python 包 → $VENV"
   [ -d "$VENV" ] || python3 -m venv "$VENV"
   "$VENV/bin/pip" install -q -U pip
   "$VENV/bin/pip" install -q -U sherpa-onnx numpy pypinyin
   "$VENV/bin/python" -c "import sherpa_onnx, numpy, pypinyin; print('  sherpa-onnx', sherpa_onnx.__version__)"
 fi
 
-step "4/6 模型 → $MODELS（KWS 18MB + SenseVoice 228MB + VAD 2MB + Matcha 73MB + 声码器 30MB）"
+step "4/5 模型 → $MODELS（KWS 18MB + SenseVoice 228MB + VAD 2MB + Matcha 73MB + 声码器 30MB）"
 mkdir -p "$MODELS"
 fetch_tar "$KWS" kws-models
 fetch_tar "$ASR" asr-models
@@ -62,25 +67,21 @@ fetch_tar "$TTS" tts-models
 du -sh "$MODELS"/* | sed 's/^/  /'
 [ "$ONLY" = models ] && exit 0
 
-step "5/6 唤醒词/急停词表 → $MODELS/$KWS/keywords_hexapod.txt"
+step "5/5 唤醒词/急停词表 + 混音器"
 ( cd "$SW" && PYTHONPATH="$SW" "$VENV/bin/python" -m hexapod.voice.keywords \
     --tokens "$MODELS/$KWS/tokens.txt" --out "$MODELS/$KWS/keywords_hexapod.txt" \
     --raw "$SW/hexapod/voice/keywords_raw.txt" )
-
-step "6/6 混音器"
-if grep -q 'seeed2micvoicec' /proc/asound/cards 2>/dev/null; then
+if grep -qiE 'respeaker|lite' /proc/asound/cards 2>/dev/null; then
   bash "$HERE/voice_mixer.sh"
 else
-  echo "  声卡还没出现（覆盖层要重启后才生效）。重启后跑: bash software/scripts/voice_mixer.sh"
+  echo "  声卡不在，跳过混音器。插上板子后跑: bash software/scripts/voice_mixer.sh"
 fi
 
 cat <<TXT
 
 完成。下一步：
-  1. sudo reboot
-  2. arecord -l && aplay -l          # 应看到 card N: seeed2micvoicec
-     i2cdetect -y 1                  # 应看到 1a（WM8960）以及 48/49（ADS1115）
-  3. bash software/scripts/voice_mixer.sh      # 若第 6 步跳过了
-  4. cd software && .venv/bin/python scripts/voice_check.py      # 录 5 秒→回放→识别→TTS
-  5. .venv/bin/python scripts/voice_teleop.py --mock             # 先不带舵机试语音
+  1. arecord -l && aplay -l          # 应看到 ReSpeaker Lite（USB Audio）
+  2. cd software && .venv/bin/python scripts/voice_check.py      # 录 5 秒→回放→识别→TTS
+  3. .venv/bin/python scripts/voice_teleop.py --mock             # 先不带舵机试语音
+（若第 2/5 步追加了 usb_max_current_enable=1，测大音量前先 sudo reboot）
 TXT

@@ -16,7 +16,9 @@
   error   模型加载/运行异常（text=原因），引擎线程随之退出
 
 线程模型：本线程只做音频→事件；机器人动作在调用方主线程里做（舵机串口
-不跨线程）。TTS 通过 Speaker 线程播，播放期间麦克风数据丢弃。
+不跨线程）。TTS 通过 Speaker 线程播，播放期间默认丢弃麦克风数据；
+ReSpeaker Lite 板载回声消除实测有效后可传 mute_during_tts=False，
+机器人自己说话时也能听见"停下"。
 """
 import glob
 import os
@@ -106,12 +108,14 @@ class VoiceEngine(threading.Thread):
                  wake_required: bool = True, follow_up_s: float = 8.0,
                  listen_timeout_s: float = 6.0, num_threads: int = 2,
                  kws_threshold: float = 0.25, wake_ack: str = "在",
-                 chunk_s: float = 0.1, log: Optional[Callable[[str], None]] = None):
+                 chunk_s: float = 0.1, mute_during_tts: bool = True,
+                 log: Optional[Callable[[str], None]] = None):
         super().__init__(name="voice-engine", daemon=True)
         self.paths, self.source, self.speaker = paths, source, speaker
         self.wake_required, self.follow_up_s = wake_required, follow_up_s
         self.listen_timeout_s, self.num_threads = listen_timeout_s, num_threads
         self.kws_threshold, self.wake_ack, self.chunk_s = kws_threshold, wake_ack, chunk_s
+        self.mute_during_tts = mute_during_tts
         self.log = log or (lambda s: None)
         self.events: "queue.Queue[VoiceEvent]" = queue.Queue()
         self._stop = threading.Event()
@@ -149,7 +153,8 @@ class VoiceEngine(threading.Thread):
                     self._drain_vad(vad, asr)
                     self.events.put(VoiceEvent("eof"))
                     break
-                if self.speaker is not None and self.speaker.is_muting():
+                if (self.mute_during_tts and self.speaker is not None
+                        and self.speaker.is_muting()):
                     if getattr(self.source, "live", True):
                         continue                         # 自己在说话：麦克风数据丢弃
                     self.speaker.wait(10.0)              # 文件音源：等说完再处理这段

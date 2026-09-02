@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""语音遥控行走（树莓派 + ReSpeaker 2-Mics HAT；键盘照旧可用）。
+"""语音遥控行走（树莓派 + ReSpeaker Lite USB 麦克风/喇叭板；键盘照旧可用）。
 
   说"小蜘蛛"唤醒 → 听令窗口内说指令，可连说：
     前进/后退/左移/右移/左转/右转 [N 秒 | N 步 | 一直] [快点 | 慢点]
@@ -11,14 +11,15 @@
   · 每条移动指令都有时长：默认 --default-secs，上限 --max-secs（"一直"=上限），
     到点自停；没听懂的句子不动；退出要二次确认；欠压照旧抛异常断舵机电。
   · 语音引擎线程只产事件；舵机/步态全部在主线程，和 walk_teleop 是同一个环。
-  · 机器人自己说话期间不听麦克风（防听见自己说的"停"），TTS 句子都很短。
+  · 机器人自己说话期间默认不听麦克风（防听见自己说的"停"），TTS 句子都很短；
+    Lite 板载回声消除实测有效后可加 --trust-aec，说话期间急停词照样生效。
 
 用法:
-  python voice_teleop.py                             # 真机 + HAT
-  python voice_teleop.py --mock                      # 无舵机干跑（要有 HAT 麦克风）
+  python voice_teleop.py                             # 真机 + ReSpeaker Lite
+  python voice_teleop.py --mock                      # 无舵机干跑（要有麦克风）
   python voice_teleop.py --mock --wav test.wav --no-tts   # 无硬件：wav 顶替麦克风
   python voice_teleop.py --no-wake                   # 不要唤醒词（安静环境）
-  python voice_teleop.py --models ~/models/voice --card seeed2micvoicec
+  python voice_teleop.py --models ~/models/voice --card ReSpeakerLite
 """
 import argparse
 import math
@@ -53,10 +54,12 @@ def main():
     ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--mock", action="store_true", help="MockDriver，不碰舵机")
     ap.add_argument("--models", help="模型根目录（默认 $HEXAPOD_VOICE_MODELS 或 ~/models/voice）")
-    ap.add_argument("--card", help="ALSA 声卡名（默认自动找 seeed2micvoicec）")
+    ap.add_argument("--card", help="ALSA 声卡名（默认自动找 ReSpeaker Lite）")
     ap.add_argument("--wav", help="用 wav 文件顶替麦克风（按真实时间节奏喂）")
     ap.add_argument("--no-wake", action="store_true", help="不要唤醒词，句句都当指令")
     ap.add_argument("--no-tts", action="store_true", help="不说话")
+    ap.add_argument("--trust-aec", action="store_true",
+                    help="信任 Lite 板载回声消除：机器人说话期间也听麦克风（先实测再开）")
     ap.add_argument("--follow-up", type=float, default=8.0,
                     help="唤醒后/每条指令后继续听令的秒数")
     ap.add_argument("--speed", type=float, default=40.0, help="平移速度 mm/s")
@@ -77,8 +80,9 @@ def main():
         source = WavSource(args.wav, realtime=True)
     else:
         if card is None:
-            sys.exit("没找到 HAT 声卡（/proc/asound/cards 里没有 seeed2micvoicec）。"
-                     f"现有声卡: {list_cards()}\n  装好驱动重启后再来，或 --card 指定，或 --wav 顶替。")
+            sys.exit("没找到 ReSpeaker Lite（/proc/asound/cards 里没有 respeaker/lite）。"
+                     f"现有声卡: {list_cards()}\n  USB 线插好了吗（要数据线不是纯充电线）；"
+                     "或 --card 指定，或 --wav 顶替。")
         source = ArecordSource(alsa_device(card))
     speaker = None
     if not args.no_tts:
@@ -90,7 +94,8 @@ def main():
             speaker.start()
             speaker.prewarm(PREWARM)
     engine = VoiceEngine(paths, source, speaker, wake_required=not args.no_wake,
-                         follow_up_s=args.follow_up, log=log)
+                         follow_up_s=args.follow_up,
+                         mute_during_tts=not args.trust_aec, log=log)
     engine.start()
 
     def say(text):

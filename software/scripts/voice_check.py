@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""语音链路自检（装好 HAT 驱动、跑完 voice_setup.sh 之后第一个跑的脚本）。
+"""语音链路自检（插上 ReSpeaker Lite、跑完 voice_setup.sh 之后第一个跑的脚本）。
 
-  python voice_check.py --list            # 列声卡，确认 seeed2micvoicec 在
+  python voice_check.py --list            # 列声卡，确认 ReSpeaker Lite 在
   python voice_check.py --record 4        # 录 4 秒 → 回放（默认存 /tmp/voice_check.wav）
   python voice_check.py --asr FILE.wav    # 对 wav 跑 KWS 唤醒 + VAD 切句 + SenseVoice + 意图
   python voice_check.py --tts "语音系统就绪"   # 合成并从喇叭播放
@@ -29,7 +29,7 @@ def do_list():
     for idx, name, desc in cards:
         print(f"  card {idx}: {name:<18} {desc}")
     card = find_card()
-    print(f"→ 选用: {card or '（没找到 HAT，检查 dtoverlay / 接线）'}")
+    print(f"→ 选用: {card or '（没找到 ReSpeaker Lite，USB 线插好了吗）'}")
     return card
 
 
@@ -51,7 +51,8 @@ def do_record(card, secs, out):
     peak = float(np.abs(audio).max()) if len(audio) else 0.0
     rms = float(np.sqrt((audio ** 2).mean())) if len(audio) else 0.0
     print(f"  存到 {out}：{len(audio)/RATE:.1f}s 峰值 {peak:.3f} 有效值 {rms:.4f}"
-          + ("  ⚠ 太小，查 amixer 'Capture' 音量 / Boost 开关" if peak < 0.02 else ""))
+          + ("  ⚠ 太小，跑 voice_mixer.sh / 查板上 Mute 键是不是按下了（红灯）"
+             if peak < 0.02 else ""))
     print("  回放…")
     AplayPlayer(dev).play_file(out)
     return out
@@ -122,7 +123,7 @@ def main():
 
     if not specific:
         if card is None:
-            sys.exit("没有 HAT 声卡，先解决驱动/接线。")
+            sys.exit("没有 ReSpeaker Lite 声卡，先解决 USB 连接。")
         wav = do_record(card, 5.0, args.out)
         events = do_asr(paths, wav)
         cmds = [e for e in events if e.kind == "command" and e.intent.kind != "unknown"]

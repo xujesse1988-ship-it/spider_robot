@@ -13,7 +13,7 @@
 | [docs/P3-GUIDE.md](docs/P3-GUIDE.md) | P3 整机装配与地面行走指南（第二批下单、打印盘点、全舵机标定） |
 | [docs/BOM.md](docs/BOM.md) | 分阶段采购清单（含淘宝搜索关键词与价格区间） |
 | [docs/CLIMBING-DESIGN.md](docs/CLIMBING-DESIGN.md) | 吸附方式选型论证、力学预算、气路图、电气架构 |
-| [docs/VOICE-GUIDE.md](docs/VOICE-GUIDE.md) | 语音交互：ReSpeaker 2-Mics HAT 接线（引脚冲突表、飞线 9 根、气路 3 根挪位）、Pi 5 驱动（纯 dtoverlay）、全离线唤醒/识别/合成软件与指令表 |
+| [docs/VOICE-GUIDE.md](docs/VOICE-GUIDE.md) | 语音交互：ReSpeaker Lite USB 版（免驱、不占 GPIO，两根线接完）、固件/混音器、全离线唤醒/识别/合成软件与指令表 |
 
 ## 3D 打印文件
 

@@ -38,6 +38,7 @@ from hexapod.voice.audio import (ArecordSource, WavSource, AplayPlayer, NullPlay
 from hexapod.voice.engine import VoiceEngine, ModelPaths
 from hexapod.voice.intents import INTRO_REPLY
 from hexapod.voice.tts import Speaker
+from hexapod.voice.voiceprint import VoiceGate, default_profile
 
 POWER_PRINT_S = 0.5
 EXIT_CONFIRM_S = 10.0
@@ -70,6 +71,12 @@ def main():
     ap.add_argument("--default-secs", type=float, default=3.0, help="没说时长时走多久")
     ap.add_argument("--max-secs", type=float, default=10.0, help="单条指令时长上限")
     ap.add_argument("--sid", type=int, default=0, help="TTS 说话人编号（多人模型才有用）")
+    ap.add_argument("--tts-gain", type=float, default=1.0,
+                    help="TTS 音量倍率；喇叭离麦克风近时降到 0.6，提高说话期间急停命中")
+    ap.add_argument("--no-voiceprint", action="store_true",
+                    help="不开声纹锁（有注册档案时默认开：指令只听主人，急停不拦）")
+    ap.add_argument("--voiceprint", help="声纹档案路径（默认 <模型根>/voiceprint_owner.npz）")
+    ap.add_argument("--spk-threshold", type=float, help="声纹阈值，覆盖档案里的建议值")
     ap.add_argument("--stand-secs", type=float, default=4.0)
     args = ap.parse_args()
 
@@ -93,12 +100,22 @@ def main():
             log("⚠ 没找到 TTS 模型，改为不说话")
         else:
             player = AplayPlayer(alsa_device(card)) if card else NullPlayer()
-            speaker = Speaker(paths.tts_dir, player, sid=args.sid, log=log)
+            speaker = Speaker(paths.tts_dir, player, sid=args.sid,
+                              gain=args.tts_gain, log=log)
             speaker.start()
             speaker.prewarm(PREWARM)
+    gate = None
+    if not args.no_voiceprint:
+        from pathlib import Path
+        prof = Path(args.voiceprint) if args.voiceprint else default_profile(args.models)
+        if prof.exists() and paths.spk_model is not None:
+            gate = VoiceGate(paths.spk_model, prof, threshold=args.spk_threshold, log=log)
+            log(f"[voice] 声纹锁开：{prof.name} 阈值 {gate.threshold:.2f}（急停谁喊都停）")
+        elif args.voiceprint:
+            sys.exit(f"声纹档案 {prof} 不存在或缺声纹模型——先跑 scripts/voice_enroll.py")
     engine = VoiceEngine(paths, source, speaker, wake_required=not args.no_wake,
                          follow_up_s=args.follow_up,
-                         mute_during_tts=not args.trust_aec, log=log)
+                         mute_during_tts=not args.trust_aec, voice_gate=gate, log=log)
     engine.start()
 
     def say(text):
@@ -237,6 +254,8 @@ def main():
                 elif ev.kind == "command":
                     log(f"[voice] “{ev.text}” → {ev.intent.kind}")
                     quit_now = dispatch(ev.intent) or quit_now
+                elif ev.kind == "denied":
+                    log(f"[voice] 声纹不符，忽略：“{ev.text}”")
                 elif ev.kind == "error":
                     halt()
                     engine_alive = False

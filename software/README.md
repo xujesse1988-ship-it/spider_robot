@@ -22,7 +22,7 @@ pip install -e ".[pi]"
 | `hexapod/robot.py` | 身体系足端目标 → 变换 → IK → 18 路脉宽；身体姿态偏移（爬墙贴墙姿态用） |
 | `hexapod/driver.py` | Servo2040 chica 协议驱动 + MockDriver；含足底开关/电压/电流读取 |
 | `hexapod/adhesion.py` | 吸附状态机（RELEASED→PRESSING→SUCKING→ATTACHED→VENTING）+ 真空回路仿真；`Pi5VacuumIO` 留待 P1 台架按实际接线补全 |
-| `hexapod/voice/` | 语音交互（`docs/VOICE-GUIDE.md`）：`intents.py` 识别文本→意图（纯规则）、`keywords.py` 唤醒词→KWS 关键词表、`audio.py` arecord/aplay 录放音、`tts.py` 离线合成+缓存、`engine.py` KWS→VAD→SenseVoice 引擎线程 |
+| `hexapod/voice/` | 语音交互（`docs/VOICE-GUIDE.md`）：`intents.py` 识别文本→意图（纯规则）、`keywords.py` 唤醒词→KWS 关键词表、`audio.py` arecord/aplay 录放音、`tts.py` 离线合成+缓存+分句播报、`engine.py` KWS→VAD→SenseVoice 引擎线程、`voiceprint.py` 声纹锁 |
 
 ## 脚本（按上手顺序）
 
@@ -32,10 +32,11 @@ python scripts/servo_center.py                   # 1. 装配标定：全舵机�
 python scripts/stand_up.py                       # 2. 站立测试 + 传感器读数
 python scripts/walk_teleop.py                    # 3. 键盘遥控行走 (wasd/qe)
 python scripts/voice_check.py                    # 4. 语音自检：录 5 秒→回放→识别→TTS（要 ReSpeaker Lite，见 docs/VOICE-GUIDE.md）
-python scripts/voice_teleop.py                   # 5. 语音遥控行走（“小蜘蛛，前进三秒”/“停下”；键盘照旧）
+python scripts/voice_enroll.py                   # 5. （可选）声纹注册：行走指令只听你，急停谁喊都停
+python scripts/voice_teleop.py                   # 6. 语音遥控行走（“小蜘蛛，前进三秒”/“停下”；键盘照旧）
 ```
 
-全部脚本支持 `--mock` 干跑（`voice_*` 还支持 `--wav` 用录音顶替麦克风）。测试：`pytest tests/`（覆盖 IK 往返、步态约束、协议字节、吸附状态机、语音意图/关键词）。
+全部脚本支持 `--mock` 干跑（`voice_*` 还支持 `--wav` 用录音顶替麦克风）。测试：`pytest tests/`（覆盖 IK 往返、步态约束、协议字节、吸附状态机、语音意图/关键词/回声过滤/声纹锁）。
 
 语音一键安装（树莓派）：`bash scripts/voice_setup.sh`，依赖见 `requirements.txt` 语音段。
 

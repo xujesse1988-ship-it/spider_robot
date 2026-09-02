@@ -20,6 +20,7 @@ KWS=sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
 ASR=sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17
 TTS=matcha-icefall-zh-baker
 VOCODER=vocos-22khz-univ.onnx
+SPK=3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx   # 声纹锁（tag 的拼写错误是官方原样）
 GH=${SHERPA_ONNX_MIRROR:-}https://github.com/k2-fsa/sherpa-onnx/releases/download
 
 fetch_tar() {  # <子目录名> <tag>
@@ -57,13 +58,14 @@ if [ "$ONLY" = all ]; then
   "$VENV/bin/python" -c "import sherpa_onnx, numpy, pypinyin; print('  sherpa-onnx', sherpa_onnx.__version__)"
 fi
 
-step "4/5 模型 → $MODELS（KWS 18MB + SenseVoice 228MB + VAD 2MB + Matcha 73MB + 声码器 30MB）"
+step "4/5 模型 → $MODELS（KWS 18MB + SenseVoice 228MB + VAD 2MB + Matcha 73MB + 声码器 30MB + 声纹 28MB）"
 mkdir -p "$MODELS"
 fetch_tar "$KWS" kws-models
 fetch_tar "$ASR" asr-models
 fetch_tar "$TTS" tts-models
 [ -f "$MODELS/silero_vad.onnx" ] || { echo "  下载 silero_vad.onnx …"; curl -SL --retry 3 -o "$MODELS/silero_vad.onnx" "$GH/asr-models/silero_vad.onnx"; }
 [ -f "$MODELS/$VOCODER" ] || { echo "  下载 $VOCODER …"; curl -SL --retry 3 -o "$MODELS/$VOCODER" "$GH/vocoder-models/$VOCODER"; }
+[ -f "$MODELS/$SPK" ] || { echo "  下载 $SPK …"; curl -SL --retry 3 -o "$MODELS/$SPK" "$GH/speaker-recongition-models/$SPK"; }
 du -sh "$MODELS"/* | sed 's/^/  /'
 [ "$ONLY" = models ] && exit 0
 
@@ -82,6 +84,7 @@ cat <<TXT
 完成。下一步：
   1. arecord -l && aplay -l          # 应看到 ReSpeaker Lite（USB Audio）
   2. cd software && .venv/bin/python scripts/voice_check.py      # 录 5 秒→回放→识别→TTS
-  3. .venv/bin/python scripts/voice_teleop.py --mock             # 先不带舵机试语音
+  3. .venv/bin/python scripts/voice_enroll.py                    # （可选）声纹注册：指令只听你
+  4. .venv/bin/python scripts/voice_teleop.py --mock             # 先不带舵机试语音
 （若第 2/5 步追加了 usb_max_current_enable=1，测大音量前先 sudo reboot）
 TXT

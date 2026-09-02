@@ -42,6 +42,15 @@ def test_intro_intent():
         assert w not in INTRO_REPLY
 
 
+def test_split_sentences():
+    from hexapod.voice.tts import split_sentences
+    parts = split_sentences(INTRO_REPLY)
+    assert len(parts) == 4                                # 分句播报：句间留静音窗
+    assert "".join(parts) == INTRO_REPLY
+    assert split_sentences("停") == ["停"]
+    assert split_sentences("") == []
+
+
 def test_long_reply_echo_segments():
     # 长回话被 VAD 切成片段回来（自我介绍场景）
     assert looks_like_echo("六个真空吸盘管吸墙", [INTRO_REPLY])      # 原文片段

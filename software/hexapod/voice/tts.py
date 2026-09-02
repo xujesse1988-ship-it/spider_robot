@@ -4,23 +4,36 @@
 缓存（~/.cache/hexapod-voice/），以后直接播，零延迟；动态句子（电压读数）
 现合成，Pi 5 上 vits 一句 ≈0.2~0.4s。
 
-播放在独立线程里做，不阻塞语音引擎读麦克风；引擎用 is_muting() 在机器人
-自己说话期间（含 0.3s 尾巴）丢弃麦克风数据，避免听见自己说的"停"。
+播放在独立线程里做，不阻塞语音引擎读麦克风。长回话按句切开播、句间留
+gap_s 静音窗——板载 AEC 实测无效（VOICE-GUIDE §3.3），静音窗是用户在
+机器人说话中途喊"停下"能被 KWS 听清的主要机会；急停 cancel() 在句间与
+句中（掐 aplay）都能立即闭嘴。gain 压低音量可进一步提高说话期间的信噪比。
+缓存按"句"为键（分句播放正好复用）。
 """
 import hashlib
 import os
 import queue
+import re
 import threading
 import time
 from collections import deque
 from pathlib import Path
-from typing import Callable, Iterable, Optional, Tuple
+from typing import Callable, Iterable, List, Optional, Tuple
 
 from .audio import read_wav, write_wav
 
 VITS_MODEL = "model.onnx"
 MATCHA_MODEL = "model-steps-3.onnx"
 RULE_FSTS = ("phone.fst", "date.fst", "number.fst")
+
+_SENT_RE = re.compile(r"[^。！？；!?;]+[。！？；!?;]*")
+
+
+def split_sentences(text: str) -> List[str]:
+    """长回话按句号/问号/分号切开（保留标点），空白句丢弃。"""
+    parts = [p.strip() for p in _SENT_RE.findall(text or "")]
+    parts = [p for p in parts if p]
+    return parts or ([text] if text else [])
 
 
 def describe_model(model_dir) -> str:
@@ -71,17 +84,21 @@ class Speaker(threading.Thread):
 
     def __init__(self, model_dir, player, *, sid: int = 0, speed: float = 1.0,
                  num_threads: int = 2, cache_dir: Optional[str] = None,
-                 vocoder: Optional[str] = None, log: Optional[Callable[[str], None]] = None):
+                 vocoder: Optional[str] = None, gain: float = 1.0,
+                 gap_s: float = 0.45, log: Optional[Callable[[str], None]] = None):
         super().__init__(name="voice-speaker", daemon=True)
         self.model_dir, self.player = Path(model_dir), player
         self.sid, self.speed, self.num_threads, self.vocoder = sid, speed, num_threads, vocoder
+        self.gain = gain              # <1 压低音量：提高说话期间用户喊声的信噪比
+        self.gap_s = gap_s            # 句间静音窗：KWS 在这里能听到干净的人声
         self.cache_dir = Path(cache_dir or os.environ.get("HEXAPOD_VOICE_CACHE")
                               or Path.home() / ".cache" / "hexapod-voice")
         self.log = log or (lambda s: None)
         self._q: "queue.Queue" = queue.Queue()
         self._tts = None
-        self._recent = deque(maxlen=8)     # (说过的句子, 播完时刻)——自听过滤用
+        self._recent = deque(maxlen=16)    # (说过的句子, 播完时刻)——自听过滤用
         self._playing_text: Optional[str] = None
+        self._cancel = threading.Event()
         self._lock = threading.Lock()
         self._busy = threading.Event()
         self._idle = threading.Event()
@@ -128,7 +145,8 @@ class Speaker(threading.Thread):
         return out
 
     def cancel(self) -> None:
-        """立即闭嘴：清掉还没播的，掐断正在播的（急停用）。"""
+        """立即闭嘴：清掉还没播的，掐断正在播的，跳过剩余句子（急停用）。"""
+        self._cancel.set()
         try:
             while True:
                 self._q.get_nowait()
@@ -188,21 +206,31 @@ class Speaker(threading.Thread):
                 if kind == "quit":
                     break
                 if kind == "warm":
-                    self.render(text, cache=True)
+                    for part in split_sentences(text):   # 与播放同键，缓存才命中
+                        self.render(part, cache=True)
                     continue
+                # say：分句播，句间留静音窗
+                self._cancel.clear()
                 if mute:
                     self._busy.set()
-                if kind == "say":
-                    self._playing_text = text
-                samples, rate = self.render(text, cache=cache)
-                self.player.play(samples, rate)
+                parts = split_sentences(text)
+                for i, part in enumerate(parts):
+                    if self._cancel.is_set():
+                        break
+                    samples, rate = self.render(part, cache=cache)
+                    if self.gain != 1.0:
+                        samples = samples * self.gain
+                    self._playing_text = part
+                    self.player.play(samples, rate)
+                    self._recent.append((part, time.time()))
+                    self._playing_text = None
+                    if i + 1 < len(parts) and not self._cancel.is_set():
+                        time.sleep(self.gap_s)
             except Exception as e:                      # 说不出话不能拖死机器人
                 self.log(f"⚠ tts 失败 {text!r}: {e}")
             finally:
                 if kind == "say":
-                    if self._playing_text is not None:
-                        self._recent.append((text, time.time()))
-                        self._playing_text = None
+                    self._playing_text = None
                     if mute:
                         self._last_end = time.time()
                         self._busy.clear()

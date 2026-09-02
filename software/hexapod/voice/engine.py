@@ -12,6 +12,7 @@
   asleep  听令窗口超时，回到只听唤醒词
   stop    KWS 急停词命中（text=哪个词）——调用方必须立即停
   command 一句识别完成（text=原文，intent=解析结果；unknown 也会给，供打印）
+  denied  声纹锁拒绝（text=原文，intent 附带）——不是注册的主人在说话；急停不经此闸
   eof     音源结束（wav 顶替麦克风时）
   error   模型加载/运行异常（text=原因），引擎线程随之退出
 
@@ -74,6 +75,7 @@ class ModelPaths:
     vad_model: Path
     keywords_file: Path
     tts_dir: Optional[Path] = None
+    spk_model: Optional[Path] = None      # 声纹模型（可选，声纹锁用）
 
     @staticmethod
     def default_root() -> Path:
@@ -106,7 +108,14 @@ class ModelPaths:
                 if hits:
                     tts = Path(hits[0])
                     break
-        return cls(kws_dir=kws, asr_dir=asr, vad_model=vad, keywords_file=kw, tts_dir=tts)
+        spk = None
+        for pat in ("3dspeaker_*campplus*.onnx", "3dspeaker_*.onnx", "wespeaker*.onnx"):
+            hits = sorted(glob.glob(str(root / pat)))
+            if hits:
+                spk = Path(hits[0])
+                break
+        return cls(kws_dir=kws, asr_dir=asr, vad_model=vad, keywords_file=kw,
+                   tts_dir=tts, spk_model=spk)
 
     def kws_files(self):
         d = self.kws_dir
@@ -141,9 +150,10 @@ class VoiceEngine(threading.Thread):
                  listen_timeout_s: float = 6.0, num_threads: int = 2,
                  kws_threshold: float = 0.25, wake_ack: str = "在",
                  chunk_s: float = 0.1, mute_during_tts: bool = True,
-                 log: Optional[Callable[[str], None]] = None):
+                 voice_gate=None, log: Optional[Callable[[str], None]] = None):
         super().__init__(name="voice-engine", daemon=True)
         self.paths, self.source, self.speaker = paths, source, speaker
+        self.voice_gate = voice_gate       # voiceprint.VoiceGate；None=不开声纹锁
         self.wake_required, self.follow_up_s = wake_required, follow_up_s
         self.listen_timeout_s, self.num_threads = listen_timeout_s, num_threads
         self.kws_threshold, self.wake_ack, self.chunk_s = kws_threshold, wake_ack, chunk_s
@@ -195,8 +205,11 @@ class VoiceEngine(threading.Thread):
                     if r:
                         kws.reset_stream(ks)
                         tag, word = parse_result(r)
+                        # 尾巴放宽到 1s：句尾的唤醒词（"…叫我小蜘蛛"）经声学+
+                        # 缓冲延迟到达 KWS 时往往已过 0.3s 默认窗（09-02 实机：
+                        # 就绪播报刚完它自己应了声"在"）
                         speaking = (self.speaker is not None
-                                    and self.speaker.is_muting())
+                                    and self.speaker.is_muting(tail_s=1.0))
                         if tag == "STOP":
                             self.log(f"[kws] 急停词 {word}")
                             self.events.put(VoiceEvent("stop", word))
@@ -258,6 +271,14 @@ class VoiceEngine(threading.Thread):
                 self.log(f"[asr] {len(samples)/RATE:.1f}s → {text!r} ≈ 自己刚说的，丢弃")
                 continue
             intent = parse(text)
+            if self.voice_gate is not None and intent.kind != "stop":
+                # 声纹锁：急停不经此闸（谁喊都停），其余指令只听主人
+                ok, sc = self.voice_gate.accept(samples)
+                if not ok:
+                    self.log(f"[spk] 声纹 {sc:.2f} < {self.voice_gate.threshold:.2f}"
+                             f"，拒绝 {text!r}")
+                    self.events.put(VoiceEvent("denied", text, intent))
+                    continue                 # 也不延长听令窗
             self.log(f"[asr] {len(samples)/RATE:.1f}s → {text!r} → {intent.kind}"
                      f" ({time.time()-t0:.2f}s)")
             self.events.put(VoiceEvent("command", text, intent))

@@ -10,26 +10,28 @@ KWS 命中时 get_result() 返回 '@' 后面的名字，parse_result() 拆回 (�
 
 类别约定：WAKE = 唤醒词（进入听令状态）；STOP = 急停词（不需唤醒，随时生效）。
 急停词故意不收单字"停"——单音节误触太多，单字"停"走唤醒后的整句识别。
+急停词阈值比唤醒低、并带提升分：安全方向是"多停"，且要能从机器人自己
+说话的回声里把用户的喊声捞出来（09-02 实机：0.35 时说话期间喊"停下"不命中）。
 
 原始词表文件（scripts/voice_setup.sh 用 keywords_raw.txt 生成）：
     # 井号开头整行是注释
     小蜘蛛 @WAKE #0.25
-    停下 @STOP #0.35
+    停下 @STOP #0.20 :2.0
 命令行：python -m hexapod.voice.keywords --tokens <kws 模型>/tokens.txt --out keywords.txt
 """
 import argparse
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-Entry = Tuple[str, str, Optional[float]]          # (词, 类别, 阈值)
+Entry = Tuple[str, str, Optional[float], Optional[float]]   # (词, 类别, 阈值, 提升分)
 
 DEFAULT_KEYWORDS: List[Entry] = [
-    ("小蜘蛛", "WAKE", 0.25),
-    ("蜘蛛同学", "WAKE", 0.25),
-    ("停下", "STOP", 0.35),
-    ("停止", "STOP", 0.35),
-    ("停下来", "STOP", 0.35),
-    ("别动", "STOP", 0.35),
+    ("小蜘蛛", "WAKE", 0.25, None),
+    ("蜘蛛同学", "WAKE", 0.25, None),
+    ("停下", "STOP", 0.20, 2.0),
+    ("停止", "STOP", 0.20, 2.0),
+    ("停下来", "STOP", 0.20, 2.0),
+    ("别动", "STOP", 0.20, 2.0),
 ]
 
 
@@ -78,25 +80,28 @@ def keyword_line(word: str, tag: str, threshold: Optional[float] = None,
 
 def build(entries: Iterable[Entry], tokens_txt) -> str:
     tokens = load_tokens(tokens_txt)
-    lines = [keyword_line(w, tag, th, tokens=tokens) for w, tag, th in entries]
+    lines = [keyword_line(w, tag, th, boost=bo, tokens=tokens)
+             for w, tag, th, bo in entries]
     return "\n".join(lines) + "\n"
 
 
 def load_raw(path) -> List[Entry]:
-    """原始词表：`词 @类别 [#阈值]`，'#' 开头整行注释，空行忽略。"""
+    """原始词表：`词 @类别 [#阈值] [:提升分]`，'#' 开头整行注释，空行忽略。"""
     entries: List[Entry] = []
     for raw in Path(path).read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
         parts = line.split()
-        word, tag, th = parts[0], "WAKE", None
+        word, tag, th, bo = parts[0], "WAKE", None, None
         for p in parts[1:]:
             if p.startswith("@"):
                 tag = p[1:]
             elif p.startswith("#"):
                 th = float(p[1:])
-        entries.append((word, tag, th))
+            elif p.startswith(":"):
+                bo = float(p[1:])
+        entries.append((word, tag, th, bo))
     return entries
 
 

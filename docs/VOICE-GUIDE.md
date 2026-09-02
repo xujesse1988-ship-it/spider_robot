@@ -104,6 +104,7 @@ GPIO/lgpio、不碰 `Pi5VacuumIO`。唯一交集是 §1.1 的 USB 供电预算�
 | 切句 | `silero_vad.onnx` | 2 MB | 语音活动检测，句尾 0.4 s 静音判定 |
 | 识别 | `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17` | 228 MB | 非流式，中英粤日韩；A76 单线程 RTF ≈0.1；`use_itn=True` 把"三秒"输出成"3秒" |
 | 合成 | `matcha-icefall-zh-baker` + `vocos-22khz-univ.onnx` | 73 + 30 MB | 中文女声；开发机 RTF 0.12；回环识别几乎全对（§5） |
+| 声纹（可选） | `3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx` | 28 MB | 声纹锁（§3.8）：指令只听注册的主人；192 维嵌入，一段 ~0.1s |
 
 全在 `~/models/voice/`（或 `HEXAPOD_VOICE_MODELS`），`ModelPaths.discover()` 按目录名
 前缀找，换更新版本只要目录名前缀不变。
@@ -118,10 +119,12 @@ software/hexapod/voice/
   audio.py          arecord/aplay 子进程录放音（不装 PortAudio）；WavSource 用 wav 顶替麦克风
   tts.py            Speaker 线程：Matcha/VITS 合成 + 固定短语 wav 缓存（~/.cache/hexapod-voice）
   engine.py         VoiceEngine 线程：KWS 常驻 → VAD → SenseVoice → 意图 → 事件队列
+  voiceprint.py     声纹锁（§3.8）：注册档案 + VoiceGate 打分
 software/scripts/
   voice_setup.sh    树莓派一键安装（§2.1）
   voice_mixer.sh    混音器初始化
   voice_check.py    自检：列声卡 → 录 5 秒 → 回放 → 识别 → TTS 报结论
+  voice_enroll.py   声纹注册/验证（§3.8）
   voice_teleop.py   语音遥控行走（键盘照旧可用）
 ```
 
@@ -159,7 +162,19 @@ software/scripts/
 
 **说话期间的急停**（09-02 第二轮加强）：KWS 在机器人说话期间也**常驻**——说话
 期间关闭的只有整句识别，"停下"随时有效，并且会**立即打断说话**（清掉没播的、
-掐断正在播的 aplay）；说话中冒出的唤醒词（自我介绍里的"我是小蜘蛛"）自动忽略。
+掐断正在播的 aplay、跳过剩余句子）；说话中冒出的唤醒词（自我介绍里的"我是
+小蜘蛛"）自动忽略，判定窗带 1 s 尾巴（句尾唤醒词的回声经声学+缓冲延迟到达
+KWS 时已在播放结束之后——实机踩过：就绪播报"…叫我小蜘蛛"刚完它自己应了声"在"）。
+
+**说话期间喊"停下"的命中率**（09-02 实测第一轮为 0，三个杠杆）：
+1. **分句播报**：长回话按句切开、句间留 0.45 s 静音窗（`Speaker.gap_s`）——AEC
+   无效的情况下，静音窗是 KWS 听清用户喊声的主要机会；顺带 VAD 也按句切回声段，
+   自听过滤按句精确匹配。缓存改按句为键。
+2. **急停词更灵敏**：`keywords_raw.txt` 急停阈值 0.35→**0.20** + 提升分 :2.0
+   （唤醒仍 0.25——急停的误触方向是"多停"，安全）。**改完词表必须重新生成**：
+   `python -m hexapod.voice.keywords --tokens <kws目录>/tokens.txt --out <kws目录>/keywords_hexapod.txt --raw hexapod/voice/keywords_raw.txt`
+3. **物理与音量**：喇叭线够长——把喇叭装得离麦克风远些、出声面背对麦克风，这是
+   最大的杠杆；软件侧 `--tts-gain 0.6` 压低播报音量提高信噪比。
 新增"自我介绍"指令（≈15 s 长回话，措辞刻意避开急停词）作为这条链路的试金石。
 
 ### 3.4 指令表（`intents.py`）
@@ -211,6 +226,7 @@ python scripts/voice_teleop.py --default-secs 2 --max-secs 6 --speed 30
 | 一句话被切成两半 | `engine.py` `min_silence_duration` 0.4 → 0.6 |
 | 泵一开识别变差 | XU316 的噪声抑制对稳态泵噪应该有效，先实测再说；还不行就近距离喊、只依赖急停/唤醒 |
 | 怀疑麦克风取错通道 | `voice_check.py --echo-test` 判定；`HEXAPOD_AUDIO_PICK=1` 临时切到通道 1 试 |
+| 说话期间喊"停下"不停 | 见 §3.3 三个杠杆：分句静音窗已内置；急停阈值 0.20（改过 `keywords_raw.txt` 要重新生成词表）；`--tts-gain 0.6` + 喇叭挪远/背对麦克风 |
 | 音量大 Pi 欠压 | `amixer -c <卡> sset <放音控制> 70%`（`voice_mixer.sh` 默认 90%）再 `alsactl store` |
 | 说话慢半拍 | 首句合成要加载模型 ≈1.5 s，`voice_teleop` 启动时已预热常用短语；动态句（电压）每次现合成 0.1~0.3 s |
 
@@ -219,6 +235,27 @@ python scripts/voice_teleop.py --default-secs 2 --max-secs 6 --speed 30
 现在只接了地面行走（`voice_teleop.py` 与 `walk_teleop.py` 同一个环）。`climb_walk.py` /
 `body_lean.py` 是带安全绳纪律的交互脚本，本次不动；以后要加语音急停，把
 `VoiceEngine.events` 当另一路按键源接进它们的键盘处理即可（stop 事件 = 已有的急停键）。
+
+### 3.8 声纹锁（可选：指令只听主人）
+
+注册过声纹后，**行走等指令只认注册的人**，别人（或电视/它自己的 TTS）说"前进"
+会被拒绝且不回话；**急停不经此闸——谁喊"停下"都停**（安全 > 便利），唤醒也不拦
+（KWS 流式做不了低延迟声纹，且陌生人唤醒后说的指令照样被拒）。
+
+```bash
+python scripts/voice_enroll.py            # 读 5 段提示语注册 → voiceprint_owner.npz
+python scripts/voice_enroll.py --test     # 自己验一次（✓），换别人验一次（✗）
+python scripts/voice_teleop.py            # 检测到档案自动开锁；--no-voiceprint 关
+```
+
+- 档案：`<模型根>/voiceprint_owner.npz`（`$HEXAPOD_VOICEPRINT` 可改），存注册段
+  声纹 + 建议阈值（按注册自相似度 −0.15，夹在 0.35~0.60）；`--spk-threshold` 可覆盖。
+- 误拒（自己被拒）→ 阈值调低 / 重新注册（注册时环境要和使用时接近，泵开着用就
+  开着泵注册几段）；误纳（别人能指挥）→ 阈值调高。
+- 开发机验证：同人不同句余弦 0.68~0.85，不同人 0.11~0.48；cmds.wav 端到端，
+  主人档案 5 指令全放行，陌生人档案 5 指令全拒且 2 个急停照常触发。
+- 局限：救不了被喇叭声压住的喊话（混叠段声纹也是糊的）——说话期间的急停命中
+  还是靠 §3.3 三个杠杆；带感冒、隔很远喊，分数会降。
 
 ## 4. 排障
 
@@ -276,6 +313,14 @@ cmds.wav 正常指令流回归不受影响；pytest 154 例全绿。
 两段 7.2 s 回声全部 `≈ 自己刚说的，丢弃`，句尾"想让我停"未误触急停；cmds.wav
 正常指令流 10 事件不变；pytest 156 例全绿。
 
+第四轮（09-02 实机命中率第一测 + 开发机修正）：实机 `--trust-aec` 下趁自我介绍喊
+"停下"**未命中**（KWS 在听——它连自己念的"小蜘蛛"都抓到了——纯声学掩蔽；且用户
+喊声混进 7.2 s 回声段被一起丢弃）；就绪播报"…叫我小蜘蛛"结尾还触发了一次自唤醒
+应答"在"（尾巴 0.3 s 不够）。修正=分句播报+句间 0.45 s 静音窗、急停阈值 0.20:2.0、
+`--tts-gain`、唤醒抑制尾巴 1 s。开发机真实时序复测：逐句回声（含听歪的"六组机器人"）
+全部丢弃、自唤醒忽略、cancel 跳过剩余句子；sherpa 正常加载带提升分的词表并照常
+命中急停；pytest 157 例全绿。
+
 ## 6. 待办
 
 - [x] 插板跑 `voice_setup.sh` + `voice_check.py`（09-02 通过，卡名 `Lite`，见 §5）
@@ -287,6 +332,8 @@ cmds.wav 正常指令流回归不受影响；pytest 154 例全绿。
 - [ ] 机器人说话期间喊"停下"的命中率实测：说"小蜘蛛"→"自我介绍"，趁 15 s 长回话
   喊"停下"，应立即闭嘴 + `[voice] 急停`；多试几次记命中率，写回本节
   （KWS 现在说话期间常驻，默认模式与 `--trust-aec` 都能测）
+- [ ] 声纹锁实机：`voice_enroll.py` 注册（含开泵环境段）→ `--test` 本人/他人各验
+  → teleop 下别人说指令应 `[voice] 声纹不符`、喊"停下"应照停；记录实机阈值
 - [ ] 舵机/泵噪声下的识别率实测；必要时换 `sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20`
 - [ ] `climb_walk.py` 接语音急停事件
 

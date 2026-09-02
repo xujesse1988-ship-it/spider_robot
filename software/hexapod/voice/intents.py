@@ -27,6 +27,7 @@ _NUM_RE = r"(\d+(?:\.\d+)?|[零〇一幺二两俩三四五六七八九十]+|半)
 _DUR_RE = re.compile(_NUM_RE + r"(秒钟|秒|s|分钟|分)")
 _STEP_RE = re.compile(r"(\d+|[一二两俩三四五六七八九十]+|几)步")
 
+WAKE_WORDS = ("小蜘蛛", "蜘蛛同学")   # 与 keywords_raw.txt 保持一致
 STOP_WORDS = ("停", "别动", "站住", "不要动", "别走", "别跑", "定住", "stop")
 CONFIRM_WORDS = {"确定", "确认", "是的", "是", "对", "对的", "好的", "好", "可以",
                  "嗯", "没错", "yes", "ok"}
@@ -50,7 +51,7 @@ _BACK = re.compile(r"后退|倒退|向后|往后|朝后|退后|倒车|back|退")
 @dataclass
 class Intent:
     kind: str                     # stop/walk/stand/crouch/gait/status/greet/exit/
-                                  # confirm/cancel/unsupported/unknown
+                                  # confirm/cancel/unsupported/ignore/unknown
     text: str = ""                # 归一化后的原文
     vx: float = 0.0               # 方向 ±1（前+）
     vy: float = 0.0               # 方向 ±1（左+）
@@ -131,6 +132,10 @@ def parse(text: str) -> Intent:
 
     if any(w in t for w in STOP_WORDS):
         return Intent("stop", t, reply="停")
+    if t in WAKE_WORDS:
+        # 唤醒词本身被 VAD 切成整句识别出来（KWS 已单独发过 wake 事件）：
+        # 不动、不回话——否则会回"没听懂"，很吵
+        return Intent("ignore", t)
     if t in CONFIRM_WORDS:
         return Intent("confirm", t)
     if t in CANCEL_WORDS:

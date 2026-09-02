@@ -91,15 +91,19 @@ def write_wav(path, samples, rate: int) -> str:
 
 
 class ArecordSource:
-    """麦克风：arecord 常驻子进程，read(n) 返回 n 个单声道 float32 样本
-    （多通道只取第 0 通道，见模块头注释）。
+    """麦克风：arecord 常驻子进程，read(n) 返回 n 个单声道 float32 样本。
 
+    多通道只取一路（默认第 0 通道，环境变量 HEXAPOD_AUDIO_PICK 可换，
+    见模块头注释；哪路干净用 voice_check.py --echo-test 判定）。
     live=True：数据随真实时间流逝，引擎在机器人说话期间可以直接丢弃。
     """
     live = True
 
-    def __init__(self, device: str, rate: int = RATE, channels: int = 2):
-        self.rate, self.channels, self.device = rate, channels, device
+    def __init__(self, device: str, rate: int = RATE, channels: int = 2,
+                 pick: Optional[int] = None):
+        if pick is None:
+            pick = int(os.environ.get("HEXAPOD_AUDIO_PICK", "0"))
+        self.rate, self.channels, self.device, self.pick = rate, channels, device, pick
         cmd = ["arecord", "-q", "-D", device, "-f", "S16_LE", "-r", str(rate),
                "-c", str(channels), "-t", "raw"]
         self._p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
@@ -118,7 +122,7 @@ class ArecordSource:
             if not chunk:
                 return None                      # arecord 退出
             buf += chunk
-        return _to_float32(bytes(buf), self.channels, pick=0)
+        return _to_float32(bytes(buf), self.channels, pick=self.pick)
 
     def close(self):
         if self._p.poll() is None:

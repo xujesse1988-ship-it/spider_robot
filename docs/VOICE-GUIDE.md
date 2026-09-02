@@ -69,15 +69,15 @@ cd ~/spider && bash software/scripts/voice_setup.sh     # 5 步，见脚本头�
 ```bash
 lsusb | grep -i 2886                 # Seeed 的 USB VID，应有一行
 arecord -l && aplay -l               # 应有 USB Audio: ReSpeaker Lite（录、放各一）
-arecord -D plughw:CARD=<卡名>,DEV=0 --dump-hw-params -d 1 /dev/null 2>&1 | head
+arecord -D plughw:CARD=Lite,DEV=0 --dump-hw-params -d 1 /dev/null 2>&1 | head
                                      # 看固件实际支持的采样率/通道数（16kHz）
 bash software/scripts/voice_mixer.sh # 放音/录音音量 90% + alsactl store
-arecord -D plughw:CARD=<卡名>,DEV=0 -f S16_LE -r 16000 -c 1 -d 3 /tmp/t.wav
-aplay   -D plughw:CARD=<卡名>,DEV=0 /tmp/t.wav
+arecord -D plughw:CARD=Lite,DEV=0 -f S16_LE -r 16000 -c 1 -d 3 /tmp/t.wav
+aplay   -D plughw:CARD=Lite,DEV=0 /tmp/t.wav
 ```
 
-`<卡名>`看 `/proc/asound/cards` 方括号里那个。TTS 合成的 22.05 kHz wav 经 `plughw`
-自动重采样到 16 kHz 播放，不用管。
+实机确认 ALSA 卡名就是 `Lite`（`/proc/asound/cards`：`0 [Lite] USB-Audio - ReSpeaker Lite`）。
+TTS 合成的 22.05 kHz wav 经 `plughw` 自动重采样到 16 kHz 播放，不用管。
 
 ### 2.3 固件（一般不用动）
 
@@ -138,10 +138,22 @@ software/scripts/
 两层的原因：急停要快、要随时有效，流式关键词最合适，误触代价只是多停一次；其它
 指令走整句识别，准确率高得多且能自由组合（"快点往前走三秒"）。
 
-**自听问题**：默认机器人说话期间（TTS 播放 + 0.3 s 尾巴）丢弃麦克风数据，免得听见
-自己说的"停"。但喇叭就接在 Lite 板上，XU316 的 AEC 拿自己正在播的音频当参考、能把
-回声消掉——实机验证有效后给 `voice_teleop.py` 加 **`--trust-aec`**，机器人说话期间
-急停词照样生效（安全性更好），验证方法见 §6。
+**自听问题**（两道防线，09-02 实机教训）：
+
+1. 默认机器人说话期间（TTS 播放 + 0.3 s 尾巴）丢弃麦克风数据；
+2. **自听过滤**：引擎把每句识别结果和机器人 2.5 s 内说过的话比对，相近就丢弃
+   （`engine.looks_like_echo`，容错到"电流1.0安"被听歪成"电容1.0N"；"停""在"这类
+   ≤2 字短回话只认全等，用户真喊的"停下"不会被吃）。
+
+第 2 层是 09-02 实机踩坑后加的：开 `--trust-aec` 实测发现板载 AEC **没有**压住
+喇叭→麦克风回声，"电压7.4伏电流1.0安"的回答被再次识别成 status 指令，机器人
+自问自答死循环。可能是 AEC 无效，也可能处理后音频不在通道 0——用
+`voice_check.py --echo-test` 判定（§6），麦克风取哪路可用 `HEXAPOD_AUDIO_PICK=1`
+临时切换。有了自听过滤，`--trust-aec` 什么时候都能开：坏处没了（不会自问自答），
+好处是机器人说话期间 KWS 仍在听，用户的急停词有机会穿透回声被识别。
+
+另外唤醒词本身被 VAD 切成整句识别出来（"小蜘蛛。"）时，intents 返回 `ignore`，
+不再回"没听懂"（09-02 实机的另一个小坑）。
 
 ### 3.4 指令表（`intents.py`）
 
@@ -190,6 +202,7 @@ python scripts/voice_teleop.py --default-secs 2 --max-secs 6 --speed 30
 | 急停词误触 | 阈值 0.35 → 0.45（误触方向是"多停"，可以容忍一点） |
 | 一句话被切成两半 | `engine.py` `min_silence_duration` 0.4 → 0.6 |
 | 泵一开识别变差 | XU316 的噪声抑制对稳态泵噪应该有效，先实测再说；还不行就近距离喊、只依赖急停/唤醒 |
+| 怀疑麦克风取错通道 | `voice_check.py --echo-test` 判定；`HEXAPOD_AUDIO_PICK=1` 临时切到通道 1 试 |
 | 音量大 Pi 欠压 | `amixer -c <卡> sset <放音控制> 70%`（`voice_mixer.sh` 默认 90%）再 `alsactl store` |
 | 说话慢半拍 | 首句合成要加载模型 ≈1.5 s，`voice_teleop` 启动时已预热常用短语；动态句（电压）每次现合成 0.1~0.3 s |
 
@@ -209,7 +222,8 @@ python scripts/voice_teleop.py --default-secs 2 --max-secs 6 --speed 30
 | `arecord: Device or resource busy` | 另一个 voice_teleop/voice_check 还在跑 |
 | 大音量爆音/Pi 欠压（`get_throttled` ≠ 0） | `config.txt` 有没有 `usb_max_current_enable=1`（加了要重启）；降放音音量；终极方案板上 5V 焊盘直供 |
 | 唤醒后指令没反应 | 看终端 `[asr]` 行：识别文本对但意图 unknown → 加词到 `intents.py`；没有 `[asr]` 行 → VAD 没切到句（说完停顿 0.5 s） |
-| 机器人说话时喊"停下"没反应 | 默认行为（说话期间闭麦）。做完 §6 的 AEC 验证后加 `--trust-aec` |
+| 机器人说话时喊"停下"没反应 | 默认行为（说话期间闭麦）。加 `--trust-aec` 后靠 KWS 穿透回声，命中率看 §6 的 AEC 判定结果 |
+| 机器人自问自答/重复回话 | 自听过滤应该兜住（09-02 加，日志有"≈ 自己刚说的，丢弃"）；若还复现，把日志里的识别文本和回话原文发出来对比——多半是回声被听歪得太厉害（相似度 <0.7），加大 TTS 与麦克风的物理距离或降音量 |
 
 ## 5. 开发机验证记录（2026-09-01，x86 + sherpa-onnx 1.13.7）
 
@@ -231,12 +245,29 @@ python scripts/voice_teleop.py --default-secs 2 --max-secs 6 --speed 30
   "别动"→急停。每句识别 60~100 ms。`voice_teleop.py --mock --wav` 按时长到点自停、急停清零均正确。
 - 单元测试：`tests/test_voice_intents.py` 31 例 + `tests/test_voice_keywords.py` 4 例全绿。
 
+**2026-09-02 树莓派实机**：插上即认卡（卡名 `Lite`），`voice_check.py` 全套通过——
+录 5 s 峰值 0.771、"小蜘蛛"唤醒命中、"前进三秒"→`前进3秒。`→walk 意图（识别 0.11 s）、
+TTS 出声。引擎模型加载 3.1 s、TTS 加载 2.75 s（teleop 启动时会预热）。加载时打印的
+`Unknown token: shei2` ×4 无害：matcha-zh-baker 的词典里"谁"的口语读音 shei2 不在
+token 表，只有合成含"谁"的句子才受影响，机器人的回话里没有这个字。
+
+同日 `voice_teleop.py --mock --trust-aec` 实测暴露自问自答死循环（"电压…"回答被
+再次识别成 status，每 3 s 一轮直到退出）→ 判定板载 AEC 没压住自听（或处理后音频
+不在通道 0），当天加了自听过滤 + 唤醒词整句 ignore（§3.3），开发机复现场景验证：
+合成"电压7.4伏，电流1.0安"回声喂引擎 → `≈ 自己刚说的，丢弃`，不再产生 status 事件；
+cmds.wav 正常指令流回归不受影响；pytest 154 例全绿。
+
 ## 6. 待办
 
-- [ ] 插板跑 `voice_setup.sh` + `voice_check.py`；记录实机 KWS 阈值与混音器音量
-- [ ] **AEC 验证**：`voice_teleop.py --mock --trust-aec`，趁机器人念长句（"电压…"）时喊
-  "停下"，看 stop 事件是否触发、TTS 内容是否被误识别为指令；有效则把 `--trust-aec`
-  写进日常用法（急停在机器人说话期间也生效）
+- [x] 插板跑 `voice_setup.sh` + `voice_check.py`（09-02 通过，卡名 `Lite`，见 §5）
+- [ ] 日常使用中若调过 KWS 阈值/混音器音量，回填 §3.6
+- [x] ~~AEC 验证第一轮~~（09-02：`--trust-aec` 下自问自答，AEC 没压住自听；已加自听
+  过滤兜底，见 §3.3/§5）
+- [ ] **AEC 通道判定**：`voice_check.py --echo-test`（喇叭念数字同时双通道录音、分通道
+  识别）。某一路认不出数字 → 那路是处理后音频，`HEXAPOD_AUDIO_PICK=1` 换过去再跑一次
+  `--trust-aec` 测试；两路都认得出 → USB 固件 AEC 对本场景无效，接受现状（自听过滤
+  已兜底，`--trust-aec` 仍可开，说话期间的急停靠 KWS 穿透回声）
+- [ ] 机器人说话期间喊"停下"的命中率实测（`--trust-aec` 下），写回本节
 - [ ] 舵机/泵噪声下的识别率实测；必要时换 `sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20`
 - [ ] `climb_walk.py` 接语音急停事件
 

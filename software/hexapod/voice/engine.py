@@ -20,6 +20,7 @@
 ReSpeaker Lite 板载回声消除实测有效后可传 mute_during_tts=False，
 机器人自己说话时也能听见"停下"。
 """
+import difflib
 import glob
 import os
 import queue
@@ -29,10 +30,36 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .intents import Intent, parse
+from .intents import Intent, normalize, parse
 from .keywords import parse_result
 
 RATE = 16000
+
+
+def looks_like_echo(text: str, said_texts) -> bool:
+    """识别结果是否只是机器人自己刚说过的话（喇叭→麦克风回声）。
+
+    09-02 实机：板载 AEC 没压住自听，"电压7.4伏电流1.0安"的回答被再次识别成
+    status 指令，机器人自问自答死循环——所以不管 AEC 好坏，这层过滤都要有。
+    容错到回声被听歪的程度（"电流1.0安"→"电容1.0N"）；短回话（"停""在"≤2 字）
+    只认全等，免得把用户真喊的"停下"当回声丢掉。
+    """
+    a = normalize(text)
+    if not a:
+        return False
+    for said in said_texts:
+        b = normalize(said)
+        if not b:
+            continue
+        if len(a) <= 2 or len(b) <= 2:
+            if a == b:
+                return True
+            continue
+        if a in b or b in a:
+            return True
+        if difflib.SequenceMatcher(None, a, b).ratio() >= 0.7:
+            return True
+    return False
 
 
 @dataclass
@@ -214,6 +241,10 @@ class VoiceEngine(threading.Thread):
             s.accept_waveform(RATE, samples)
             asr.decode_stream(s)
             text = s.result.text.strip()
+            if (text and self.speaker is not None
+                    and looks_like_echo(text, self.speaker.recent_texts())):
+                self.log(f"[asr] {len(samples)/RATE:.1f}s → {text!r} ≈ 自己刚说的，丢弃")
+                continue
             intent = parse(text)
             self.log(f"[asr] {len(samples)/RATE:.1f}s → {text!r} → {intent.kind}"
                      f" ({time.time()-t0:.2f}s)")

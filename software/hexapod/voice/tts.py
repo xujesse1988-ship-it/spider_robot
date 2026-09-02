@@ -12,6 +12,7 @@ import os
 import queue
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Callable, Iterable, Optional, Tuple
 
@@ -79,6 +80,8 @@ class Speaker(threading.Thread):
         self.log = log or (lambda s: None)
         self._q: "queue.Queue" = queue.Queue()
         self._tts = None
+        self._recent = deque(maxlen=8)     # (说过的句子, 播完时刻)——自听过滤用
+        self._playing_text: Optional[str] = None
         self._lock = threading.Lock()
         self._busy = threading.Event()
         self._idle = threading.Event()
@@ -114,6 +117,15 @@ class Speaker(threading.Thread):
 
     def is_muting(self, tail_s: float = 0.3) -> bool:
         return self._busy.is_set() or time.time() < self._last_end + tail_s
+
+    def recent_texts(self, window_s: float = 2.5):
+        """正在说 + window_s 内说完的句子——引擎用来丢弃"听见自己"的识别结果。"""
+        now = time.time()
+        out = [t for t, end in list(self._recent) if now - end <= window_s]
+        cur = self._playing_text
+        if cur:
+            out.append(cur)
+        return out
 
     def stop(self) -> None:
         self._stop = True
@@ -167,13 +179,19 @@ class Speaker(threading.Thread):
                     continue
                 if mute:
                     self._busy.set()
+                if kind == "say":
+                    self._playing_text = text
                 samples, rate = self.render(text, cache=cache)
                 self.player.play(samples, rate)
             except Exception as e:                      # 说不出话不能拖死机器人
                 self.log(f"⚠ tts 失败 {text!r}: {e}")
             finally:
-                if kind == "say" and mute:
-                    self._last_end = time.time()
-                    self._busy.clear()
+                if kind == "say":
+                    if self._playing_text is not None:
+                        self._recent.append((text, time.time()))
+                        self._playing_text = None
+                    if mute:
+                        self._last_end = time.time()
+                        self._busy.clear()
                 if self._q.empty():
                     self._idle.set()

@@ -1,9 +1,10 @@
 """ALSA 录音/放音：走 arecord / aplay 子进程（alsa-utils 树莓派自带）。
 
 不用 PortAudio/sounddevice：少一层依赖，plughw 自动做采样率/位深/通道转换。
-声卡是 ReSpeaker Lite（USB 固件，UAC2 免驱，16kHz）：XU316 芯片在板上做完
-回声消除/噪声抑制/自动增益，送出来的已是处理后的人声，这里只取第 0 通道
-转 float32 给识别用（多通道时其余通道内容未必是同一路，取平均反而掺东西）。
+声卡是 ReSpeaker Lite（USB 固件，UAC2 免驱，16kHz，双通道）。09-02 实机
+--echo-test 判定：两个采集通道内容相同（有效值逐位一致），且板载 AEC 没有
+压住自己喇叭的回声——自听问题由 engine 的自听过滤兜底，这里取第 0 通道即可
+（HEXAPOD_AUDIO_PICK 可换，留作固件更新后复测用）。
 WavSource 用 wav 文件顶替麦克风，开发机上无声卡也能把整条链路跑通。
 """
 import os

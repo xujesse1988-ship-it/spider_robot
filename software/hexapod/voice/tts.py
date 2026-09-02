@@ -218,6 +218,8 @@ class Speaker(threading.Thread):
                     if self._cancel.is_set():
                         break
                     samples, rate = self.render(part, cache=cache)
+                    if self._cancel.is_set():
+                        break                # 急停打在合成期间：这句不许开播
                     if self.gain != 1.0:
                         samples = samples * self.gain
                     self._playing_text = part

@@ -66,8 +66,14 @@ def save_profile(path, embs, threshold: float, name: str = "owner") -> str:
     return str(p)
 
 
+SHORT_S = 0.7          # 只给极短段折让（"退出"≈0.5s，向量确实抖）。窗口不能放到
+                       # 1.0s：陌生人 0.8~0.9s 的指令会 0.43~0.46 贴线混过（开发机实测）；
+SHORT_DISCOUNT = 0.05  # 多尺度注册后主人短句已 0.58+，折让只是给极短句留余量
+
+
 class VoiceGate:
-    """score(samples) = 与主人声纹的最大余弦；accept() 按阈值判。模型懒加载。"""
+    """score(samples) = 与主人声纹的最大余弦；accept() 按阈值判（短段有折让）。
+    模型懒加载。"""
 
     def __init__(self, model_path, profile_path, *, threshold: Optional[float] = None,
                  num_threads: int = 2, log: Optional[Callable[[str], None]] = None):
@@ -95,6 +101,9 @@ class VoiceGate:
     def score(self, samples, rate: int = 16000) -> float:
         return best_score(self.embs, embed(self._ensure(), samples, rate))
 
+    def effective_threshold(self, dur_s: float) -> float:
+        return self.threshold - (SHORT_DISCOUNT if dur_s < SHORT_S else 0.0)
+
     def accept(self, samples, rate: int = 16000) -> Tuple[bool, float]:
         s = self.score(samples, rate)
-        return s >= self.threshold, s
+        return s >= self.effective_threshold(len(samples) / rate), s

@@ -275,8 +275,9 @@ class VoiceEngine(threading.Thread):
                 # 声纹锁：急停不经此闸（谁喊都停），其余指令只听主人
                 ok, sc = self.voice_gate.accept(samples)
                 if not ok:
-                    self.log(f"[spk] 声纹 {sc:.2f} < {self.voice_gate.threshold:.2f}"
-                             f"，拒绝 {text!r}")
+                    dur = len(samples) / RATE
+                    thr = self.voice_gate.effective_threshold(dur)
+                    self.log(f"[spk] 声纹 {sc:.2f} < {thr:.2f}（{dur:.1f}s），拒绝 {text!r}")
                     self.events.put(VoiceEvent("denied", text, intent))
                     continue                 # 也不延长听令窗
             self.log(f"[asr] {len(samples)/RATE:.1f}s → {text!r} → {intent.kind}"

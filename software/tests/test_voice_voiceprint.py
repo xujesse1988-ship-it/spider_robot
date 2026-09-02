@@ -41,6 +41,15 @@ def test_empty_profile_rejected(tmp_path):
         VoiceGate("m.onnx", p)
 
 
+def test_short_segment_threshold_discount(tmp_path):
+    p = tmp_path / "o.npz"
+    save_profile(p, np.stack([_unit([1, 0])]), 0.50)
+    g = VoiceGate("m.onnx", p)
+    assert g.effective_threshold(2.0) == pytest.approx(0.50)   # 正常长度不折让
+    assert g.effective_threshold(0.8) == pytest.approx(0.50)   # 0.7~1s 也不折让（防贴线混入）
+    assert g.effective_threshold(0.5) == pytest.approx(0.45)   # 极短句（"退出"）折让 0.05
+
+
 def test_default_profile_env(tmp_path, monkeypatch):
     monkeypatch.setenv("HEXAPOD_VOICEPRINT", str(tmp_path / "x.npz"))
     assert default_profile() == tmp_path / "x.npz"

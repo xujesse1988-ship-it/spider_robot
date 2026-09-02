@@ -21,11 +21,25 @@ from hexapod.voice.voiceprint import (VoiceGate, best_score, default_profile, em
                                       make_extractor, save_profile)
 
 RATE = 16000
+WIN_S = 1.5      # 除整段外，再按 1.5s 子窗提声纹：短指令（"退出"0.5s）对短窗
+                 # 的相似度远高于对 4s 整段，缓解长短失配的误拒
 PROMPTS = ("小蜘蛛，前进三秒",
            "向左转两秒，再往右挪一点",
            "停下，别动，站起来",
            "今天天气不错，我们去爬墙吧",
            "电压多少，换成三角步态")
+
+
+def seg_embeddings(ext, audio):
+    """一段录音 → [整段声纹] + [有人声的 1.5s 子窗声纹]。"""
+    import numpy as np
+    embs = [embed(ext, audio)]
+    win = int(WIN_S * RATE)
+    for k in range(len(audio) // win):
+        w = audio[k * win:(k + 1) * win]
+        if float(np.sqrt((w ** 2).mean())) > 0.01:      # 纯静音窗不要
+            embs.append(embed(ext, w))
+    return embs
 
 
 def record(card, secs: float, save_to=None):
@@ -70,9 +84,11 @@ def main():
         gate = VoiceGate(paths.spk_model, profile, log=print)
         if args.wav:
             for w in args.wav:
-                ok, sc = gate.accept(*read_wav(w))
-                print(f"{w}: 声纹 {sc:.3f} 阈值 {gate.threshold:.2f} → "
-                      f"{'✓ 是 ' + gate.name if ok else '✗ 不是主人'}")
+                audio, r = read_wav(w)
+                dur = len(audio) / r
+                ok, sc = gate.accept(audio, r)
+                print(f"{w}: {dur:.1f}s 声纹 {sc:.3f} 阈值 {gate.effective_threshold(dur):.2f}"
+                      f" → {'✓ 是 ' + gate.name if ok else '✗ 不是主人'}")
         else:
             print(f"录 4s，请说话（档案 {profile}，阈值 {gate.threshold:.2f}）…")
             audio = record(card, 4.0, save_to="/tmp/voice_enroll_test.wav")
@@ -83,15 +99,17 @@ def main():
 
     # ---- 注册 ----
     ext = make_extractor(paths.spk_model)
-    embs = []
+    full_embs, all_embs = [], []            # 整段（算自相似度用）/ 整段+子窗（存档案）
     if args.wav:
         for w in args.wav:
             audio, _ = read_wav(w)
-            embs.append(embed(ext, audio))
-            print(f"  {w}: {len(audio)/RATE:.1f}s ✓")
+            es = seg_embeddings(ext, audio)
+            full_embs.append(es[0])
+            all_embs.extend(es)
+            print(f"  {w}: {len(audio)/RATE:.1f}s ✓（{len(es)} 个声纹）")
     else:
         print(f"声纹注册：读 {args.segs} 段提示语，每段录 {args.secs:.0f} 秒，"
-              "从头说到尾别停顿太久。\n")
+              "从头说到尾别停顿太久；用什么距离/环境指挥机器人，就在什么条件下录。\n")
         i = 0
         while i < args.segs:
             prompt = PROMPTS[i % len(PROMPTS)]
@@ -101,20 +119,24 @@ def main():
             if peak < 0.02:
                 print(f"  ⚠ 峰值 {peak:.3f} 太小（没录到？），这段重来")
                 continue
-            embs.append(embed(ext, audio))
-            print(f"  ✓ 峰值 {peak:.3f}")
+            es = seg_embeddings(ext, audio)
+            full_embs.append(es[0])
+            all_embs.extend(es)
+            print(f"  ✓ 峰值 {peak:.3f}（{len(es)} 个声纹）")
             i += 1
 
-    if len(embs) < 2:
+    if len(full_embs) < 2:
         sys.exit("至少要 2 段才能注册（自相似度没法算）")
-    E = np.stack(embs)
-    sims = [best_score(np.delete(E, i, axis=0), E[i]) for i in range(len(E))]
+    F = np.stack(full_embs)
+    sims = [best_score(np.delete(F, i, axis=0), F[i]) for i in range(len(F))]
     self_min, self_mean = min(sims), sum(sims) / len(sims)
-    threshold = round(min(0.60, max(0.35, self_min - 0.15)), 2)
-    save_profile(profile, E, threshold, args.name)
+    # 上限 0.50：注册是同场同长度的录音，自相似度偏乐观；实战短指令分数会低一截
+    threshold = round(min(0.50, max(0.35, self_min - 0.15)), 2)
+    save_profile(profile, np.stack(all_embs), threshold, args.name)
     print(f"\n注册段自相似度：最低 {self_min:.3f} 平均 {self_mean:.3f}"
           f"（低于 0.55 说明录音质量差/环境吵，建议重录）")
-    print(f"档案 → {profile}（{len(E)} 段，建议阈值 {threshold}）")
+    print(f"档案 → {profile}（整段 {len(F)} + 子窗共 {len(all_embs)} 个声纹，"
+          f"阈值 {threshold}；短于 0.7s 的极短指令自动再降 0.05）")
     print("下一步：voice_enroll.py --test 自己和别人各验一次；"
           "voice_teleop.py 检测到档案会自动开声纹锁（急停不拦）")
 

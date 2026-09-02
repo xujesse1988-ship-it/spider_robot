@@ -97,36 +97,60 @@ class ArecordSource:
     多通道只取一路（默认第 0 通道，环境变量 HEXAPOD_AUDIO_PICK 可换，
     见模块头注释；哪路干净用 voice_check.py --echo-test 判定）。
     live=True：数据随真实时间流逝，引擎在机器人说话期间可以直接丢弃。
+
+    看门狗：连续 STALL_S 秒读不到数据就自动重启 arecord（09-02 实机：急停
+    掐死 aplay 偶发呛住 USB 声卡，麦克风停止吐数据 → 整机失聪）；一次 read
+    内连续 3 次重启仍无数据才返回 None（引擎随之发 eof）。
     """
     live = True
+    STALL_S = 2.0
 
     def __init__(self, device: str, rate: int = RATE, channels: int = 2,
                  pick: Optional[int] = None):
         if pick is None:
             pick = int(os.environ.get("HEXAPOD_AUDIO_PICK", "0"))
         self.rate, self.channels, self.device, self.pick = rate, channels, device, pick
-        cmd = ["arecord", "-q", "-D", device, "-f", "S16_LE", "-r", str(rate),
-               "-c", str(channels), "-t", "raw"]
+        self._p = None
+        self._spawn(check=True)
+
+    def _spawn(self, check: bool = False):
+        self.close()
+        cmd = ["arecord", "-q", "-D", self.device, "-f", "S16_LE", "-r", str(self.rate),
+               "-c", str(self.channels), "-t", "raw"]
         self._p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, bufsize=0)
-        time.sleep(0.2)
-        if self._p.poll() is not None:
-            err = self._p.stderr.read().decode(errors="replace").strip()
-            raise RuntimeError(f"arecord 启动失败（{device}）：{err or '无输出'}\n"
-                               f"  查：arecord -l 有没有 ReSpeaker Lite；当前用户在 audio 组吗")
+        if check:
+            time.sleep(0.2)
+            if self._p.poll() is not None:
+                err = self._p.stderr.read().decode(errors="replace").strip()
+                raise RuntimeError(
+                    f"arecord 启动失败（{self.device}）：{err or '无输出'}\n"
+                    f"  查：arecord -l 有没有 ReSpeaker Lite；当前用户在 audio 组吗")
 
     def read(self, n: int):
+        import select
         need = n * self.channels * 2
         buf = bytearray()
+        stalls = 0
         while len(buf) < need:
-            chunk = self._p.stdout.read(need - len(buf))
-            if not chunk:
-                return None                      # arecord 退出
-            buf += chunk
+            r, _, _ = select.select([self._p.stdout], [], [], self.STALL_S)
+            chunk = self._p.stdout.read(need - len(buf)) if r else b""
+            if chunk:
+                buf += chunk
+                continue
+            stalls += 1                          # 超时没数据 / arecord 死了
+            if stalls > 3:
+                return None
+            print(f"\n⚠ 麦克风 {self.STALL_S:.0f}s 无数据，重启 arecord（第 {stalls} 次）")
+            try:
+                self._spawn()
+            except OSError:
+                return None
+            buf.clear()                          # 半截帧丢掉，重新对齐
         return _to_float32(bytes(buf), self.channels, pick=self.pick)
 
     def close(self):
-        if self._p.poll() is None:
+        if self._p is not None and self._p.poll() is None:
             self._p.terminate()
             try:
                 self._p.wait(1.0)
@@ -190,6 +214,9 @@ class AplayPlayer:
         if p is not None and p.poll() is None:
             try:
                 p.terminate()
+                p.wait(0.5)              # 及时收尸，别留僵尸占着 PCM
+            except subprocess.TimeoutExpired:
+                p.kill()
             except OSError:
                 pass
 

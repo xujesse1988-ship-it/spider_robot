@@ -7,7 +7,8 @@
     退出（要再说"确定"）
   "停下 / 停止 / 别动"不用唤醒，随时生效（流式关键词急停，~0.3s）——
   机器人自己说话时也听得见，且急停会立即打断说话
-  键盘（有终端时）：w/s/a/d/q/e 动，空格停，1/2 步态，ESC 退出，同 walk_teleop
+  键盘（有终端时）：w/s/a/d/q/e 动，空格停，1/2 步态，v 阀排气/通罐，ESC 退出，
+  同 walk_teleop
 
 安全边界：
   · 每条移动指令都有时长：默认 --default-secs，上限 --max-secs（"一直"=上限），
@@ -22,6 +23,9 @@
   python voice_teleop.py --mock --wav test.wav --no-tts   # 无硬件：wav 顶替麦克风
   python voice_teleop.py --no-wake                   # 不要唤醒词（安静环境）
   python voice_teleop.py --models ~/models/voice --card ReSpeakerLite
+  python voice_teleop.py --no-vent                   # 不碰阀（对照；默认六阀排气让吸盘
+                                                     # 通大气，否则被动真空锁脚抬不起，
+                                                     # 见 walk_teleop 模块头）
 """
 import argparse
 import math
@@ -32,6 +36,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver, TRIPOD, WAVE
+from hexapod.adhesion import GroundVent, MockVacuumIO
 from hexapod.gait import GaitEngine
 from hexapod.voice.audio import (ArecordSource, WavSource, AplayPlayer, NullPlayer,
                                  find_card, alsa_device, list_cards)
@@ -78,6 +83,9 @@ def main():
     ap.add_argument("--voiceprint", help="声纹档案路径（默认 <模型根>/voiceprint_owner.npz）")
     ap.add_argument("--spk-threshold", type=float, help="声纹阈值，覆盖档案里的建议值")
     ap.add_argument("--stand-secs", type=float, default=4.0)
+    ap.add_argument("--vent", action=argparse.BooleanOptionalAction, default=True,
+                    help="六阀拉到排气位让吸盘通大气（默认开）；--no-vent 不碰阀，"
+                         "吸盘经单向阀通罐会被被动真空吸在地上（对照用，运行中 v 可切）")
     args = ap.parse_args()
 
     def log(s):
@@ -123,6 +131,14 @@ def main():
             speaker.say(text)
 
     # ---- 机器人侧（与 walk_teleop 一致）----
+    # 阀先于舵机：站起时吸盘就已通大气，压下去不攒被动真空
+    vent = GroundVent(io_factory=(lambda: MockVacuumIO(6)) if args.mock else None,
+                      stagger_s=0.0 if args.mock else 0.2)
+    if args.vent:
+        vent.set(True)
+        log("六阀已拉到排气位（吸盘通大气）")
+    else:
+        log("阀未动（通罐位）：吸盘可能被被动真空吸在地上，按 v 切到排气对照")
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
     bot.move_feet(bot.crouch_feet())
@@ -235,6 +251,9 @@ def main():
                     bot.engine = GaitEngine(bot.cfg, TRIPOD)
                 elif k == "2":
                     bot.engine = GaitEngine(bot.cfg, WAVE)
+                elif k == "v":
+                    vent.toggle()
+                    log("阀 排气（吸盘通大气）" if vent.on else "阀 通罐（吸盘经单向阀通罐）")
 
             quit_now = False
             while True:
@@ -277,8 +296,8 @@ def main():
                 v, c = bot.check_power()
                 peak_a = max(peak_a, c)
                 state = "听令中" if engine.awake else "待唤醒"
-                print(f"\r电压 {v:.2f}V  电流 {c:5.2f}A  峰值 {peak_a:5.2f}A  [{state}]  ",
-                      end="", flush=True)
+                print(f"\r电压 {v:.2f}V  电流 {c:5.2f}A  峰值 {peak_a:5.2f}A  [{state}]  "
+                      f"{'阀 排气' if vent.on else '阀 通罐'}  ", end="", flush=True)
                 last_power_check = t
             time.sleep(dt)
             t += dt
@@ -289,8 +308,11 @@ def main():
             speaker.stop()
         if tty_mode:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
-        drv.close()
-        print("\n已断舵机电，退出。")
+        try:
+            drv.close()
+        finally:
+            vent.close()    # 六线圈断电再释放，绝不拉高着退（阀会一直通电发热）
+        print("\n已断舵机电、阀线圈已断电，退出。")
 
 
 if __name__ == "__main__":

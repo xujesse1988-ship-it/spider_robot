@@ -211,6 +211,8 @@ python scripts/voice_teleop.py                     # 真机，键盘 wasd/qe 仍
 python scripts/voice_teleop.py --no-wake           # 安静环境省掉唤醒词
 python scripts/voice_teleop.py --trust-aec         # AEC 实测有效后：说话期间也听急停
 python scripts/voice_teleop.py --default-secs 2 --max-secs 6 --speed 30
+python scripts/voice_teleop.py --no-vent           # 不碰阀做对照：默认六阀排气让吸盘通大气，否则
+                                                   # 装气路后被动真空锁脚抬不起（v 键运行中切换，同 walk_teleop）
 ```
 
 无板子的开发机也能跑逻辑：`python scripts/voice_teleop.py --mock --wav 某段.wav --no-tts`

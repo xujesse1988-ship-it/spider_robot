@@ -31,8 +31,15 @@ def default_profile(models_root=None) -> Path:
 
 def make_extractor(model_path, num_threads: int = 2):
     import sherpa_onnx as so
-    return so.SpeakerEmbeddingExtractor(so.SpeakerEmbeddingExtractorConfig(
-        model=str(model_path), num_threads=num_threads))
+    try:
+        return so.SpeakerEmbeddingExtractor(so.SpeakerEmbeddingExtractorConfig(
+            model=str(model_path), num_threads=num_threads))
+    except RuntimeError as e:
+        size = Path(model_path).stat().st_size if Path(model_path).exists() else 0
+        raise RuntimeError(
+            f"{e}\n  {model_path} 当前 {size} 字节（campplus 正确应为 28281138）。"
+            f"多半是下载坏了（镜像错误页/断传）：删掉该文件后重跑 "
+            f"scripts/voice_setup.sh models（国内镜像失败就去掉 SHERPA_ONNX_MIRROR 直连）") from e
 
 
 def embed(extractor, samples, rate: int = 16000):

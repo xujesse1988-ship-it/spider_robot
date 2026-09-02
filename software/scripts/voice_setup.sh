@@ -23,9 +23,13 @@ VOCODER=vocos-22khz-univ.onnx
 SPK=3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx   # 声纹锁（tag 的拼写错误是官方原样）
 GH=${SHERPA_ONNX_MIRROR:-}https://github.com/k2-fsa/sherpa-onnx/releases/download
 
+fetch_file() {  # <URL> <目标文件>   -f：HTTP 出错(404/镜像错误页)就失败，别把错误页存成模型
+  curl -fSL --retry 3 -o "$2" "$1" || { rm -f "$2"; echo "  ✗ 下载失败：$1"; return 1; }
+}
+
 fetch_tar() {  # <子目录名> <tag>
   if [ -d "$MODELS/$1" ]; then echo "  已有 $1"; return; fi
-  echo "  下载 $1 …"; curl -SL --retry 3 -o "$MODELS/$1.tar.bz2" "$GH/$2/$1.tar.bz2"
+  echo "  下载 $1 …"; fetch_file "$GH/$2/$1.tar.bz2" "$MODELS/$1.tar.bz2"
   tar xjf "$MODELS/$1.tar.bz2" -C "$MODELS" && rm -f "$MODELS/$1.tar.bz2"
 }
 
@@ -63,9 +67,15 @@ mkdir -p "$MODELS"
 fetch_tar "$KWS" kws-models
 fetch_tar "$ASR" asr-models
 fetch_tar "$TTS" tts-models
-[ -f "$MODELS/silero_vad.onnx" ] || { echo "  下载 silero_vad.onnx …"; curl -SL --retry 3 -o "$MODELS/silero_vad.onnx" "$GH/asr-models/silero_vad.onnx"; }
-[ -f "$MODELS/$VOCODER" ] || { echo "  下载 $VOCODER …"; curl -SL --retry 3 -o "$MODELS/$VOCODER" "$GH/vocoder-models/$VOCODER"; }
-[ -f "$MODELS/$SPK" ] || { echo "  下载 $SPK …"; curl -SL --retry 3 -o "$MODELS/$SPK" "$GH/speaker-recongition-models/$SPK"; }
+[ -f "$MODELS/silero_vad.onnx" ] || { echo "  下载 silero_vad.onnx …"; fetch_file "$GH/asr-models/silero_vad.onnx" "$MODELS/silero_vad.onnx"; }
+[ -f "$MODELS/$VOCODER" ] || { echo "  下载 $VOCODER …"; fetch_file "$GH/vocoder-models/$VOCODER" "$MODELS/$VOCODER"; }
+[ -f "$MODELS/$SPK" ] || { echo "  下载 $SPK …"; fetch_file "$GH/speaker-recongition-models/$SPK" "$MODELS/$SPK"; }
+# 声纹模型完整性（应 28281138 字节；镜像错误页/断传会小很多）
+if [ -f "$MODELS/$SPK" ] && [ "$(stat -c%s "$MODELS/$SPK")" != 28281138 ]; then
+  echo "  ⚠ $SPK 大小不对（$(stat -c%s "$MODELS/$SPK") ≠ 28281138），已删除——"
+  echo "    重跑本脚本；用了 SHERPA_ONNX_MIRROR 还失败就去掉镜像前缀直连重试"
+  rm -f "$MODELS/$SPK"
+fi
 du -sh "$MODELS"/* | sed 's/^/  /'
 [ "$ONLY" = models ] && exit 0
 

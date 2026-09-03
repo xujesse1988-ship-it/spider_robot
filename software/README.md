@@ -40,6 +40,8 @@ python scripts/voice_teleop.py                   # 6. 语音遥控行走（“�
 
 语音一键安装（树莓派）：`bash scripts/voice_setup.sh`，依赖见 `requirements.txt` 语音段。
 
+黑匣子与死机验尸：`climb_walk`/`body_lean` 每跑一次落一份 `logs/<tag>_时间.log`（事件+遥测，`hexapod/runlog.py`）。09-02 起启动段逐步落盘（每路阀线圈通电前、舵机继电器合闸前后母线电压），并由 `hexapod/powerlog.py` 后台线程每 0.1s 记一行 Pi 5 的 5V 输入电压与欠压标志（`TLM 电源`，需 `vcgencmd`，用户在 video 组）。启动死机（灯绿→红、SSH 失联）排查：先 `bash scripts/pi_forensics.sh setup`（内核日志持久化，一次即可）→ 复现 → 重新上电 → `bash scripts/pi_forensics.sh check`；`--startup-gap 3` 把阀线圈与舵机合闸隔开定位扳机。详见 docs/P4-GUIDE.md 常见问题。
+
 ## 上电顺序（重要）
 
 1. Pi 5 用独立 5V/5A 降压模块供电，舵机 7.4V 经继电器（Pi GPIO17 控制，08-15 定案，原 Servo2040 A0/GPIO26）供电。

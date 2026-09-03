@@ -420,3 +420,41 @@ def test_ground_vent_off_never_touches_io():
         assert gv.drive("off", k % 2 == 0, now=float(k)) is True
     gv.close()
     assert not made and gv.io is None and not gv.on
+
+
+def test_pi5io_init_marks_before_each_coil(monkeypatch):
+    """Pi5VacuumIO 构造：每路阀线圈 claim（通电）之前恰好回调一次 on_step、
+    六路之后再回调一次，标记与写 GPIO 严格交替——09-02 启动死机验尸靠日志
+    最后一行落在哪一路。lgpio/smbus2 用假模块顶替，time.sleep 不真等。"""
+    import sys
+    import types
+    from hexapod.adhesion import Pi5VacuumIO
+    calls = []
+    lg = types.SimpleNamespace(
+        gpiochip_open=lambda chip: 99,
+        gpio_claim_output=lambda h, p, lvl: calls.append(("claim", p, lvl)),
+        gpio_write=lambda h, p, lvl: calls.append(("write", p, lvl)),
+        gpiochip_close=lambda h: None)
+    monkeypatch.setitem(sys.modules, "lgpio", lg)
+
+    class SMBus:
+        def __init__(self, n):
+            pass
+    monkeypatch.setitem(sys.modules, "smbus2", types.SimpleNamespace(SMBus=SMBus))
+    monkeypatch.setattr(time, "sleep", lambda s: calls.append(("sleep", s)))
+    io = Pi5VacuumIO(6, on_step=lambda s: calls.append(("mark", s)))
+    marks = [c[1] for c in calls if c[0] == "mark"]
+    assert len(marks) == 7 and marks[-1].startswith("六阀线圈已全部通电")
+    claims = [c for c in calls if c[0] == "claim"]
+    assert [c[1] for c in claims] == Pi5VacuumIO.VALVE_PINS + [Pi5VacuumIO.PUMP_PIN]
+    # 每路阀 claim 的前一条非 sleep 记录必是点名该 GPIO 的标记
+    for k, p in enumerate(Pi5VacuumIO.VALVE_PINS):
+        idx = calls.index(("claim", p, 1 - Pi5VacuumIO.VALVE_ON_LEVEL))
+        prev = [c for c in calls[:idx] if c[0] != "sleep"][-1]
+        assert prev[0] == "mark" and f"阀 {k + 1}/6" in prev[1] and f"GPIO{p}" in prev[1]
+    assert sum(1 for c in calls if c == ("sleep", 0.2)) == 5   # 足间串行 0.2s 不变
+    assert io.valve == [False] * 6 and io.pump is False
+    # 不传回调 = 旧行为
+    calls.clear()
+    Pi5VacuumIO(6)
+    assert not [c for c in calls if c[0] == "mark"]

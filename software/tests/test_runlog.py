@@ -105,3 +105,26 @@ def test_climbwatch_freeze_edge(tmp_path):
     watch.poll()
     txt = read(log.path)
     assert "冻结 ⚠ 测试冻结" in txt and "EVT 解冻" in txt
+
+
+def test_runlog_mark_and_concurrent_writers(tmp_path):
+    """mark() 当场落盘；两线程（控制环 + PowerWatch 采样）同写不串行。"""
+    import threading
+    log = RunLog(str(tmp_path), tag="t")
+    log.mark("阀 1/6 线圈通电前")
+
+    def writer(tag):
+        for k in range(300):
+            log.event(f"{tag}{k:03d}" + "x" * 40)
+    ts = [threading.Thread(target=writer, args=(t,)) for t in ("甲", "乙")]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    log.close("测试")
+    lines = read(log.path).splitlines()
+    body = [ln for ln in lines if ln.startswith("[")]
+    assert "EVT 阀 1/6 线圈通电前" in body[0]
+    ev = [ln for ln in body if "EVT 甲" in ln or "EVT 乙" in ln]
+    assert len(ev) == 600 and all(ln.endswith("x" * 40) for ln in ev)
+    assert sum(1 for ln in lines if ln.startswith("# boot_id=")) <= 1

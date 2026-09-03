@@ -131,7 +131,9 @@ class Pi5VacuumIO:
     MAX_BURST = 3
     BURST_WINDOW = 0.015
 
-    def __init__(self, n_feet=6):
+    def __init__(self, n_feet=6, on_step=None):
+        """on_step(text)：每路阀线圈通电**前**与全部通电后各回调一次（脚本传
+        RunLog.mark 落盘——09-02 启动死机验尸：日志停在哪一路，扳机就是它）。"""
         import lgpio
         from smbus2 import SMBus
         self._lg, self.n = lgpio, n_feet
@@ -147,7 +149,11 @@ class Pi5VacuumIO:
             # 同口径）——12V 轨不再吃 ~25W 阶跃（08-18 掉电疑似扳机）
             if k:
                 time.sleep(0.2)
+            if on_step is not None:
+                on_step(f"阀 {k + 1}/{n_feet} 线圈通电前（GPIO{p}）")
             lgpio.gpio_claim_output(self._h, p, 1 - self.VALVE_ON_LEVEL)
+        if on_step is not None:
+            on_step("六阀线圈已全部通电（排气位），接泵引脚/I2C 初始化")
         lgpio.gpio_claim_output(self._h, self.PUMP_PIN, 0)
         self._bus = SMBus(1)
         self._cache = {}      # (addr, ch) -> (kpa, 采样时刻)

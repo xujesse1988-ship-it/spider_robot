@@ -22,6 +22,7 @@ ClimbWatch 是 climb_walk 的取数器：逐控制周期 poll() 内存镜像找�
 import os
 import subprocess
 import sys
+import threading
 import time
 import traceback
 
@@ -54,11 +55,17 @@ class RunLog:
         self._ended = False       # END 标记只写一次
         self._exc_logged = False  # traceback 只写一份（close 与 excepthook 都可能到）
         self._last_sync = 0.0
+        # 写行互斥：PowerWatch 采样线程与控制环同时写同一文件，半行交叉会把
+        # 验尸材料搅碎
+        self._lock = threading.Lock()
         self.note(f"开跑 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.t0))}"
                   f"  argv: {' '.join(sys.argv)}")
         rev = self._git_rev()
         if rev:
             self.note(f"git: {rev}")
+        boot = self._boot_info()
+        if boot:
+            self.note(boot)
 
     @staticmethod
     def _git_rev():
@@ -70,14 +77,30 @@ class RunLog:
         except Exception:
             return None
 
+    @staticmethod
+    def _boot_info():
+        """boot_id + 开机秒数：死机重启后对 journalctl --list-boots / -o
+        short-monotonic 找上一次开机的内核日志用（Linux 之外返回 None）。"""
+        try:
+            with open("/proc/sys/kernel/random/boot_id") as f:
+                bid = f.read().strip()
+            with open("/proc/uptime") as f:
+                up = float(f.read().split()[0])
+        except (OSError, ValueError, IndexError):
+            return None
+        return f"boot_id={bid} uptime={up:.3f}s（验尸：journalctl -b -1 对这次开机）"
+
     def _line(self, text):
         if self._dead:
             return
         try:
-            self._f.write(text + "\n")
-            now = time.monotonic()
-            if now - self._last_sync >= FSYNC_S:
-                self._last_sync = now
+            with self._lock:      # 只护写行；fsync 在锁外，采样线程落盘不挡控制环
+                self._f.write(text + "\n")
+                now = time.monotonic()
+                due = now - self._last_sync >= FSYNC_S
+                if due:
+                    self._last_sync = now
+            if due:
                 os.fsync(self._f.fileno())
         except Exception as e:
             self._dead = True
@@ -89,6 +112,12 @@ class RunLog:
 
     def event(self, text):
         self._line(f"[{time.monotonic() - self._t0m:9.3f}] EVT {text}")
+
+    def mark(self, text):
+        """事件 + 当场 fsync：给"下一步可能把整机弄死"的步骤用（阀线圈通电、
+        舵机合闸），死机后日志停在哪一行就知道扳机是哪步。"""
+        self.event(text)
+        self.sync()
 
     def row(self, text):
         self._line(f"[{time.monotonic() - self._t0m:9.3f}] TLM {text}")
@@ -110,7 +139,9 @@ class RunLog:
         if self._dead:
             return
         try:
-            self._f.flush()
+            with self._lock:
+                self._f.flush()
+                self._last_sync = time.monotonic()
             os.fsync(self._f.fileno())
         except Exception:
             self._dead = True

@@ -116,6 +116,7 @@ from hexapod.gait import CLIMB, CLIMB_DUAL
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch, PHASE_CH, ADH_CH
+from hexapod.powerlog import PowerWatch, startup_marker, servo_power_on
 
 SPEED = 15.0    # mm/s（爬墙宁慢勿快；跑顺再提）
 TURN = 0.1      # rad/s
@@ -299,6 +300,10 @@ def main():
                          "自担代价；'轮到 X'提示、--handover-weights 轮转距离"
                          "、启动吸附序全部自动跟随新序。⚠ 换序改变权重与"
                          "逐腿 δ 的稳态格局，A/B 不得跨序比较、δ 表按序分组")
+    ap.add_argument("--startup-gap", type=float, default=0.0,
+                    help="六阀线圈通电完毕到舵机继电器合闸之间静置秒数（默认 0="
+                         "紧接着合闸）。排查启动死机时设 3：把两次电流阶跃隔开，"
+                         "黑匣子最后一行就能分清扳机是阀线圈还是舵机合闸")
     ap.add_argument("--dual", action="store_true",
                     help="双足爬行（双摆动窗，docs/DUAL-SWING-DESIGN.md）：占空 "
                          "5/6→4/6，任意时刻恒 2 腿在摆/4 足吸附，理论提速 "
@@ -458,15 +463,24 @@ def main():
              f" SPEED={speed:g} TURN={TURN} update_hz={cfg.update_hz:g}"
              f" max_step={cfg.climb_max_step} dual={int(args.dual)}"
              + (f" leg_order={'_'.join(leg_order)}" if leg_order else ""))
+    # Pi 5 电源监视线程：5V 输入轨 + 欠压标志每 0.1s 落盘、每行 fsync（启动
+    # 死机验尸，hexapod/powerlog.py）；非树莓派自动降级为只留步骤标记
+    pwr = PowerWatch(log).start()
+    if pwr.uv_ever_at_start:
+        print("⚠ 本次开机以来 Pi 已出现过欠压（get_throttled 粘滞位）——供电有问题，"
+              "先查 5V 降压再跑")
+    step = startup_marker(log, pwr)   # 启动步骤标记：一步一行当场落盘
     _prev_hook = sys.excepthook
 
     def _crash_hook(tp, val, tb):
         # 任何未捕获异常（含硬件初始化失败/欠压停机）落盘后再走默认打印
+        pwr.stop()
         log.exc(val)
         log.close("uncaught")
         _prev_hook(tp, val, tb)
     sys.excepthook = _crash_hook
 
+    step("打开舵机串口 + 继电器 GPIO17（保持断开）")
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     if args.mock or args.dry:
         # --dry：舵机真走，气路用 Mock 顶替（不碰 GPIO/I2C，阀泵不会动）。
@@ -476,7 +490,9 @@ def main():
             io.sealed = [False] * 6
     else:
         from hexapod.adhesion import Pi5VacuumIO
-        io = Pi5VacuumIO(6)
+        step("阀板初始化：六阀线圈按足串行通电（排气位，0.2s 间隔）")
+        io = Pi5VacuumIO(6, on_step=step)
+        step("阀板/I2C 就绪")
     # --air 时罐压传感器可能未接：泵降级为"有脚在抽就开"，不被 tank_fault 停死
     ctl_kw = dict(pump_without_tank=args.air, tankless=args.no_tank)
     if args.no_tank:
@@ -526,14 +542,14 @@ def main():
                     time.sleep(0.2)        # 足间间隔
             # 使能瞬间是硬跳：预置到爬墙站位（离中断时的姿态最近），再缓动回地面站姿
             bot.move_feet(eng.default_feet)
-            drv.enable(True)
-            time.sleep(0 if args.mock else 1.0)
+            servo_power_on(drv, log, pwr)
             bot.stand(3.0)
         finally:
             coils_off(io)      # 收尾必达：无论上面哪步异常都把线圈断掉
             drv.close()
             signal.signal(signal.SIGINT, prev_int)
         print("已全放气并回站姿（阀线圈已断电）。")
+        pwr.stop()
         log.close("release 完成")
         return
 
@@ -602,13 +618,16 @@ def main():
         # （旧流程"站姿130→爬墙站位176"的 glide 会拖着承重吸盘划 46mm）。
         # 站起放在 try 内：4s glide 里 Ctrl-C 同样要走 at_pause 收尾断线圈
         bot.move_feet(bot.crouch_feet(feet=eng.default_feet))
-        drv.enable(True)
-        time.sleep(0 if args.mock else 1.0)
+        if args.startup_gap > 0 and not args.mock:
+            step(f"阀线圈已全通电→舵机合闸前静置 {args.startup_gap:g}s（--startup-gap）")
+            time.sleep(args.startup_gap)
+        servo_power_on(drv, log, pwr)   # 合闸 + 合闸后 1s 内多点采母线电压
         print("缓慢站起（竖直升至爬墙站位，吸盘轴⊥面）……")
         log.event("缓慢站起（竖直升至爬墙站位）")
         bot.glide_to(dict(eng.default_feet), 4.0)
         print("爬墙站位就位。")
         log.event("爬墙站位就位，进入就位暂停")
+        pwr.relax()                     # 大电流启动段过了，采样放慢到 0.5s
         if args.air:
             print("⚠ 架空模式：吸附失败不冻结，互锁旁路——上墙严禁本模式")
         if args.dry:
@@ -1109,6 +1128,7 @@ def main():
             # 密封慢漏撑着），墙上口径一致，不分模式都提示
             print("⚠ 若有腿悬空：进程退出后阀/泵终态不可控、真空可能流失"
                   "——墙上请确认安全绳受力。")
+        pwr.stop()
         log.close("正常退出" if (clean_exit or aborted) else "中断退出")
 
 

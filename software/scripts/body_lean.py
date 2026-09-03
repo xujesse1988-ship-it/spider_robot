@@ -87,6 +87,7 @@ from hexapod.gait import CLIMB, CLIMB_DUAL
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
+from hexapod.powerlog import PowerWatch, startup_marker, servo_power_on
 
 from climb_walk import status_line, coils_off   # 显示/收尾与 climb_walk 同源
 
@@ -221,6 +222,10 @@ def main():
                          "'轮到 X'提示与 --handover-weights 轮转距离自动跟随"
                          "新序（守卫仍按新序判偏离轮转）。⚠ 换序改变权重与"
                          "逐腿 δ 的稳态格局，δ 标定按序分组、勿跨序比较")
+    ap.add_argument("--startup-gap", type=float, default=0.0,
+                    help="六阀线圈通电完毕到舵机继电器合闸之间静置秒数（默认 0="
+                         "紧接着合闸）。排查启动死机时设 3：把两次电流阶跃隔开，"
+                         "黑匣子最后一行就能分清扳机是阀线圈还是舵机合闸")
     ap.add_argument("--dual", action="store_true",
                     help="双足对抬（双摆动窗，docs/DUAL-SWING-DESIGN.md）：i 一次"
                          "抬一对（数字键选对首腿，搭档=窗序继任，窗头差 0.6s "
@@ -319,20 +324,31 @@ def main():
              f" handover={ho_txt} handover_rate={cfg.handover_rate_mms:g}"
              f" mark_settle={args.mark_settle:g} dual={int(args.dual)}"
              + (f" leg_order={'_'.join(leg_order)}" if leg_order else ""))
+    # Pi 5 电源监视线程：5V 输入轨 + 欠压标志每 0.1s 落盘、每行 fsync（启动
+    # 死机验尸，hexapod/powerlog.py）；非树莓派自动降级为只留步骤标记
+    pwr = PowerWatch(log).start()
+    if pwr.uv_ever_at_start:
+        print("⚠ 本次开机以来 Pi 已出现过欠压（get_throttled 粘滞位）——供电有问题，"
+              "先查 5V 降压再跑")
+    step = startup_marker(log, pwr)   # 启动步骤标记：一步一行当场落盘
     _prev_hook = sys.excepthook
 
     def _crash_hook(tp, val, tb):
+        pwr.stop()
         log.exc(val)
         log.close("uncaught")
         _prev_hook(tp, val, tb)
     sys.excepthook = _crash_hook
 
+    step("打开舵机串口 + 继电器 GPIO17（保持断开）")
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     if args.mock or args.dry:
         io = MockVacuumIO(6)
     else:
         from hexapod.adhesion import Pi5VacuumIO
-        io = Pi5VacuumIO(6)
+        step("阀板初始化：六阀线圈按足串行通电（排气位，0.2s 间隔）")
+        io = Pi5VacuumIO(6, on_step=step)
+        step("阀板/I2C 就绪")
     ctl_kw = dict(tankless=args.no_tank)
     if args.no_tank:
         ctl_kw["suck_timeout_s"] = 2.5
@@ -399,13 +415,16 @@ def main():
                 pass
     try:
         bot.move_feet(bot.crouch_feet(feet=eng.default_feet))
-        drv.enable(True)
-        time.sleep(0 if args.mock else 1.0)
+        if args.startup_gap > 0 and not args.mock:
+            step(f"阀线圈已全通电→舵机合闸前静置 {args.startup_gap:g}s（--startup-gap）")
+            time.sleep(args.startup_gap)
+        servo_power_on(drv, log, pwr)   # 合闸 + 合闸后 1s 内多点采母线电压
         print("缓慢站起（竖直升至爬墙站位，吸盘轴⊥面）……")
         log.event("缓慢站起（竖直升至爬墙站位）")
         bot.glide_to(dict(eng.default_feet), 4.0)
         print("爬墙站位就位。")
         log.event("爬墙站位就位，进入就位暂停")
+        pwr.relax()                     # 大电流启动段过了，采样放慢到 0.5s
         if args.dry:
             print("⚠ 干跑模式：气路是仿真的，阀泵不会动——上墙严禁")
         if args.no_tank:
@@ -977,6 +996,7 @@ def main():
             log.event(f"中断：不放气退出，冻结={eng.frozen or '无'}")
             print(f"\n中断：不放气退出。冻结: {eng.frozen or '无'}；"
                   "善后请跑 climb_walk --release。")
+        pwr.stop()
         log.close("正常退出" if (clean_exit or aborted) else "中断退出")
 
 

@@ -57,6 +57,38 @@ def best_score(embs, e) -> float:
     return float((embs @ e).max())
 
 
+def trim_voiced(samples, rate: int = 16000, margin_s: float = 0.1, rel: float = 0.1):
+    """按能量裁出有人声的区间（注册短词用：2s 录音里"退出"只占 0.5s，
+    整段直接提声纹会被前后静音稀释）。门限=峰值 RMS 的 rel 倍，下限 0.008。"""
+    import numpy as np
+    win = max(1, int(0.03 * rate))
+    n = len(samples) // win
+    if n == 0:
+        return samples
+    rms = np.sqrt((samples[:n * win].reshape(n, win) ** 2).mean(axis=1))
+    th = max(0.008, float(rms.max()) * rel)
+    idx = np.nonzero(rms >= th)[0]
+    if not len(idx):
+        return samples
+    m = int(margin_s * rate)
+    a = max(0, int(idx[0]) * win - m)
+    b = min(len(samples), (int(idx[-1]) + 1) * win + m)
+    return samples[a:b]
+
+
+def append_profile(path, new_embs) -> int:
+    """向已有档案追加声纹（阈值/名字不动），返回追加后的总条数。
+    补录短词（voice_enroll.py --append）用，不必整套重注册。"""
+    import numpy as np
+    data = np.load(str(path), allow_pickle=False)
+    old = np.asarray(data["embs"], dtype=np.float32)
+    embs = np.vstack([old, np.asarray(new_embs, dtype=np.float32)])
+    th = float(data["threshold"]) if "threshold" in data.files else 0.5
+    name = str(data["name"]) if "name" in data.files else "owner"
+    save_profile(path, embs, th, name)
+    return len(embs)
+
+
 def save_profile(path, embs, threshold: float, name: str = "owner") -> str:
     import numpy as np
     p = Path(path)

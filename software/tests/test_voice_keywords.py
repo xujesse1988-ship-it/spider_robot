@@ -21,9 +21,15 @@ def test_default_keywords_have_wake_and_stop():
     tags = {t for _, t, _, _ in DEFAULT_KEYWORDS}
     assert tags == {"WAKE", "STOP"}
     assert all(len(w) >= 2 for w, _, _, _ in DEFAULT_KEYWORDS)   # 单字词误触多，禁止
-    for _, tag, th, bo in DEFAULT_KEYWORDS:                      # 急停要比唤醒灵敏
+    for _, tag, th, bo in DEFAULT_KEYWORDS:
         if tag == "STOP":
             assert th <= 0.25 and bo
+        if tag == "WAKE":                # 09-03 走路噪声：唤醒也放灵敏、带提升分
+            assert th <= 0.20 and bo
+    # 纪律：唤醒提升分必须压着急停一档——急停在任何混叠里都要先活下来
+    wake_bo = max(bo for _, t, _, bo in DEFAULT_KEYWORDS if t == "WAKE")
+    stop_bo = min(bo for _, t, _, bo in DEFAULT_KEYWORDS if t == "STOP")
+    assert wake_bo < stop_bo
 
 
 def test_ppinyin_matches_sherpa_text2token_format():

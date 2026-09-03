@@ -26,8 +26,8 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 Entry = Tuple[str, str, Optional[float], Optional[float]]   # (词, 类别, 阈值, 提升分)
 
 DEFAULT_KEYWORDS: List[Entry] = [
-    ("小蜘蛛", "WAKE", 0.25, None),
-    ("蜘蛛同学", "WAKE", 0.25, None),
+    ("小蜘蛛", "WAKE", 0.20, 1.5),      # 走路舵机噪声下 0.25 要喊很大声（09-03 实机）
+    ("蜘蛛同学", "WAKE", 0.20, 1.5),
     ("停下", "STOP", 0.20, 2.0),
     ("停止", "STOP", 0.20, 2.0),
     ("停下来", "STOP", 0.20, 2.0),

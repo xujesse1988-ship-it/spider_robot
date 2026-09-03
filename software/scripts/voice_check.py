@@ -7,6 +7,9 @@
   python voice_check.py --tts "语音系统就绪"   # 合成并从喇叭播放
   python voice_check.py --echo-test       # 自听测试：喇叭念数字同时双通道录音、分通道识别，
                                           #   判断 AEC 是否有效 / 处理后音频在哪个通道
+  python voice_check.py --noise-test      # 走路噪声测试（另开终端让机器人走着）：三段引导
+                                          #   录音 → 量化噪声底/带噪说话/静止说话的电平与
+                                          #   信噪比 → 判"纯掩蔽"还是"AGC 被噪声压了增益"
   python voice_check.py                   # 全套：列声卡 → 录 5 秒（请说“小蜘蛛，前进三秒”）
                                           #        → 回放 → 识别 → TTS 报结果
 
@@ -121,6 +124,74 @@ def do_echo_test(paths, card, out="/tmp/voice_echo"):
         do_asr(paths, f"{out}_ch{ch}.wav", wake_required=False)
 
 
+def _frame_dbfs(audio, pct):
+    """30ms 帧 RMS 的百分位电平（dBFS）。噪声底取中位数（50），说话段取 90
+    ——整段 RMS 会被停顿稀释，帧百分位才是"说话时到底多响"。"""
+    import math
+    import numpy as np
+    n = int(0.03 * RATE)
+    k = len(audio) // n
+    if k == 0:
+        return -120.0
+    rms = np.sqrt((audio[:k * n].reshape(k, n) ** 2).mean(axis=1))
+    v = float(np.percentile(rms, pct))
+    return 20.0 * math.log10(max(v, 1e-6))
+
+
+def _rec(card, secs, out):
+    import numpy as np
+    src = ArecordSource(alsa_device(card))
+    chunks, n = [], int(0.1 * RATE)
+    t_end = time.time() + secs
+    while time.time() < t_end:
+        x = src.read(n)
+        if x is None:
+            break
+        chunks.append(x)
+    src.close()
+    audio = np.concatenate(chunks) if chunks else np.zeros(0, np.float32)
+    write_wav(out, audio, RATE)
+    return audio
+
+
+def do_noise_test(paths, card):
+    """走路噪声下"要喊很大声"的归因（09-03 实机反馈）：
+    A 纯噪声底 → B 带噪正常音量说话 → C 静止同距离同音量说话。
+    判据：B 说话段与 A 噪声底的差 = 实际信噪比（<10dB 基本靠喊）；
+    B 与 C 的说话段电平差 = AGC 嫌疑（被持续噪声压了增益会差很多）。"""
+    print("走路噪声测试：三段录音，全程别动麦克风、人站平时指挥的位置。")
+    input("A) 让机器人走起来（另开终端 walk_teleop，或晃动通电的腿）——"
+          "人别说话，回车录 4s 纯噪声…")
+    na = _rec(card, 4.0, "/tmp/voice_noise_a.wav")
+    input("B) 保持机器人走动，回车后用**平时音量**说“小蜘蛛，前进三秒”（录 5s）…")
+    nb = _rec(card, 5.0, "/tmp/voice_noise_b.wav")
+    input("C) 让机器人停下站住，同距离同音量再说一遍（录 5s）…")
+    nc = _rec(card, 5.0, "/tmp/voice_noise_c.wav")
+
+    noise = _frame_dbfs(na, 50)
+    sp_n = _frame_dbfs(nb, 90)
+    sp_q = _frame_dbfs(nc, 90)
+    snr = sp_n - noise
+    agc_drop = sp_q - sp_n
+    print(f"\n噪声底（走动，中位帧）      {noise:6.1f} dBFS")
+    print(f"带噪说话段（90 分位帧）      {sp_n:6.1f} dBFS   → 信噪比 ≈ {snr:.1f} dB")
+    print(f"静止说话段（90 分位帧）      {sp_q:6.1f} dBFS   → 带噪比静止低 {agc_drop:.1f} dB")
+    print("判读：")
+    if snr < 10.0:
+        print("  · 信噪比 <10dB：以掩蔽为主——第一杠杆是物理：麦克风板远离舵机、"
+              "垫泡棉减振（结构传导比空气声更毒）、麦克风面朝人；其次 amixer 把"
+              "录音增益从 90% 拉到 100% 试")
+    else:
+        print("  · 信噪比尚可：若唤醒仍难，多半是阈值——确认已用新词表"
+              "（唤醒 0.20:1.5，改完要重新生成 keywords_hexapod.txt）")
+    if agc_drop > 6.0:
+        print("  · 带噪时说话电平明显更低：板载 AGC 疑似被持续噪声压了增益"
+              "——把人和麦克风的距离缩短一半试；AGC 参数在固件里，暂无旋钮")
+    print("\n对 B 段跑唤醒+识别（走动噪声下的端到端验证）：")
+    do_asr(paths, "/tmp/voice_noise_b.wav")
+    print("三段录音存 /tmp/voice_noise_{a,b,c}.wav，可拷回开发机细看频谱")
+
+
 def do_tts(paths, card, text):
     if paths.tts_dir is None:
         print("没找到 TTS 模型目录")
@@ -143,11 +214,14 @@ def main():
     ap.add_argument("--tts", metavar="TEXT")
     ap.add_argument("--echo-test", action="store_true",
                     help="双通道自听测试：判断 AEC / 处理后音频在哪个通道")
+    ap.add_argument("--noise-test", action="store_true",
+                    help="走路噪声测试：量化噪声底/信噪比/AGC 嫌疑（另开终端让机器人走）")
     ap.add_argument("--out", default="/tmp/voice_check.wav")
     ap.add_argument("--models")
     ap.add_argument("--card")
     args = ap.parse_args()
-    specific = any([args.list, args.record, args.asr, args.tts, args.echo_test])
+    specific = any([args.list, args.record, args.asr, args.tts, args.echo_test,
+                    args.noise_test])
 
     card = args.card
     if args.list or not specific:
@@ -156,7 +230,7 @@ def main():
         card = card or find_card()
 
     paths = None
-    if args.asr or args.tts or args.echo_test or not specific:
+    if args.asr or args.tts or args.echo_test or args.noise_test or not specific:
         paths = ModelPaths.discover(args.models)
         print(f"模型：KWS={paths.kws_dir.name}  ASR={paths.asr_dir.name}  "
               f"TTS={paths.tts_dir.name if paths.tts_dir else '无'}  关键词={paths.keywords_file.name}")
@@ -171,6 +245,10 @@ def main():
         if card is None:
             sys.exit("没有 ReSpeaker Lite 声卡，--echo-test 要实机跑。")
         do_echo_test(paths, card)
+    if args.noise_test:
+        if card is None:
+            sys.exit("没有 ReSpeaker Lite 声卡，--noise-test 要实机跑。")
+        do_noise_test(paths, card)
 
     if not specific:
         if card is None:

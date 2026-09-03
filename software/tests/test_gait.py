@@ -78,67 +78,76 @@ def test_trim_inactive_without_forward_speed():
         plain.foot_targets(0.4, 0.0, 0.0, 0.3)
 
 
-def test_march_groups_come_from_gait_offsets():
-    """踏步分组=步态同偏移的腿，组序按偏移升序（= 步行抬腿先后），六腿不重不漏。"""
-    tri = MarchEngine(CFG, TRIPOD)
-    assert tri.groups == (("L1", "L3", "R2"), ("L2", "R1", "R3"))
-    wave = MarchEngine(CFG, WAVE)
-    assert wave.groups == (("R3",), ("R2",), ("R1",), ("L3",), ("L2",), ("L1",))
-    for eng in (tri, wave):
-        flat = [n for g in eng.groups for n in g]
-        assert sorted(flat) == sorted(LEG_NAMES)
+def test_march_keymap_covers_six_legs_in_view_layout():
+    """六个踏步键一一对应六条腿，键盘 2×3 块 = 俯视腿位（左列 t/g/b、右列 y/h/n）。"""
+    eng = MarchEngine(CFG)
+    assert eng.keymap == {"t": "L1", "g": "L2", "b": "L3",
+                          "y": "R1", "h": "R2", "n": "R3"}
+    assert sorted(eng.keymap.values()) == sorted(LEG_NAMES)
+    assert eng.leg_of_key("T") == "L1"          # 大小写都认
+    for k in ("w", "s", " ", "1", "v", "m", ""):
+        assert eng.leg_of_key(k) is None        # 非踏步键一律不认
 
 
-def test_march_holds_five_seconds_up_and_down():
-    """抬到顶悬停 5s、落地站定 5s，两头都停满才走下一段。"""
-    eng = MarchEngine(CFG, TRIPOD, hold_s=5.0)
-    assert eng.period == 2 * eng.lift_s + 10.0
-    eps = 1e-6                                        # 段端点归下一段，取严格段内
-    # 悬空段：整整 5s 停在最高点不动，只有本组三只腿抬着
-    for i in range(51):
-        t = eng.lift_s + eps + i * (5.0 - 2 * eps) / 50
-        assert eng.phase_at(t)[0] == "top"
-        assert abs(eng.height_at(t) - CFG.step_height) < 1e-9
-        up = [n for n, p in eng.foot_targets(t).items()
-              if p[2] > eng.default_feet[n][2] + 1e-9]
-        assert sorted(up) == sorted(eng.groups[0])
-    # 落地段：整整 5s 六脚都在默认站位
-    for i in range(51):
-        t = 2 * eng.lift_s + 5.0 + eps + i * (5.0 - 2 * eps) / 50
-        assert eng.phase_at(t)[0] == "ground" and not eng.airborne(t)
-        assert eng.foot_targets(t) == eng.default_feet
-    # 站定停满才轮到下一组抬起
-    t = eng.period + eng.lift_s / 2
-    assert eng.phase_at(t)[0] == "rise" and eng.group_at(t) == 1
-    assert eng.group_at(len(eng.groups) * eng.period + 0.1) == 0
+def test_march_toggle_lifts_only_that_leg_and_toggles_back():
+    """按一下抬起、再按踩下；只有被点的那只脚动 z，其余六脚原样站着。"""
+    eng = MarchEngine(CFG, lift_mm=70.0, move_s=0.5)
+    assert eng.foot_targets() == eng.default_feet and eng.settled
+    assert eng.toggle("L1") is True and eng.up_legs() == ("L1",)
+    for _ in range(25):                          # 0.5s 抬到位
+        eng.update(0.02)
+    assert eng.settled and abs(eng.height_of("L1") - 70.0) < 1e-9
+    for n, (x, y, z) in eng.foot_targets().items():
+        x0, y0, z0 = eng.default_feet[n]
+        assert (x, y) == (x0, y0)                # 身体不动，只动 z
+        assert z == z0 + (70.0 if n == "L1" else 0.0)
+    assert eng.toggle("L1") is False             # 再按踩下
+    for _ in range(25):
+        eng.update(0.02)
+    assert eng.settled and eng.foot_targets() == eng.default_feet
 
 
-def test_march_moves_only_z_and_peaks_at_step_height():
-    """原地踏步：x/y 恒在默认站位（身体不前进），z 峰高 = step_height，抬落单调。"""
-    eng = MarchEngine(CFG, TRIPOD, hold_s=5.0)
-    peak = 0.0
-    for i in range(400):
-        t = i * len(eng.groups) * eng.period / 400
-        for n, (x, y, z) in eng.foot_targets(t).items():
-            x0, y0, z0 = eng.default_feet[n]
-            assert (x, y) == (x0, y0)
-            assert z >= z0 - 1e-9
-            peak = max(peak, z - z0)
-    assert abs(peak - CFG.step_height) < 1e-9
-    rise = [eng.height_at(i * eng.lift_s / 20) for i in range(21)]
-    assert rise == sorted(rise)                       # 抬起单调升
-    fall = [eng.height_at(eng.lift_s + 5.0 + i * eng.lift_s / 20) for i in range(21)]
-    assert fall == sorted(fall, reverse=True)         # 落下单调降
+def test_march_lift_is_smooth_and_reverses_midway():
+    """抬落两端速度为零、单调；抬到一半再按平滑折返，不跳变。"""
+    eng = MarchEngine(CFG, lift_mm=70.0, move_s=0.5)
+    eng.toggle("R2")
+    hs = []
+    for _ in range(25):
+        eng.update(0.02)
+        hs.append(eng.height_of("R2"))
+    assert hs == sorted(hs) and abs(hs[-1] - 70.0) < 1e-9
+    assert hs[0] < 0.02 * 70.0 and (hs[-1] - hs[-2]) < (hs[13] - hs[12])  # 两端慢中间快
+    eng2 = MarchEngine(CFG, lift_mm=70.0, move_s=0.5)
+    eng2.toggle("R2")
+    for _ in range(12):
+        eng2.update(0.02)
+    mid = eng2.height_of("R2")
+    assert 0 < mid < 70.0 and not eng2.settled
+    eng2.toggle("R2")                            # 半空中反悔
+    assert eng2.height_of("R2") == mid           # 折返不跳变
+    for _ in range(12):
+        eng2.update(0.02)
+    assert eng2.height_of("R2") == 0.0 and eng2.settled
 
 
-def test_march_hold_zero_is_continuous_and_targets_reachable():
-    """hold=0 退化成不停歇的连续踏步；两种步态整轮 IK 都可解。"""
+def test_march_targets_reachable_for_every_leg():
+    """每条腿单独抬到默认高度、以及六脚全抬，IK 都可解。"""
     bot = Hexapod(MockDriver())
-    for gait in (TRIPOD, WAVE):
-        for hold in (0.0, 5.0):
-            eng = MarchEngine(CFG, gait, hold_s=hold)
-            for i in range(120):
-                t = i * len(eng.groups) * eng.period / 120
-                bot.pulses(eng.foot_targets(t))     # 内部做 IK + 脉宽映射
-            if hold == 0.0:
-                assert all(eng.airborne(i * eng.period / 9) for i in range(1, 9))
+    eng = MarchEngine(CFG)
+    assert eng.lift_mm > CFG.step_height          # "抬高一些"：比步行抬脚高
+    for name in LEG_NAMES:
+        eng.toggle(name)
+        for _ in range(30):
+            eng.update(0.02)
+            bot.pulses(eng.foot_targets())        # 内部做 IK + 脉宽映射
+        assert eng.up_legs() == (name,)
+        eng.toggle(name)
+        for _ in range(30):
+            eng.update(0.02)
+            bot.pulses(eng.foot_targets())
+    for name in LEG_NAMES:                        # 六脚同时抬（IK 上限校验）
+        eng.toggle(name)
+    for _ in range(30):
+        eng.update(0.02)
+        bot.pulses(eng.foot_targets())
+    assert eng.up_legs() == LEG_NAMES

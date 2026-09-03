@@ -116,91 +116,75 @@ class GaitEngine:
 
 
 class MarchEngine:
-    """原地踏步：按步态分组轮流抬落，抬到顶悬停 hold_s、落地后站定 hold_s。
+    """原地踏步（手动逐脚）：身体不动，六只脚各是一个开关——按一下抬起，再按踩下。
 
-    与 GaitEngine 的区别：足端只在 z 上动，x/y 恒在默认站位——身体不前进、
-    不转向，看抬腿幅度/脚有没有被被动真空吸住/落地后身体沉多少时不用追着
-    机器人跑，也不必留出场地。
-    分组取自步态偏移（同偏移的腿一组，组序按偏移升序 = 步行时的抬腿先后）：
-    TRIPOD 两组（对角三只一组），WAVE 六组（一次一腿）。
-    一组的节拍（period = 2*lift_s + 2*hold_s）四段：
-      抬起 lift_s → 悬空停 hold_s（停在 step_height 高处）
-      落下 lift_s → 落地停 hold_s（六脚都在默认站位）→ 轮到下一组
-    抬落用 smoothstep（两端速度为零），停下那一刻不甩腿。
-    时间是纯函数：foot_targets(t) 只看踏步已走时 t，调用方不推进时间就不动
-    （walk_teleop 在阀没通电完时就是这么原地等的）。
+    进这个状态机器人只保持默认站位不动，抬哪只脚、抬多久全由人按键决定：
+    看抬腿幅度够不够、脚有没有被被动真空吸住、单腿悬空时身体沉多少、吸盘
+    离地那一下有没有被拽——都可以停在任意一只脚抬着的状态慢慢看。
+    足端只动 z、x/y 恒在默认站位（身体不前进不转向）；抬落走 smoothstep
+    （两端速度为零，不甩腿），抬到一半再按会平滑折返，不跳变。
+    抬起高度 lift_mm 默认 70mm，比步行的 step_height=40 高一截（femur 抬到
+    接近竖直）；再高就要当心 femur 过竖直撞身体，改 lift_mm 前先架空试。
+
+    按键布局照机器人俯视：左列 t/g/b = 左前/左中/左后，右列 y/h/n = 右前/右中/右后。
     """
-    MIN_LIFT_S = 0.4    # 单程太快看不清也拍不清：WAVE 半个摆动窗才 0.125s，兜到 0.4s
+    LIFT_MM = 70.0      # 默认抬起高度 mm（步行 step_height=40，这里"抬高一些"）
+    MOVE_S = 0.5        # 单只脚抬起/落下的运动时长 s
+    # 键 -> 腿：t y / g h / b n 在键盘上就是一个 2×3 块，跟六条腿的俯视位置对上
+    KEYMAP = (("t", "L1"), ("g", "L2"), ("b", "L3"),
+              ("y", "R1"), ("h", "R2"), ("n", "R3"))
 
-    def __init__(self, cfg: RobotConfig, gait: Gait = TRIPOD, hold_s: float = 5.0,
-                 lift_s: float = None, step_height: float = None):
+    def __init__(self, cfg: RobotConfig, lift_mm: float = None, move_s: float = None):
         self.cfg = cfg
-        self.gait = gait
-        self.hold_s = max(0.0, float(hold_s))
-        # lift_s = 单程（抬起或落下）运动时长
-        self.lift_s = (max(self.MIN_LIFT_S, cfg.cycle_time * (1 - gait.duty) / 2)
-                       if lift_s is None else float(lift_s))
-        self.step_height = cfg.step_height if step_height is None else float(step_height)
+        self.lift_mm = self.LIFT_MM if lift_mm is None else float(lift_mm)
+        self.move_s = max(1e-3, self.MOVE_S if move_s is None else float(move_s))
         self.default_feet = default_feet(cfg)
-        self.groups = tuple(
-            tuple(n for n in LEG_NAMES if gait.offsets[n] == off)
-            for off in sorted(set(gait.offsets.values())))
+        self.keymap = dict(self.KEYMAP)
+        self.up = {n: False for n in LEG_NAMES}     # 目标态：True=抬起
+        self._s = {n: 0.0 for n in LEG_NAMES}       # 抬落进度 0..1（当前实际位置）
 
-    @property
-    def period(self) -> float:
-        """一组的节拍时长 s（抬起 + 悬空停 + 落下 + 落地停）。"""
-        return 2 * self.lift_s + 2 * self.hold_s
+    def leg_of_key(self, key) -> str:
+        """按键 -> 腿名（大小写都认）；不是六个踏步键返回 None。"""
+        return self.keymap.get(key.lower()) if key else None
 
-    def group_at(self, t: float) -> int:
-        """t 时刻轮到的组序号（落地停算刚踩下的那一组）。"""
-        return int(t // self.period) % len(self.groups)
+    def toggle(self, leg: str) -> bool:
+        """切换一只脚：抬起<->踩下，返回切换后的目标态（True=抬起）。"""
+        self.up[leg] = not self.up[leg]
+        return self.up[leg]
 
-    def phase_at(self, t: float):
-        """t 时刻本组处在哪一段：('rise'|'top'|'fall'|'ground', 该段已走时)。"""
-        s = t % self.period
-        if s < self.lift_s:
-            return "rise", s
-        s -= self.lift_s
-        if s < self.hold_s:
-            return "top", s
-        s -= self.hold_s
-        if s < self.lift_s:
-            return "fall", s
-        return "ground", s - self.lift_s
+    def update(self, dt: float) -> None:
+        """推进一拍：各脚按 lift_mm/move_s 的速度朝各自目标走。"""
+        for name in LEG_NAMES:
+            goal = 1.0 if self.up[name] else 0.0
+            s = self._s[name]
+            step = dt / self.move_s
+            self._s[name] = min(goal, s + step) if goal > s else max(goal, s - step)
 
-    def airborne(self, t: float) -> bool:
-        """t 时刻本组脚是否离地（抬起/悬空/落下三段）。"""
-        return self.phase_at(t)[0] != "ground"
+    def height_of(self, leg: str) -> float:
+        """该脚当前离默认站位的高度 mm。"""
+        return self.lift_mm * _smoothstep(self._s[leg])
 
-    def height_at(self, t: float) -> float:
-        """t 时刻本组足端离默认站位的高度 mm。"""
-        seg, s = self.phase_at(t)
-        if seg == "rise":
-            return self.step_height * _smoothstep(s / self.lift_s)
-        if seg == "top":
-            return self.step_height
-        if seg == "fall":
-            return self.step_height * (1 - _smoothstep(s / self.lift_s))
-        return 0.0
-
-    def foot_targets(self, t: float) -> dict:
-        """踏步已走时 t 的各腿足端目标（身体系）。"""
-        targets = dict(self.default_feet)
-        lift = self.height_at(t)
-        if lift <= 0.0:
-            return targets
-        for name in self.groups[self.group_at(t)]:
-            x, y, z = self.default_feet[name]
-            targets[name] = (x, y, z + lift)
+    def foot_targets(self) -> dict:
+        """当前各腿足端目标（身体系）。"""
+        targets = {}
+        for name, (x, y, z) in self.default_feet.items():
+            targets[name] = (x, y, z + self.height_of(name))
         return targets
 
-    def state_text(self, t: float) -> str:
-        seg, s = self.phase_at(t)
-        legs = "/".join(self.groups[self.group_at(t)])
-        if seg == "rise":
-            return f"抬起 {legs}"
-        if seg == "top":
-            return f"悬空 {legs} 还 {self.hold_s - s:.1f}s"
-        if seg == "fall":
-            return f"落下 {legs}"
-        return f"站定 还 {self.hold_s - s:.1f}s"
+    def up_legs(self) -> tuple:
+        """目标态为抬起的腿（按 L1..R3 固定顺序）。"""
+        return tuple(n for n in LEG_NAMES if self.up[n])
+
+    @property
+    def settled(self) -> bool:
+        """六只脚都走到各自目标位（没有正在抬/落的）。"""
+        return all(self._s[n] == (1.0 if self.up[n] else 0.0) for n in LEG_NAMES)
+
+    def key_hint(self) -> str:
+        return "  ".join(f"{k}={n}" for k, n in self.KEYMAP)
+
+    def state_text(self) -> str:
+        up = self.up_legs()
+        if not up:
+            return "六脚着地" if self.settled else "落下中"
+        return f"抬 {'/'.join(up)}" + ("" if self.settled else " …")

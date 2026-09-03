@@ -22,7 +22,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod.voice.audio import (ArecordSource, WavSource, AplayPlayer, find_card,
-                                 alsa_device, list_cards, write_wav)
+                                 alsa_device, list_cards, read_wav, write_wav)
 from hexapod.voice.engine import VoiceEngine, ModelPaths
 from hexapod.voice.tts import Speaker
 
@@ -138,6 +138,66 @@ def _frame_dbfs(audio, pct):
     return 20.0 * math.log10(max(v, 1e-6))
 
 
+_BANDS = ((0, 150), (150, 300), (300, 1000), (1000, 2000), (2000, 4000), (4000, 8000))
+
+
+def _band_ms(audio, lo, hi):
+    """频段内的均方功率（线性；Hann 窗修正，全带求和≈整段均方）。"""
+    import numpy as np
+    if len(audio) < RATE // 4:
+        return 1e-12
+    w = np.hanning(len(audio))
+    spec = np.abs(np.fft.rfft(audio * w)) ** 2
+    freqs = np.fft.rfftfreq(len(audio), 1.0 / RATE)
+    m = (freqs >= lo) & (freqs < hi)
+    return max(float(2.0 * spec[m].sum() / (len(audio) * (w ** 2).sum())), 1e-12)
+
+
+def do_noise_analyze(wavs):
+    """三段录音分频段：看走路噪声堆在哪个频段，判"高通能不能赚"。
+    低频(<300Hz)占大头=结构传导，HEXAPOD_AUDIO_HPF=200 能白赚几个 dB；
+    噪声在语音带(300~4k)内=滤波无解，回物理（减振/挪位/朝向）。"""
+    import math
+    import numpy as np
+    names = ("A 走动噪声", "B 走动+说话", "C 静止说话")
+    datas = []
+    for w in wavs:
+        audio, _ = read_wav(w)
+        datas.append(audio)
+    db = lambda p: 10.0 * math.log10(p)
+    print("\n分频段功率（dB，越大越响；关键看 A 列噪声堆在哪）：")
+    print("  频段        " + "".join(f"{n:>12}" for n in names[:len(datas)]))
+    for lo, hi in _BANDS:
+        row = "".join(f"{db(_band_ms(d, lo, hi)):12.1f}" for d in datas)
+        print(f"  {lo:>4}~{hi:<5}Hz{row}")
+    a = datas[0]
+    lf = sum(_band_ms(a, lo, hi) for lo, hi in _BANDS[:2])          # <300Hz
+    hf = sum(_band_ms(a, lo, hi) for lo, hi in _BANDS[4:])          # >2kHz
+    full = sum(_band_ms(a, lo, hi) for lo, hi in _BANDS)
+    hpf_gain = db(full) - db(full - lf * 0.9)     # 高通 200 大致砍掉 <300 的九成
+    print(f"判读：走动噪声 <300Hz 占 {lf / full * 100:.0f}%、>2kHz 占 {hf / full * 100:.0f}%"
+          f"；高通 200Hz 约可压低噪声底 {hpf_gain:.1f} dB")
+    if len(datas) >= 2:
+        sa = _band_ms(a, 300, 4000)
+        sb = _band_ms(datas[1], 300, 4000)
+        print(f"  语音带（300~4k）内信噪比 ≈ {db(sb) - db(sa):.1f} dB")
+    if hpf_gain >= 3.0:
+        print("  低频占大头（结构传导/泵一类）：值得开高通实测 A/B"
+              "（同一段录音，确定性对比）：\n"
+              "    HEXAPOD_AUDIO_HPF=200 python scripts/voice_check.py"
+              " --asr /tmp/voice_noise_b.wav --no-wake\n"
+              "  有效的话 voice_teleop/voice_climb 前也带上这个环境变量")
+    elif hf / full > 0.6:
+        print("  高频（>2kHz 齿轮啸叫）占大头——滤波无解：低通/带限会连清辅音"
+              "（小蜘蛛的x、停的t）一起砍，09-03 实测 ASR 反而更糊；高频方向性强"
+              "衰减快，物理杠杆=挪远+麦克风朝人+与舵机之间加泡棉挡板（减振没用，"
+              "低频占比才这点）。软件出路=走动会话用 --no-wake+声纹锁：09-03 实测"
+              "纯舵机噪声 VAD 零切句不会乱出指令，且 ASR 常常听得懂（KWS 小模型"
+              "先倒下），唤醒这一步跳过就好")
+    else:
+        print("  噪声分布平：先做物理（挪位/朝向），再回来复测")
+
+
 def _rec(card, secs, out):
     import numpy as np
     src = ArecordSource(alsa_device(card))
@@ -177,20 +237,29 @@ def do_noise_test(paths, card):
     agc_drop = sp_q - sp_n
     print(f"\n噪声底（走动，中位帧）      {noise:6.1f} dBFS")
     print(f"带噪说话段（90 分位帧）      {sp_n:6.1f} dBFS   → 信噪比 ≈ {snr:.1f} dB")
-    print(f"静止说话段（90 分位帧）      {sp_q:6.1f} dBFS   → 带噪比静止低 {agc_drop:.1f} dB")
+    print(f"静止说话段（90 分位帧）      {sp_q:6.1f} dBFS")
     print("判读：")
     if snr < 10.0:
         print("  · 信噪比 <10dB：以掩蔽为主——杠杆只有物理：麦克风板远离舵机、"
               "垫泡棉减振（结构传导比空气声更毒）、麦克风面朝人"
               "（USB 固件不给主机侧录音增益，amixer 无旋钮，09-03 实机证实）")
+        print("  · 判别主攻方向：把麦克风板拆下拎在手里、机器人照走，重录 A 段"
+              "——噪声底大降（如 -18→-30）=结构传导为主攻减振悬浮贴装；"
+              "降得少=空气声为主攻距离和朝向。目标：走动噪声底 < -30dBFS")
     else:
         print("  · 信噪比尚可：若唤醒仍难，多半是阈值——确认已用新词表"
               "（唤醒 0.20:1.5，改完要重新生成 keywords_hexapod.txt）")
     if agc_drop > 6.0:
-        print("  · 带噪时说话电平明显更低：板载 AGC 疑似被持续噪声压了增益"
-              "——把人和麦克风的距离缩短一半试；AGC 参数在固件里，暂无旋钮")
-    print("\n对 B 段跑唤醒+识别（走动噪声下的端到端验证）：")
-    do_asr(paths, "/tmp/voice_noise_b.wav")
+        print(f"  · 带噪说话比静止低 {agc_drop:.1f}dB：板载 AGC 疑似被持续噪声压了"
+              "增益——把人和麦克风的距离缩短一半试；AGC 参数在固件里，暂无旋钮")
+    elif agc_drop < -3.0:
+        print(f"  · 带噪说话反而比静止高 {-agc_drop:.1f}dB：噪声能量叠加 + 人在噪声"
+              "里自然提嗓（Lombard），无 AGC 压制迹象——固件没在害你")
+    do_noise_analyze(["/tmp/voice_noise_a.wav", "/tmp/voice_noise_b.wav",
+                      "/tmp/voice_noise_c.wav"])
+    print("\n对 B 段跑识别（不要求唤醒，KWS 命中会照常显示 wake 事件；"
+          "看 ASR 在噪声里到底听到什么）：")
+    do_asr(paths, "/tmp/voice_noise_b.wav", wake_required=False)
     print("三段录音存 /tmp/voice_noise_{a,b,c}.wav，可拷回开发机细看频谱")
 
 
@@ -218,12 +287,15 @@ def main():
                     help="双通道自听测试：判断 AEC / 处理后音频在哪个通道")
     ap.add_argument("--noise-test", action="store_true",
                     help="走路噪声测试：量化噪声底/信噪比/AGC 嫌疑（另开终端让机器人走）")
+    ap.add_argument("--noise-analyze", nargs="*", metavar="WAV",
+                    help="对已录的噪声测试 wav 分频段分析，不重录"
+                         "（默认 /tmp/voice_noise_{a,b,c}.wav）")
     ap.add_argument("--out", default="/tmp/voice_check.wav")
     ap.add_argument("--models")
     ap.add_argument("--card")
     args = ap.parse_args()
     specific = any([args.list, args.record, args.asr, args.tts, args.echo_test,
-                    args.noise_test])
+                    args.noise_test, args.noise_analyze is not None])
 
     card = args.card
     if args.list or not specific:
@@ -251,6 +323,10 @@ def main():
         if card is None:
             sys.exit("没有 ReSpeaker Lite 声卡，--noise-test 要实机跑。")
         do_noise_test(paths, card)
+    if args.noise_analyze is not None:
+        do_noise_analyze(args.noise_analyze or
+                         ["/tmp/voice_noise_a.wav", "/tmp/voice_noise_b.wav",
+                          "/tmp/voice_noise_c.wav"])
 
     if not specific:
         if card is None:

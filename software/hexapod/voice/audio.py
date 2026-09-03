@@ -65,6 +65,51 @@ def _to_float32(pcm: bytes, channels: int, pick: Optional[int] = None):
     return (x.astype(np.float32) / 32768.0)
 
 
+class Highpass:
+    """二阶 Butterworth 高通（流式，跨 chunk 保状态）。用途：砍走路时结构
+    传导进麦克风板的低频隆隆——<200Hz 对识别几乎没贡献，却常占噪声大头；
+    带内（300Hz~4kHz）的舵机啸叫/齿轮啮合它救不了，先用 voice_check
+    --noise-analyze 看噪声分布再决定开不开。
+    开关：环境变量 HEXAPOD_AUDIO_HPF=截止Hz（如 200；不设/0=关，默认关），
+    ArecordSource/WavSource 都认——对着同一段 wav 可当场 A/B。"""
+
+    def __init__(self, cutoff_hz: float, rate: int = RATE):
+        import math
+        w0 = 2.0 * math.pi * cutoff_hz / rate
+        alpha = math.sin(w0) / math.sqrt(2.0)          # Q = 0.7071
+        c = math.cos(w0)
+        a0 = 1.0 + alpha
+        self.b0 = (1.0 + c) / 2.0 / a0
+        self.b1 = -(1.0 + c) / a0
+        self.b2 = self.b0
+        self.a1 = -2.0 * c / a0
+        self.a2 = (1.0 - alpha) / a0
+        self.cutoff_hz = cutoff_hz
+        self._x1 = self._x2 = self._y1 = self._y2 = 0.0
+
+    @classmethod
+    def from_env(cls, rate: int = RATE) -> Optional["Highpass"]:
+        try:
+            hz = float(os.environ.get("HEXAPOD_AUDIO_HPF", "0") or 0.0)
+        except ValueError:
+            hz = 0.0
+        return cls(hz, rate) if hz > 0.0 else None
+
+    def process(self, x):
+        import numpy as np
+        y = np.empty(len(x), dtype=np.float32)
+        x1, x2, y1, y2 = self._x1, self._x2, self._y1, self._y2
+        b0, b1, b2, a1, a2 = self.b0, self.b1, self.b2, self.a1, self.a2
+        for i in range(len(x)):
+            xi = float(x[i])
+            yi = b0 * xi + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            y[i] = yi
+            x2, x1 = x1, xi
+            y2, y1 = y1, yi
+        self._x1, self._x2, self._y1, self._y2 = x1, x2, y1, y2
+        return y
+
+
 def read_wav(path, rate: int = RATE):
     """任意 wav → 单声道 float32 @rate（线性重采样够用）。"""
     import numpy as np
@@ -110,6 +155,9 @@ class ArecordSource:
         if pick is None:
             pick = int(os.environ.get("HEXAPOD_AUDIO_PICK", "0"))
         self.rate, self.channels, self.device, self.pick = rate, channels, device, pick
+        self._hpf = Highpass.from_env(rate)
+        if self._hpf:
+            print(f"[audio] 高通 {self._hpf.cutoff_hz:g}Hz 开（HEXAPOD_AUDIO_HPF）")
         self._p = None
         self._spawn(check=True)
 
@@ -150,7 +198,8 @@ class ArecordSource:
             except OSError:
                 return None
             buf.clear()                          # 半截帧丢掉，重新对齐
-        return _to_float32(bytes(buf), self.channels, pick=self.pick)
+        x = _to_float32(bytes(buf), self.channels, pick=self.pick)
+        return self._hpf.process(x) if self._hpf else x
 
     def close(self):
         if self._p is not None and self._p.poll() is None:
@@ -168,6 +217,7 @@ class WavSource:
         self.samples, self.rate = read_wav(path, rate)
         self.realtime, self.pos = realtime, 0
         self.live = realtime      # 非实时喂法：说话期间不能丢数据，引擎改为等说完
+        self._hpf = Highpass.from_env(rate)   # 与麦克风同口径，方便对 wav A/B
 
     def read(self, n: int):
         import numpy as np
@@ -179,7 +229,7 @@ class WavSource:
             x = np.concatenate([x, np.zeros(n - len(x), np.float32)])
         if self.realtime:
             time.sleep(n / self.rate)
-        return x
+        return self._hpf.process(x) if self._hpf else x
 
     def close(self):
         pass

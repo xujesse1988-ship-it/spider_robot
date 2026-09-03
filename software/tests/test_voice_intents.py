@@ -76,6 +76,15 @@ def test_backward_and_speed_modifier():
     assert parse("慢慢往后退").speed == 0.6
 
 
+def test_bare_speed_words_adjust_pace():
+    it = parse("快点。")                        # 光杆调速：连续走动中提速/减速
+    assert (it.kind, it.speed, it.reply) == ("speed", 1.5, "提速")
+    assert parse("慢一点").speed == 0.6
+    assert parse("太快了").kind == "speed" and parse("太快了").speed == 0.6
+    assert parse("太慢了").speed == 1.5
+    assert parse("快点前进").kind == "walk"     # 带方向的仍归 walk，别被调速抢
+
+
 def test_turn_beats_strafe():
     assert parse("左转").wz == 1 and parse("左转").vy == 0
     assert parse("向左转").wz == 1

@@ -5,6 +5,8 @@
     前进/后退/左移/右移/左转/右转 [N 秒 | N 步] [快点 | 慢点]
       ——不带时长=连续动作，一直走到喊停/新指令/键盘干预（回复念"一直前进，
       说停就停"）；带时长到点自停
+    快点 / 慢点（单说）＝调速：持续倍率 ×1.5/×0.6 夹在 0.4~2.0，走动中立即
+      生效、后续指令继承；键盘键不跟倍率走（始终基准速度）
     站起来 / 趴下 / 三角步态 / 波浪步态 / 电压多少 / 你好 / 自我介绍（长回话）
     退出（要再说"确定"）
   "停下 / 停止 / 别动"不用唤醒，随时生效（流式关键词急停，~0.3s）——
@@ -52,6 +54,7 @@ from hexapod.voice.voiceprint import VoiceGate, default_profile
 POWER_PRINT_S = 0.5
 EXIT_CONFIRM_S = 10.0
 PREWARM = ("在", "停", "起立", "趴下", "在呢", "没听懂", "好", "再见",
+           "提速", "减速", "已经最快了", "已经最慢了",
            "确定退出吗？请说 确定",
            "一直前进，说停就停", "一直后退，说停就停", "一直左转，说停就停",
            "一直右转，说停就停", "一直左移，说停就停", "一直右移，说停就停",
@@ -169,6 +172,8 @@ def main():
     last_power_check = 0.0
     peak_a = 0.0
     engine_alive = True
+    spd_mult = 1.0     # 光杆"快点/慢点"的持续倍率（0.4~2.0）；只作用于语音指令，
+                       # 键盘键始终基准速度（底层直控，不跟语音倍率走）
 
     def halt():
         nonlocal vx, vy, wz, deadline
@@ -186,19 +191,32 @@ def main():
 
     def dispatch(it) -> bool:
         """执行一条意图；返回 True 表示要退出程序。"""
-        nonlocal vx, vy, wz, deadline, crouched, pending_exit
+        nonlocal vx, vy, wz, deadline, crouched, pending_exit, spd_mult
         k = it.kind
         if k == "stop":
             halt()
             if speaker:
                 speaker.cancel()          # 急停连嘴一起停
             say(it.reply)
+        elif k == "speed":
+            # 光杆"快点/慢点"：调持续倍率，走动中立即生效（新指令也继承）
+            old = spd_mult
+            spd_mult = max(0.4, min(2.0, spd_mult * it.speed))
+            if spd_mult == old:
+                say("已经最快了" if it.speed > 1.0 else "已经最慢了")
+            else:
+                if vx or vy or wz:
+                    vx *= spd_mult / old
+                    vy *= spd_mult / old
+                    wz *= spd_mult / old
+                say(it.reply)
+            log(f"[voice] 速度倍率 ×{spd_mult:g}")
         elif k == "walk":
             if crouched:
                 stand_up()
-            vx = it.vx * args.speed * it.speed
-            vy = it.vy * args.speed * it.speed
-            wz = it.wz * args.turn * it.speed
+            vx = it.vx * args.speed * it.speed * spd_mult
+            vy = it.vy * args.speed * it.speed * spd_mult
+            wz = it.wz * args.turn * it.speed * spd_mult
             say(it.reply)
             if it.seconds is None or math.isinf(it.seconds):
                 deadline = None      # 连续动作：说停/新指令/键盘为止（同键盘 wasd）
@@ -245,7 +263,7 @@ def main():
                      if args.no_wake else "小蜘蛛 / 蜘蛛同学 —— 唤醒后说指令，可连说"))
     print("急停：停下 / 停止 / 别动 / 站住 —— 不用唤醒随时喊，它自己说话时也管用")
     print("移动：前进 后退 左移 右移 左转 右转 [快点/慢点] —— 一直走，喊停为止；")
-    print("      带时长（“前进三秒”/“走两步”）则到点自停")
+    print("      带时长（“前进三秒”/“走两步”）则到点自停；走动中单说 快点/慢点=调速")
     print("姿势：站起来 / 趴下        步态：三角步态 / 波浪步态")
     print("问答：电压多少 / 你好 / 自我介绍（15 秒长回话，可趁机试喊停）")
     print("退出：退出 → 10 秒内再说“确定”；说“取消”反悔")

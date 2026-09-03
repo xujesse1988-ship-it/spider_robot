@@ -48,6 +48,10 @@ STAND_WORDS = ("站起来", "站起", "站立", "起立", "站好", "起来", "�
 CROUCH_WORDS = ("趴下", "蹲下", "坐下", "休息", "趴着", "卧倒", "趴")
 GREET_WORDS = ("你好", "您好", "嗨", "哈喽", "哈罗", "在吗", "在不在", "hello", "hi",
                "早上好", "晚上好")
+# 单说的调速词（连续行走中说"快点"提速）。带方向的句子（"快点前进"）在移动
+# 分支先被截走，这两张表只接住光杆调速；"太快了"=要求减速、"太慢了"=提速
+FASTER_WORDS = ("快点", "快一点", "再快", "加速", "快些", "太慢了")
+SLOWER_WORDS = ("慢点", "慢一点", "再慢", "减速", "慢些", "太快了")
 DANCE_WORDS = ("跳舞", "跳个舞", "跳支舞")
 
 _TURN_L = re.compile(r"(向|往|朝)?左(转|拐)|转左|逆时针|左旋|转身|掉头|转个圈|转一圈|转弯")
@@ -60,8 +64,8 @@ _BACK = re.compile(r"后退|倒退|向后|往后|朝后|退后|倒车|back|退")
 
 @dataclass
 class Intent:
-    kind: str                     # stop/walk/stand/crouch/gait/status/greet/intro/
-                                  # exit/confirm/cancel/unsupported/ignore/unknown
+    kind: str                     # stop/walk/speed/stand/crouch/gait/status/greet/
+                                  # intro/exit/confirm/cancel/unsupported/ignore/unknown
     text: str = ""                # 归一化后的原文
     vx: float = 0.0               # 方向 ±1（前+）
     vy: float = 0.0               # 方向 ±1（左+）
@@ -182,6 +186,12 @@ def parse(text: str) -> Intent:
         return _walk(t, "后退", vx=-1.0)
     if _FWD.search(t):
         return _walk(t, "前进", vx=1.0)
+
+    # 光杆调速（必须在移动之后：“快点前进”归 walk，speed 已在 _walk 里吃掉）
+    if any(w in t for w in SLOWER_WORDS):
+        return Intent("speed", t, speed=0.6, reply="减速")
+    if any(w in t for w in FASTER_WORDS):
+        return Intent("speed", t, speed=1.5, reply="提速")
 
     if any(w in t for w in GREET_WORDS):
         return Intent("greet", t, reply="在呢")

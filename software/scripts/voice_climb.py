@@ -303,6 +303,8 @@ def main():
             say(status_speech())
         elif k in ("stand", "crouch", "gait"):
             say("爬墙状态不支持")
+        elif k == "speed":
+            say("爬墙速度是定死的，不支持调速")   # --speed 启动时定，宁慢勿快
         elif k == "intro":
             say("爬墙中，回头再介绍")       # 15s 长回话在墙上纯占耳朵
         elif k in ("greet", "unsupported"):

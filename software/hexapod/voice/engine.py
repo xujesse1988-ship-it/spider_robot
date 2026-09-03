@@ -150,10 +150,12 @@ class VoiceEngine(threading.Thread):
                  listen_timeout_s: float = 6.0, num_threads: int = 2,
                  kws_threshold: float = 0.25, wake_ack: str = "在",
                  chunk_s: float = 0.1, mute_during_tts: bool = True,
-                 voice_gate=None, log: Optional[Callable[[str], None]] = None):
+                 voice_gate=None, parser=None,
+                 log: Optional[Callable[[str], None]] = None):
         super().__init__(name="voice-engine", daemon=True)
         self.paths, self.source, self.speaker = paths, source, speaker
         self.voice_gate = voice_gate       # voiceprint.VoiceGate；None=不开声纹锁
+        self.parser = parser or parse      # 文本→Intent（voice_climb 换 parse_climb）
         self.wake_required, self.follow_up_s = wake_required, follow_up_s
         self.listen_timeout_s, self.num_threads = listen_timeout_s, num_threads
         self.kws_threshold, self.wake_ack, self.chunk_s = kws_threshold, wake_ack, chunk_s
@@ -270,7 +272,7 @@ class VoiceEngine(threading.Thread):
                     and looks_like_echo(text, self.speaker.recent_texts())):
                 self.log(f"[asr] {len(samples)/RATE:.1f}s → {text!r} ≈ 自己刚说的，丢弃")
                 continue
-            intent = parse(text)
+            intent = self.parser(text)
             if self.voice_gate is not None and intent.kind != "stop":
                 # 声纹锁：急停不经此闸（谁喊都停），其余指令只听主人
                 ok, sc = self.voice_gate.accept(samples)

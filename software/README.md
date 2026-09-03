@@ -34,6 +34,7 @@ python scripts/walk_teleop.py                    # 3. 键盘遥控行走 (wasd/q
 python scripts/voice_check.py                    # 4. 语音自检：录 5 秒→回放→识别→TTS（要 ReSpeaker Lite，见 docs/VOICE-GUIDE.md）
 python scripts/voice_enroll.py                   # 5. （可选）声纹注册：行走指令只听你，急停谁喊都停；末尾补录"确认/退出"等短词锚点，已有档案用 --append 只补短词
 python scripts/voice_teleop.py                   # 6. 语音遥控行走（“小蜘蛛，前进”=一直走喊停为止、“前进三秒”=到点自停、“停下”急停；键盘照旧；阀排气同 walk_teleop）
+python scripts/voice_climb.py                    # 7. 爬墙语音壳：climb_walk 原样跑在 pty 里，语音映射成按键注入（急停→空格、“启动”→p、行走→wasdqe、单步/落地→i、“冻结”→f），互锁/黑匣子照旧；退出与取机只认键盘（VOICE-GUIDE §3.9）
 ```
 
 全部脚本支持 `--mock` 干跑（`voice_*` 还支持 `--wav` 用录音顶替麦克风）。测试：`pytest tests/`（覆盖 IK 往返、步态约束、协议字节、吸附状态机、语音意图/关键词/回声过滤/声纹锁）。

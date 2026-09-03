@@ -12,6 +12,8 @@
 vx/vy/wz 只给 ±1 的方向，seconds=None 表示"没说时长"，inf 表示"一直"。
 真实速度、时长语义由调用方（scripts/voice_teleop.py）决定——那边把
 "没说时长"当"一直走"（连续动作，说停为止），reply 也按这个念。
+爬墙口径另有 parse_climb（文件尾，scripts/voice_climb.py 用）：先认
+单步/落地/解冻/开始吸附等爬墙专用词，其余落回 parse()。
 """
 import math
 import re
@@ -40,7 +42,8 @@ CONFIRM_WORDS = {"确定", "确认", "是的", "是", "对", "对的", "好的",
                  "嗯", "没错", "yes", "ok"}
 CANCEL_WORDS = {"取消", "不用", "不用了", "算了", "不要", "不", "no"}
 EXIT_WORDS = ("退出", "结束程序", "关闭程序", "关机", "下线")
-STATUS_WORDS = ("电压", "电量", "电池", "几伏", "状态", "电流", "多少电")
+STATUS_WORDS = ("电压", "低压",   # "低压"=SenseVoice 对"电压"的高频听歪（实测），收进来
+                "电量", "电池", "几伏", "状态", "电流", "多少电")
 STAND_WORDS = ("站起来", "站起", "站立", "起立", "站好", "起来", "立正")
 CROUCH_WORDS = ("趴下", "蹲下", "坐下", "休息", "趴着", "卧倒", "趴")
 GREET_WORDS = ("你好", "您好", "嗨", "哈喽", "哈罗", "在吗", "在不在", "hello", "hi",
@@ -183,3 +186,35 @@ def parse(text: str) -> Intent:
     if any(w in t for w in GREET_WORDS):
         return Intent("greet", t, reply="在呢")
     return Intent("unknown", t, reply="没听懂")
+
+
+# ---- 爬墙口径（scripts/voice_climb.py 用）----
+# 词表纪律：
+# - 不收"走一步"当单步——parse() 会把它解析成 1 秒定时行走（"N 步"是时长
+#   语法），爬墙优先层截了它反而改变通用语义；说"单步/抬腿"最稳。
+# - begin 不收裸"开始"——"开始前进"必须落到 walk，不能被抢成按 p。
+# - pickup/exit 语音永远不执行（放气类，听歪=墙上坠落），认出来只回键盘指引。
+CLIMB_STEP_WORDS = ("单步", "抬腿", "迈一步", "抬一步", "抬一条腿")
+CLIMB_LAND_WORDS = ("落地", "踩下", "落下")
+CLIMB_UNFREEZE_WORDS = ("解冻", "冻结")   # "解除"常被听成"接触/接出"，认"冻结"就够
+                                        # ——f 键只在冻结态有作用，平时注入是空操作
+CLIMB_BEGIN_WORDS = ("开始吸附", "吸附启动", "启动", "开始爬",
+                     # SenseVoice 对"吸附"的实测听歪集（xīfù 同音近音），收编：
+                     "开始吸服", "开始洗服", "开始戏附", "开始袭附")
+CLIMB_PICKUP_WORDS = ("取机", "放开吸盘", "松开吸盘", "放吸盘")
+
+
+def parse_climb(text: str) -> Intent:
+    """爬墙意图：先认爬墙专用词，其余落回 parse()。只做识别不做安全判断
+    ——指令能不能执行由 climb_walk 的互锁说了算（语音层只是按键的别名）。"""
+    t = normalize(text)
+    if t and not any(w in t for w in STOP_WORDS):    # 急停永远第一优先
+        for kind, words, reply in (
+                ("step", CLIMB_STEP_WORDS, "单步"),
+                ("land", CLIMB_LAND_WORDS, "落地"),
+                ("unfreeze", CLIMB_UNFREEZE_WORDS, "解冻"),
+                ("begin", CLIMB_BEGIN_WORDS, "开始吸附序列"),
+                ("pickup", CLIMB_PICKUP_WORDS, "")):
+            if any(w in t for w in words):
+                return Intent(kind, t, reply=reply)
+    return parse(text)

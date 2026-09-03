@@ -167,6 +167,10 @@
 > （判据时间窗防毛刺、is_leaking/leak_time、Pi5VacuumIO 七路传感器+罐压
 > 失效判断、mode 仲裁位）。联调入口 `scripts/climb_walk.py`
 > （--mock/--air/--release），可视化 `sim_walk.py --gait climb`。
+> 语音壳 `scripts/voice_climb.py`（09-03）：climb_walk 原样跑在 pty 里，
+> 语音映射成按键注入（急停"停下"→空格、"往前走"→w、"开始吸附/启动"→p、
+> "单步/落地"→i、"冻结"→f），互锁与黑匣子全部照旧；退出/取机等放气类
+> 只认键盘（详见 VOICE-GUIDE §3.9）。
 > 4.6 之 1、2 已完成（37 pytest 全绿 + GIF 目检），3、4 待实机。
 >
 > **2026-08-16 落点几何修正（§4.3 实装，实机架空发现）**：默认站位

@@ -2,7 +2,8 @@ import math
 
 import pytest
 
-from hexapod.voice.intents import parse, cn_to_number, parse_duration, normalize
+from hexapod.voice.intents import (parse, parse_climb, cn_to_number,
+                                   parse_duration, normalize)
 
 
 def test_normalize_strips_punct_and_fullwidth():
@@ -104,8 +105,47 @@ def test_posture_and_gait():
 
 def test_status_and_greet_and_unknown():
     assert parse("电压多少").kind == "status"
+    assert parse("低压多少").kind == "status"       # "电压"的高频听歪（实测收编）
     assert parse("你好").kind == "greet"
     assert parse("跳个舞").kind == "unsupported"
     assert parse("今天天气不错").kind == "unknown"
     assert parse("").kind == "unknown"
 
+
+# ---- 爬墙口径 parse_climb（voice_climb.py 用）----
+def test_climb_words():
+    assert parse_climb("单步").kind == "step"
+    assert parse_climb("抬腿。").kind == "step"
+    assert parse_climb("落地").kind == "land"
+    assert parse_climb("踩下").kind == "land"
+    assert parse_climb("解除冻结").kind == "unfreeze"
+    assert parse_climb("接出冻结").kind == "unfreeze"  # "解除"高频听歪，认"冻结"兜住
+    assert parse_climb("开始吸附").kind == "begin"
+    assert parse_climb("启动").kind == "begin"      # "吸附"易听歪，"启动"是硬朗备份
+    assert parse_climb("取机").kind == "pickup"
+    assert parse_climb("放开吸盘").kind == "pickup"
+
+
+def test_climb_stop_beats_climb_words():
+    # 急停永远第一优先：句里混进爬墙词也得停
+    assert parse_climb("别动，先别抬腿").kind == "stop"
+    assert parse_climb("停下单步").kind == "stop"
+
+
+def test_climb_falls_back_to_parse():
+    it = parse_climb("前进三秒")
+    assert it.kind == "walk" and it.vx == 1 and it.seconds == 3
+    assert parse_climb("电压多少").kind == "status"
+    # "开始前进"必须是 walk 不是 begin（begin 词表故意不收裸"开始"）
+    assert parse_climb("开始前进").kind == "walk"
+    # 已知边界："走一步"走通用语法=1 秒定时行走，不是单步（模块注释有记）
+    it = parse_climb("走一步")
+    assert it.kind == "walk" and it.seconds == 1.0
+
+
+def test_climb_action_replies_avoid_kws_stop_words():
+    # 爬墙回复/播报纪律：机器人念的话不得含 KWS 急停词
+    for text in ("单步", "落地", "解冻", "开始吸附"):
+        reply = parse_climb(text).reply
+        for w in ("停下", "停止", "停下来", "别动"):
+            assert w not in reply

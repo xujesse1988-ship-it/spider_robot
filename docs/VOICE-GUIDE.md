@@ -71,7 +71,8 @@ lsusb | grep -i 2886                 # Seeed 的 USB VID，应有一行
 arecord -l && aplay -l               # 应有 USB Audio: ReSpeaker Lite（录、放各一）
 arecord -D plughw:CARD=Lite,DEV=0 --dump-hw-params -d 1 /dev/null 2>&1 | head
                                      # 看固件实际支持的采样率/通道数（16kHz）
-bash software/scripts/voice_mixer.sh # 放音/录音音量 90% + alsactl store
+bash software/scripts/voice_mixer.sh # 有控制项就设 90%+存盘；Lite USB 固件实测不暴露
+                                     # 任何控制项（scontrols 空，增益在片内），会提示后退出
 arecord -D plughw:CARD=Lite,DEV=0 -f S16_LE -r 16000 -c 1 -d 3 /tmp/t.wav
 aplay   -D plughw:CARD=Lite,DEV=0 /tmp/t.wav
 ```
@@ -314,7 +315,7 @@ pty——与手敲完全等价，它的全部互锁（单步在途/已放开/大
 | 大音量爆音/Pi 欠压（`get_throttled` ≠ 0） | `config.txt` 有没有 `usb_max_current_enable=1`（加了要重启）；降放音音量；终极方案板上 5V 焊盘直供 |
 | 唤醒后指令没反应 | 看终端 `[asr]` 行：识别文本对但意图 unknown → 加词到 `intents.py`；没有 `[asr]` 行 → VAD 没切到句（说完停顿 0.5 s） |
 | 机器人说话时喊"停下"没反应 | 默认行为（说话期间闭麦）。加 `--trust-aec` 后靠 KWS 穿透回声，命中率看 §6 的 AEC 判定结果 |
-| **走路时要喊很大声才听见** | 18 舵机噪声糊麦，结构振动经机身传进麦克风板比空气声更毒。先跑 `voice_check.py --noise-test`（另开终端让机器人走，三段引导录音）拿数：信噪比 <10dB → 物理杠杆第一（麦克风板远离舵机、垫泡棉减振、麦克风面朝人）；带噪说话电平比静止低 >6dB → 板载 AGC 被持续噪声压了增益（缩短人机距离最有效）。软件侧：唤醒词 09-03 已放灵敏（0.25→0.20:1.5，**拉取后必须在树莓派重新生成 keywords_hexapod.txt**，命令见 §3.3）；`amixer` 把录音增益 90%→100% 试。实在吵：走动中急停照样最灵（0.20:2.0），普通指令喊"停下"停稳了再说 |
+| **走路时要喊很大声才听见** | 18 舵机噪声糊麦，结构振动经机身传进麦克风板比空气声更毒。先跑 `voice_check.py --noise-test`（另开终端让机器人走，三段引导录音）拿数：信噪比 <10dB → 物理杠杆第一（麦克风板远离舵机、垫泡棉减振、麦克风面朝人）；带噪说话电平比静止低 >6dB → 板载 AGC 被持续噪声压了增益（缩短人机距离最有效）。软件侧：唤醒词 09-03 已放灵敏（0.25→0.20:1.5，**拉取后必须在树莓派重新生成 keywords_hexapod.txt**，命令见 §3.3）。录音增益没有软件旋钮——09-03 实机证实这块 USB 固件不暴露任何 amixer 控制项（`scontrols` 为空），增益/AGC 全在 XU316 片内。实在吵：走动中急停照样最灵（0.20:2.0），普通指令喊"停下"停稳了再说 |
 | 机器人自问自答/重复回话 | 自听过滤应该兜住（09-02 加，日志有"≈ 自己刚说的，丢弃"）；若还复现，把日志里的识别文本和回话原文发出来对比——多半是回声被听歪得太厉害（相似度 <0.7），加大 TTS 与麦克风的物理距离或降音量 |
 
 ## 5. 开发机验证记录（2026-09-01，x86 + sherpa-onnx 1.13.7）

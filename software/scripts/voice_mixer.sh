@@ -14,6 +14,14 @@ fi
 [ -n "$CARD" ] || { echo "没找到 ReSpeaker Lite（/proc/asound/cards 里无 respeaker/lite），USB 插好了吗"; exit 1; }
 echo "声卡: $CARD"
 
+N_CTL=$(amixer -c "$CARD" scontrols | wc -l)
+if [ "$N_CTL" -eq 0 ]; then
+  # 09-03 实机证实：Lite 的 USB 固件不暴露任何混音器控制项（scontrols 为空），
+  # 增益/AGC 全在 XU316 片内，主机侧无音量可设——属正常，不是故障。
+  # 录音电平由固件定；TTS 响度用 voice_teleop --tts-gain 调（乘样本幅度，不走混音器）。
+  echo "该固件不暴露混音器控制项（正常）：主机侧无音量可设，本脚本无事可做。"
+  exit 0
+fi
 amixer -c "$CARD" scontrols | sed -E "s/^Simple mixer control '([^']+)'.*/\1/" | \
 while IFS= read -r name; do
   info=$(amixer -c "$CARD" sget "$name" 2>/dev/null) || continue

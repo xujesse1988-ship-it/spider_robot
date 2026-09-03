@@ -47,19 +47,24 @@ def _smoothstep(s: float) -> float:
     return s * s * (3 - 2 * s)
 
 
+def default_feet(cfg: RobotConfig) -> dict:
+    """默认站位的足端位置（身体系，z 相对髋轴平面）。"""
+    feet = {}
+    for leg in cfg.legs:
+        a = math.radians(leg.mount_angle_deg)
+        feet[leg.name] = (
+            leg.mount_x + cfg.foot_reach * math.cos(a),
+            leg.mount_y + cfg.foot_reach * math.sin(a),
+            -cfg.stand_height,
+        )
+    return feet
+
+
 class GaitEngine:
     def __init__(self, cfg: RobotConfig, gait: Gait = TRIPOD):
         self.cfg = cfg
         self.gait = gait
-        # 默认足端位置（身体系，z 相对髋轴平面）
-        self.default_feet = {}
-        for leg in cfg.legs:
-            a = math.radians(leg.mount_angle_deg)
-            self.default_feet[leg.name] = (
-                leg.mount_x + cfg.foot_reach * math.cos(a),
-                leg.mount_y + cfg.foot_reach * math.sin(a),
-                -cfg.stand_height,
-            )
+        self.default_feet = default_feet(cfg)
 
     def _stride(self, leg_name: str, vx: float, vy: float, wz: float):
         """该腿在一个支撑相内的位移向量（身体系，mm）。
@@ -108,3 +113,94 @@ class GaitEngine:
                     z0 + self.cfg.step_height * math.sin(math.pi * s),
                 )
         return targets
+
+
+class MarchEngine:
+    """原地踏步：按步态分组轮流抬落，抬到顶悬停 hold_s、落地后站定 hold_s。
+
+    与 GaitEngine 的区别：足端只在 z 上动，x/y 恒在默认站位——身体不前进、
+    不转向，看抬腿幅度/脚有没有被被动真空吸住/落地后身体沉多少时不用追着
+    机器人跑，也不必留出场地。
+    分组取自步态偏移（同偏移的腿一组，组序按偏移升序 = 步行时的抬腿先后）：
+    TRIPOD 两组（对角三只一组），WAVE 六组（一次一腿）。
+    一组的节拍（period = 2*lift_s + 2*hold_s）四段：
+      抬起 lift_s → 悬空停 hold_s（停在 step_height 高处）
+      落下 lift_s → 落地停 hold_s（六脚都在默认站位）→ 轮到下一组
+    抬落用 smoothstep（两端速度为零），停下那一刻不甩腿。
+    时间是纯函数：foot_targets(t) 只看踏步已走时 t，调用方不推进时间就不动
+    （walk_teleop 在阀没通电完时就是这么原地等的）。
+    """
+    MIN_LIFT_S = 0.4    # 单程太快看不清也拍不清：WAVE 半个摆动窗才 0.125s，兜到 0.4s
+
+    def __init__(self, cfg: RobotConfig, gait: Gait = TRIPOD, hold_s: float = 5.0,
+                 lift_s: float = None, step_height: float = None):
+        self.cfg = cfg
+        self.gait = gait
+        self.hold_s = max(0.0, float(hold_s))
+        # lift_s = 单程（抬起或落下）运动时长
+        self.lift_s = (max(self.MIN_LIFT_S, cfg.cycle_time * (1 - gait.duty) / 2)
+                       if lift_s is None else float(lift_s))
+        self.step_height = cfg.step_height if step_height is None else float(step_height)
+        self.default_feet = default_feet(cfg)
+        self.groups = tuple(
+            tuple(n for n in LEG_NAMES if gait.offsets[n] == off)
+            for off in sorted(set(gait.offsets.values())))
+
+    @property
+    def period(self) -> float:
+        """一组的节拍时长 s（抬起 + 悬空停 + 落下 + 落地停）。"""
+        return 2 * self.lift_s + 2 * self.hold_s
+
+    def group_at(self, t: float) -> int:
+        """t 时刻轮到的组序号（落地停算刚踩下的那一组）。"""
+        return int(t // self.period) % len(self.groups)
+
+    def phase_at(self, t: float):
+        """t 时刻本组处在哪一段：('rise'|'top'|'fall'|'ground', 该段已走时)。"""
+        s = t % self.period
+        if s < self.lift_s:
+            return "rise", s
+        s -= self.lift_s
+        if s < self.hold_s:
+            return "top", s
+        s -= self.hold_s
+        if s < self.lift_s:
+            return "fall", s
+        return "ground", s - self.lift_s
+
+    def airborne(self, t: float) -> bool:
+        """t 时刻本组脚是否离地（抬起/悬空/落下三段）。"""
+        return self.phase_at(t)[0] != "ground"
+
+    def height_at(self, t: float) -> float:
+        """t 时刻本组足端离默认站位的高度 mm。"""
+        seg, s = self.phase_at(t)
+        if seg == "rise":
+            return self.step_height * _smoothstep(s / self.lift_s)
+        if seg == "top":
+            return self.step_height
+        if seg == "fall":
+            return self.step_height * (1 - _smoothstep(s / self.lift_s))
+        return 0.0
+
+    def foot_targets(self, t: float) -> dict:
+        """踏步已走时 t 的各腿足端目标（身体系）。"""
+        targets = dict(self.default_feet)
+        lift = self.height_at(t)
+        if lift <= 0.0:
+            return targets
+        for name in self.groups[self.group_at(t)]:
+            x, y, z = self.default_feet[name]
+            targets[name] = (x, y, z + lift)
+        return targets
+
+    def state_text(self, t: float) -> str:
+        seg, s = self.phase_at(t)
+        legs = "/".join(self.groups[self.group_at(t)])
+        if seg == "rise":
+            return f"抬起 {legs}"
+        if seg == "top":
+            return f"悬空 {legs} 还 {self.hold_s - s:.1f}s"
+        if seg == "fall":
+            return f"落下 {legs}"
+        return f"站定 还 {self.hold_s - s:.1f}s"

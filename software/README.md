@@ -30,7 +30,7 @@ pip install -e ".[pi]"
 python scripts/sim_walk.py --gif walk.gif        # 0. 无硬件仿真，先看步态对不对
 python scripts/servo_center.py                   # 1. 装配标定：全舵机回中，装舵盘
 python scripts/stand_up.py                       # 2. 站立测试 + 传感器读数
-python scripts/walk_teleop.py                    # 3. 键盘遥控行走 (wasd/qe)；装气路后阀策略 --vent auto（默认）：站起/走动时六阀通电排气让吸盘通大气、站着不动断电；on 常通；off 不碰阀=脚被被动真空吸住抬不起（对照，v 键轮换）
+python scripts/walk_teleop.py                    # 3. 键盘遥控行走 (wasd/qe)；m 键原地踏步（身体不动，按步态分组轮抬：抬起→悬空停 5s→落下→站定 5s→下一组，`--march-hold` 改秒数；空格冻结当前姿势，抬到一半也定得住；踏步全程六阀通电排气）；装气路后阀策略 --vent auto（默认）：站起/走动时六阀通电排气让吸盘通大气、站着不动断电；on 常通；off 不碰阀=脚被被动真空吸住抬不起（对照，v 键轮换）
 python scripts/voice_check.py                    # 4. 语音自检：录 5 秒→回放→识别→TTS（要 ReSpeaker Lite，见 docs/VOICE-GUIDE.md）
 python scripts/voice_enroll.py                   # 5. （可选）声纹注册：行走指令只听你，急停谁喊都停
 python scripts/voice_teleop.py                   # 6. 语音遥控行走（“小蜘蛛，前进三秒”/“停下”；键盘照旧；阀排气同 walk_teleop）

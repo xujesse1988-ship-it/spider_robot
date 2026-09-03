@@ -61,9 +61,12 @@ def test_forward_with_seconds_itn_digits():
     assert it.reply == "前进3秒"
 
 
-def test_forward_default_duration_when_unspecified():
+def test_forward_without_duration_is_continuous():
     it = parse("往前走")
     assert it.kind == "walk" and it.vx == 1 and it.seconds is None
+    assert it.reply == "一直前进，说停就停"       # 没说时长=连续动作，回复要念明白
+    for w in ("停下", "停止", "停下来", "别动"):  # 回复不能含 KWS 急停词（念了自触发）
+        assert w not in it.reply
 
 
 def test_backward_and_speed_modifier():
@@ -105,3 +108,4 @@ def test_status_and_greet_and_unknown():
     assert parse("跳个舞").kind == "unsupported"
     assert parse("今天天气不错").kind == "unknown"
     assert parse("").kind == "unknown"
+

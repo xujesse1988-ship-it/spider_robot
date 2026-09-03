@@ -2,7 +2,9 @@
 """语音遥控行走（树莓派 + ReSpeaker Lite USB 麦克风/喇叭板；键盘照旧可用）。
 
   说"小蜘蛛"唤醒 → 听令窗口内说指令，可连说：
-    前进/后退/左移/右移/左转/右转 [N 秒 | N 步 | 一直] [快点 | 慢点]
+    前进/后退/左移/右移/左转/右转 [N 秒 | N 步] [快点 | 慢点]
+      ——不带时长=连续动作，一直走到喊停/新指令/键盘干预（回复念"一直前进，
+      说停就停"）；带时长到点自停
     站起来 / 趴下 / 三角步态 / 波浪步态 / 电压多少 / 你好 / 自我介绍（长回话）
     退出（要再说"确定"）
   "停下 / 停止 / 别动"不用唤醒，随时生效（流式关键词急停，~0.3s）——
@@ -11,8 +13,9 @@
   同 walk_teleop
 
 安全边界：
-  · 每条移动指令都有时长：默认 --default-secs，上限 --max-secs（"一直"=上限），
-    到点自停；没听懂的句子不动；退出要二次确认；欠压照旧抛异常断舵机电。
+  · 移动指令默认连续（不带时长=一直走），靠急停词/新指令/键盘停——回复会念
+    "说停就停"提醒；带时长的到点自停，上限 --max-secs 防把时长听歪；
+    没听懂的句子不动；退出要二次确认；欠压照旧抛异常断舵机电。
   · 语音引擎线程只产事件；舵机/步态全部在主线程，和 walk_teleop 是同一个环。
   · 机器人自己说话期间默认不听麦克风（防听见自己说的"停"），TTS 句子都很短；
     Lite 板载回声消除实测有效后可加 --trust-aec，说话期间急停词照样生效。
@@ -49,8 +52,10 @@ from hexapod.voice.voiceprint import VoiceGate, default_profile
 POWER_PRINT_S = 0.5
 EXIT_CONFIRM_S = 10.0
 PREWARM = ("在", "停", "起立", "趴下", "在呢", "没听懂", "好", "再见",
-           "确定退出吗？请说 确定", "前进3秒", "后退3秒", "左转3秒", "右转3秒",
-           "左移3秒", "右移3秒", "换三角步态", "换波浪步态", INTRO_REPLY)
+           "确定退出吗？请说 确定",
+           "一直前进，说停就停", "一直后退，说停就停", "一直左转，说停就停",
+           "一直右转，说停就停", "一直左移，说停就停", "一直右移，说停就停",
+           "换三角步态", "换波浪步态", INTRO_REPLY)
 
 
 def read_key(timeout):
@@ -74,8 +79,8 @@ def main():
                     help="唤醒后/每条指令后继续听令的秒数")
     ap.add_argument("--speed", type=float, default=40.0, help="平移速度 mm/s")
     ap.add_argument("--turn", type=float, default=0.3, help="转向速度 rad/s")
-    ap.add_argument("--default-secs", type=float, default=3.0, help="没说时长时走多久")
-    ap.add_argument("--max-secs", type=float, default=10.0, help="单条指令时长上限")
+    ap.add_argument("--max-secs", type=float, default=10.0,
+                    help="带时长指令的上限（防把'三秒'听歪成'三十秒'；不带时长=一直走不受限）")
     ap.add_argument("--sid", type=int, default=0, help="TTS 说话人编号（多人模型才有用）")
     ap.add_argument("--tts-gain", type=float, default=1.0,
                     help="TTS 音量倍率；喇叭离麦克风近时降到 0.6，提高说话期间急停命中")
@@ -191,15 +196,17 @@ def main():
         elif k == "walk":
             if crouched:
                 stand_up()
-            secs = args.default_secs if it.seconds is None else min(it.seconds, args.max_secs)
-            if math.isinf(secs):
-                secs = args.max_secs
             vx = it.vx * args.speed * it.speed
             vy = it.vy * args.speed * it.speed
             wz = it.wz * args.turn * it.speed
-            deadline = time.monotonic() + secs
             say(it.reply)
-            log(f"→ 移动 vx={vx:.0f} vy={vy:.0f} wz={wz:.2f} 持续 {secs:.1f}s")
+            if it.seconds is None or math.isinf(it.seconds):
+                deadline = None      # 连续动作：说停/新指令/键盘为止（同键盘 wasd）
+                log(f"→ 移动 vx={vx:.0f} vy={vy:.0f} wz={wz:.2f} 一直（说停为止）")
+            else:
+                secs = min(it.seconds, args.max_secs)
+                deadline = time.monotonic() + secs
+                log(f"→ 移动 vx={vx:.0f} vy={vy:.0f} wz={wz:.2f} 持续 {secs:.1f}s")
         elif k == "stand":
             halt()
             say(it.reply)
@@ -233,8 +240,21 @@ def main():
                 say(it.reply)
         return False
 
-    print("语音遥控就绪：说“小蜘蛛”唤醒；“停下/别动”随时急停"
-          + ("；键盘同 walk_teleop" if tty_mode else "") + "。")
+    print("─" * 30 + " 指令一览 " + "─" * 30)
+    print("唤醒：" + ("不用（--no-wake），直接说指令"
+                     if args.no_wake else "小蜘蛛 / 蜘蛛同学 —— 唤醒后说指令，可连说"))
+    print("急停：停下 / 停止 / 别动 / 站住 —— 不用唤醒随时喊，它自己说话时也管用")
+    print("移动：前进 后退 左移 右移 左转 右转 [快点/慢点] —— 一直走，喊停为止；")
+    print("      带时长（“前进三秒”/“走两步”）则到点自停")
+    print("姿势：站起来 / 趴下        步态：三角步态 / 波浪步态")
+    print("问答：电压多少 / 你好 / 自我介绍（15 秒长回话，可趁机试喊停）")
+    print("退出：退出 → 10 秒内再说“确定”；说“取消”反悔")
+    if gate is not None:
+        print("声纹：行走等指令只听主人，急停谁喊都停（--no-voiceprint 关）")
+    if tty_mode:
+        print("键盘：w/s/a/d/q/e 动，空格停，1/2 步态，v 阀策略，ESC 退出")
+    print("─" * 70)
+    print("语音遥控就绪。")
     try:
         while True:
             now = time.monotonic()

@@ -9,8 +9,9 @@
   4. 移动：转向 > 平移 > 前后（"左转"含"左"，必须先判转向）
      可带时长（"三秒"/"5 秒"/"两步"/"一直"）和快慢（"快点"/"慢点"）
 
-vx/vy/wz 只给 ±1 的方向，seconds=None 表示"用默认时长"，inf 表示"一直"。
-真实速度、默认/上限时长由调用方（scripts/voice_teleop.py）决定。
+vx/vy/wz 只给 ±1 的方向，seconds=None 表示"没说时长"，inf 表示"一直"。
+真实速度、时长语义由调用方（scripts/voice_teleop.py）决定——那边把
+"没说时长"当"一直走"（连续动作，说停为止），reply 也按这个念。
 """
 import math
 import re
@@ -121,9 +122,9 @@ def _fmt_secs(s: float) -> str:
 def _walk(text: str, kind_name: str, vx=0.0, vy=0.0, wz=0.0) -> Intent:
     secs = parse_duration(text)
     speed = 1.5 if "快" in text else (0.6 if "慢" in text else 1.0)
-    if secs is None:
-        reply = kind_name
-    elif math.isinf(secs):
+    if secs is None or math.isinf(secs):
+        # 没说时长=一直走（连续动作）。"说停就停"不含 KWS 急停词
+        # （停下/停止/停下来/别动），机器人念它不会触发自己的急停
         reply = f"一直{kind_name}，说停就停"
     else:
         reply = f"{kind_name}{_fmt_secs(secs)}秒"

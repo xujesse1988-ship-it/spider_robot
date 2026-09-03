@@ -33,7 +33,7 @@ python scripts/stand_up.py                       # 2. 站立测试 + 传感器�
 python scripts/walk_teleop.py                    # 3. 键盘遥控行走 (wasd/qe)；m 键进/出原地踏步（身体不动、手动逐脚：t/g/b=左前中后、y/h/n=右前中后，按一下抬起 70mm 再按踩下，`--march-lift` 改高度；该状态只认这六个键+m+ESC，其余按键忽略；全程六阀通电排气，出踏步时抬着的脚先滑回站位）；装气路后阀策略 --vent auto（默认）：站起/走动时六阀通电排气让吸盘通大气、站着不动断电；on 常通；off 不碰阀=脚被被动真空吸住抬不起（对照，v 键轮换）
 python scripts/voice_check.py                    # 4. 语音自检：录 5 秒→回放→识别→TTS（要 ReSpeaker Lite，见 docs/VOICE-GUIDE.md）
 python scripts/voice_enroll.py                   # 5. （可选）声纹注册：行走指令只听你，急停谁喊都停；末尾补录"确认/退出"等短词锚点，已有档案用 --append 只补短词
-python scripts/voice_teleop.py                   # 6. 语音遥控行走（“小蜘蛛，前进三秒”/“停下”；键盘照旧；阀排气同 walk_teleop）
+python scripts/voice_teleop.py                   # 6. 语音遥控行走（“小蜘蛛，前进”=一直走喊停为止、“前进三秒”=到点自停、“停下”急停；键盘照旧；阀排气同 walk_teleop）
 ```
 
 全部脚本支持 `--mock` 干跑（`voice_*` 还支持 `--wav` 用录音顶替麦克风）。测试：`pytest tests/`（覆盖 IK 往返、步态约束、协议字节、吸附状态机、语音意图/关键词/回声过滤/声纹锁）。

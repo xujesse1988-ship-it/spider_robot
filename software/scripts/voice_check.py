@@ -159,7 +159,9 @@ def do_noise_test(paths, card):
     A 纯噪声底 → B 带噪正常音量说话 → C 静止同距离同音量说话。
     判据：B 说话段与 A 噪声底的差 = 实际信噪比（<10dB 基本靠喊）；
     B 与 C 的说话段电平差 = AGC 嫌疑（被持续噪声压了增益会差很多）。"""
-    print("走路噪声测试：三段录音，全程别动麦克风、人站平时指挥的位置。")
+    print("走路噪声测试：三段录音，全程别动麦克风、人站平时指挥的位置。\n"
+          "⚠ 噪声源用 walk_teleop（纯键盘）——voice_teleop/voice_climb 会占着"
+          "麦克风，测试期间不能开。")
     input("A) 让机器人走起来（另开终端 walk_teleop，或晃动通电的腿）——"
           "人别说话，回车录 4s 纯噪声…")
     na = _rec(card, 4.0, "/tmp/voice_noise_a.wav")

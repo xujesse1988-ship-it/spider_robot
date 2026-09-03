@@ -123,9 +123,12 @@ class ArecordSource:
             time.sleep(0.2)
             if self._p.poll() is not None:
                 err = self._p.stderr.read().decode(errors="replace").strip()
-                raise RuntimeError(
-                    f"arecord 启动失败（{self.device}）：{err or '无输出'}\n"
-                    f"  查：arecord -l 有没有 ReSpeaker Lite；当前用户在 audio 组吗")
+                hint = ("  录音口被别的进程占着（一次只能一个）：voice_teleop/"
+                        "voice_climb 还开着？残留 arecord？\n"
+                        "  查占用：fuser -v /dev/snd/*   清残留：pkill -f arecord"
+                        if "busy" in err.lower() else
+                        "  查：arecord -l 有没有 ReSpeaker Lite；当前用户在 audio 组吗")
+                raise RuntimeError(f"arecord 启动失败（{self.device}）：{err or '无输出'}\n{hint}")
 
     def read(self, n: int):
         import select

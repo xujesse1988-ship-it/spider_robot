@@ -38,8 +38,10 @@ THROTTLE_BITS = {0: "欠压中", 1: "ARM频率封顶", 2: "限频中", 3: "软�
 # 5V 输入告警线：PMIC 欠压门限之上留余量的经验线（标称 5.0V，降压模块正常
 # 应在 5.0~5.15；跌到 4.8 以下说明降压输入/输出已经吃紧）
 EXT5V_WARN_V = 4.80
-# 舵机合闸后母线采样时刻（相对合闸，秒）；末点 = 原脚本合闸后 1.0s 等待
-SERVO_ON_SAMPLE_S = (0.05, 0.15, 0.3, 0.6, 1.0)
+# 舵机上电两段的母线采样时刻（秒）：合闸后（带电未出力，≤ ARM_DELAY_S）与
+# 固件使能后（出力；末点 = 原脚本使能后 1.0s 等待）
+SERVO_ON_SAMPLE_S = (0.05, 0.15, 0.3)
+SERVO_ARM_SAMPLE_S = (0.05, 0.15, 0.3, 0.6, 1.0)
 
 _ADC_RE = re.compile(r"^\s*(\S+)\s+(?:volt|current)\(\d+\)=([0-9.]+)\s*[VA]",
                      re.M)
@@ -305,27 +307,48 @@ def _bus_text(drv):
         return f"母线=读失败({e.__class__.__name__})"
 
 
-def servo_power_on(drv, log, pwr=None, settle_s=1.0, samples=SERVO_ON_SAMPLE_S):
-    """合舵机继电器（drv.enable(True)）并把合闸前后的母线电压/电流落盘。
-
-    合闸=18 舵机同刻上电（BOM：瞬态 ~12A），是启动序列里最大的一次电流阶跃，
-    紧跟在六阀线圈通电之后不到 0.1s——用户看到的"阀逐一亮起之后死机"落在
-    这两件事之间，靠本函数的标记行分辨。合闸后按 samples 各时刻读一次母线，
-    整体等满 settle_s（原脚本合闸后 sleep 1.0s 的口径不变）；Mock 驱动不等。"""
-    sfx = (lambda: pwr.text()) if pwr is not None else (lambda: "")
-    log.mark(f"舵机继电器合闸前 {_bus_text(drv)}{sfx()}")
-    drv.enable(True)
-    log.mark(f"舵机继电器已合闸（18 舵机同刻上电）{sfx()}")
-    if getattr(drv, "is_mock", False):
-        return
+def _sample_after(drv, log, sfx, label, samples, total_s):
+    """从现在起按 samples 各时刻读一次母线落盘，整体等满 total_s。"""
     t0 = time.monotonic()
     for t in samples:
-        if t > settle_s:
+        if t > total_s:
             break
         rem = t0 + t - time.monotonic()
         if rem > 0:
             time.sleep(rem)
-        log.mark(f"合闸后 {t:.2f}s {_bus_text(drv)}{sfx()}")
-    rem = t0 + settle_s - time.monotonic()
+        log.mark(f"{label} {t:.2f}s {_bus_text(drv)}{sfx()}")
+    rem = t0 + total_s - time.monotonic()
     if rem > 0:
         time.sleep(rem)
+
+
+def servo_power_on(drv, log, pwr=None, settle_s=1.0, arm_delay_s=None,
+                   samples=SERVO_ARM_SAMPLE_S, pre_samples=SERVO_ON_SAMPLE_S):
+    """舵机上电拆两步并逐步落盘：合物理继电器（带电不出力）→ 等 arm_delay_s
+    （默认取驱动 ARM_DELAY_S）→ 固件使能（18 舵机同刻出力）→ 等 settle_s。
+
+    09-03 实机定案：六阀线圈全程 5V 平稳，"继电器已合闸"是黑匣子最后一行，
+    <50ms 后 Pi 5 死机——当时固件使能在前、合闸在后，带电冲击与出力冲击叠在
+    同一瞬间。拆开后两段各自采样（pre_samples / samples），能看出是哪一记把
+    5V 拽过线，也把峰值分开。没有 power_on/arm 的驱动退回 enable(True) 一步；
+    Mock 驱动只留标记不等待。"""
+    sfx = (lambda: pwr.text()) if pwr is not None else (lambda: "")
+    mock = getattr(drv, "is_mock", False)
+    staged = hasattr(drv, "power_on") and hasattr(drv, "arm")
+    if arm_delay_s is None:
+        arm_delay_s = getattr(drv, "ARM_DELAY_S", 0.4)
+    log.mark(f"舵机继电器合闸前 {_bus_text(drv)}{sfx()}")
+    if not staged:
+        drv.enable(True)
+        log.mark(f"舵机已使能（该驱动不分步）{sfx()}")
+    else:
+        drv.power_on()
+        log.mark(f"舵机继电器已合闸（18 舵机带电，固件未使能不出力）{sfx()}")
+        if not mock:
+            _sample_after(drv, log, sfx, "合闸后", pre_samples, arm_delay_s)
+        log.mark(f"固件使能前（18 舵机同刻开始出力）{_bus_text(drv)}{sfx()}")
+        drv.arm()
+        log.mark(f"固件已使能{sfx()}")
+    if mock:
+        return
+    _sample_after(drv, log, sfx, "使能后", samples, settle_s)

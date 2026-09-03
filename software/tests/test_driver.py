@@ -43,3 +43,26 @@ def test_mock_driver_state():
     assert d.enabled
     d.touch_raw[0] = 1000
     assert d.read_touch()[0] and not d.read_touch()[1]
+
+
+def test_servo2040_enable_is_staged_relay_then_firmware(monkeypatch):
+    """合闸拆两步：GPIO17 先合（舵机带电不出力）→ 等 ARM_DELAY_S → 串口 RELAY=1
+    固件使能；分闸反序先断功率。09-03 实机：两冲击叠同刻 Pi 5 合闸即死。"""
+    import time
+    from hexapod.driver import Servo2040Driver
+    calls = []
+
+    class Ser:
+        def write(self, b):
+            calls.append(("ser", bytes(b)))
+    lg = type("LG", (), {"gpio_write": staticmethod(
+        lambda h, p, lvl: calls.append(("gpio", p, lvl)))})()
+    d = object.__new__(Servo2040Driver)
+    d.ser, d._lg, d._h = Ser(), lg, 7
+    monkeypatch.setattr(time, "sleep", lambda s: calls.append(("sleep", s)))
+    d.enable(True)
+    assert calls == [("gpio", 17, 1), ("sleep", Servo2040Driver.ARM_DELAY_S),
+                     ("ser", encode_set(IDX_RELAY, [1]))]
+    calls.clear()
+    d.enable(False)
+    assert calls == [("gpio", 17, 0), ("ser", encode_set(IDX_RELAY, [0]))]

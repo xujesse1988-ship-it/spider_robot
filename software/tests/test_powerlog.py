@@ -118,19 +118,67 @@ def test_startup_marker_and_servo_power_on_mock(tmp_path):
     drv = MockDriver()
     t0 = time.monotonic()
     servo_power_on(drv, log, pw)
-    assert drv.enabled and time.monotonic() - t0 < 0.5   # mock 不等 1s
+    assert drv.powered and drv.enabled and time.monotonic() - t0 < 0.5  # mock 不等
     pw.stop()
     txt = read(log.path)
     assert "EVT 启动 阀 1/6 线圈通电前（GPIO5）  Pi[5V=5.100V thr=0x0 " in txt
     assert "舵机继电器合闸前 母线=7.40V 1.00A" in txt
-    assert "舵机继电器已合闸（18 舵机同刻上电）" in txt
-    assert "合闸后" not in txt
+    assert "舵机继电器已合闸（18 舵机带电，固件未使能不出力）" in txt
+    assert "固件使能前（18 舵机同刻开始出力）" in txt and "固件已使能" in txt
+    assert "合闸后" not in txt and "使能后" not in txt
 
 
-def test_servo_power_on_real_driver_samples_bus(tmp_path):
+class _StagedDrv:
+    """有 power_on/arm 的假驱动（无 is_mock：走真实采样路径），记录调用顺序。"""
+
+    def __init__(self):
+        self.calls = []
+        self.v = iter([7.9, 7.5, 7.6, 7.7, 6.9, 7.3, 7.6])
+
+    def power_on(self):
+        self.calls.append("power_on")
+
+    def arm(self):
+        self.calls.append("arm")
+
+    def enable(self, on):
+        raise AssertionError("分步驱动不该走 enable")
+
+    def read_voltage_v(self):
+        self.calls.append("v")
+        return next(self.v, 7.8)
+
+    def read_current_a(self):
+        return 2.5
+
+
+def test_servo_power_on_staged_samples_both_phases(tmp_path):
+    log = RunLog(str(tmp_path), tag="t")
+    drv = _StagedDrv()
+    t0 = time.monotonic()
+    servo_power_on(drv, log, None, settle_s=0.03, arm_delay_s=0.02,
+                   samples=(0.0, 0.01, 0.5), pre_samples=(0.0, 0.01, 0.5))
+    el = time.monotonic() - t0
+    assert 0.05 <= el < 0.5                  # 两段各等满：0.02 + 0.03
+    ops = [c for c in drv.calls if c != "v"]
+    assert ops == ["power_on", "arm"]        # 先合继电器再固件使能
+    txt = read(log.path)
+    lines = [ln for ln in txt.splitlines() if "EVT" in ln]
+    order = [k for ln in lines for k in ("合闸前", "已合闸", "合闸后 0.00s", "合闸后 0.01s",
+                                         "固件使能前", "固件已使能", "使能后 0.00s",
+                                         "使能后 0.01s") if k in ln]
+    assert order == ["合闸前", "已合闸", "合闸后 0.00s", "合闸后 0.01s", "固件使能前",
+                     "固件已使能", "使能后 0.00s", "使能后 0.01s"]
+    assert "合闸前 母线=7.90V 2.50A" in txt and "合闸后 0.00s 母线=7.50V" in txt
+    assert "固件使能前（18 舵机同刻开始出力）母线=7.70V" in txt
+    assert "使能后 0.00s 母线=6.90V" in txt
+    assert "0.50s" not in txt                # 超过各段时长的采样点丢弃
+
+
+def test_servo_power_on_driver_without_stages_falls_back(tmp_path):
     log = RunLog(str(tmp_path), tag="t")
 
-    class Drv:                                 # 无 is_mock：走真实采样路径
+    class Drv:                                 # 无 power_on/arm、无 is_mock
         def __init__(self):
             self.v = iter([7.9, 6.9, 7.3, 7.6])
             self.enabled = False
@@ -147,8 +195,8 @@ def test_servo_power_on_real_driver_samples_bus(tmp_path):
     t0 = time.monotonic()
     servo_power_on(drv, log, None, settle_s=0.03, samples=(0.0, 0.01, 0.5))
     el = time.monotonic() - t0
-    assert drv.enabled and 0.03 <= el < 0.4   # 等满 settle_s；超 settle 的采样点丢弃
+    assert drv.enabled and 0.03 <= el < 0.4
     txt = read(log.path)
-    assert "合闸前 母线=7.90V 2.50A" in txt
-    assert "合闸后 0.00s 母线=6.90V" in txt and "合闸后 0.01s 母线=7.30V" in txt
-    assert "合闸后 0.50s" not in txt
+    assert "合闸前 母线=7.90V 2.50A" in txt and "舵机已使能（该驱动不分步）" in txt
+    assert "使能后 0.00s 母线=6.90V" in txt and "使能后 0.01s 母线=7.30V" in txt
+    assert "使能后 0.50s" not in txt and "合闸后" not in txt

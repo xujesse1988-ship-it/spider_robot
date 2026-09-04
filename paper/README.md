@@ -52,7 +52,7 @@
 ## 待办(投稿前;`main.tex` 内红字与此同步)
 
 1. **作者/单位/邮箱/资助**(main.tex 头部)。
-2. **整机称重**——Sec III-A 的 ~2.7kg 是估计,P4-GUIDE 验收表本就欠着这项。
+2. ~~**整机称重**~~ ✅ 09-04 实测 3537g:Sec III-A 中英已改 $3.54$ kg、\TODO 已删;讨论段 "sub-3 kg climbers" 随之改 "few-kilogram climbers"(中文"几公斤级"),因为本机已不在 3kg 以下。
 3. **图**:Fig.1 示意图 (a)(b)(c) 已由 `make_fig1.py` 生成,**真机照片 (d) 待拍**;Fig.2 阶梯轨迹+破裂剖面
    (T3,`ab_quant --zoom`);Fig.3 弹跳-δ 线性;Fig.4 分解瀑布+逐腿弹跳;
    Fig.5 D′ 对齐剖面。figures/ 里已生成的见文件头注释,其余 `\TODO`。

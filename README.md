@@ -51,7 +51,7 @@
 | 传感 | 六路 XGZP6847A 吸盘压力（ADS1115 读）、母线电压/电流遥测。没有 IMU，没有力传感器，足底开关未启用 |
 | 语音 | ReSpeaker Lite USB + 4Ω 3W 喇叭；sherpa-onnx 离线四件套（KWS 唤醒 → Silero VAD → SenseVoice 识别 → Matcha 合成）+ CAM++ 声纹 |
 | 供电 | 2S 锂电 7.4 V 直供舵机（继电器切正极）；Pi 独立 5V/5A 降压 |
-| 重量 / 成本 | 约 2.7 kg（估算，待称重）；零件约 ¥1700~2800，分两批买，见 [`docs/BOM.md`](docs/BOM.md) |
+| 重量 / 成本 | 3.54 kg（2026-09-04 实测，含吸附系统）；零件约 ¥1700~2800，分两批买，见 [`docs/BOM.md`](docs/BOM.md) |
 
 ## 软件一览（`software/`）
 

@@ -47,6 +47,10 @@
 所有关键尺寸在 PARAMS 里，按实际购买件修改后重新运行即可。
 运行:  .venv/bin/python tools/generate_climbing_parts.py
 输出:  hardware/climbing-parts/*.stl
+协议:  left/right-tibia-suction*.stl 合并了上游 STL/left-tibia.stl 的几何
+       （MakeYourPet hexapod，MIT），属衍生作品，再分发须附
+       hardware/climbing-parts/NOTICE.md；其余输出为本项目原创，按仓库根
+       LICENSE（MIT）发布。
 依赖:  trimesh, manifold3d, numpy, scipy, shapely
 """
 

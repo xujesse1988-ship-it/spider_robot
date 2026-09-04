@@ -300,7 +300,8 @@ Slow venting, the intuitive remedy, does not help on our data
 \label{sec:platform}
 
 The testbed (Fig.~\ref{fig:platform}) is a six-legged 3D-printed
-walker derived from the open-source MakeYourPet hexapod kit (printed
+walker derived from the open-source MakeYourPet hexapod
+kit~\cite{makeyourpet2022hexapod} (printed
 body and coxa/femur links), fitted with self-designed printed
 tibia--suction-cup legs and a pneumatics bay. The robot climbs facing
 up the wall; legs are named L/R for the left/right side and $1/2/3$
@@ -322,7 +323,8 @@ and deeper than a $-50$\,kPa gate. The gait moves one leg at a time:
 at any moment five feet are attached and at most one is in the air.
 Eighteen 35\,kg$\cdot$cm position-controlled hobby servos (no torque,
 force, tactile, or per-joint current feedback of any kind) are driven
-by a Raspberry~Pi~5 through an RP2040 servo board; total mass is
+by a Raspberry~Pi~5 through an RP2040 servo board running open-source
+firmware~\cite{carrera_chica}; total mass is
 ${\sim}2.7$\,kg \TODO{final weigh-in of assembled robot}. The robot's
 sensors are six cup-pressure transducers (one per foot), which the
 adhesion state machine reads for attachment and vent confirmation,

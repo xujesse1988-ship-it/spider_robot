@@ -20,7 +20,7 @@
 | 目录 | 说明 |
 |---|---|
 | `hardware/makeyourpet-hexapod/STL/` | 步行平台：MakeYourPet 六足全套 STL（MIT 协议，含 STEP 源文件、接线图；上游 https://github.com/MakeYourPet/hexapod ） |
-| `hardware/climbing-parts/` | **本项目自制爬墙部件**（由 `tools/generate_climbing_parts.py` 参数化生成，见下） |
+| `hardware/climbing-parts/` | **本项目自制爬墙部件**（由 `tools/generate_climbing_parts.py` 参数化生成，见下）。其中左右 `tibia-suction*.stl` 派生自上游 `left-tibia.stl`（MIT），再分发须附目录内 [NOTICE.md](hardware/climbing-parts/NOTICE.md) |
 
 ## 控制软件（software/）
 
@@ -55,3 +55,14 @@ python3 -m venv .venv && .venv/bin/pip install trimesh manifold3d numpy scipy sh
 ## 安全
 
 - 爬墙测试全程系安全绳、地面铺垫；锂电池充电不离人。
+
+## 许可证
+
+本仓库的自研内容（`software/` 控制软件、`docs/` 文档、`tools/` 生成脚本、自制打印件、实验数据与论文源码）以 **MIT 协议**发布，见 [LICENSE](LICENSE)。
+
+第三方内容：
+
+- `hardware/makeyourpet-hexapod/`：MakeYourPet hexapod 原样收录（MIT，Copyright (c) 2022 MakeYourPet.com），许可原文在该目录 `LICENSE`。
+- `hardware/climbing-parts/` 中的左右 `tibia-suction*.stl` 派生自上游 `left-tibia.stl`，见 [hardware/climbing-parts/NOTICE.md](hardware/climbing-parts/NOTICE.md)。
+- Servo2040 固件 chica（[EddieCarrera/chica-servo2040-simpleDriver](https://github.com/EddieCarrera/chica-servo2040-simpleDriver)，MIT）不包含在本仓库中，`software/hexapod/driver.py` 只实现其串口协议。
+- "MakeYourPet" 是上游作者的名称，本项目与其无隶属或背书关系；上游作者的 YouTube 视频等不在 MIT 授权范围内。

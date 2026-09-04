@@ -36,8 +36,15 @@ femur 过竖直撞身体，改之前先架空试）。抬落 0.5s 走完、两�
   off   不碰阀 GPIO/I2C（装气路前旧行为，对照：脚会被吸住）
 运行中按 v 轮换三种策略。退出时先断舵机电再断六线圈；线圈断电后吸盘回到
 通罐位，搬机时若脚被轻微吸住属正常，关 12V 即放开。
+
+黑匣子（09-04）：每跑一次落 `logs/walk_<时间>.log`——启动步骤逐步落盘（每路阀
+线圈通电前、舵机继电器合闸前后/固件使能前后的母线电压）、Pi 5 的 5V 输入电压每
+0.1s 一行（就位后 0.5s）、遥控中每 0.5s 一行母线电压电流。09-04 实机：本脚本
+启动也死过机（灯绿→红），当时没有黑匣子只能空手验尸，故与 climb_walk/body_lean
+同口径。死机后 `bash scripts/pi_forensics.sh check` 会带出最新一份尾巴。
 """
 import argparse
+import os
 import select
 import sys
 import termios
@@ -46,8 +53,10 @@ import tty
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver, TRIPOD, WAVE
-from hexapod.adhesion import GroundVent, MockVacuumIO
+from hexapod.adhesion import GroundVent, MockVacuumIO, Pi5VacuumIO
 from hexapod.gait import GaitEngine, MarchEngine
+from hexapod.powerlog import PowerWatch, startup_marker, servo_power_on
+from hexapod.runlog import RunLog
 
 SPEED = 40.0    # mm/s
 TURN = 0.3      # rad/s
@@ -72,22 +81,50 @@ def main():
     args = ap.parse_args()
     mode = args.vent
 
+    # 黑匣子：建在碰任何硬件之前，硬件初始化失败也要留痕（excepthook 兜底）；
+    # 与 climb_walk 同口径（hexapod/runlog.py + hexapod/powerlog.py）
+    log = RunLog(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs"), tag="walk")
+    print(f"黑匣子日志: {log.path}")
+    log.note(f"模式={'mock' if args.mock else '实机'} port={args.port} vent={mode}"
+             f" SPEED={SPEED:g} TURN={TURN} march_lift={args.march_lift:g}")
+    pwr = PowerWatch(log).start()
+    if pwr.uv_ever_at_start:
+        print("⚠ 本次开机以来 Pi 已出现过欠压（get_throttled 粘滞位）——供电有问题，"
+              "先查 5V 降压再跑")
+    step = startup_marker(log, pwr)   # 启动步骤标记：一步一行当场落盘
+    _prev_hook = sys.excepthook
+
+    def _crash_hook(tp, val, tb):
+        # 任何未捕获异常（含硬件初始化失败/欠压停机）落盘后再走默认打印
+        pwr.stop()
+        log.exc(val)
+        log.close("uncaught")
+        _prev_hook(tp, val, tb)
+    sys.excepthook = _crash_hook
+
     # 阀先于舵机：站起时吸盘就已通大气，压下去不攒被动真空
-    vent = GroundVent(io_factory=(lambda: MockVacuumIO(6)) if args.mock else None,
+    vent = GroundVent(io_factory=((lambda: MockVacuumIO(6)) if args.mock
+                                  else (lambda: Pi5VacuumIO(6, on_step=step))),
                       stagger_s=0.0 if args.mock else 0.2)
     if mode != "off":
+        step("阀板初始化：六阀线圈按足串行通电（排气位，0.2s 间隔）")
         vent.set(True)
+        step("六阀已到排气位（线圈全通电）")
         print(f"阀策略 {mode}：站起前六阀已拉到排气位（吸盘通大气）")
     else:
         print("阀策略 off：不碰阀（通罐位），吸盘可能被被动真空吸在地上，按 v 切策略对照")
 
+    step("打开舵机串口 + 继电器 GPIO17（保持断开）")
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
     # 缓慢站起：使能前先发蹲姿（离断电趴姿最近，使能跳变小），再慢滑到站姿
     bot.move_feet(bot.crouch_feet())
-    drv.enable(True)
-    time.sleep(0 if args.mock else 1.0)
+    servo_power_on(drv, log, pwr)   # 合闸→0.4s→固件使能，两段各采母线电压，替代原 sleep(1)
+    log.event("缓慢站起（4s）")
     bot.stand(duration=4.0)
+    log.event("站姿就位，遥控就绪")
+    pwr.relax()                     # 大电流启动段过了，Pi 电源采样放慢到 0.5s
 
     old = termios.tcgetattr(sys.stdin)
     tty.setcbreak(sys.stdin.fileno())
@@ -169,15 +206,21 @@ def main():
                 if march is not None:
                     line += f"  踏步[{march.state_text()}]"
                 print("\r" + line.ljust(78), end="", flush=True)  # 补空格抹掉上一行残留
+                log.row(f"t={t:6.1f} 电={v:.2f}V/{c:.2f}A/峰{peak_a:.2f}"
+                        f" 速={vx:+.0f},{vy:+.0f},{wz:+.2f} 阀[{mode}]"
+                        f"{' 踏步' if march is not None else ''}")
                 last_power_check = t
             time.sleep(dt)
             t += dt
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
+        log.event("退出：断舵机电 → 断六线圈")
         try:
             drv.close()
         finally:
             vent.close()    # 六线圈断电再释放，绝不拉高着退（阀会一直通电发热）
+        pwr.stop()
+        log.close("正常退出")
         print("\n已断舵机电、阀线圈已断电，退出。")
 
 

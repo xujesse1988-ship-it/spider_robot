@@ -13,6 +13,8 @@
   机器人自己说话时也听得见，且急停会立即打断说话
   键盘（有终端时）：w/s/a/d/q/e 动，空格停，1/2 步态，v 轮换阀策略，ESC 退出，
   同 walk_teleop
+  黑匣子：每跑一次落 logs/voice_<时间>.log（启动步骤、Pi 5V 输入电压、母线电压
+  电流），与 walk_teleop/climb_walk 同口径；死机验尸 scripts/pi_forensics.sh check
 
 安全边界：
   · 移动指令默认连续（不带时长=一直走），靠急停词/新指令/键盘停——回复会念
@@ -35,6 +37,7 @@
 """
 import argparse
 import math
+import os
 import queue
 import select
 import sys
@@ -42,8 +45,10 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver, TRIPOD, WAVE
-from hexapod.adhesion import GroundVent, MockVacuumIO
+from hexapod.adhesion import GroundVent, MockVacuumIO, Pi5VacuumIO
 from hexapod.gait import GaitEngine
+from hexapod.powerlog import PowerWatch, startup_marker, servo_power_on
+from hexapod.runlog import RunLog
 from hexapod.voice.audio import (ArecordSource, WavSource, AplayPlayer, NullPlayer,
                                  find_card, alsa_device, list_cards)
 from hexapod.voice.engine import VoiceEngine, ModelPaths
@@ -100,7 +105,29 @@ def main():
     def log(s):
         print("\r" + s + " " * 8)
 
+    # 黑匣子（logs/voice_<时间>.log，与 walk_teleop/climb_walk 同口径）：建在碰任何
+    # 硬件之前——语音模型加载、阀板、舵机合闸任一步死机/抛异常都要留痕
+    bb = RunLog(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs"), tag="voice")
+    print(f"黑匣子日志: {bb.path}")
+    bb.note(f"模式={'mock' if args.mock else '实机'} port={args.port} vent={args.vent}"
+            f" wake={int(not args.no_wake)} tts={int(not args.no_tts)}"
+            f" speed={args.speed:g} turn={args.turn:g}")
+    pwr = PowerWatch(bb).start()
+    if pwr.uv_ever_at_start:
+        log("⚠ 本次开机以来 Pi 已出现过欠压（get_throttled 粘滞位）——供电有问题，先查 5V 降压再跑")
+    step = startup_marker(bb, pwr)
+    _prev_hook = sys.excepthook
+
+    def _crash_hook(tp, val, tb):
+        pwr.stop()
+        bb.exc(val)
+        bb.close("uncaught")
+        _prev_hook(tp, val, tb)
+    sys.excepthook = _crash_hook
+
     # ---- 语音侧 ----
+    step("加载语音模型（KWS/ASR/TTS/声纹）")
     paths = ModelPaths.discover(args.models)
     card = args.card or find_card()
     if args.wav:
@@ -134,6 +161,7 @@ def main():
                          follow_up_s=args.follow_up,
                          mute_during_tts=not args.trust_aec, voice_gate=gate, log=log)
     engine.start()
+    step("语音引擎已起（麦克风流开始）")
 
     def say(text):
         if speaker and text:
@@ -141,20 +169,26 @@ def main():
 
     # ---- 机器人侧（与 walk_teleop 一致）----
     # 阀先于舵机：站起时吸盘就已通大气，压下去不攒被动真空
-    vent = GroundVent(io_factory=(lambda: MockVacuumIO(6)) if args.mock else None,
+    vent = GroundVent(io_factory=((lambda: MockVacuumIO(6)) if args.mock
+                                  else (lambda: Pi5VacuumIO(6, on_step=step))),
                       stagger_s=0.0 if args.mock else 0.2)
     vent_mode = args.vent
     if vent_mode != "off":
+        step("阀板初始化：六阀线圈按足串行通电（排气位，0.2s 间隔）")
         vent.set(True)
+        step("六阀已到排气位（线圈全通电）")
         log(f"阀策略 {vent_mode}：站起前六阀已拉到排气位（吸盘通大气）")
     else:
         log("阀策略 off：不碰阀（通罐位），吸盘可能被被动真空吸在地上，按 v 切策略对照")
+    step("打开舵机串口 + 继电器 GPIO17（保持断开）")
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
     bot.move_feet(bot.crouch_feet())
-    drv.enable(True)
-    time.sleep(0 if args.mock else 1.0)
+    servo_power_on(drv, bb, pwr)   # 合闸→0.4s→固件使能，两段各采母线电压，替代原 sleep(1)
+    bb.event(f"缓慢站起（{args.stand_secs:g}s）")
     bot.stand(duration=args.stand_secs)
+    bb.event("站姿就位，语音/键盘遥控就绪")
+    pwr.relax()                    # 大电流启动段过了，Pi 电源采样放慢到 0.5s
 
     tty_mode = sys.stdin.isatty()
     if tty_mode:
@@ -350,6 +384,8 @@ def main():
                 state = "听令中" if engine.awake else "待唤醒"
                 print(f"\r电压 {v:.2f}V  电流 {c:5.2f}A  峰值 {peak_a:5.2f}A  [{state}]  "
                       f"阀[{vent_mode}] {vent.state_text()}  ", end="", flush=True)
+                bb.row(f"t={t:6.1f} 电={v:.2f}V/{c:.2f}A/峰{peak_a:.2f}"
+                       f" 速={vx:+.0f},{vy:+.0f},{wz:+.2f} 阀[{vent_mode}] {state}")
                 last_power_check = t
             time.sleep(dt)
             t += dt
@@ -360,10 +396,13 @@ def main():
             speaker.stop()
         if tty_mode:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
+        bb.event("退出：断舵机电 → 断六线圈")
         try:
             drv.close()
         finally:
             vent.close()    # 六线圈断电再释放，绝不拉高着退（阀会一直通电发热）
+        pwr.stop()
+        bb.close("正常退出")
         print("\n已断舵机电、阀线圈已断电，退出。")
 
 

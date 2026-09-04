@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 树莓派死机验尸工具（09-02：body_lean/climb_walk 启动时阀线圈逐一通电后概率性
-# 整机死机，灯绿→红、SSH 失联）。两条子命令：
+# 整机死机，灯绿→红、SSH 失联；09-04 walk_teleop 启动也死过）。两条子命令：
 #
 #   setup [--ramoops] [--watchdog]   一次性准备（死机**之前**做，否则内核日志随
 #                                    死机蒸发）：journal 落盘持久化 + 1s 同步；
@@ -22,6 +22,14 @@
 #   * journalctl -b -1 末尾有 "Undervoltage detected" / hwmon 字样 = 内核自己
 #     也看见了欠压；有 Oops/panic = 软件崩溃（看 pstore 全文）；什么都没有、
 #     日志戛然而止 = 断电式死亡（PMIC 停机）最典型的样子
+#   * /proc/device-tree/chosen/power/power_reset 非零（通常 2）= **上一次开机是
+#     PMIC 因输入电压过低把板子断电的**（树莓派工程师 timg236 论坛原话：
+#     "hexdump -C /proc/device-tree/chosen/power will be non-zero (probably 2)
+#     if this occurred on the previous boot"，forums.raspberrypi.com t=361231）。
+#     09-03/09-04 两次死机后读到的都是 2，正常 sudo reboot 后应回 0——对照一次
+#     就能把"是不是 PMIC 欠压停机"钉死
+#   * 黑匣子标签：climb_（climb_walk）/lean_（body_lean）/walk_（walk_teleop）/
+#     voice_（voice_teleop），check 只看最新一份
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 logs="$here/../logs"
@@ -84,6 +92,23 @@ do_check() {
     echo "===== 上次开机 最后 25 行（死前系统在干什么；戛然而止=断电式死亡）"
     journalctl -b -1 --no-pager -o short-monotonic 2>/dev/null | tail -n 25
     echo
+    echo "===== 上次开机 真实时间线（Pi 5 无 RTC 电池：开机列表里的起始时刻是上次存盘的假"
+    echo "      时钟，联网校时后才跳到真时间；用最后一条的真时间倒推开机时刻）"
+    last_iso=$(journalctl -b -1 -n 1 --no-pager -o short-iso 2>/dev/null | awk '{print $1}')
+    last_mono=$(journalctl -b -1 -n 1 --no-pager -o short-monotonic 2>/dev/null \
+                | sed -n 's/^\[ *\([0-9.]*\)\].*/\1/p')
+    if [ -n "$last_iso" ] && [ -n "$last_mono" ]; then
+        last_epoch=$(date -d "$last_iso" +%s 2>/dev/null)
+        if [ -n "$last_epoch" ]; then
+            boot_epoch=$(awk -v e="$last_epoch" -v m="$last_mono" 'BEGIN{printf "%d", e - m}')
+            echo "  最后一条日志: $last_iso（开机后 ${last_mono}s）"
+            echo "  倒推真实开机时刻: $(date -d @"$boot_epoch" '+%F %T')；此后到死机之间系统没再写日志"
+            echo "  （死机时刻 ≥ 最后一条；黑匣子行内的 uptime/时间戳可与之对齐）"
+        fi
+    else
+        echo "  （journalctl -b -1 无内容）"
+    fi
+    echo
     echo "===== 关机/重启记录（wtmp）：只有 reboot 没有 shutdown = 非正常断电"
     last -x -n 6 shutdown reboot 2>/dev/null | head -n 8
     echo
@@ -100,7 +125,8 @@ do_check() {
             echo "hwmon rpi_volt in0_lcrit_alarm=$(cat "$n/in0_lcrit_alarm" 2>/dev/null)"
     done
     echo
-    echo "===== 固件电源节点 /proc/device-tree/chosen/power（大端 u32，看 max_current 等）"
+    echo "===== 固件电源节点 /proc/device-tree/chosen/power（大端 u32；power_reset 非零(通常 2)="
+    echo "      上次开机被 PMIC 因低压断电，正常 reboot 后应为 0；max_current 单位 mA）"
     for f in /proc/device-tree/chosen/power/*; do
         [ -f "$f" ] && printf '%s = ' "$(basename "$f")" && od -An -tx1 "$f" | tr -s ' \n' ' ' && echo
     done 2>/dev/null
@@ -109,8 +135,8 @@ do_check() {
     cfg=$(boot_cfg); [ -n "${cfg:-}" ] && grep -nE 'usb_max_current|psu_max_current|ramoops|watchdog' "$cfg"
     command -v rpi-eeprom-config >/dev/null && rpi-eeprom-config 2>/dev/null | grep -E 'POWER_OFF_ON_HALT|PSU_MAX_CURRENT|WAKE_ON_GPIO'
     echo
-    echo "===== 黑匣子尾巴（最新一份 lean_/climb_ 日志；看最后一行停在哪一步、5V 趋势）"
-    latest=$(ls -t "$logs"/lean_*.log "$logs"/climb_*.log 2>/dev/null | head -n 1)
+    echo "===== 黑匣子尾巴（最新一份 climb_/lean_/walk_/voice_ 日志；看最后一行停在哪一步、5V 趋势）"
+    latest=$(ls -t "$logs"/*_*.log 2>/dev/null | head -n 1)
     if [ -n "$latest" ]; then
         echo "$latest"
         grep -m1 '^# boot_id' "$latest"

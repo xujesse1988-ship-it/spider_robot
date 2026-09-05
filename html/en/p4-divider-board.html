@@ -1,0 +1,456 @@
+<!doctype html>
+<!-- English translation of html/p4-divider-board.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>7-channel divider board build drawings</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+      --pwr: #E0A64F; --air: #4BC2A0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+    --pwr: #E0A64F; --air: #4BC2A0;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 17px; margin: 4px 0 -12px; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 10px 6px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  .note ul, .note ol { margin: 8px 0 2px; padding-left: 20px; }
+  .note li { margin: 3px 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+  table.vtab { border-collapse: collapse; margin: 10px 0 12px; }
+  .vtab th, .vtab td { border: 1px solid var(--line); padding: 4px 12px; font-size: 12.5px; text-align: left; }
+  .vtab th { background: var(--accent-soft); font-weight: 700; }
+
+  /* Figure elements */
+  .brd  { fill: var(--part); fill-opacity: .18; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-box { fill: var(--part); fill-opacity: .35; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-boxa { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .dom5 { fill: none; stroke: var(--pwr); stroke-width: 1.3; stroke-dasharray: 7 5; opacity: .8; }
+  .dom3 { fill: none; stroke: var(--accent); stroke-width: 1.3; stroke-dasharray: 7 5; opacity: .8; }
+  .domm { fill: none; stroke: var(--part-stroke); stroke-width: 1.3; stroke-dasharray: 7 5; opacity: .8; }
+  .sch  { stroke: var(--ink); stroke-width: 1.6; fill: none; opacity: .8; }
+  .bus5 { stroke: var(--pwr); stroke-width: 3.5; fill: none; }
+  .busg { stroke: var(--ink); stroke-width: 3.5; fill: none; opacity: .6; }
+  .tr5  { stroke: var(--pwr); stroke-width: 2; fill: none; }
+  .trs  { stroke: var(--ink); stroke-width: 1.7; fill: none; opacity: .7; }
+  .jp { stroke: var(--pwr); stroke-width: 1.7; stroke-dasharray: 5 4; fill: none; }
+  .js { stroke: var(--accent); stroke-width: 1.7; stroke-dasharray: 5 4; fill: none; }
+  .jg { stroke: var(--muted); stroke-width: 1.7; stroke-dasharray: 5 4; fill: none; }
+  .rb { fill: var(--part); fill-opacity: .95; stroke: var(--part-stroke); stroke-width: 1.2; }
+  .cb { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .pin { fill: var(--ink); opacity: .8; }
+  .ndd { fill: var(--accent); }
+  .m3  { fill: var(--bg); stroke: var(--part-stroke); stroke-width: 1.6; }
+  .lbl { paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-bx  { font-size: 12.5px; font-weight: 700; text-anchor: middle; }
+  .t-bs  { font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+  .t-bsw { font-size: 10.5px; fill: var(--warn); text-anchor: middle; }
+  .t-pin { font-size: 8.5px; fill: var(--muted); }
+  .t-seg { font-size: 11.5px; fill: var(--muted); }
+  .t-dim { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-warn{ font-size: 12px; font-weight: 700; fill: var(--warn); }
+  .t-acc { font-size: 11.5px; fill: var(--accent); }
+  .t-pw  { font-size: 11.5px; fill: var(--pwr); }
+  .t-b   { font-size: 12px; fill: var(--ink); }
+  .t-bm  { font-size: 11.5px; fill: var(--muted); }
+  .t-foot{ font-size: 10.5px; fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Spider · P4 whole robot · divider board (companion to the system diagram, Fig. 1)</p>
+    <h1>7-channel divider board build drawings</h1>
+    <p class="sub">Perfboard 7×9 cm (24×32 holes @2.54 mm): 7 channels of 10k/10k dividers + 100 nF filtering, adapting the 5 V-domain output of the XGZP6847A
+    (0.5–4.5 V) to two 3.3 V-powered ADS1115 modules (their header pins soldered directly onto the board).
+    All analog routing stays on the board; off-board there are only 7 sensor lines in (S1–S7) + 1 Pi harness out (J1). No breadboards / Dupont plugs anywhere on the robot.</p>
+  </header>
+
+  <h2>Fig. 1 · Single-channel schematic (×8 channels, channel 8 pads only)</h2>
+  <figure>
+    <svg viewBox="0 0 780 400" role="img" aria-label="Single-channel divider schematic: sensor output halved by 10k/10k with 100 nF, fed to ADS1115; ADDR wiring of the two ADS modules and the power-domain split">
+      <defs>
+        <marker id="ak" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--ink)" opacity=".8"/>
+        </marker>
+        <marker id="aa" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <!-- Power-domain split -->
+      <rect class="dom5" x="24" y="64" width="240" height="320" rx="8"/>
+      <rect class="domm" x="280" y="64" width="300" height="320" rx="8"/>
+      <rect class="dom3" x="596" y="64" width="160" height="320" rx="8"/>
+      <text class="t-pw" x="34" y="84" font-weight="700">5 V domain (sensor side)</text>
+      <text class="t-bm" x="292" y="84">Divider board (perfboard) · this circuit ×8</text>
+      <text class="t-acc" x="606" y="84" font-weight="700">3.3 V domain (ADS + I2C)</text>
+
+      <!-- 5V rail and input electrolytic -->
+      <polyline class="tr5" points="60,110 210,110 210,180 184,180"/>
+      <text class="t-pw lbl" x="64" y="103">5 V (from the Pi 5 V rail, via J1)</text>
+      <line class="tr5" x1="38" y1="110" x2="60" y2="110"/>
+      <line class="tr5" x1="38" y1="110" x2="38" y2="132"/>
+      <circle class="cb" cx="38" cy="141" r="9"/>
+      <line class="trs" x1="38" y1="150" x2="38" y2="330"/>
+      <text class="t-bm lbl" x="52" y="138">10 µF electrolytic (5 V entry, against the drop on the 7-channel shared cable)</text>
+
+      <!-- Sensors -->
+      <rect class="sv-box" x="52" y="160" width="132" height="100" rx="6"/>
+      <text class="t-bx" x="118" y="188">XGZP6847A ×7</text>
+      <text class="t-bs" x="118" y="206">0 to −100 kPa pressure sensor</text>
+      <text class="t-bs" x="118" y="224">OUT = 0.5~4.5V</text>
+      <text class="t-pin lbl" x="188" y="176">5V+</text>
+      <text class="t-pin lbl" x="188" y="206">OUT</text>
+      <text class="t-pin lbl" x="188" y="236">GND</text>
+      <polyline class="trs" points="184,240 220,240 220,330"/>
+
+      <!-- Divider chain -->
+      <line class="sch" x1="184" y1="210" x2="258" y2="210"/>
+      <rect class="rb" x="258" y="202" width="64" height="16" rx="3"/>
+      <text class="t-bm lbl" x="290" y="196" text-anchor="middle">R_A 10k ±1%</text>
+      <line class="sch" x1="322" y1="210" x2="390" y2="210"/>
+      <circle class="ndd" cx="390" cy="210" r="3.5"/>
+      <text class="t-b lbl" x="390" y="192" text-anchor="middle">Divider node V = OUT / 2</text>
+      <line class="sch" x1="390" y1="210" x2="586" y2="210" marker-end="url(#ak)"/>
+      <text class="t-acc lbl" x="480" y="203" text-anchor="middle">0.25~2.25V</text>
+      <text class="t-bm lbl" x="480" y="226" text-anchor="middle">AINx (per the channel map)</text>
+      <line class="sch" x1="390" y1="210" x2="390" y2="238"/>
+      <circle class="ndd" cx="390" cy="225" r="2.5"/>
+      <rect class="rb" x="382" y="238" width="16" height="60" rx="3"/>
+      <text class="t-bm lbl" x="404" y="272">R_B 10k ±1%</text>
+      <line class="sch" x1="390" y1="298" x2="390" y2="330"/>
+      <line class="sch" x1="390" y1="225" x2="452" y2="225"/>
+      <line class="sch" x1="452" y1="225" x2="452" y2="242"/>
+      <line class="sch" x1="443" y1="242" x2="461" y2="242" stroke-width="2.6"/>
+      <line class="sch" x1="443" y1="250" x2="461" y2="250" stroke-width="2.6"/>
+      <line class="sch" x1="452" y1="250" x2="452" y2="330"/>
+      <text class="t-bm lbl" x="462" y="240">100nF</text>
+      <text class="t-bm lbl" x="462" y="258">≈300 Hz low-pass, filters pump vibration noise</text>
+
+      <!-- GND bus -->
+      <line class="busg" x1="38" y1="330" x2="560" y2="330"/>
+      <line class="sch" x1="292" y1="337" x2="308" y2="337"/>
+      <line class="sch" x1="295" y1="342" x2="305" y2="342"/>
+      <line class="sch" x1="298" y1="347" x2="302" y2="347"/>
+      <text class="t-bm lbl" x="316" y="348">GND (system-wide common ground)</text>
+
+      <!-- Why 1% resistors -->
+      <text class="t-bm" x="48" y="292">Use 1% metal-film resistors: 5% parts give a ratio</text>
+      <text class="t-bm" x="48" y="308">error of ±5%, i.e. ±3 kPa off at −60 kPa</text>
+
+      <!-- Two ADS1115 boards -->
+      <line class="js" x1="676" y1="66" x2="676" y2="106" marker-end="url(#aa)"/>
+      <text class="t-acc lbl" x="676" y="58" text-anchor="middle">Pi I2C (SDA/SCL, 3.3 V)</text>
+      <rect class="sv-boxa" x="608" y="112" width="136" height="84" rx="6"/>
+      <text class="t-bx" x="676" y="136">ADS1115 #1</text>
+      <text class="t-bs" x="676" y="154">0x48: ADDR→GND</text>
+      <text class="t-bs" x="676" y="172">Tank/L1/L2/L3 → A0–A3</text>
+      <rect class="sv-boxa" x="608" y="222" width="136" height="84" rx="6"/>
+      <text class="t-bx" x="676" y="246">ADS1115 #2</text>
+      <text class="t-bs" x="676" y="264">0x49: ADDR→VDD jumper wire</text>
+      <text class="t-bs" x="676" y="282">R1/R2/R3/spare → A0–A3</text>
+      <text class="t-warn" x="676" y="326" text-anchor="middle">VDD must be 3.3 V</text>
+      <text class="t-bs" x="676" y="344">5 V supply → I2C threshold 3.5 V</text>
+      <text class="t-bs" x="676" y="360">The Pi's 3.3 V cannot reach it</text>
+      <text class="t-bs" x="676" y="376">Both modules have pull-ups; in parallel ≈5k</text>
+    </svg>
+  </figure>
+  <h2>Fig. 2 · Perfboard layout (top view = component side, 7×9 cm, 24×32 holes)</h2>
+  <figure>
+    <svg viewBox="0 0 780 650" role="img" aria-label="Perfboard layout: S1–S7 sensor ports along the top edge, 7 divider columns, 5 V rail top and GND rail bottom, two ADS1115 upright on the right, J1 to the Pi bottom left, M3 holes in the corners">
+      <defs>
+        <pattern id="holes" x="97" y="85" width="18" height="18" patternUnits="userSpaceOnUse">
+          <circle cx="7" cy="7" r="1.7" fill="var(--part-stroke)" opacity=".45"/>
+        </pattern>
+      </defs>
+
+      <!-- Top notes -->
+      <text class="t-bm" x="320" y="44" text-anchor="middle">S1–S7 sensor ports (3 wires each: 5V·OUT·GND, JST-XH 3P or soldered + heat-shrink), spread along the long edge</text>
+      <text class="t-bm" x="756" y="44" text-anchor="end">M3 mounting holes ×4</text>
+      <text class="t-bs" x="756" y="58" text-anchor="end" style="text-anchor:end">Match the PCB standoffs in the pneumatic bay</text>
+
+      <!-- Board and hole grid -->
+      <rect class="brd" x="92" y="80" width="584" height="440" rx="8"/>
+      <rect x="97" y="85" width="574" height="430" fill="url(#holes)"/>
+      <circle class="m3" cx="122" cy="110" r="5"/>
+      <circle class="m3" cx="644" cy="110" r="5"/>
+      <circle class="m3" cx="122" cy="488" r="5"/>
+      <circle class="m3" cx="644" cy="488" r="5"/>
+
+      <!-- Buses -->
+      <line class="bus5" x1="104" y1="128" x2="464" y2="128"/>
+      <line class="busg" x1="104" y1="434" x2="536" y2="434"/>
+
+      <!-- J1 front-side routing (5V up to the bus, GND straight down to the bus) -->
+      <line class="tr5" x1="104" y1="128" x2="104" y2="398"/>
+
+      <!-- C8 input electrolytic (col2) -->
+      <line class="tr5" x1="122" y1="128" x2="122" y2="160"/>
+      <circle class="cb" cx="122" cy="168" r="8"/>
+      <line class="trs" x1="122" y1="176" x2="122" y2="434"/>
+
+      <!-- Channel 1 (S1 tank pressure) -->
+      <rect class="sv-box" x="132" y="82" width="52" height="20" rx="4"/>
+      <line class="tr5" x1="140" y1="92" x2="140" y2="128"/>
+      <line class="trs" x1="158" y1="92" x2="158" y2="434"/>
+      <line class="trs" x1="158" y1="200" x2="140" y2="200"/>
+      <line class="trs" x1="140" y1="200" x2="140" y2="434"/>
+      <line class="jg" x1="176" y1="92" x2="176" y2="434"/>
+      <rect class="rb" x="153" y="114" width="10" height="66" rx="3"/>
+      <rect class="rb" x="153" y="220" width="10" height="66" rx="3"/>
+      <rect class="cb" x="134" y="224" width="12" height="26" rx="2"/>
+      <circle class="pin" cx="140" cy="92" r="2.2"/><circle class="pin" cx="158" cy="92" r="2.2"/><circle class="pin" cx="176" cy="92" r="2.2"/>
+      <circle class="ndd" cx="158" cy="200" r="3"/>
+      <!-- Channel 2 (S2 foot L1) -->
+      <rect class="sv-box" x="186" y="82" width="52" height="20" rx="4"/>
+      <line class="tr5" x1="194" y1="92" x2="194" y2="128"/>
+      <line class="trs" x1="212" y1="92" x2="212" y2="434"/>
+      <line class="trs" x1="212" y1="200" x2="194" y2="200"/>
+      <line class="trs" x1="194" y1="200" x2="194" y2="434"/>
+      <line class="jg" x1="230" y1="92" x2="230" y2="434"/>
+      <rect class="rb" x="207" y="114" width="10" height="66" rx="3"/>
+      <rect class="rb" x="207" y="220" width="10" height="66" rx="3"/>
+      <rect class="cb" x="188" y="224" width="12" height="26" rx="2"/>
+      <circle class="pin" cx="194" cy="92" r="2.2"/><circle class="pin" cx="212" cy="92" r="2.2"/><circle class="pin" cx="230" cy="92" r="2.2"/>
+      <circle class="ndd" cx="212" cy="200" r="3"/>
+      <!-- Channel 3 (S3 foot L2) -->
+      <rect class="sv-box" x="240" y="82" width="52" height="20" rx="4"/>
+      <line class="tr5" x1="248" y1="92" x2="248" y2="128"/>
+      <line class="trs" x1="266" y1="92" x2="266" y2="434"/>
+      <line class="trs" x1="266" y1="200" x2="248" y2="200"/>
+      <line class="trs" x1="248" y1="200" x2="248" y2="434"/>
+      <line class="jg" x1="284" y1="92" x2="284" y2="434"/>
+      <rect class="rb" x="261" y="114" width="10" height="66" rx="3"/>
+      <rect class="rb" x="261" y="220" width="10" height="66" rx="3"/>
+      <rect class="cb" x="242" y="224" width="12" height="26" rx="2"/>
+      <circle class="pin" cx="248" cy="92" r="2.2"/><circle class="pin" cx="266" cy="92" r="2.2"/><circle class="pin" cx="284" cy="92" r="2.2"/>
+      <circle class="ndd" cx="266" cy="200" r="3"/>
+      <!-- Channel 4 (S4 foot L3) -->
+      <rect class="sv-box" x="294" y="82" width="52" height="20" rx="4"/>
+      <line class="tr5" x1="302" y1="92" x2="302" y2="128"/>
+      <line class="trs" x1="320" y1="92" x2="320" y2="434"/>
+      <line class="trs" x1="320" y1="200" x2="302" y2="200"/>
+      <line class="trs" x1="302" y1="200" x2="302" y2="434"/>
+      <line class="jg" x1="338" y1="92" x2="338" y2="434"/>
+      <rect class="rb" x="315" y="114" width="10" height="66" rx="3"/>
+      <rect class="rb" x="315" y="220" width="10" height="66" rx="3"/>
+      <rect class="cb" x="296" y="224" width="12" height="26" rx="2"/>
+      <circle class="pin" cx="302" cy="92" r="2.2"/><circle class="pin" cx="320" cy="92" r="2.2"/><circle class="pin" cx="338" cy="92" r="2.2"/>
+      <circle class="ndd" cx="320" cy="200" r="3"/>
+      <!-- Channel 5 (S5 foot R1) -->
+      <rect class="sv-box" x="348" y="82" width="52" height="20" rx="4"/>
+      <line class="tr5" x1="356" y1="92" x2="356" y2="128"/>
+      <line class="trs" x1="374" y1="92" x2="374" y2="434"/>
+      <line class="trs" x1="374" y1="200" x2="356" y2="200"/>
+      <line class="trs" x1="356" y1="200" x2="356" y2="434"/>
+      <line class="jg" x1="392" y1="92" x2="392" y2="434"/>
+      <rect class="rb" x="369" y="114" width="10" height="66" rx="3"/>
+      <rect class="rb" x="369" y="220" width="10" height="66" rx="3"/>
+      <rect class="cb" x="350" y="224" width="12" height="26" rx="2"/>
+      <circle class="pin" cx="356" cy="92" r="2.2"/><circle class="pin" cx="374" cy="92" r="2.2"/><circle class="pin" cx="392" cy="92" r="2.2"/>
+      <circle class="ndd" cx="374" cy="200" r="3"/>
+      <!-- Channel 6 (S6 foot R2) -->
+      <rect class="sv-box" x="402" y="82" width="52" height="20" rx="4"/>
+      <line class="tr5" x1="410" y1="92" x2="410" y2="128"/>
+      <line class="trs" x1="428" y1="92" x2="428" y2="434"/>
+      <line class="trs" x1="428" y1="200" x2="410" y2="200"/>
+      <line class="trs" x1="410" y1="200" x2="410" y2="434"/>
+      <line class="jg" x1="446" y1="92" x2="446" y2="434"/>
+      <rect class="rb" x="423" y="114" width="10" height="66" rx="3"/>
+      <rect class="rb" x="423" y="220" width="10" height="66" rx="3"/>
+      <rect class="cb" x="404" y="224" width="12" height="26" rx="2"/>
+      <circle class="pin" cx="410" cy="92" r="2.2"/><circle class="pin" cx="428" cy="92" r="2.2"/><circle class="pin" cx="446" cy="92" r="2.2"/>
+      <circle class="ndd" cx="428" cy="200" r="3"/>
+      <!-- Channel 7 (S7 foot R3) -->
+      <rect class="sv-box" x="456" y="82" width="52" height="20" rx="4"/>
+      <line class="tr5" x1="464" y1="92" x2="464" y2="128"/>
+      <line class="trs" x1="482" y1="92" x2="482" y2="434"/>
+      <line class="trs" x1="482" y1="200" x2="464" y2="200"/>
+      <line class="trs" x1="464" y1="200" x2="464" y2="434"/>
+      <line class="jg" x1="500" y1="92" x2="500" y2="434"/>
+      <rect class="rb" x="477" y="114" width="10" height="66" rx="3"/>
+      <rect class="rb" x="477" y="220" width="10" height="66" rx="3"/>
+      <rect class="cb" x="458" y="224" width="12" height="26" rx="2"/>
+      <circle class="pin" cx="464" cy="92" r="2.2"/><circle class="pin" cx="482" cy="92" r="2.2"/><circle class="pin" cx="500" cy="92" r="2.2"/>
+      <circle class="ndd" cx="482" cy="200" r="3"/>
+      <!-- Channel 8: spare pads (no connector fitted) -->
+      <g opacity=".55">
+        <line class="trs" x1="536" y1="92" x2="536" y2="434"/>
+        <line class="trs" x1="536" y1="200" x2="518" y2="200"/>
+        <line class="trs" x1="518" y1="200" x2="518" y2="434"/>
+        <rect class="rb" x="531" y="114" width="10" height="66" rx="3"/>
+        <rect class="rb" x="531" y="220" width="10" height="66" rx="3"/>
+        <rect class="cb" x="512" y="224" width="12" height="26" rx="2"/>
+        <circle class="pin" cx="536" cy="92" r="2.8"/>
+        <circle class="ndd" cx="536" cy="200" r="3"/>
+        <path class="js" d="M536 200 C560 300 560 460 554 506"/>
+      </g>
+
+      <!-- ADS1115 modules ×2 (headers soldered down) -->
+      <rect class="sv-boxa" x="546" y="138" width="88" height="178" rx="5"/>
+      <rect class="sv-boxa" x="546" y="336" width="88" height="178" rx="5"/>
+
+      <!-- Back-side jumpers: I2C / 3.3V / GND / ADDR -->
+      <path class="jp" d="M104 416 L510 416 L510 326 L554 344"/>
+      <path class="js" d="M104 452 L530 452 L554 398"/>
+      <path class="js" d="M104 470 L536 470 L554 380"/>
+      <path class="jp" d="M554 344 C582 334 582 154 554 146"/>
+      <path class="js" d="M554 380 C570 372 570 190 554 182"/>
+      <path class="js" d="M554 398 C576 388 576 208 554 200"/>
+      <path class="jg" d="M554 362 C588 352 588 172 554 164"/>
+      <path class="jg" d="M554 362 L536 434"/>
+      <path class="js" d="M554 218 C543 218 543 164 554 164"/>
+      <path class="js" d="M554 416 C542 416 542 344 554 344"/>
+      <text class="t-pw lbl" x="300" y="411" text-anchor="middle">3.3 V (jumper on the back)</text>
+      <text class="t-acc lbl" x="300" y="447" text-anchor="middle">SDA</text>
+      <text class="t-acc lbl" x="300" y="466" text-anchor="middle">SCL</text>
+
+      <!-- Back-side jumpers: divider taps → AIN ×8 -->
+      <path class="js" d="M158 200 Q356 212 554 254"/>
+      <path class="js" d="M212 200 Q383 222 554 272"/>
+      <path class="js" d="M266 200 Q410 231 554 290"/>
+      <path class="js" d="M320 200 Q437 240 554 308"/>
+      <path class="js" d="M374 200 Q464 318 554 452"/>
+      <path class="js" d="M428 200 Q491 328 554 470"/>
+      <path class="js" d="M482 200 Q518 336 554 488"/>
+      <text class="t-acc lbl" x="350" y="192" text-anchor="middle">Divider node → AIN jumpers on the back ×8</text>
+
+      <!-- Module pins and labels -->
+      <circle class="pin" cx="554" cy="146" r="2.2"/><circle class="pin" cx="554" cy="164" r="2.2"/><circle class="pin" cx="554" cy="182" r="2.2"/><circle class="pin" cx="554" cy="200" r="2.2"/><circle class="pin" cx="554" cy="218" r="2.2"/><circle class="pin" cx="554" cy="236" r="2.2"/><circle class="pin" cx="554" cy="254" r="2.2"/><circle class="pin" cx="554" cy="272" r="2.2"/><circle class="pin" cx="554" cy="290" r="2.2"/><circle class="pin" cx="554" cy="308" r="2.2"/>
+      <circle class="pin" cx="554" cy="344" r="2.2"/><circle class="pin" cx="554" cy="362" r="2.2"/><circle class="pin" cx="554" cy="380" r="2.2"/><circle class="pin" cx="554" cy="398" r="2.2"/><circle class="pin" cx="554" cy="416" r="2.2"/><circle class="pin" cx="554" cy="434" r="2.2"/><circle class="pin" cx="554" cy="452" r="2.2"/><circle class="pin" cx="554" cy="470" r="2.2"/><circle class="pin" cx="554" cy="488" r="2.2"/><circle class="pin" cx="554" cy="506" r="2.2"/>
+      <text class="t-pin lbl" x="562" y="149">VDD</text><text class="t-pin lbl" x="562" y="167">GND</text><text class="t-pin lbl" x="562" y="185">SCL</text><text class="t-pin lbl" x="562" y="203">SDA</text><text class="t-pin lbl" x="562" y="221">ADDR</text><text class="t-pin lbl" x="562" y="239">ALRT</text><text class="t-pin lbl" x="562" y="257">A0</text><text class="t-pin lbl" x="562" y="275">A1</text><text class="t-pin lbl" x="562" y="293">A2</text><text class="t-pin lbl" x="562" y="311">A3</text>
+      <text class="t-pin lbl" x="562" y="347">VDD</text><text class="t-pin lbl" x="562" y="365">GND</text><text class="t-pin lbl" x="562" y="383">SCL</text><text class="t-pin lbl" x="562" y="401">SDA</text><text class="t-pin lbl" x="562" y="419">ADDR</text><text class="t-pin lbl" x="562" y="437">ALRT</text><text class="t-pin lbl" x="562" y="455">A0</text><text class="t-pin lbl" x="562" y="473">A1</text><text class="t-pin lbl" x="562" y="491">A2</text><text class="t-pin lbl" x="562" y="509">A3</text>
+      <text class="t-pin lbl" x="592" y="257">Tank</text><text class="t-pin lbl" x="592" y="275">Foot L1</text><text class="t-pin lbl" x="592" y="293">Foot L2</text><text class="t-pin lbl" x="592" y="311">Foot L3</text>
+      <text class="t-pin lbl" x="592" y="455">Foot R1</text><text class="t-pin lbl" x="592" y="473">Foot R2</text><text class="t-pin lbl" x="592" y="491">Foot R3</text><text class="t-pin lbl" x="592" y="509">Spare</text>
+      <text class="t-b lbl" x="590" y="118" text-anchor="middle">ADS1115 #1 · 0x48</text>
+      <text class="t-bm lbl" x="590" y="132" text-anchor="middle">ADDR→GND</text>
+      <text class="t-b lbl" x="590" y="533" text-anchor="middle">ADS1115 #2 · 0x49</text>
+      <text class="t-bm lbl" x="590" y="547" text-anchor="middle">ADDR→VDD (jumper wire on board)</text>
+
+      <!-- J1 -->
+      <rect class="sv-box" x="95" y="388" width="18" height="90" rx="4"/>
+      <circle class="pin" cx="104" cy="398" r="2.2"/><circle class="pin" cx="104" cy="416" r="2.2"/><circle class="pin" cx="104" cy="434" r="2.2"/><circle class="pin" cx="104" cy="452" r="2.2"/><circle class="pin" cx="104" cy="470" r="2.2"/>
+      <text class="t-pin" x="88" y="401" text-anchor="end">5V</text>
+      <text class="t-pin" x="88" y="419" text-anchor="end">3.3V</text>
+      <text class="t-pin" x="88" y="437" text-anchor="end">GND</text>
+      <text class="t-pin" x="88" y="455" text-anchor="end">SDA</text>
+      <text class="t-pin" x="88" y="473" text-anchor="end">SCL</text>
+      <text class="t-b lbl" x="104" y="381" text-anchor="middle">J1 → Pi</text>
+
+      <!-- Buses and left-edge labels -->
+      <text class="t-pw lbl" x="240" y="123" text-anchor="middle">5 V rail (tinned bus wire)</text>
+      <text class="t-bm lbl" x="240" y="429" text-anchor="middle">GND rail (tinned bus wire)</text>
+      <text class="t-bm" x="86" y="150" text-anchor="end">R_A 10k 1%</text>
+      <text class="t-bm" x="86" y="172" text-anchor="end">C8 10µF</text>
+      <text class="t-bm" x="86" y="204" text-anchor="end">Divider node</text>
+      <text class="t-bm" x="86" y="248" text-anchor="end">R_B 10k (right)</text>
+      <text class="t-bm" x="86" y="266" text-anchor="end">100 nF (left)</text>
+
+      <!-- S port names -->
+      <text class="t-bs" x="158" y="58">S1</text><text class="t-bs" x="158" y="72">Tank</text>
+      <text class="t-bs" x="212" y="58">S2</text><text class="t-bs" x="212" y="72">Foot L1</text>
+      <text class="t-bs" x="266" y="58">S3</text><text class="t-bs" x="266" y="72">Foot L2</text>
+      <text class="t-bs" x="320" y="58">S4</text><text class="t-bs" x="320" y="72">Foot L3</text>
+      <text class="t-bs" x="374" y="58">S5</text><text class="t-bs" x="374" y="72">Foot R1</text>
+      <text class="t-bs" x="428" y="58">S6</text><text class="t-bs" x="428" y="72">Foot R2</text>
+      <text class="t-bs" x="482" y="58">S7</text><text class="t-bs" x="482" y="72">Foot R3</text>
+      <text class="t-bs" x="536" y="58">(8)</text><text class="t-bs" x="536" y="72">Spare</text>
+
+      <!-- Dimensions -->
+      <line x1="92" y1="560" x2="676" y2="560" stroke="var(--muted)" stroke-width="1.1"/>
+      <line x1="92" y1="554" x2="92" y2="566" stroke="var(--muted)" stroke-width="1.1"/>
+      <line x1="676" y1="554" x2="676" y2="566" stroke="var(--muted)" stroke-width="1.1"/>
+      <text class="t-dim lbl" x="384" y="555" text-anchor="middle">90 mm · 32 holes @ 2.54 mm</text>
+      <line x1="700" y1="80" x2="700" y2="520" stroke="var(--muted)" stroke-width="1.1"/>
+      <line x1="694" y1="80" x2="706" y2="80" stroke="var(--muted)" stroke-width="1.1"/>
+      <line x1="694" y1="520" x2="706" y2="520" stroke="var(--muted)" stroke-width="1.1"/>
+      <text class="t-dim" x="712" y="300" transform="rotate(90 712 300)" text-anchor="middle">70 mm · 24 holes</text>
+
+      <!-- Legend -->
+      <line class="bus5" x1="24" y1="592" x2="56" y2="592"/>
+      <text class="t-bm" x="62" y="596">Front-side traces / tinned bus wire (amber = power)</text>
+      <line class="busg" x1="330" y1="592" x2="362" y2="592"/>
+      <text class="t-bm" x="368" y="596">GND rail</text>
+      <line class="jp" x1="440" y1="592" x2="472" y2="592"/>
+      <text class="t-bm" x="478" y="596">Back-side power jumper (3.3 V)</text>
+      <line class="js" x1="24" y1="614" x2="56" y2="614"/>
+      <text class="t-bm" x="62" y="618">Back-side signal jumpers (divider node→AIN ×8, I2C, ADDR)</text>
+      <line class="jg" x1="390" y1="614" x2="422" y2="614"/>
+      <text class="t-bm" x="428" y="618">Back-side GND jumpers (sensor returns ×7)</text>
+      <text class="t-foot" x="16" y="642">Top view = component side. Dashed = insulated jumpers on the solder side, not connected at crossings; the 5 V/GND bus wires pass between holes under the component bodies. Channel 8 gets divider parts only, no connector, as a spare pad.</text>
+    </svg>
+  </figure>
+
+  <div class="note">
+    <b>Channel map</b> (write channel numbers on the board and both wire ends with a marker, matching this table)
+    <table class="vtab">
+      <tr><th>Channel</th><th>S port</th><th>Sensor</th><th>ADS module</th><th>Input</th></tr>
+      <tr><td>1</td><td>S1</td><td>Tank pressure (tee at the tank outlet)</td><td>#1 · 0x48</td><td>A0</td></tr>
+      <tr><td>2</td><td>S2</td><td>Foot L1</td><td>#1 · 0x48</td><td>A1</td></tr>
+      <tr><td>3</td><td>S3</td><td>Foot L2</td><td>#1 · 0x48</td><td>A2</td></tr>
+      <tr><td>4</td><td>S4</td><td>Foot L3</td><td>#1 · 0x48</td><td>A3</td></tr>
+      <tr><td>5</td><td>S5</td><td>Foot R1</td><td>#2 · 0x49</td><td>A0</td></tr>
+      <tr><td>6</td><td>S6</td><td>Foot R2</td><td>#2 · 0x49</td><td>A1</td></tr>
+      <tr><td>7</td><td>S7</td><td>Foot R3</td><td>#2 · 0x49</td><td>A2</td></tr>
+      <tr><td>8</td><td>— (pads)</td><td>Spare</td><td>#2 · 0x49</td><td>A3</td></tr>
+    </table>
+    ADS <code>PGA=±4.096V</code> (±2.048 would clip at −10 kPa to 0 and break vent confirmation); software conversion is "×2 to undo the divider, then linear map 0.5–4.5 V → 0 to −100 kPa".
+  </div>
+
+  <div class="note">
+    <b>Assembly order and inspection checklist</b>
+    <ol>
+      <li><b>Bus wires first</b>: 5 V rail along the top edge, GND rail along the bottom (tinned copper wire pulled straight and soldered along its length) + J1's 5 V/GND front-side traces.</li>
+      <li><b>Resistors</b>: R_A/R_B ×16 (1% metal film), spot-check each with a multimeter before soldering.</li>
+      <li><b>Capacitors</b>: 100 nF ×8 + 10 µF electrolytic at the entry (<b class="d">mind the polarity</b>, + to 5 V).</li>
+      <li><b>ADS1115 ×2</b>: solder the header pins to the modules first, then solder the modules onto the board — <b class="d">no sockets, no Dupont</b>; solder the ADDR→VDD jumper wire of ADS#2 at the same time.</li>
+      <li><b>Back-side jumpers</b>: divider node→AIN ×8, I2C/3.3V/GND daisy chain, all in insulated wire; never scrape and bridge at crossings.</li>
+      <li><b>Connectors last</b>: J1 and S1–S7 (JST-XH or soldered + heat-shrink); harnesses pass through cable-tie holes where they leave the board for strain relief; connector wires carry no pull.</li>
+    </ol>
+    <ul>
+      <li><b>Two multimeter checks before fitting (each channel)</b>: S-port OUT pad → divider node ≈10k; divider node → GND rail ≈10k. A clear deviation = cold joint / misplacement / short.</li>
+      <li><b>Powered check</b>: <code>i2cdetect -y 1</code> should show both 0x48 and 0x49; with 7 sensors connected and open to air, the 7 readings should be ≈ half the sensors' atmospheric output (≈0.5 V), i.e. ≈0.25 V and consistent across channels.</li>
+      <li>After checking channel numbers against the map one by one, label the board and both wire ends with a marker.</li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,791 @@
+<!-- English translation of html/knowledge-map-20260821.html (2026-09-05). The Chinese original is the maintained source. -->
+<title>Wall-climbing hexapod knowledge map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;600&display=swap">
+
+<style>
+:root{
+  --paper:#F3F5F2;
+  --surface:#FFFFFF;
+  --surface-2:#EAEEEA;
+  --ink:#12211E;
+  --ink-mid:#3C4E4A;
+  --ink-soft:#687974;
+  --rule:#D5DCD7;
+  --rule-soft:#E4E9E4;
+  --accent:#0B6E62;
+  --accent-soft:#D9EBE6;
+  --brass:#8C6316;
+  --brass-soft:#F0E5CD;
+  --shadow:0 1px 2px rgba(18,33,30,.05),0 8px 24px -16px rgba(18,33,30,.25);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1514;
+    --surface:#14201E;
+    --surface-2:#1A2725;
+    --ink:#E7ECE8;
+    --ink-mid:#B6C4BF;
+    --ink-soft:#87968F;
+    --rule:#26332F;
+    --rule-soft:#1E2B28;
+    --accent:#4FC2AE;
+    --accent-soft:#12302B;
+    --brass:#D8A552;
+    --brass-soft:#2C2415;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -18px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1514;
+  --surface:#14201E;
+  --surface-2:#1A2725;
+  --ink:#E7ECE8;
+  --ink-mid:#B6C4BF;
+  --ink-soft:#87968F;
+  --rule:#26332F;
+  --rule-soft:#1E2B28;
+  --accent:#4FC2AE;
+  --accent-soft:#12302B;
+  --brass:#D8A552;
+  --brass-soft:#2C2415;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -18px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'IBM Plex Sans','Noto Sans SC',system-ui,-apple-system,sans-serif;
+  font-size:16px;
+  line-height:1.78;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px 96px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+
+/* ---------- header ---------- */
+header.top{
+  border-bottom:1px solid var(--rule);
+  padding:56px 0 32px;
+  margin-bottom:44px;
+}
+.eyebrow{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-soft);margin:0 0 18px;
+}
+h1{
+  font-size:clamp(30px,4.6vw,46px);
+  line-height:1.18;font-weight:700;letter-spacing:-.01em;
+  margin:0 0 20px;text-wrap:balance;
+}
+.thesis{
+  max-width:64ch;font-size:17.5px;color:var(--ink-mid);margin:0 0 8px;
+}
+.thesis strong{color:var(--ink);font-weight:600}
+.stats{
+  display:flex;flex-wrap:wrap;gap:0;margin-top:32px;
+  border:1px solid var(--rule);border-radius:2px;overflow:hidden;
+  background:var(--surface);
+}
+.stat{
+  flex:1 1 128px;padding:12px 16px;
+  border-right:1px solid var(--rule-soft);
+}
+.stat:last-child{border-right:0}
+.stat b{
+  display:block;font-family:'IBM Plex Mono',monospace;
+  font-size:19px;font-weight:500;line-height:1.3;
+  font-variant-numeric:tabular-nums;color:var(--ink);
+}
+.stat span{font-size:12px;color:var(--ink-soft);letter-spacing:.02em}
+
+/* ---------- layout ---------- */
+.cols{display:block}
+@media(min-width:1040px){
+  .cols{display:grid;grid-template-columns:170px minmax(0,1fr);gap:56px;align-items:start}
+  nav.rail{position:sticky;top:32px}
+}
+nav.rail{display:none}
+@media(min-width:1040px){nav.rail{display:block}}
+nav.rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+nav.rail a{
+  display:block;padding:4px 0 4px 12px;
+  border-left:2px solid var(--rule);
+  color:var(--ink-soft);text-decoration:none;font-size:13.5px;line-height:1.5;
+}
+nav.rail a:hover,nav.rail a:focus-visible{color:var(--accent);border-left-color:var(--accent)}
+nav.rail .num{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;
+  margin-right:6px;opacity:.7;
+}
+
+section{scroll-margin-top:24px}
+h2{
+  font-size:25px;font-weight:600;letter-spacing:-.005em;
+  margin:64px 0 6px;padding-top:24px;border-top:1px solid var(--rule);
+  text-wrap:balance;
+}
+h2:first-of-type{margin-top:0;border-top:0;padding-top:0}
+.sub{color:var(--ink-soft);font-size:14.5px;margin:0 0 28px;max-width:62ch}
+h3{font-size:17px;font-weight:600;margin:36px 0 10px}
+p{max-width:66ch}
+
+/* ---------- domain groups ---------- */
+.group-label{
+  display:flex;align-items:baseline;gap:12px;
+  margin:38px 0 16px;
+}
+.group-label .tag{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent);
+  border:1px solid var(--accent);border-radius:2px;padding:1px 7px;
+  white-space:nowrap;
+}
+.group-label h3{margin:0;font-size:18px}
+.group-label .note{color:var(--ink-soft);font-size:13.5px}
+
+.cards{display:grid;gap:14px;grid-template-columns:1fr}
+@media(min-width:720px){.cards{grid-template-columns:1fr 1fr}}
+.card{
+  background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  padding:18px 20px 20px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:10px;
+}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card-head h4{margin:0;font-size:16.5px;font-weight:600;letter-spacing:.01em}
+.chip{
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;
+  padding:2px 7px;border-radius:2px;white-space:nowrap;
+}
+.chip.gate{background:var(--brass-soft);color:var(--brass);border:1px solid var(--brass)}
+.chip.learn{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}
+.chip.copy{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--rule)}
+.anchor{
+  font-size:13.5px;color:var(--ink-mid);margin:0;
+  padding-left:11px;border-left:2px solid var(--accent);
+}
+.anchor code,.card li code,p code,li code,td code{
+  font-family:'IBM Plex Mono',monospace;font-size:.87em;
+  background:var(--surface-2);padding:1px 4px;border-radius:2px;
+  color:var(--ink-mid);
+}
+.card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px}
+.card li{font-size:14.5px;color:var(--ink-mid);line-height:1.6}
+.card li b{color:var(--ink);font-weight:600}
+
+/* ---------- matrix ---------- */
+.figure{
+  margin:32px 0 8px;border:1px solid var(--rule);border-radius:3px;
+  background:var(--surface);padding:20px 8px 8px;overflow-x:auto;
+}
+.figure svg{display:block;min-width:660px;margin:0 auto}
+.fig-cap{font-size:13px;color:var(--ink-soft);margin:10px 4px 0;max-width:none}
+.ax{fill:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em}
+.quad{fill:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:10.5px;opacity:.72}
+.lbl{fill:var(--ink);font-family:'Noto Sans SC','IBM Plex Sans',sans-serif;font-size:12.5px}
+.dot{fill:var(--accent)}
+.dot.hot{fill:var(--brass)}
+.grid-line{stroke:var(--rule);stroke-width:1}
+.grid-line.dash{stroke-dasharray:3 4}
+
+/* ---------- steps ---------- */
+.steps{display:flex;flex-direction:column;gap:0;margin-top:24px}
+.step{
+  display:grid;grid-template-columns:64px minmax(0,1fr);gap:20px;
+  padding:20px 0;border-top:1px solid var(--rule-soft);
+}
+.step:first-child{border-top:1px solid var(--rule)}
+.step-no{
+  font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:500;
+  color:var(--accent);letter-spacing:.04em;padding-top:2px;
+}
+.step h4{margin:0 0 6px;font-size:16.5px;font-weight:600}
+.step p{margin:0 0 8px;font-size:14.5px;color:var(--ink-mid)}
+.step .gate-line{
+  font-size:13.5px;color:var(--ink-soft);
+  font-family:'IBM Plex Mono',monospace;
+}
+.step .gate-line b{color:var(--brass);font-weight:500}
+
+/* ---------- lessons ---------- */
+.lesson{
+  border-left:3px solid var(--brass);
+  padding:2px 0 2px 20px;margin:30px 0;
+}
+.lesson h4{margin:0 0 8px;font-size:17px;font-weight:600}
+.lesson p{margin:0 0 10px;font-size:15px;color:var(--ink-mid)}
+blockquote{
+  margin:12px 0;padding:0;
+  font-family:'Noto Serif SC',Georgia,serif;
+  font-size:15.5px;line-height:1.8;color:var(--ink);
+  max-width:60ch;
+}
+blockquote::before{content:"“"}
+blockquote::after{content:"”"}
+blockquote cite{
+  display:block;font-family:'IBM Plex Mono',monospace;font-style:normal;
+  font-size:11.5px;color:var(--ink-soft);letter-spacing:.06em;margin-top:6px;
+}
+
+/* ---------- tables ---------- */
+.table-wrap{overflow-x:auto;margin:22px 0;border:1px solid var(--rule);border-radius:3px}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{
+  text-align:left;padding:10px 14px;font-size:14px;
+  border-bottom:1px solid var(--rule-soft);vertical-align:top;
+}
+th{
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-soft);font-weight:500;
+  background:var(--surface-2);border-bottom:1px solid var(--rule);
+}
+tbody tr:last-child td{border-bottom:0}
+td.num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---------- verdict ---------- */
+.verdict{
+  background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  padding:24px 26px;margin-top:28px;box-shadow:var(--shadow);
+}
+.verdict h4{margin:0 0 10px;font-size:16px;font-weight:600}
+.verdict h4 + p{margin-top:0}
+.verdict p{font-size:15px;color:var(--ink-mid);margin:0 0 18px}
+.verdict p:last-child{margin-bottom:0}
+.verdict .flag{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--brass);display:block;margin-bottom:4px;
+}
+a{color:var(--accent)}
+a:focus-visible,:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+footer{
+  margin-top:72px;padding-top:20px;border-top:1px solid var(--rule);
+  font-size:13px;color:var(--ink-soft);
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">spider · wall-climbing hexapod robot · knowledge inventory 2026-08-21</p>
+  <h1>Wall-climbing hexapod knowledge map</h1>
+  <p class="thesis">
+    What really eats the time on this machine is not kinematics and gaits — those two chapters are textbook material, a week of reading, and the code is 52 lines plus 102 lines.
+    What decides success are four much humbler things: <strong>getting the air seal to hold, getting the power stable, measuring the geometry right, and designing the experiments right</strong>.
+    Below, each is taken apart by "where in the project it was used", followed by a learning order and an honest difficulty verdict.
+  </p>
+  <div class="stats">
+    <div class="stat"><b>6 × 3</b><span>legs × joints = 18 servos</span></div>
+    <div class="stat"><b>1 + 6 + 7</b><span>pump / valves / pressure sensors</span></div>
+    <div class="stat"><b>50 Hz</b><span>control-loop period</span></div>
+    <div class="stat"><b>11.8k</b><span>lines of Python</span></div>
+    <div class="stat"><b>81</b><span>automated tests</span></div>
+    <div class="stat"><b>2.5 kg</b><span>whole-robot hard weight limit</span></div>
+    <div class="stat"><b>¥2000–2800</b><span>full parts set</span></div>
+  </div>
+</header>
+
+<div class="cols">
+
+<nav class="rail" aria-label="Contents">
+  <ol>
+    <li><a href="#map"><span class="num mono">A</span>The knowledge landscape</a></li>
+    <li><a href="#matrix"><span class="num mono">B</span>What to learn first</a></li>
+    <li><a href="#path"><span class="num mono">C</span>Learning path</a></li>
+    <li><a href="#lessons"><span class="num mono">D</span>Not in the books</a></li>
+    <li><a href="#cost"><span class="num mono">E</span>Cost and cut-down options</a></li>
+    <li><a href="#verdict"><span class="num mono">F</span>Verdict</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============ A ============ -->
+<section id="map">
+  <h2>A · The knowledge landscape: thirteen areas</h2>
+  <p class="sub">
+    Four groups. The first line of each card is the "anchor in the project" — the file or number where this knowledge lands;
+    the mark in the corner means: <span class="chip gate">prerequisite</span> cannot start without it,
+    <span class="chip learn">learn by doing</span> the project itself teaches it,
+    <span class="chip copy">copy existing</span> a mature solution can be taken as is.
+  </p>
+
+  <div class="group-label">
+    <span class="tag">I · Mechanics and motion</span>
+    <span class="note">making it move</span>
+  </div>
+  <div class="cards">
+
+    <article class="card">
+      <div class="card-head"><h4>Serial-mechanism kinematics</h4><span class="chip learn">learn by doing</span></div>
+      <p class="anchor">All the math in <code>kinematics.py</code> is 52 lines: <code>atan2</code> for the coxa sweep, the law of cosines for the knee, reachability <code>|l2−l3| &lt; d &lt; l2+l3</code>.</p>
+      <ul>
+        <li><b>Forward and inverse kinematics</b>: trigonometry, law of cosines, planar two-link solution; being able to derive it once by hand is enough</li>
+        <li><b>Coordinate transforms</b>: body frame → leg frame is a translation plus a rotation about Z; body pose uses an RPY inverse transform (<code>robot.py</code>)</li>
+        <li><b>Workspace and envelope margin</b>: keep a safety distance from the reachability boundary (3 mm in this project), or the stance phase runs out of solutions halfway</li>
+        <li><b>The real difficulty is coupling</b>: on a 3-DOF leg the foot position and cup orientation are locked together — pick the foothold and the cup's direction is fixed, with no fourth ankle joint to compensate</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>Gait and motion planning</h4><span class="chip learn">learn by doing</span></div>
+      <p class="anchor"><code>gait.py</code> gives three phase tables (tripod/wave/climb) in 102 lines; the climbing engine <code>climb.py</code> is 1019 lines — the difference is all "coupling with adhesion".</p>
+      <ul>
+        <li><b>Phase-based gait</b>: duty, per-leg phase offset, constant-speed backward sweep in stance, smoothstep plus sine lift in swing</li>
+        <li><b>Static stability</b>: support polygon and center-of-mass projection; on the wall, five-foot support moving one foot at a time</li>
+        <li><b>Rigid-body velocity field</b> <code>v + ω × r</code>: this is the formula behind each leg having a different stride when turning</li>
+        <li><b>Event driven</b>: the phase clock can be stopped by adhesion events — from "walk by the timetable" to "wait for physical confirmation", the biggest software change from floor to wall</li>
+        <li><b>Lift order is also design</b>: three consecutive same-side lifts piled the disturbance on one side; changed to diagonal alternation R3→L1→R2→L3→R1→L2</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>Mechanical design and 3D printing</h4><span class="chip gate">prerequisite</span></div>
+      <p class="anchor"><code>tools/generate_climbing_parts.py</code> uses trimesh + manifold3d booleans to carve a tibia cavity as a "full-shape negative" of the purchased cup's three-view drawing.</p>
+      <ul>
+        <li><b>Parametric modeling</b>: union/difference/intersection, solids of revolution, extrusion; dimensions live in <code>PARAMS</code>, change a number and regenerate</li>
+        <li><b>Print orientation decides feasibility</b>: the suction tibia can only be printed upright — the square shaft is 4.5 mm from the flat back while the cavity radius is 17 mm; lying flat it would cut through the bed</li>
+        <li><b>Tolerances and fits</b>: printed hole diameters must be checked with calipers; part-level tricks like hex pockets against rotation and locating pins</li>
+        <li><b>Materials</b>: PETG first for leg parts, walls and infill by load; a 25-tooth horn spline = 14.4° per step, assembly residual can only be fixed by software calibration, do not expect to mount it accurately</li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="group-label">
+    <span class="tag">II · Mechanics and energy</span>
+    <span class="note">keeping it on the wall</span>
+  </div>
+  <div class="cards">
+
+    <article class="card">
+      <div class="card-head"><h4>Statics and force budget</h4><span class="chip gate">prerequisite</span></div>
+      <p class="anchor">One Ø30 cup @−50 kPa measured: 25 N normal pull-off, 15 N shear on vertical glass (about 60%). Five-foot support of a 2.8 kg robot: shear safety factor ≈2.7.</p>
+      <ul>
+        <li><b>Adhesion force</b> <code>F = ΔP × A</code>, and why shear is far less than normal</li>
+        <li><b>Peel moment</b> <code>≈ m·g·d/h</code>: every centimeter the center of mass moves toward the wall is real margin — so the body hugs the wall and the battery sits on the wall side</li>
+        <li><b>Servo torque</b>: how kg·cm converts to a joint, why 35 kg·cm is derated to 50%, what stall means</li>
+        <li><b>Safety-factor thinking</b>: count the worst-case number of feet actually carrying load, not the nominal</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>Elasticity, stored energy and the ratchet</h4><span class="chip gate">prerequisite</span></div>
+      <p class="anchor">The most expensive lesson of this project: "stepping in place" on the wall stalled for four days, finally nailed by frame-by-frame video quantification — <b>83% of the slip happens in the 1–2 frames when the vented seal ruptures</b>, not slipping, not sliding.</p>
+      <ul>
+        <li><b>Springs in series</b>: lateral deformation of the bellows cup + the servo's give under load add up to one spring that keeps storing energy before the leg lifts</li>
+        <li><b>Ratchet mechanism</b>: elastic give is "locked in" by the next attachment as irreversible displacement, six times per cycle, enough to eat the whole stride</li>
+        <li><b>The energy view beats the force view</b>: slow venting was rejected by the data outright — the force release is not gradual with pressure, the seal breaks and the whole step happens at once</li>
+        <li><b>The cure is handover, not compensation</b>: before venting, spread this leg's load over the other five (δ/5 each; the six-leg command mean is unchanged = the body does not move), then vent at force ≈ 0</li>
+        <li><b>Be able to write a ten-line 1-D spring model</b>: Appendix A of <code>HANDOVER-DESIGN.md</code> reproduces the measured 26% net advance — modeling need not be complex, it needs the right mechanism</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>Weight budget</h4><span class="chip learn">learn by doing</span></div>
+      <p class="anchor">2.5 kg is the hard cap; minus 1.9 kg for the robot without adhesion, only 0.6 kg is left for the whole pneumatic system, against a rough estimate of 0.94–1.11 kg. <b>The budget was over from day one.</b></p>
+      <ul>
+        <li>Weigh every part on arrival and log it; the trend matters more than any single point (<code>docs/en/weight-log.md</code>)</li>
+        <li>Weight saving is a prioritized engineering action: first flight with one pump (−130 g), the small tank, hollowed printed parts</li>
+        <li>Sensitivity to weight in wall climbing is on a different scale from floor robots — overweight eats the adhesion margin directly</li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="group-label">
+    <span class="tag">III · Air and electricity</span>
+    <span class="note">making it reliable</span>
+  </div>
+  <div class="cards">
+
+    <article class="card">
+      <div class="card-head"><h4>Vacuum and pneumatics</h4><span class="chip gate">prerequisite</span></div>
+      <p class="anchor">Pump → check valve → vacuum tank → manifold → six normally-closed 3-way valves → six cups, plus a check valve per foot for fault isolation.</p>
+      <ul>
+        <li><b>Basic quantities of negative pressure</b>: kPa gauge, pump limit (555 dual-head about −75 to −85), pump-down time constant ≈ volume/flow (first-order exponential, same shape as RC)</li>
+        <li><b>Component vocabulary</b>: the P/A/R ports of a 3/2-way valve, normally open/closed, check-valve direction, why a tank speeds up response</li>
+        <li><b>Vacuum hold on power loss</b> is the lifeline of this design: wire it so that on power loss the cup stays connected to the stopped pump, and the diaphragm pump's internal check valves lock the vacuum — the robot does not drop on power loss, and the valves draw zero power while attached at rest</li>
+        <li><b>Leak hunting</b>: every joint is a leak point; soapy water plus binary search by pinching tubes segment by segment; hysteresis control (−60/−75 kPa) reduces pump cycling</li>
+        <li><b>Dirt lies to you</b>: dust blocking a pressure tap seals in a fake vacuum and the state machine thinks it is attached — hence a filter on every foot</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>Electronics and power integrity</h4><span class="chip gate">prerequisite</span></div>
+      <p class="anchor">The class of problem most able to "kill a whole day" in this project: a red-LED no-boot suspected as a fried board, a morning of troubleshooting, fixed by swapping the charger.</p>
+      <ul>
+        <li><b>Power architecture</b>: 2S direct to the servos / separate 5 V 5 A for the Pi (never a shared rail; a stalled-servo dip reboots the Pi) / boost to 12 V for pump and valves</li>
+        <li><b>Switching devices</b>: MOSFET board, optocoupler isolation, flyback diodes for inductive loads; the relay must switch the positive high side — ground is shared with the Pi through USB, so a low-side switch would be bypassed</li>
+        <li><b>Analog chain</b>: 4.5 V sensors divided into a 3.3 V system, ADS1115 single-ended channels, PGA range, polling the conversion-ready bit, two-point calibration giving <code>kPa = 25 × (V − V_atm)</code></li>
+        <li><b>Power integrity</b>: undervoltage history flags, transient margin and USB port choice can all reboot the system mid-air; <b>check the power first, suspect the logic later</b></li>
+        <li><b>Reading noise</b>: on reading dropouts, take a spectrum first — a small mains-frequency share means electrostatic coupling, not a bad contact</li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="group-label">
+    <span class="tag">IV · Software and method</span>
+    <span class="note">making it inspectable and trustworthy</span>
+  </div>
+  <div class="cards">
+
+    <article class="card">
+      <div class="card-head"><h4>Embedded real-time software</h4><span class="chip learn">learn by doing</span></div>
+      <p class="anchor">The 50 Hz main loop must fit 18 servo commands + 7 I2C pressure reads; without rate limiting it jitters periodically — the read cache and burst limiting in <code>adhesion.py</code> exist for this.</p>
+      <ul>
+        <li><b>Protocol implementation</b>: match the serial protocol byte by byte against the firmware source, 14-bit values split into two 7-bit bytes; header checks, no split writes</li>
+        <li><b>Time budget</b>: sensor readings are at worst 0.11 s stale, so a criterion's confirmation window must be clearly longer than that, or the window cannot span two real samples</li>
+        <li><b>State machines and interlocks</b>: six adhesion states, ten leg phases, the other five feet must all be attached before a lift</li>
+        <li><b>Glitch rejection</b>: criteria use "condition holds continuously for a duration", not "N consecutive samples" — independent of sample rate</li>
+        <li><b>Hardware abstraction + mocks</b>: the full logic and all 81 tests run without hardware; this is what makes remote development possible</li>
+        <li><b>Black-box logging</b>: line buffering plus periodic fsync; a failed write only warns and never crashes the control loop — both later quantified reports depended on it</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>The control view (this project has no PID)</h4><span class="chip learn">learn by doing</span></div>
+      <p class="anchor">18 PWM servos: no position read-back, no torque mode, no per-channel enable. The only thing you can do is send position commands.</p>
+      <ul>
+        <li><b>Changing the command = changing the force</b>: an attached foot cannot slip, so an increment in position command actually redistributes load — the whole principle behind the "zero-force handover"</li>
+        <li><b>Current is an indirect observation of force</b>: if total current does not fall back after attachment, the servos are fighting the vacuum; a cycle-by-cycle climb is internal stress accumulating</li>
+        <li><b>Quasi-static</b>: handover and lean are applied at a constant 10 mm/s, slow enough to ignore dynamics</li>
+        <li><b>When not to close the loop</b>: when neither sensor precision nor actuator bandwidth supports it, open loop plus interlocks plus timeout freeze is more reliable than a forced feedback loop</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>Measurement and calibration</h4><span class="chip gate">prerequisite</span></div>
+      <p class="anchor">The most laborious job of the whole project: pulse width ↔ joint angle measured and fitted for each of 18 servos, plus a hard-fought battle over "how long is the tibia" (<code>L3-DISPUTE-OPEN.md</code>).</p>
+      <ul>
+        <li><b>Least-squares fitting</b>: a servo is a linear model; measure 2–4 points, fit slope and zero, judge by residual</li>
+        <li><b>Measurement design</b>: height-difference method (<code>sinα = Δh/l</code>), three-side method (law of cosines), projection method — pick one that is reproducible and immune to lateral offset</li>
+        <li><b>Error propagation</b>: near vertical the sine flattens and a 1 mm reading error becomes 4.5° — so the calibration pose must be chosen, not arbitrary</li>
+        <li><b>Defining the reference matters more than measuring</b>: where the knee axis is, where the foot is, which line is the cup axis — all three were once defined wrong, and all three were corrected only by cross-examining three-view drawings</li>
+        <li><b>State-dependent geometry</b>: the cup is 19 mm tall free, 7.5 mm pressed to seal, 8 mm under vacuum — hence "press to seal first, then pump"; pumping barely moves it</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>Experiment design and data analysis</h4><span class="chip gate">prerequisite</span></div>
+      <p class="anchor"><code>logs_analysis/ab_quant.py</code>: frame-by-frame NCC template matching + parabolic sub-pixel + static-reference camera-drift correction, splitting each round's 74 mm of slip by event.</p>
+      <ul>
+        <li><b>Quantify before tuning</b>: without this frame-by-frame quantification, "83% at the seal-rupture instant" would never have been found, only endless blind tuning of compensation coefficients</li>
+        <li><b>Measuring displacement from video</b>: template matching, sub-pixel interpolation, mm/px calibration, static reference to remove camera drift</li>
+        <li><b>A/B discipline</b>: re-run the baseline the same day, tripod and zoom locked, sync marker before the first round, always judge on round 2 (round 1 is the transient ramp from zero)</li>
+        <li><b>Dare to let data reject your own idea</b>: slow venting, an idea that "sounded reasonable", was shot down on the spot by the profile data</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h4>Systems engineering and working discipline</h4><span class="chip gate">prerequisite</span></div>
+      <p class="anchor">The roadmap puts the most expensive assumption first: the single-leg wall decision gate costs only the first batch, ¥600–950; if it fails, stop the loss and the 15 other servos are never bought.</p>
+      <ul>
+        <li><b>Risk first</b>: verify the one thing most likely to overturn the whole plan, not the part you are most sure of</li>
+        <li><b>Acceptance criteria must be quantifiable</b>: 50 cycles &gt;95%, 1.5 kg hanging for 5 minutes, slip per round &lt;10 mm — not "feels fine"</li>
+        <li><b>Degradation and fail-safe</b>: rescue a leak first, freeze and alarm on timeout; when the process dies the GPIO is released, the relay opens, the normally-closed valves hold vacuum</li>
+        <li><b>Write the retracted conclusions into the docs too</b>: this project has a dedicated section "wrong conclusions produced this round, do not reuse" — so you do not pick the wrong one up again weeks later</li>
+        <li><b>Safety discipline</b>: safety rope on at all times, padding on the floor, nobody under a hanging-weight test, never leave a charging LiPo unattended</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ============ B ============ -->
+<section id="matrix">
+  <h2>B · What to learn first: dependency × learning cost</h2>
+  <p class="sub">
+    Horizontal axis: how much effort it takes to learn from zero; vertical axis: whether not knowing it blocks this project.
+    The few in the top right are the real prerequisites — note that not one of them is "robotics".
+  </p>
+
+  <div class="figure">
+    <svg viewBox="0 0 760 470" role="img" aria-labelledby="mtitle mdesc">
+      <title id="mtitle">Dependency and learning cost of the thirteen knowledge areas</title>
+      <desc id="mdesc">Vacuum pneumatics, measurement and calibration, power integrity and the elastic ratchet fall in the high-dependency, high-cost zone and are the real prerequisites of this project; kinematics and gait are high dependency but low cost.</desc>
+
+      <!-- frame -->
+      <line class="grid-line" x1="70" y1="30" x2="70" y2="400"/>
+      <line class="grid-line" x1="70" y1="400" x2="720" y2="400"/>
+      <line class="grid-line dash" x1="395" y1="30" x2="395" y2="400"/>
+      <line class="grid-line dash" x1="70" y1="141" x2="720" y2="141"/>
+
+      <!-- axis labels -->
+      <text class="ax" x="70" y="425">Low</text>
+      <text class="ax" x="690" y="425">High</text>
+      <text class="ax" x="330" y="443">Cost to learn from zero →</text>
+      <text class="ax" x="26" y="400" transform="rotate(-90 26 400)">Dependency →</text>
+
+      <!-- quadrant hints -->
+      <text class="quad" x="84" y="52">Required · easy</text>
+      <text class="quad" x="612" y="52">Required · hard (the real prerequisites)</text>
+      <text class="quad" x="84" y="388">Picked up along the way</text>
+      <text class="quad" x="640" y="388">Can wait</text>
+
+      <!-- points: x = 70 + cost*6.5 , y = 400 - dep*3.7 -->
+      <g>
+        <circle class="dot" cx="148" cy="197" r="5"/><text class="lbl" x="160" y="201">Weight budget</text>
+        <circle class="dot hot" cx="174" cy="74" r="5.5"/><text class="lbl" x="186" y="78">System discipline</text>
+        <circle class="dot" cx="239" cy="134" r="5"/><text class="lbl" x="251" y="138">Force budget</text>
+        <circle class="dot" cx="278" cy="89" r="5"/><text class="lbl" x="290" y="93">Kinematics</text>
+        <circle class="dot" cx="291" cy="171" r="5"/><text class="lbl" x="303" y="175">Printed parts</text>
+        <circle class="dot" cx="382" cy="111" r="5"/><text class="lbl" x="394" y="115">Gait</text>
+        <circle class="dot" cx="408" cy="222" r="5"/><text class="lbl" x="420" y="226">Control view</text>
+        <circle class="dot" cx="447" cy="148" r="5"/><text class="lbl" x="459" y="152">Real-time software</text>
+        <circle class="dot hot" cx="343" cy="48" r="5.5"/><text class="lbl" x="355" y="52">Vacuum pneumatics</text>
+        <circle class="dot hot" cx="486" cy="67" r="5.5"/><text class="lbl" x="498" y="71">Measurement/calibration</text>
+        <circle class="dot" cx="551" cy="126" r="5"/><text class="lbl" x="563" y="130">Experiment method</text>
+        <circle class="dot hot" cx="616" cy="82" r="5.5"/><text class="lbl" x="604" y="86" text-anchor="end">Power integrity</text>
+        <circle class="dot hot" cx="642" cy="41" r="5.5"/><text class="lbl" x="630" y="45" text-anchor="end">Elastic ratchet</text>
+      </g>
+    </svg>
+    <p class="fig-cap">
+      Amber = the five that actually caused stoppages in this project. Positions are judged from the real time spent over 166 commits and a month of dev logs, not a general ranking.
+    </p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th style="width:130px">Tier</th><th>Content</th><th style="width:180px">How to handle</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="chip gate">hard prerequisite</span></td>
+          <td>A multimeter and basic circuit sense (dividers, common ground, continuity in diode mode); reading and writing Python; trigonometry and vectors; running a 3D printer; <b>willingness to keep records</b></td>
+          <td>Should be there before starting; learning them on the way drags the whole pace down</td>
+        </tr>
+        <tr>
+          <td><span class="chip learn">learn by doing</span></td>
+          <td>IK / gait / state machines / I2C and ADC / pneumatic components / calibration methods / video quantification</td>
+          <td>Learn and use at each stage, with acceptance criteria as the safety net</td>
+        </tr>
+        <tr>
+          <td><span class="chip copy">copy existing</span></td>
+          <td>The walking platform structure (full MakeYourPet STL set + wiring diagram, MIT); servo-board firmware (Servo2040 + chica); this repo's kinematics/gait/adhesion/climb engine</td>
+          <td>Use them, do not rebuild; spend the saved time on pneumatics and calibration</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ C ============ -->
+<section id="path">
+  <h2>C · Learning path: catch up stage by stage</h2>
+  <p class="sub">
+    This is a real sequence — each step is the prerequisite of the next, and each has a "stop if it fails" criterion.
+    Learned in this order, the knowledge is pulled out by problems, not memorized in advance.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-no">P0</div>
+      <div>
+        <h4>Get one leg moving</h4>
+        <p>To learn: 3D printing and assembly, the concept of servo pulse width, SSH/serial on the Pi, Python packages and tests. Get the simulation running first; this can start before the hardware arrives.</p>
+        <p class="gate-line">Criterion: <b>three servos can be swung by the program; simulation and tests all green.</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P1</div>
+      <div>
+        <h4>Vacuum circuit on the rig</h4>
+        <p>To learn: pneumatic components, GPIO and MOSFET, ADC and dividers, two-point calibration, leak hunting. The physical foundation of the whole project is set here — the three curves (pump-down time, leak rate, release time) and the tilt tolerance are all measured here.</p>
+        <p class="gate-line">Criterion: <b>one foot holds 1.5 kg on vertical glass for 10 minutes; one attach-confirm-release cycle &lt;2 s.</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P2</div>
+      <div>
+        <h4>Single leg on the wall — decision gate</h4>
+        <p>To learn: single-leg IK integrated with the adhesion state machine, measured check of the force budget, load-bearing fixture design. The only stop-loss point of the whole project; do not buy the second batch before passing.</p>
+        <p class="gate-line">Criterion: <b>50 attach/release cycles &gt;95% success; 1.5 kg hanging for 5 minutes + 1 kg side pull without detaching.</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P3</div>
+      <div>
+        <h4>Whole-robot assembly and floor walking</h4>
+        <p>To learn: the methodology of 18-channel calibration (the most laborious job of the project, several days), gait parameters, drift compensation. By here the "robotics" part is done.</p>
+        <p class="gate-line">Criterion: <b>walk 2 m straight, turn 360° in place, single-leg point-to-point error &lt;5 mm.</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P4</div>
+      <div>
+        <h4>Whole robot on the wall</h4>
+        <p>To learn: converting the gait to event-driven, real-time budget for multi-channel sensing, fail-safe and degradation, black-box logging, and — the mechanics problems that only show up on the wall. This project was stuck here for four days and found the root cause only through video quantification.</p>
+        <p class="gate-line">Criterion: <b>climb 1 m on vertical glass, traverse 0.5 m, hover 5 minutes after power loss without detaching.</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">P5</div>
+      <div>
+        <h4>Payload, floor-to-wall transition, perception</h4>
+        <p>To learn: transition sequencing and center-of-mass management, vision and attitude sensing. Kinematically verified feasible (with the body level, wall distance to the front hip 80–200 mm all have valid footholds); the difficulty is the sequencing.</p>
+        <p class="gate-line">Criterion: <b>ordered as needed, no single gate.</b></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ D ============ -->
+<section id="lessons">
+  <h2>D · Six things the books will not tell you</h2>
+  <p class="sub">
+    These were hit by this project itself. Each cost at least a full day, several cost four.
+  </p>
+
+  <div class="lesson">
+    <h4>One · On a 3-DOF leg, position and orientation are locked together</h4>
+    <p>
+      For the cup to seal, its axis must be roughly perpendicular to the wall; but the leg has only three joints, so once the foothold is chosen the cup direction is fixed, with no fourth degree of freedom to compensate.
+      As a result, stand height 90 mm, stance reach 176 mm, stride ≤40 mm are not comfortable tuned values
+      but hard constraints solved backward from "bellows cup ±15° tolerance". The general floor pose reach=130 moved onto the wall makes the cup meet the surface at 16.7° and simply not seal.
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>Two · A "normally closed valve" label cannot be trusted; vacuum hold on power loss has to be assembled from the wiring</h4>
+    <p>
+      The 3-way valves bought vent the outlet to air when unpowered — wired by the label, the whole robot drops at the first power loss.
+      The actual fix is reversing the tubing: when unpowered the cup stays connected to the stopped diaphragm pump, whose internal check valves lock the vacuum.
+      A free bonus comes with it: while attached at rest the coils are unpowered, six valves at zero power. <b>A component's real behavior must be tested by blowing through it yourself; do not trust the listing.</b>
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>Three · The elastic energy of a lifted leg drags the whole robot down at the instant the seal ruptures</h4>
+    <blockquote>
+      On flat ground the robot can walk forward, but on the glass wall it seems to march in place all the time… every time it lifts a leg it gets dragged down a bit.
+      <cite>project log · the day of the first wall climb</cite>
+    </blockquote>
+    <blockquote>
+      If the lifted leg's elastic energy is large, lifting it releases that energy and the whole body moves down a distance instead; I found that this is what keeps it from advancing.
+      <cite>project log · root cause spotted four days later, confirmed by data the next day</cite>
+    </blockquote>
+    <p>
+      Frame-by-frame quantification: during the 0.4 s of venting after the valve opens the body moves &lt;0.15 mm; after the seal ruptures the drop completes in 1–2 frames (&lt;100 ms),
+      single-leg bounces from 5.8 to 20.9 mm (<b>a fourfold spread between legs</b>), and total current ratchets up every cycle without falling back.
+      The cure is not slow venting (rejected by the data) but handing the load over before venting.
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>Four · Position-controlled actuators can still redistribute force</h4>
+    <p>
+      An attached foot cannot slip, so the position command you give it actually changes force.
+      The leg to be lifted has its command retreat "uphill" by δ to unload itself, and the other five each take δ/5 "downhill" — the vector sum of the six commands is zero, the body command does not move,
+      but that leg's force drops to near zero and there is no energy to release when the seal breaks. This idea holds even on servos with no torque interface; it is the most elegant step of the project.
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>Five · Power problems disguise themselves as everything else</h4>
+    <p>
+      Raspberry Pi red LED, no boot, still red with every connector pulled, multimeter reading 0 V — a whole morning checking the MOSFET board channel by channel for breakdown,
+      fixed in the end by swapping a phone charger; the board was never broken. The same week: the servo board reported undervoltage on the blue USB 3.0 port and was fine on the black USB 2.0 port.
+      <b>The order should be reversed: swap the power supply first, look at the undervoltage flag first, suspect logic and parts later.</b>
+    </p>
+  </div>
+
+  <div class="lesson">
+    <h4>Six · Geometric truth is not measured, it is defined first and then measured</h4>
+    <p>
+      The question "how long is the tibia" was argued for a whole day, and the root was not measurement precision but three undefined reference points: where the knee axis is, where the foot ends, which line is the cup axis.
+      It converged only by drawing three views and cross-examining them (<code>tibia_len = 123.7</code>; the official value is 134).
+      And the cup axis is not "the line from knee to lip center" at all; the two differ by 25.2° — an error that at one point made the whole "stand perpendicular" implementation wrong.
+      <b>Cross-examining drawings is the most effective way to resolve a disagreement, far cheaper than arguing on.</b>
+    </p>
+  </div>
+</section>
+
+<!-- ============ E ============ -->
+<section id="cost">
+  <h2>E · Cost, time and cut-down routes</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>How far to go</th><th style="width:130px">Parts cost</th><th>Knowledge needed</th><th style="width:110px">What you get to play with</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Single-leg adhesion rig</b> (P0–P2)</td>
+          <td class="num">¥600~950</td>
+          <td>Pneumatics + power + ADC + single-leg IK + state machine</td>
+          <td>Verify wall-climbing feasibility, film "one foot holding 3 kg"</td>
+        </tr>
+        <tr>
+          <td><b>Floor hexapod</b> (skip the pneumatics)</td>
+          <td class="num">¥1300~2200</td>
+          <td>Only groups I and IV: kinematics, gait, calibration, embedded</td>
+          <td>A complete walking robot, with a mature community path</td>
+        </tr>
+        <tr>
+          <td><b>Whole-robot wall climbing</b> (full P0–P4)</td>
+          <td class="num">¥2000~2800</td>
+          <td>All thirteen areas, plus experiment quantification skills</td>
+          <td>Climbing on glass/tile walls + hovering after power loss</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    In time, this project went from single-leg acceptance to the first wall climb and on to locating and solving "stepping in place" in one month of intensive development (166 commits).
+    Less than a week of that went into kinematics and gait; the rest went into calibration, pneumatics, power and quantified experiments.
+  </p>
+  <p>
+    <b>Cut-down advice</b>: if you only want to learn robotics, a floor hexapod is enough and saves the whole of group III and half the money;
+    if you want to play with climbing without building the whole robot, a single-leg rig for a few hundred yuan meets all the most interesting physics (sealing, peeling, elasticity).
+    <b>Cut-downs not recommended</b>: dropping the pressure sensors for timed valves — without pressure feedback the state machine cannot tell "attached or not",
+    and going on the wall becomes luck; dropping the black-box log — after an incident nothing can be traced.
+  </p>
+</section>
+
+<!-- ============ F ============ -->
+<section id="verdict">
+  <h2>F · An honest verdict</h2>
+
+  <div class="verdict">
+    <h4>The good news</h4>
+    <p>
+      The part that looks most "high-barrier" — kinematics, gait, robot control — is exactly the most standardized and easiest to copy.
+      The leg inverse solution is 52 lines, the gait engine 102, the structure has a complete MIT-licensed open-source design, the servo board has ready-made firmware.
+      Someone who writes Python and knows trigonometry can get a hexapod walking on the floor within two weeks.
+    </p>
+
+    <h4>The bad news</h4>
+    <p>
+      What decides whether this machine gets onto the wall is all "un-robotics-like": a fitting not pushed fully home and the robot drops;
+      a bit less power margin and it reboots in mid-air; a wrong calibration reference and "stand perpendicular" comes out tilted;
+      nobody thinks of the cup's elastic energy storage and four days of tuning go nowhere. There is no textbook for these; only measurement, records and cross-examination.
+    </p>
+
+    <h4>If you remember one thing</h4>
+    <p>
+      The three real breakthroughs of this project — correcting the tibia length, pinning down the undervoltage pattern, the elastic-energy root cause —
+      <b>came not from smarter analysis but from using physical photos, multimeter readings and frame-by-frame video to push back a plausible-sounding wrong assumption.</b>
+      Whether you are willing to do that decides whether you finish it, more than whether you can solve inverse kinematics.
+    </p>
+
+    <p><span class="flag">self-check first</span>
+      If you cannot bring yourself to do either "read off a multimeter point by point" or "measure with calipers and cross-examine three-view drawings",
+      this machine will most likely stop halfway — not because you cannot, but because you do not check.
+    </p>
+  </div>
+</section>
+
+<footer>
+  Compiled from the state of the <code>spider</code> repo on 2026-08-21: fourteen design and operating documents in <code>docs/</code>,
+  11.8k lines of Python and 81 tests in <code>software/</code>, two quantified experiment reports in <code>html/</code>, 166 commits.
+  Current progress: the whole robot is on the wall, the zero-force handover is implemented, the real-machine A/B experiment is pending.
+</footer>
+
+</main>
+</div>
+</div>

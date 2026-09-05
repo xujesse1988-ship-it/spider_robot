@@ -1,0 +1,475 @@
+<!doctype html>
+<!-- English translation of html/p4-bay-v1-assembly.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>P4 V1 equipment bay · interactive 3D assembly view</title>
+<style>
+  :root {
+    --bg:#f3f5f7; --panel:#fff; --panel2:#f8fafb; --ink:#1e2a36; --muted:#62717e;
+    --line:#d5dde4; --accent:#0e7ac4; --accent-soft:rgba(14,122,196,.10);
+    --mechanical:#7d8e9d; --pneumatic:#17836a; --electronic:#b26a00; --actuator:#8b5daf;
+    --tube:#1aa985; --wire:#347dc1; --warn:#b5452f; --shadow:0 10px 34px rgba(31,46,59,.09);
+  }
+  @media (prefers-color-scheme:dark) {
+    :root { --bg:#10161c; --panel:#171f27; --panel2:#121a21; --ink:#e3eaf1; --muted:#93a1ae;
+      --line:#2a3541; --accent:#53a8e4; --accent-soft:rgba(83,168,228,.14);
+      --mechanical:#879bad; --pneumatic:#4bc2a0; --electronic:#e0a64f; --actuator:#b88bd4;
+      --tube:#43c8a4; --wire:#69b4ea; --warn:#e0785c; --shadow:0 14px 40px rgba(0,0,0,.27); }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Avenir Next","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; line-height:1.55; }
+  header { max-width:1440px; margin:auto; padding:26px 24px 14px; }
+  .eyebrow { margin:0 0 5px; color:var(--muted); font-size:12px; letter-spacing:.14em; text-transform:uppercase; }
+  h1 { margin:0 0 6px; font-size:25px; letter-spacing:-.02em; }
+  .sub { margin:0; color:var(--muted); font-size:14px; max-width:1060px; }
+  main { max-width:1440px; margin:auto; padding:0 24px 36px; display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:16px; }
+  .viewer, .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); }
+  .viewer { min-width:0; overflow:hidden; position:relative; }
+  .toolbar { min-height:55px; padding:10px 12px; border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  button, .chip { color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:7px 10px; font:inherit; font-size:12px; cursor:pointer; }
+  button:hover, button:focus-visible, .chip:hover { border-color:var(--accent); outline:none; }
+  button.active { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .sep { height:24px; width:1px; background:var(--line); margin:0 2px; }
+  .slider { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
+  .slider input { width:88px; accent-color:var(--accent); }
+  .canvas-wrap { height:min(72vh,760px); min-height:520px; position:relative; background:
+    radial-gradient(circle at 50% 42%, var(--accent-soft), transparent 48%), var(--panel2); }
+  canvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+  canvas.dragging { cursor:grabbing; }
+  .selection-banner { position:absolute; z-index:6; left:50%; top:12px; transform:translateX(-50%); max-width:calc(100% - 28px); min-width:min(390px,calc(100% - 28px)); padding:9px 14px; border:1px solid color-mix(in srgb,var(--accent) 52%,var(--line)); border-radius:9px; color:var(--ink); background:var(--panel); box-shadow:0 5px 18px rgba(25,43,58,.16); text-align:center; font-size:13px; pointer-events:none; }
+  .selection-banner .selection-prefix { color:var(--muted); font-weight:600; }
+  .selection-banner .selection-name { color:var(--accent); font-weight:750; }
+  .selection-banner.empty .selection-name { color:var(--muted); font-weight:500; }
+  .scene-object-label { position:absolute; z-index:5; left:0; top:0; max-width:min(280px,calc(100% - 16px)); padding:5px 9px; overflow:hidden; border:1px solid var(--accent); border-radius:6px; color:var(--ink); background:color-mix(in srgb,var(--panel) 96%,transparent); box-shadow:0 4px 14px rgba(20,35,47,.22); font-size:12px; font-weight:700; line-height:1.25; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; backdrop-filter:blur(4px); }
+  .scene-object-label.selected { border-width:2px; border-color:var(--warn); color:var(--warn); }
+  .scene-object-label.hovered { opacity:.92; font-weight:600; }
+  .scene-object-label[hidden] { display:none; }
+  .axis-note { position:absolute; left:13px; bottom:11px; padding:5px 8px; border-radius:6px; color:var(--muted); background:color-mix(in srgb,var(--panel) 86%,transparent); border:1px solid var(--line); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; pointer-events:none; }
+  .hint { position:absolute; right:13px; bottom:11px; color:var(--muted); font-size:11px; pointer-events:none; }
+  aside { display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .panel { padding:14px; }
+  .panel h2 { margin:0 0 10px; font-size:15px; }
+  .filters { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .filter { display:flex; align-items:center; gap:7px; padding:7px 8px; border:1px solid var(--line); border-radius:7px; font-size:12px; cursor:pointer; user-select:none; }
+  .filter input { margin:0; accent-color:var(--accent); }
+  .swatch { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  .search { width:100%; margin-top:10px; padding:8px 9px; color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:7px; font:inherit; font-size:12px; }
+  .search:focus { outline:none; border-color:var(--accent); }
+  .inventory { max-height:274px; overflow:auto; border-top:1px solid var(--line); }
+  .inventory-group { position:sticky; top:0; z-index:1; padding:7px 3px 5px; color:var(--muted); background:var(--panel); border-bottom:1px solid var(--line); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  .object-list { max-height:310px; overflow:auto; border-top:1px solid var(--line); }
+  .object-row { width:100%; border:0; border-bottom:1px solid var(--line); border-radius:0; padding:8px 3px; background:transparent; display:grid; grid-template-columns:10px 1fr auto; align-items:center; gap:8px; text-align:left; }
+  .object-row:hover, .object-row.selected { background:var(--accent-soft); }
+  .object-row.selected { color:var(--accent); }
+  .object-row .dot { width:9px; height:9px; border-radius:50%; }
+  .object-row small { display:block; color:var(--muted); }
+  .part-row { width:100%; border:0; border-bottom:1px solid var(--line); border-radius:0; padding:8px 3px; background:transparent; display:grid; grid-template-columns:24px 1fr auto; align-items:center; gap:7px; text-align:left; }
+  .part-row:hover { background:var(--accent-soft); }
+  .part-row.selected { color:var(--accent); background:var(--accent-soft); }
+  .num { width:21px; height:21px; display:grid; place-items:center; border-radius:50%; color:var(--muted); background:var(--panel2); border:1px solid var(--line); font-size:10px; }
+  .part-row small { color:var(--muted); }
+  .badge { display:inline-flex; padding:2px 6px; border-radius:999px; font-size:10px; color:var(--muted); border:1px solid var(--line); white-space:nowrap; }
+  .detail { min-height:230px; }
+  .detail-empty { color:var(--muted); font-size:13px; padding:18px 4px; }
+  .detail-title { display:flex; gap:8px; align-items:flex-start; margin-bottom:9px; }
+  .detail-title h2 { margin:0; line-height:1.3; flex:1; }
+  .kind { flex:0 0 auto; border-radius:5px; color:#fff; padding:2px 6px; font-size:10px; }
+  .kv { display:grid; grid-template-columns:68px 1fr; gap:6px 9px; padding:8px 0; border-top:1px solid var(--line); font-size:12px; }
+  .kv dt { color:var(--muted); }
+  .kv dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; color:var(--accent); }
+  .legend-note { color:var(--muted); font-size:11px; margin:9px 0 0; }
+  .status { display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--muted); padding-top:9px; }
+  .warning { border-left:3px solid var(--warn); background:color-mix(in srgb,var(--warn) 7%,transparent); border-radius:6px; padding:8px 10px; color:var(--muted); font-size:11px; margin-top:9px; }
+  .foot { grid-column:1/-1; color:var(--muted); font-size:12px; padding:2px 4px; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  @media(max-width:920px) {
+    main { grid-template-columns:1fr; }
+    aside { display:grid; grid-template-columns:1fr 1fr; }
+    .canvas-wrap { min-height:480px; height:64vh; }
+  }
+  @media(max-width:620px) {
+    header, main { padding-left:12px; padding-right:12px; }
+    aside { display:flex; }
+    .toolbar .slider { display:none; }
+    .canvas-wrap { min-height:430px; }
+    .selection-banner { top:8px; min-width:calc(100% - 20px); max-width:calc(100% - 20px); padding:8px 10px; }
+    .scene-object-label { max-width:calc(100% - 16px); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <p class="eyebrow">Spider · P4 Bay V1 · Assembly Digital Mock-up</p>
+  <h1>P4 V1 whole robot and equipment bay · interactive 3D assembly view</h1>
+  <p class="sub">Drag to rotate, scroll to zoom, click a part to see its assembly coordinates and interface directions. The frame, six legs, 18 servos and the ventral Servo2040 are included; the geometry is a position/linkage proxy and does not replace the real CAD. The origin is the center of the frame and the bay, <b>+Y points to the robot's head</b>.</p>
+</header>
+
+<main>
+  <section class="viewer" aria-label="P4 V1 3D assembly view">
+    <div class="toolbar">
+      <button data-view="iso" class="active" aria-pressed="true">Whole robot isometric</button>
+      <button data-view="bay" aria-pressed="false">Bay close-up</button>
+      <button data-view="top" aria-pressed="false">Top</button>
+      <button data-view="front" aria-pressed="false">Head view</button>
+      <button data-view="side" aria-pressed="false">Right</button>
+      <span class="sep"></span>
+      <button id="reset">Reset</button>
+      <button id="xray" class="active" aria-pressed="true">Deck translucent</button>
+      <button id="template" aria-pressed="false">Fit-check templates</button>
+      <label class="slider">Explode <input id="explode" type="range" min="0" max="55" value="0"><span id="explodeValue">0</span></label>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="scene" aria-label="Rotatable P4 V1 3D assembly view"></canvas>
+      <div id="selectionBanner" class="selection-banner empty" role="status" aria-live="polite" aria-atomic="true">
+        <span class="selection-prefix">Selected:</span><span id="selectionName" class="selection-name">click the model or the "Assembly objects" list to select a part</span>
+      </div>
+      <div id="selectedSceneLabel" class="scene-object-label selected" aria-hidden="true" hidden></div>
+      <div id="hoveredSceneLabel" class="scene-object-label hovered" aria-hidden="true" hidden></div>
+      <div class="axis-note">+X right · +Y head · +Z up</div>
+      <div class="hint">Drag to rotate · scroll to zoom · click to select</div>
+    </div>
+  </section>
+
+  <aside>
+    <section class="panel">
+      <h2>Display and search</h2>
+      <div class="filters" id="filters"></div>
+      <input id="search" class="search" type="search" placeholder="Search name / ID / interface…" aria-label="Search parts">
+      <div class="status"><span id="visibleCount"></span><span>V1 · mm</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>Printed parts list</h2>
+      <div class="inventory" id="inventory"></div>
+      <p class="legend-note">Includes the original 13 P4 bay types and the whole-robot structural parts; "fit-check / compatibility reference parts" are not part of the current P4 final state. Click a type to focus its assembly instances.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Assembly objects</h2>
+      <div class="object-list" id="objectList" aria-label="Selectable printed parts, components and routing paths"></div>
+      <p class="legend-note">Synced with search and category filters; selecting an entry outlines it in the 3D view and shows its world coordinates.</p>
+    </section>
+
+    <section class="panel detail" id="detail">
+      <div class="detail-empty">Click a 3D part or the printed-parts list on the left to see name, coordinates, size, layer and interface directions.</div>
+    </section>
+  </aside>
+
+  <p class="foot">Data baseline: <code>hardware/climbing-parts/p4-bay-v1/layout-report.json</code>, <code>software/hexapod/config.py</code>, MakeYourPet STL bounds and <code>docs/en/P3-GUIDE.md</code>. Legs are drawn with 43/80/120 mm joint axis lengths; printed-part shapes and servo cases are simplified proxies, and a measured sweep is still required before assembly.</p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const C = {
+    mechanical:'#7d8e9d', pneumatic:'#17836a', electronic:'#b26a00',
+    tube:'#1aa985', wire:'#347dc1', actuator:'#8b5daf', selected:'#e14b36', pcb:'#2e8b57', tpu:'#9b69b7'
+  };
+  const categoryInfo = {
+    mechanical:['Mechanical',C.mechanical], pneumatic:['Pneumatic',C.pneumatic],
+    electronic:['Electronics',C.electronic], actuator:['Servos',C.actuator], tube:['Tubing',C.tube], wire:['Harnesses',C.wire]
+  };
+  const items = [];
+  const add = o => { o.visible = o.visible !== false; o.rot = o.rot || 0; o.interfaces = o.interfaces || '—'; items.push(o); return o; };
+  const box = (id,name,cat,pos,dims,layer,extra={}) => add({id,name,cat,pos,dims,layer,shape:'box',...extra});
+  const cyl = (id,name,cat,pos,dims,layer,extra={}) => add({id,name,cat,pos,dims,layer,shape:'cyl',axis:'z',...extra});
+  const line = (id,name,cat,points,layer,extra={}) => add({id,name,cat,points,layer,shape:'line',...extra});
+  const beam = (id,name,cat,a,b,width,height,layer,extra={}) => {
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]);
+    return add({id,name,cat,a,b,pos:a.map((v,i)=>(v+b[i])/2),dims:[len,width,height],layer,shape:'beam',...extra});
+  };
+
+  const printedTypes = [
+    ['fit-template','Fit-check outline templates','×1','First-print check parts, not part of the formal assembly','P4 bay · 13 types'],
+    ['baseplate','Main base plate','×1','PETG · 190×130×4','P4 bay · 13 types'],
+    ['electrical-deck','Electrical deck','×1','PETG · 184×108×3','P4 bay · 13 types'],
+    ['deck-post','100 mm deck posts','×6','Fit-check part; metal M3 preferred for the final build','P4 bay · 13 types'],
+    ['spacer-m25','M2.5 6 mm standoffs','×4','Pi 5','P4 bay · 13 types'],
+    ['spacer-m3','M3 6 mm standoffs','×24','6 non-Pi PCBs, 4 per board','P4 bay · 13 types'],
+    ['pump-adapter','Pump adapter plates','×2','Right part rotated 180°','P4 bay · 13 types'],
+    ['pump-pad','TPU pump vibration pads','×2','TPU 95A','P4 bay · 13 types'],
+    ['valve-rail','Six-valve upright rail','×1','Side ports toward −Y','P4 bay · 13 types'],
+    ['sensor-bridge','Seven-sensor bridge','×1','2+2+2+1','P4 bay · 13 types'],
+    ['manifold-clip','Manifold clips','×2','C-ring needs print supports','P4 bay · 13 types'],
+    ['switch-bracket','Master-switch bracket','×1','KCD1 + XT60/fuse','P4 bay · 13 types'],
+    ['cable-comb','Harness combs','×4','Left signal / right power','P4 bay · 13 types'],
+    ['platform-frame','Body frame','×1','STL bounds 198×205.4×16','Whole-robot structure'],
+    ['left-coxa2','Left coxa2','×3','STL bounds 59×19×59; axis length 43','Whole-robot structure'],
+    ['right-coxa2','Right coxa2','×3','STL bounds 59×19×59; axis length 43','Whole-robot structure'],
+    ['left-femur','Left femur','×3','STL bounds 92×16×59; axis length 80','Whole-robot structure'],
+    ['right-femur','Right femur','×3','STL bounds 92×16×59; axis length 80','Whole-robot structure'],
+    ['left-tibia-suction','Left suction tibia','×3','STL bounds 87.2×25×115.8; axis length 120','Whole-robot structure'],
+    ['right-tibia-suction','Right suction tibia','×3','STL bounds 87.2×25×115.8; axis length 120','Whole-robot structure'],
+    ['suction-foot-door','Suction-foot door cover','×6','STL bounds 34×19.6×29.5','Whole-robot structure'],
+    ['servo2040-cover','Servo2040 ventral tray','×1','STL bounds 96×130×14','Ventral structure'],
+    ['battery-bar','Battery bar','×1','STL bounds 78×9×28','Ventral structure'],
+    ['top-cover4-ref','top-cover4 (P3 replacement part)','×1','Replaced by the P4 bay; not fitted by default','Compatibility reference · not P4 final state'],
+    ['bottom-cover-ref','Plain bottom-cover (replacement part)','×1','Either this or the Servo2040 tray','Compatibility reference · not P4 final state'],
+    ['shield-ref','shield (official compatible part)','×1','Mounting position to be confirmed against the physical plan','Compatibility reference · not P4 final state']
+  ];
+
+  // Whole-robot base and belly-side parts. frame uses a ring envelope with a central opening so it does not hide the belly-side controller.
+  add({id:'frame',name:'MakeYourPet body frame',cat:'mechanical',pos:[0,0,-8],dims:[198,205.4,16],opening:[76,116],layer:'Whole-robot structure',shape:'frame',printed:'platform-frame',color:'#586b7a',opacity:.72,interfaces:'Six coxa servo ports; top face (±44,±40) takes the P4 base plate; ventral face takes the Servo2040 tray',source:'frame.stl bounds; P4-BAY-DESIGN §0/§2.3',note:'The open ring is a proxy of the STL outer envelope; it does not reproduce the curved surfaces, servo ports or local ribs; do a dynamic six-leg sweep before assembly.'});
+  box('servo2040-cover','Servo2040 ventral tray','mechanical',[0,0,-23],[96,129.95,14],'Frame ventral face',{printed:'servo2040-cover',color:'#697c8b',opacity:.72,interfaces:'Locked to the frame\'s ventral face; houses the Servo2040; the central opening is adjacent to the Pi USB drop-down cable',source:'servo2040-bottom-cover.stl bounds; P4-BAY-DESIGN §0-1/2'});
+  box('servo2040','Pimoroni Servo2040 controller board','electronic',[0,5,-34],[56,86,7],'Frame ventral face',{color:'#2c9366',interfaces:'USB-C → Pi; channels 0–17 → 18 servos; 7.4 V servo power rail',source:'BOM table 1; P4-BAY-DESIGN §0-2; official wiring diagram',note:'The board body is a recognizable position proxy; actual PCB, header and mounting-hole dimensions must be measured on arrival.'});
+  box('battery-bar','Battery bar','mechanical',[0,-44,-43],[78,9,28],'Frame ventral face',{printed:'battery-bar',color:'#718392',interfaces:'Holds the 2S battery together with hook-and-loop / cable ties; must not press on the balance lead or the XT60',source:'battery-bar.stl bounds; P3-GUIDE step 2'});
+  box('battery','2S 7.4 V battery (position proxy)','electronic',[0,-30,-64],[48,110,24],'Frame ventral face',{color:'#6b7280',interfaces:'XT60 → master switch/fuse; servo 7.4 V rail and boost inputs',source:'BOM table 1; P4-BAY-DESIGN §0-1',note:'Battery shape and final position along the ventral face await checks of physical size, lead bend radius and center of mass.'});
+
+  // P3 legacy parts: in the P4 final state they are not assembled over the parts now in use above or on the belly; shown only when clicked in the list.
+  box('top-cover4-ref','top-cover4 (P3 top-cover replacement part)','mechanical',[0,0,6.1],[100,140,12.18],'Reference outside the assembly',{printed:'top-cover4-ref',color:'#8da0ae',opacity:.28,visible:false,interfaces:'Reuses the four holes on the frame top; replaced by the bay base plate in the P4 final state',source:'top-cover4.stl bounds',note:'Compatibility reference part; cannot be installed overlapping the current P4 bay base plate.'});
+  box('bottom-cover-ref','Plain bottom-cover (non-Servo2040 version)','mechanical',[0,0,-23],[96,129.95,14],'Reference outside the assembly',{printed:'bottom-cover-ref',color:'#8da0ae',opacity:.28,visible:false,interfaces:'Frame ventral replacement interface',source:'bottom-cover.stl bounds',note:'Same outer envelope as servo2040-bottom-cover; an alternative, not installed together with the current tray.'});
+  box('shield-ref','shield (official compatibility reference part)','mechanical',[0,0,60],[41.98,40,120.62],'Reference outside the assembly',{printed:'shield-ref',color:'#8da0ae',opacity:.24,visible:false,interfaces:'Mounting interface and coexistence with P4 to be confirmed against the physical plan',source:'shield.stl bounds',note:'Shown only as the STL outer envelope; the current P4 final state has not locked its mounting pose.'});
+
+  // The six leg mounting points come from software/hexapod/config.py.
+  // config coordinates are +X forward / +Y left; this page uses +X right / +Y toward the head, so htmlX=-configY, htmlY=configX, plane angle = 90°+config angle.
+  const legDefs=[
+    ['L1','Left front L1',-63,83.5,145,[15,16,17],'left'], ['L2','Left middle L2',-81.5,0,180,[9,10,11],'left'], ['L3','Left rear L3',-63,-83.5,215,[3,4,5],'left'],
+    ['R1','Right front R1',63,83.5,35,[12,13,14],'right'], ['R2','Right middle R2',81.5,0,0,[6,7,8],'right'], ['R3','Right rear R3',63,-83.5,-35,[0,1,2],'right']
+  ];
+  const legGeometry=[];
+  legDefs.forEach(([id,label,mx,my,angle,channels,side])=>{
+    const a=angle*Math.PI/180, dx=Math.cos(a), dy=Math.sin(a), hip=[mx,my,-8];
+    const elbow=[mx+43*dx,my+43*dy,-8];
+    // IK proxy pose for P3 stand_height=90 / foot_reach=130: alpha≈21.5°, knee point ≈29.3 mm above the hip.
+    const knee=[mx+117.43*dx,my+117.43*dy,21.34], foot=[mx+130*dx,my+130*dy,-98];
+    const sideName=side==='left'?'Left':'Right';
+    legGeometry.push({id,label,hip,elbow,knee,foot,angle,channels,side});
+    beam(`coxa-${id}`,`${label} · ${sideName} coxa2 printed link`,'mechanical',hip,elbow,19,16,'Leg structure',{printed:`${side}-coxa2`,color:'#6f8291',interfaces:`Frame leg root ↔ femur axis; coxa joint axis length 43 mm`,source:'P3-GUIDE print list; config.py COXA_LEN=43',note:'The link beam is an assembly-axis proxy; STL outer envelope 59×19×59 mm.'});
+    beam(`femur-${id}`,`${label} · ${sideName} femur printed link`,'mechanical',elbow,knee,16,14,'Leg structure',{printed:`${side}-femur`,color:'#788b99',interfaces:'coxa end ↔ tibia knee axis; femur joint axis length 80 mm',source:'P3-GUIDE print list; config.py FEMUR_LEN=80',note:'The link beam is an assembly-axis proxy; STL outer envelope 92×16×59 mm.'});
+    beam(`tibia-${id}`,`${label} · ${sideName} tibia-suction printed part`,'mechanical',knee,foot,25,15,'Leg structure',{printed:`${side}-tibia-suction`,color:'#8093a0',interfaces:'Knee axis ↔ cup lip center; houses the M5 fitting and the cup inside',source:'P3-GUIDE final-version notes; config.py TIBIA_LEN=120',note:'The link beam is a proxy of the suction-tibia axis; STL outer envelope about 87.2×25×115.8 mm.'});
+    box(`foot-door-${id}`,`${label} · suction-foot door cover`,'mechanical',[foot[0],foot[1],foot[2]+3],[34,19.6,6],'Foot',{printed:'suction-foot-door',color:'#687c8b',rot:angle,interfaces:'Closes the foot cavity of tibia-suction; final-version part, glued in place',source:'suction-foot-door.stl bounds; P3-GUIDE step 2',note:'Display thickness compressed to 6 mm to highlight the assembly layering; actual STL outer envelope 34×19.6×29.5 mm.'});
+    cyl(`suction-cup-${id}`,`${label} · vacuum suction cup`,'pneumatic',[foot[0],foot[1],foot[2]-4],[38,38,8],'Foot',{color:'#299579',interfaces:`4 mm vacuum tube → ${id} branch after the valve; connects to the tibia-suction M5 fitting`,source:'P4 pneumatic topology',note:'Cup diameter and compression are visual proxies; actual free/attached heights must be measured.'});
+    [['coxa',hip],['femur',elbow],['tibia',knee]].forEach(([joint,pos],j)=>
+      box(`servo-${id}-${joint}`,`${label} · ${joint} servo CH${channels[j]}`,'actuator',pos,[40,22,40],'Servos',{color:C.actuator,rot:angle,interfaces:`Servo2040 CH${channels[j]}; 7.4 V power; output shaft connects to the ${joint} printed part`,source:'BOM 18 servos; config.py channel map',note:'40×22×40 mm is only a generic servo visual proxy, not an acceptance dimension for the DS3235 mount; spline orientation and zero must be calibrated per leg.'}));
+  });
+
+  // 13 kinds of printed parts: coordinates from the V1 assembly report. The simple proxies deliberately do not reproduce STL detail.
+  box('baseplate','Main base plate','mechanical',[0,0,2],[190,130,4],'Bottom layer', {printed:'baseplate', color:'#798b9b', opacity:.66, interfaces:'Frame holes (±44,±40); module holes on the base plate\'s top face'});
+  box('electrical-deck','Electrical deck','mechanical',[0,0,105.5],[184,108,3],'Upper deck', {printed:'electrical-deck', color:'#93a4b1', opacity:.28, interfaces:'6×M3 posts; open cable exits, signal left, power right'});
+  const postXY=[[-85,-48],[-85,0],[-85,48],[85,-48],[85,0],[85,48]];
+  postXY.forEach((p,i)=>cyl(`post-${i+1}`,`100 mm deck post ${i+1}`,'mechanical',[p[0],p[1],54],[9,9,100],'Posts', {printed:'deck-post', color:'#657987', interfaces:'Bottom end to main base plate M3; top end to electrical deck M3'}));
+  box('pump-adapter-L','Left pump adapter plate','mechanical',[-46,24,6],[64,54,4],'Bottom layer', {printed:'pump-adapter', interfaces:'Base plate M3; pump bracket 48×28 mm M4'});
+  box('pump-adapter-R','Right pump adapter plate','mechanical',[46,24,6],[64,54,4],'Bottom layer', {printed:'pump-adapter', rot:180, interfaces:'Base plate M3; pump bracket 48×28 mm M4; rotated 180°'});
+  box('pump-pad-L','Left pump TPU vibration pad','mechanical',[-46,24,9.5],[56,36,3],'Bottom layer', {printed:'pump-pad', color:C.tpu, interfaces:'Sandwiched between the metal pump bracket and the adapter plate'});
+  box('pump-pad-R','Right pump TPU vibration pad','mechanical',[46,24,9.5],[56,36,3],'Bottom layer', {printed:'pump-pad', color:C.tpu, interfaces:'Sandwiched between the metal pump bracket and the adapter plate'});
+  box('valve-rail','Six-valve upright rail','mechanical',[0,-44.5,19.45],[154,32,30.9],'Bottom layer', {printed:'valve-rail', opacity:.74, interfaces:'6×0520B; bottom ports toward −Z, side ports toward −Y; manifold clip holes'});
+  box('sensor-bridge','Seven-sensor bridge','mechanical',[0,12,15.5],[44.1,90,23],'Bottom layer', {printed:'sensor-bridge', opacity:.6, interfaces:'7×15 mm pin window; 3×M3 under the bridge'});
+  const clipX=[-17,17];
+  clipX.forEach((x,i)=>cyl(`manifold-clip-${i?'R':'L'}`,`${i?'Right':'Left'} manifold clip`,'mechanical',[x,-49.5,42],[24,24,68],'Bottom layer', {printed:'manifold-clip', opacity:.58, interfaces:'2×M3 at the bottom to the valve rail; C-ring clamps the Ø20 manifold', note:'The cylinder is a proxy of the clip envelope'}));
+  box('switch-bracket','Master-switch bracket','mechanical',[0,60,22],[50,10,36],'Bottom layer', {printed:'switch-bracket', opacity:.65, interfaces:'Base plate 2×M3; KCD1 panel hole; XT60/fuse cable-tie slots'});
+  [[-87,-24.5,-90],[-87,24.5,-90],[87,-24.75,90],[87,24.75,90]].forEach((p,i)=>
+    box(`comb-${i+1}`,`${i<2?'Signal':'Power'} harness comb ${i%2+1}`,'mechanical',[p[0],p[1],12],[36,14,16],'Bottom layer', {printed:'cable-comb',rot:p[2],interfaces:`${i<2?'Left signal harness':'Right power harness'}; 2×M3`}));
+
+  // PCB standoffs: top face Z=107, top-plate PCB faces up; bottom-face PCB faces down.
+  const piHoles=[[39.5,-21], [39.5,37], [-9.5,-21], [-9.5,37]];
+  piHoles.forEach((p,i)=>cyl(`pi-spacer-${i+1}`,`Pi M2.5 standoff ${i+1}`,'mechanical',[p[0],p[1],110],[7,7,6],'Deck top face',{printed:'spacer-m25',interfaces:'M2.5 / fit-check hole Ø3.0'}));
+  const m3Holes=[[-23,-41.5],[-23,41.5],[-81,-41.5],[-81,41.5],[79.5,-18.5],[79.5,22.5],[60.5,-18.5],[60.5,22.5],[-.5,27],[86.5,27],[-.5,36],[86.5,38.5],[-43.75,-18.25],[-43.75,48.25],[-78.25,-18.25],[-78.25,48.25],[-35.5,-47.5],[7.5,-47.5],[-35.5,-26.5],[7.5,-26.5],[34.5,-47.5],[77.5,-47.5],[34.5,-26.5],[77.5,-26.5]];
+  m3Holes.forEach((p,i)=>cyl(`m3-spacer-${i+1}`,`M3 standoff ${i+1}`,'mechanical',[p[0],p[1],i<8?110:101],[7.5,7.5,6],i<8?'Deck top face':'Deck bottom face',{printed:'spacer-m3',interfaces:'M3 / fit-check hole Ø3.6'}));
+  // fit-template is the first-print check part, hidden by default; when shown it overlays the base-plate outline.
+  box('fit-template','Fit-check outline template (outside the assembly)','mechanical',[0,0,.5],[190,130,1],'Check part outside the assembly',{printed:'fit-template',color:'#53a8e4',opacity:.16,visible:false,template:true,interfaces:'Only for the dynamic six-leg sweep; not kept in the formal assembly'});
+
+  // Proxies for the main real pneumatic parts.
+  [-46,46].forEach((x,i)=>box(`pump-${i?'R':'L'}`,`${i?'Right':'Left'} 555 dual-head vacuum pump`,'pneumatic',[x,24,35],[56,38,48],'Bottom-layer components',{color:'#277f72',interfaces:'12V-P power line; vacuum outlet → manifold/tank',note:'Pump fore/aft offset to be measured; currently shown at the bracket center'}));
+  const valveX=[-58.75,-35.25,-11.75,11.75,35.25,58.75];
+  const valveNames=['L1','L2','L3','R1','R2','R3'];
+  valveX.forEach((x,i)=>box(`valve-${i+1}`,`0520B solenoid valve ${valveNames[i]}`,'pneumatic',[x,-44.5,39.5],[20,16,25],'Bottom-layer components',{color:'#31967c',interfaces:`Bottom port −Z vacuum bus; side port −Y → foot ${valveNames[i]}; 12V-V / MOS OUT${i+1}`,note:'Plastic ports at Ø8×12 clearance; protrusion to be measured'}));
+  const sensorXY=[[-10.75,-20.25],[10.75,-20.25],[-10.75,1.25],[10.75,1.25],[-10.75,22.75],[10.75,22.75],[0,44.25]];
+  sensorXY.forEach((p,i)=>box(`sensor-${i+1}`,`XGZP6847A pressure sensor ${i+1}`,'pneumatic',[p[0],p[1],23],[18,18,8],'Bottom-layer components',{color:'#47a88f',interfaces:`Pressure port +Z; pins −Z → divider board CH${i+1}`}));
+  add({id:'manifold',name:'1-in-6-out vacuum manifold',cat:'pneumatic',pos:[0,-49.5,65],dims:[115,20,20],layer:'Bottom-layer components',shape:'cyl',axis:'x',color:'#1f7968',interfaces:'Two pump/tank inputs; 6 outputs → valve bottom ports'});
+  cyl('valve-nozzles','Valve bottom-port clearance (6 channels)','pneumatic',[0,-44.5,21],[8,8,12],'Bottom-layer components',{opacity:.25,interfaces:'Must be clear through in −Z',visible:false});
+
+  // Proxies for the real electronics. board_size matches the rotated V1 envelope.
+  box('divider','7-channel divider board','electronic',[-52,0,116],[70,91,6],'Deck top face',{color:C.pcb,interfaces:'JST sensor ports on the open left edge; Pi IDC → +Y',rot:90});
+  box('pi5','Raspberry Pi 5','electronic',[15,8,117],[56,85,8],'Deck top face',{color:'#2f9860',interfaces:'GPIO −X; USB-A/Ethernet +Y; USB-C power +X',rot:90});
+  box('buck5','5V / 5A buck module','electronic',[70,2,115],[24,46,6],'Deck top face',{color:'#2f9860',interfaces:'7.4 V input −Y; USB-C 5 V output +Y',rot:90});
+  box('mos','YYNMOS-8 MOSFET board','electronic',[43,24,96],[93,54,8],'Deck bottom face',{color:'#316f8e',interfaces:'IN1–8 on the open +Y edge; OUT/DC −Y (20 mm wiring corridor)'});
+  box('relay','30 A servo power relay','electronic',[-61,15,96],[40,72,8],'Deck bottom face',{color:'#3d78a0',interfaces:'30 A power terminals −Y; coil control on the open +Y edge',rot:90});
+  box('xl-pump','XL6009 #1 · pump rail','electronic',[-14,-37,97],[50,28,7],'Deck bottom face',{color:'#326f92',interfaces:'Battery input +X; 12V-P output −X',rot:180});
+  box('xl-valve','XL6009 #2 · valve rail','electronic',[56,-37,97],[50,28,7],'Deck bottom face',{color:'#326f92',interfaces:'Battery input −X; 12V-V output +X'});
+  box('cap-pump','Pump-rail filter capacitor','electronic',[-48,-37,94],[13,13,22],'Deck bottom face',{color:'#4d689c',interfaces:'In parallel on the XL6009 pump-rail OUT'});
+  box('cap-valve','Valve-rail filter capacitor','electronic',[87,-37,96],[10,10,16],'Deck bottom face',{color:'#4d689c',interfaces:'In parallel on the XL6009 valve-rail OUT'});
+  box('switch','KCD1 master switch','electronic',[0,61.5,27],[21,16,25],'Bottom-layer components',{color:'#b64e45',interfaces:'In series with the 2S battery positive; panel face toward +Y'});
+  box('fuse','5 A fuse / XT60 wiring position','electronic',[20,58,12],[24,12,8],'Bottom-layer components',{color:'#d18a2d',interfaces:'Battery → master switch → fuse → 7.4 V bus'});
+
+  // Pneumatic lines: position and routing are schematic; the paths do not represent exact tubing bend radii.
+  line('tube-pump-L','Left pump vacuum tube','tube',[[-46,24,59],[-72,6,68],[-57.5,-49.5,65]],'Tubing',{interfaces:'Left pump → manifold left end'});
+  line('tube-pump-R','Right pump vacuum tube','tube',[[46,24,59],[72,6,68],[57.5,-49.5,65]],'Tubing',{interfaces:'Right pump → manifold right end'});
+  valveX.forEach((x,i)=>line(`tube-valve-${i+1}`,`Manifold → valve ${valveNames[i]} vacuum tube`,'tube',[[x,-49.5,65],[x,-58,57],[x,-44.5,52]],'Tubing',{interfaces:`Manifold branch ${i+1} → valve ${valveNames[i]} bottom port`}));
+  valveX.forEach((x,i)=>line(`tube-foot-${i+1}`,`Valve ${valveNames[i]} → foot tube`,'tube',[[x,-52.5,39.5],[x,-71,35],[x+(i<3?-18:18),-82,28]],'Tubing',{interfaces:`Valve ${valveNames[i]} side port −Y → its suction cup`}));
+  sensorXY.slice(0,6).forEach((p,i)=>line(`tube-sensor-${i+1}`,`Foot pressure tap ${valveNames[i]}`,'tube',[[valveX[i],-71,35],[p[0],p[1],30]],'Tubing',{interfaces:`${valveNames[i]} branch → pressure sensor ${i+1}`,opacity:.7}));
+  line('tube-sensor-tank','Bus pressure tap','tube',[[0,-49.5,65],[0,44.25,30]],'Tubing',{interfaces:'Vacuum bus → pressure sensor 7',opacity:.7});
+
+  // Wiring harness: only trunks and branch directions are drawn; terminal-level definitions are in the reference HTML.
+  line('wire-sensor','Sensor analog harness','wire',[[0,12,28],[-70,15,35],[-87,24.5,24],[-87,24.5,92],[-52,0,113]],'Harnesses',{interfaces:'7× XGZP6847A → left signal comb → divider board'});
+  line('wire-idc','Pi ↔ divider board IDC / I²C','wire',[[-52,43,118],[-18,50,124],[15,50,121]],'Harnesses',{interfaces:'Pi GPIO / ADS1115 I²C; low-voltage signals'});
+  line('wire-mos-signal','Pi → MOS 8-channel control','wire',[[15,8,121],[-2,49,122],[-20,60,106],[43,56,96]],'Harnesses',{interfaces:'GPIO ×8 → IN1+ to IN8+; signal ground at a single point'});
+  line('wire-power-trunk','Right-side 7.4 V / 12 V power trunk','wire',[[20,58,16],[87,24.75,25],[87,-24.75,75],[86,-37,97]],'Harnesses',{color:C.electronic,dash:[],interfaces:'Fuse output → right power comb → both XL6009 / MOS DC+'});
+  line('wire-pumps','Pump 12V-P harness','wire',[[-39,-37,97],[87,-24.75,72],[60,8,44],[46,24,54],[-46,24,54]],'Harnesses',{color:C.electronic,dash:[],interfaces:'XL6009 #1 OUT → pump +; pump − → MOS OUT7−/8−'});
+  line('wire-valves','Six-valve 12V-V harness','wire',[[81,-37,97],[87,-24.75,70],[70,-44.5,57],[-58.75,-44.5,55]],'Harnesses',{color:C.electronic,dash:[],interfaces:'XL6009 #2 / MOS OUT1–6 → six valve coils'});
+  line('wire-pi-servo2040','Pi ↔ Servo2040 USB','wire',[[15,8,117],[15,8,108],[0,5,-30]],'Harnesses',{interfaces:'Pi USB-A → Servo2040 USB-C; through the central opening of the frame / P4 base plate',source:'P4-BAY-DESIGN §0-2; p4-pi-wiring.html'});
+  legGeometry.forEach(leg=>line(`wire-servo-${leg.id}`,`Servo2040 → ${leg.id} three-servo harness`,'wire',[[0,5,-34],[leg.hip[0]*.72,leg.hip[1]*.72,-25],leg.hip,leg.elbow,leg.knee],'Harnesses',{interfaces:`Servo2040 CH${leg.channels.join('/')} → ${leg.id} coxa/femur/tibia; service loop kept at the leg root`,source:'config.py channel map; P3-GUIDE step 3',opacity:.72}));
+
+  // Draw state.
+  const canvas=document.getElementById('scene'), wrap=document.getElementById('canvasWrap'), ctx=canvas.getContext('2d');
+  const selectionBanner=document.getElementById('selectionBanner'), selectionName=document.getElementById('selectionName');
+  const selectedSceneLabel=document.getElementById('selectedSceneLabel'), hoveredSceneLabel=document.getElementById('hoveredSceneLabel');
+  let yaw=-.72, pitch=.58, zoom=1.10, targetZ=-15, selected=null, hovered=null, explode=0, xray=true, showTemplate=false;
+  let drag=false, moved=false, lastX=0, lastY=0, hitFaces=[];
+  const activeCats=new Set(Object.keys(categoryInfo));
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+  const rgba=(hex,a=1)=>{ const h=hex.replace('#',''); const v=parseInt(h.length===3?h.split('').map(x=>x+x).join(''):h,16); return `rgba(${v>>16},${(v>>8)&255},${v&255},${a})`; };
+  const shade=(hex,f,a=1)=>{ const h=hex.replace('#',''),v=parseInt(h,16); return `rgba(${clamp(((v>>16)&255)*f,0,255)|0},${clamp(((v>>8)&255)*f,0,255)|0},${clamp((v&255)*f,0,255)|0},${a})`; };
+  function resize(){ const dpr=Math.min(2,devicePixelRatio||1),r=wrap.getBoundingClientRect(); canvas.width=Math.round(r.width*dpr); canvas.height=Math.round(r.height*dpr); canvas.style.width=r.width+'px'; canvas.style.height=r.height+'px'; ctx.setTransform(dpr,0,0,dpr,0,0); draw(); }
+  function itemOffset(o){
+    if(!explode) return 0;
+    if(o.layer==='Deck top face') return explode*1.7;
+    if(o.layer==='Upper deck') return explode;
+    if(o.layer==='Deck bottom face') return explode*.72;
+    if(o.layer==='Harnesses' || o.layer==='Tubing') return explode*.25;
+    return 0;
+  }
+  function project(p,o){
+    const z=p[2]+(o?itemOffset(o):0), cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+    const dx=p[0],dy=p[1],dz=z-targetZ;
+    const right=cy*dx-sy*dy, depth=sy*dx+cy*dy, vertical=cp*dz-sp*depth, camDepth=sp*dz+cp*depth;
+    return [canvas.clientWidth/2+right*zoom,canvas.clientHeight*.54-vertical*zoom,camDepth];
+  }
+  function rotateXY(p,a){ const c=Math.cos(a),s=Math.sin(a); return [p[0]*c-p[1]*s,p[0]*s+p[1]*c,p[2]]; }
+  function boxFaces(o){
+    const [w,d,h]=o.dims, a=(o.rot||0)*Math.PI/180, [x,y,z]=o.pos;
+    let v=[[-w/2,-d/2,-h/2],[w/2,-d/2,-h/2],[w/2,d/2,-h/2],[-w/2,d/2,-h/2],[-w/2,-d/2,h/2],[w/2,-d/2,h/2],[w/2,d/2,h/2],[-w/2,d/2,h/2]];
+    v=v.map(q=>{q=rotateXY(q,a);return [q[0]+x,q[1]+y,q[2]+z]});
+    return [[0,1,2,3],[4,7,6,5],[0,4,5,1],[1,5,6,2],[2,6,7,3],[3,7,4,0]].map((ix,i)=>({pts:ix.map(k=>project(v[k],o)),shade:[.66,1.08,.78,.92,.82,.72][i]}));
+  }
+  function frameFaces(o){
+    const [w,d,h]=o.dims,[ow,od]=o.opening, side=(w-ow)/2, end=(d-od)/2, [x,y,z]=o.pos;
+    const parts=[
+      {pos:[x-(ow+side)/2,y,z],dims:[side,d,h]}, {pos:[x+(ow+side)/2,y,z],dims:[side,d,h]},
+      {pos:[x,y-(od+end)/2,z],dims:[ow,end,h]}, {pos:[x,y+(od+end)/2,z],dims:[ow,end,h]}
+    ];
+    return parts.flatMap(p=>boxFaces({...o,...p,shape:'box'}));
+  }
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const unit=v=>{const n=Math.hypot(...v)||1;return v.map(x=>x/n);};
+  function beamFaces(o){
+    const u=unit(o.b.map((v,i)=>v-o.a[i])), ref=Math.abs(u[2])<.88?[0,0,1]:[0,1,0], v=unit(cross(ref,u)), w=cross(u,v);
+    const c=o.pos, hl=o.dims[0]/2, hw=o.dims[1]/2, hh=o.dims[2]/2;
+    const vertex=(su,sv,sw)=>c.map((q,i)=>q+u[i]*hl*su+v[i]*hw*sv+w[i]*hh*sw);
+    const verts=[vertex(-1,-1,-1),vertex(1,-1,-1),vertex(1,1,-1),vertex(-1,1,-1),vertex(-1,-1,1),vertex(1,-1,1),vertex(1,1,1),vertex(-1,1,1)];
+    return [[0,1,2,3],[4,7,6,5],[0,4,5,1],[1,5,6,2],[2,6,7,3],[3,7,4,0]].map((ix,i)=>({pts:ix.map(k=>project(verts[k],o)),shade:[.66,1.08,.78,.92,.82,.72][i]}));
+  }
+  function cylFaces(o){
+    const axis=o.axis||'z', len=axis==='x'?o.dims[0]:o.dims[2], r=(axis==='x'?o.dims[1]:o.dims[0])/2, n=14, [cx,cy,cz]=o.pos, rings=[[],[]];
+    for(let k=0;k<2;k++) for(let i=0;i<n;i++){ const a=i*2*Math.PI/n, q=axis==='x'?[cx+(k-.5)*len,cy+Math.cos(a)*r,cz+Math.sin(a)*r]:[cx+Math.cos(a)*r,cy+Math.sin(a)*r,cz+(k-.5)*len]; rings[k].push(q); }
+    const fs=[];
+    for(let i=0;i<n;i++) fs.push({pts:[project(rings[0][i],o),project(rings[0][(i+1)%n],o),project(rings[1][(i+1)%n],o),project(rings[1][i],o)],shade:.72+(i%5)*.07});
+    fs.push({pts:rings[0].map(p=>project(p,o)),shade:.66},{pts:[...rings[1]].reverse().map(p=>project(p,o)),shade:1.04});
+    return fs;
+  }
+  function isShown(o){
+    if(!activeCats.has(o.cat)) return false;
+    if(o.template && !showTemplate) return false;
+    const q=document.getElementById('search').value.trim().toLowerCase();
+    if(q && !`${o.name} ${o.id} ${o.interfaces} ${o.printed||''} ${o.layer||''} ${o.source||''} ${o.note||''}`.toLowerCase().includes(q)) return false;
+    return o.visible!==false || (o.template&&showTemplate);
+  }
+  function polyPath(points){ const p=new Path2D(); p.moveTo(points[0][0],points[0][1]); for(let i=1;i<points.length;i++) p.lineTo(points[i][0],points[i][1]); p.closePath(); return p; }
+  function drawGrid(){
+    ctx.save(); ctx.lineWidth=1; ctx.strokeStyle=rgba(css('--line')||'#d5dde4',.48);
+    for(let i=-220;i<=220;i+=40){ [[[-220,i,-98],[220,i,-98]],[[i,-220,-98],[i,220,-98]]].forEach(seg=>{const a=project(seg[0]),b=project(seg[1]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();}); }
+    const axes=[[[0,0,0],[225,0,0],'X','#c05252'],[[0,0,0],[0,225,0],'Y','#438969'],[[0,0,0],[0,0,145],'Z','#397caf']];
+    ctx.font='11px ui-monospace,monospace'; axes.forEach(([a,b,t,col])=>{a=project(a);b=project(b);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.fillStyle=col;ctx.fillText('+'+t,b[0]+4,b[1]-3);}); ctx.restore();
+  }
+  function draw(){
+    if(!canvas.clientWidth) return;
+    ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight); drawGrid(); hitFaces=[];
+    const solids=[], lines=[];
+    items.filter(isShown).forEach(o=>{
+      if(o.shape==='line') { const pts=o.points.map(p=>project(p,o)); lines.push({o,pts,depth:pts.reduce((s,p)=>s+p[2],0)/pts.length}); return; }
+      const faces=o.shape==='cyl'?cylFaces(o):o.shape==='beam'?beamFaces(o):o.shape==='frame'?frameFaces(o):boxFaces(o);
+      faces.forEach(f=>solids.push({o,pts:f.pts,depth:f.pts.reduce((s,p)=>s+p[2],0)/f.pts.length,shade:f.shade}));
+    });
+    solids.sort((a,b)=>a.depth-b.depth);
+    solids.forEach(f=>{
+      const o=f.o, base=o.color||C[o.cat], isSel=selected===o.id, isHover=hovered===o.id;
+      let alpha=o.opacity==null?.86:o.opacity; if(o.id==='electrical-deck'&&xray) alpha=.18;
+      const p=polyPath(f.pts); ctx.fillStyle=isSel?rgba(C.selected,alpha):shade(base,f.shade,alpha); ctx.fill(p);
+      ctx.strokeStyle=isSel?C.selected:(isHover?'#f0a43c':shade(base,.72,Math.min(1,alpha+.2))); ctx.lineWidth=isSel?2.4:(isHover?1.8:.7); ctx.stroke(p);
+      hitFaces.push({o,path:p});
+    });
+    lines.sort((a,b)=>a.depth-b.depth).forEach(l=>{
+      const isSel=selected===l.o.id,isHover=hovered===l.o.id; ctx.beginPath(); ctx.moveTo(l.pts[0][0],l.pts[0][1]); for(let i=1;i<l.pts.length;i++)ctx.lineTo(l.pts[i][0],l.pts[i][1]);
+      ctx.strokeStyle=isSel?C.selected:(l.o.color||C[l.o.cat]); ctx.lineWidth=isSel?5:(isHover?4:2.5); ctx.globalAlpha=l.o.opacity==null?.9:l.o.opacity; ctx.setLineDash(l.o.dash ?? (l.o.cat==='wire'?[7,4]:[])); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+      l.pts.forEach((p,i)=>{ if(i===0||i===l.pts.length-1){ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.arc(p[0],p[1],isSel?4:2.6,0,Math.PI*2);ctx.fill();} });
+      const pad=new Path2D(); pad.moveTo(l.pts[0][0],l.pts[0][1]); for(let i=1;i<l.pts.length;i++)pad.lineTo(l.pts[i][0],l.pts[i][1]); hitFaces.push({o:l.o,path:pad,line:true});
+    });
+    updateSceneLabels();
+    const count=items.filter(isShown).length; document.getElementById('visibleCount').textContent=`Showing ${count} objects`;
+  }
+  function sceneAnchor(o){
+    return o.pos?project([o.pos[0],o.pos[1],o.pos[2]+(o.dims?.[2]||0)/2],o):project(o.points[Math.floor(o.points.length/2)],o);
+  }
+  function placeSceneLabel(el,o,offsetY=0){
+    if(!o || !isShown(o)){el.hidden=true;return;}
+    el.textContent=o.name; el.hidden=false;
+    const p=sceneAnchor(o), w=el.offsetWidth, h=el.offsetHeight;
+    el.style.left=`${clamp(p[0]+12,8,canvas.clientWidth-w-8)}px`;
+    el.style.top=`${clamp(p[1]-h-10+offsetY,58,canvas.clientHeight-h-34)}px`;
+  }
+  function updateSceneLabels(){
+    const selectedItem=items.find(o=>o.id===selected), hoveredItem=items.find(o=>o.id===hovered&&o.id!==selected);
+    placeSceneLabel(selectedSceneLabel,selectedItem);
+    placeSceneLabel(hoveredSceneLabel,hoveredItem,selectedItem?30:0);
+  }
+  function renderSelectionBanner(o){
+    selectionBanner.classList.toggle('empty',!o);
+    selectionName.textContent=o?o.name:'Click the model or the "Assembly objects" list to select a part';
+  }
+  function hitAt(x,y){
+    for(let i=hitFaces.length-1;i>=0;i--){ const h=hitFaces[i]; if(h.line){ctx.save();ctx.lineWidth=10;if(ctx.isPointInStroke(h.path,x,y)){ctx.restore();return h.o;}ctx.restore();} else if(ctx.isPointInPath(h.path,x,y)) return h.o; }
+    return null;
+  }
+  function fmt(v){ return Array.isArray(v)?`(${v.map(n=>Number(n).toFixed(1)).join(', ')}) mm`:'—'; }
+  function select(id,focus=false){ selected=id; const o=items.find(x=>x.id===id); renderDetail(o); renderInventory(); renderObjectList(); renderSelectionBanner(o); if(o&&focus&&o.pos){ /* Keep the current orientation, just make sure the selected label is redrawn */ } draw(); }
+  function renderDetail(o){
+    const d=document.getElementById('detail'); if(!o){d.innerHTML='<div class="detail-empty">Click a 3D part or the printed-parts list to see name, coordinates, size, layer and interface directions.</div>';return;}
+    const label=categoryInfo[o.cat][0], col=categoryInfo[o.cat][1], coords=o.pos?fmt(o.pos):`${o.points.length} path nodes`, dims=o.dims?fmt(o.dims):'Tube/harness path';
+    const ptype=o.printed?printedTypes.find(p=>p[0]===o.printed):null;
+    d.innerHTML=`<div class="detail-title"><h2>${o.name}</h2><span class="kind" style="background:${col}">${label}</span></div>
+      <dl class="kv"><dt>ID</dt><dd><code>${o.id}</code></dd><dt>Center</dt><dd>${coords}</dd><dt>Proxy size</dt><dd>${dims}</dd><dt>Assembly layer</dt><dd>${o.layer}</dd><dt>Interfaces</dt><dd>${o.interfaces}</dd>${ptype?`<dt>Part type</dt><dd>${ptype[1]} ${ptype[2]}</dd>`:''}${o.source?`<dt>Position basis</dt><dd>${o.source}</dd>`:''}</dl>
+      ${o.note?`<div class="warning">${o.note}</div>`:''}`;
+  }
+  function renderFilters(){ const e=document.getElementById('filters'); e.innerHTML=''; Object.entries(categoryInfo).forEach(([key,[name,col]])=>{const l=document.createElement('label');l.className='filter';l.innerHTML=`<input type="checkbox" checked data-cat="${key}"><span class="swatch" style="background:${col}"></span>${name}`;l.querySelector('input').onchange=ev=>{ev.target.checked?activeCats.add(key):activeCats.delete(key);renderObjectList();draw();};e.appendChild(l);}); }
+  function renderInventory(){
+    const e=document.getElementById('inventory'); e.innerHTML=''; let group=''; printedTypes.forEach((p,i)=>{ if(p[4]!==group){group=p[4];const h=document.createElement('div');h.className='inventory-group';h.textContent=group;e.appendChild(h);} const inst=items.filter(o=>o.printed===p[0]); const b=document.createElement('button'); b.className='part-row'+(inst.some(o=>o.id===selected)?' selected':''); b.innerHTML=`<span class="num">${i+1}</span><span>${p[1]}<br><small>${p[3]}</small></span><span class="badge">${p[2]}</span>`; b.onclick=()=>{ if(p[0]==='fit-template'&&!showTemplate){showTemplate=true;document.getElementById('template').classList.add('active');} const target=inst[0]; if(target){target.visible=true;select(target.id,true);} }; e.appendChild(b); });
+  }
+  function renderObjectList(){
+    const e=document.getElementById('objectList'); e.innerHTML='';
+    items.filter(isShown).sort((a,b)=>a.layer.localeCompare(b.layer,'zh-CN')||a.name.localeCompare(b.name,'zh-CN')).forEach(o=>{
+      const b=document.createElement('button'); b.className='object-row'+(o.id===selected?' selected':''); b.setAttribute('aria-pressed',o.id===selected?'true':'false');
+      b.innerHTML=`<span class="dot" style="background:${o.color||categoryInfo[o.cat][1]}"></span><span>${o.name}<small>${o.layer} · ${o.id}</small></span><span class="badge">${categoryInfo[o.cat][0]}</span>`;
+      b.onclick=()=>select(o.id,true); e.appendChild(b);
+    });
+    if(!e.children.length)e.innerHTML='<div class="detail-empty">No objects match the current filter.</div>';
+  }
+  function setView(v){ const views={iso:[-.72,.58,1.10,-15],bay:[-.72,.58,3.12,54],top:[0,1.54,.90,0],front:[Math.PI,.05,1.34,5],side:[-Math.PI/2,.08,1.34,5]}; [yaw,pitch,zoom,targetZ]=views[v]; document.querySelectorAll('[data-view]').forEach(b=>{const active=b.dataset.view===v;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');}); draw(); }
+  canvas.addEventListener('pointerdown',e=>{drag=true;moved=false;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId);canvas.classList.add('dragging');});
+  canvas.addEventListener('pointermove',e=>{const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(drag){const dx=e.clientX-lastX,dy=e.clientY-lastY;if(Math.abs(dx)+Math.abs(dy)>2)moved=true;yaw+=dx*.008;pitch=clamp(pitch+dy*.006,-1.35,1.54);lastX=e.clientX;lastY=e.clientY;draw();}else{const h=hitAt(x,y),id=h?.id||null;if(id!==hovered){hovered=id;canvas.style.cursor=id?'pointer':'grab';draw();}}});
+  canvas.addEventListener('pointerup',e=>{const r=canvas.getBoundingClientRect();if(!moved){const h=hitAt(e.clientX-r.left,e.clientY-r.top);select(h?.id||null);}drag=false;canvas.classList.remove('dragging');});
+  canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom*Math.exp(-e.deltaY*.001),.7,7);draw();},{passive:false});
+  document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));
+  document.getElementById('reset').onclick=()=>{explode=0;document.getElementById('explode').value=0;document.getElementById('explodeValue').textContent='0';select(null);setView('iso');};
+  document.getElementById('xray').onclick=e=>{xray=!xray;e.currentTarget.classList.toggle('active',xray);e.currentTarget.setAttribute('aria-pressed',xray?'true':'false');draw();};
+  document.getElementById('template').onclick=e=>{showTemplate=!showTemplate;e.currentTarget.classList.toggle('active',showTemplate);e.currentTarget.setAttribute('aria-pressed',showTemplate?'true':'false');renderObjectList();draw();};
+  document.getElementById('explode').oninput=e=>{explode=+e.target.value;document.getElementById('explodeValue').textContent=explode;draw();};
+  document.getElementById('search').oninput=()=>{renderObjectList();draw();};
+  new ResizeObserver(resize).observe(wrap); renderFilters();renderInventory();renderObjectList();renderDetail(null);renderSelectionBanner(null);resize();
+})();
+</script>
+</body>
+</html>

@@ -15,7 +15,7 @@
 
 它不是产品，是一张能力证明：用最便宜的零件，把"六条腿上墙"这件事做成了，还顺手发现了一个爬壁机器人的普遍现象并给出了不用传感器的解法（正在写论文）。
 
-> **English summary.** *Spider* is a 3D-printed hexapod that walks on the floor and climbs vertical glass on six suction-cup feet (one normally-closed solenoid valve per foot, one diaphragm pump, no vacuum tank). Brain: Raspberry Pi 5; actuators: 18 × 35 kg·cm hobby servos; parts cost about ¥2,000 (~US$300). Along the way we found that **93% of a climbing step's slip happens in the instant a cup's seal breaks**, and cut three-round slip by **61%** with a sensor-free, purely kinematic "zero-force handover" (paper in preparation, see `docs/PAPER-PLAN.md`). Fully offline voice control. Built in two months by a DIY beginner pairing with an AI coding assistant. MIT licensed; walking platform derived from the open-source [MakeYourPet hexapod](https://github.com/MakeYourPet/hexapod).
+> **English summary.** *Spider* is a 3D-printed hexapod that walks on the floor and climbs vertical glass on six suction-cup feet (one normally-closed solenoid valve per foot, one diaphragm pump, no vacuum tank). Brain: Raspberry Pi 5; actuators: 18 × 35 kg·cm hobby servos; parts cost about ¥2,000 (~US$300). Along the way we found that **93% of a climbing step's slip happens in the instant a cup's seal breaks**, and cut three-round slip by **61%** with a sensor-free, purely kinematic "zero-force handover" (paper in preparation, see `docs/PAPER-PLAN.md`). Fully offline voice control. Built in two months by a DIY beginner pairing with an AI coding assistant. MIT licensed; walking platform derived from the open-source [MakeYourPet hexapod](https://github.com/MakeYourPet/hexapod). **Full English translations of every document and report are in [`docs/en/`](docs/en/) and [`html/en/`](html/en/).**
 
 ## 它能做什么
 
@@ -88,13 +88,13 @@
 
 | 目录 | 内容 |
 |---|---|
-| [`docs/`](docs/) | 路线图、分阶段操作指南、设计论证、论文计划（下表） |
+| [`docs/`](docs/) | 路线图、分阶段操作指南、设计论证、论文计划（下表）；英文版在 [`docs/en/`](docs/en/) |
 | [`software/`](software/) | Pi 5 控制软件、脚本、测试、视频量化管线 |
 | [`hardware/makeyourpet-hexapod/`](hardware/makeyourpet-hexapod/) | 上游步行平台 STL/STEP、接线图（原样收录） |
 | [`hardware/climbing-parts/`](hardware/climbing-parts/) | 自制吸盘小腿、门盖、气动舱固定件（[打印说明](hardware/climbing-parts/README.md)） |
 | [`tools/`](tools/) | 打印件参数化生成器 |
 | [`paper/`](paper/) | 论文 LaTeX 源码（中英）、图、参考文献 |
-| [`html/`](html/) | 23 份实验分析与设计图解报告，直接用浏览器打开 |
+| [`html/`](html/) | 23 份实验分析与设计图解报告，直接用浏览器打开；英文版在 [`html/en/`](html/en/) |
 | [`images/`](images/) | 零件照片、实验视频与 188 张量化核对图 |
 
 ### 文档

@@ -1,0 +1,200 @@
+<!-- English translation of html/fkp-glass-poses.html (2026-09-05). The Chinese original is the maintained source. -->
+<title>P2 · FKP triangle vs. glass</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 8px 4px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { font-size: 13px; color: var(--muted); padding: 8px 10px 10px; }
+  figcaption b { color: var(--ink); }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+
+  .sv-glass { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .sv-tri   { fill: var(--accent-soft); stroke: none; }
+  .sv-fk    { stroke: var(--ink); stroke-width: 2.6; stroke-linecap: round; }
+  .sv-kp    { stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; }
+  .sv-kpx   { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 5 5; opacity: .75; }
+  .sv-fp    { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 7 5; }
+  .sv-axis  { stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 11 4 2 4; fill: none; }
+  .sv-cupax { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 11 4 2 4; fill: none; }
+  .sv-plane { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 6; fill: none; }
+  .sv-arc   { stroke: var(--ink); stroke-width: 1.6; fill: none; }
+  .sv-delta { stroke: var(--warn); stroke-width: 2; fill: none; }
+  .sv-dim   { stroke: var(--muted); stroke-width: 1.1; fill: none; }
+  .sv-fold  { stroke: var(--part-stroke); stroke-width: 1.6; fill: none; }
+  .sv-lip   { stroke: var(--part-stroke); stroke-width: 5; stroke-linecap: round; }
+  .sv-dot   { fill: var(--accent); stroke: var(--panel); stroke-width: 2.5; }
+  .sv-ghost { fill: var(--panel); stroke: var(--warn); stroke-width: 2; }
+  .mk-m { fill: var(--muted); } .mk-a { fill: var(--accent); }
+  text { font-family: inherit; fill: var(--ink); font-size: 13px; }
+  text.mu { fill: var(--muted); font-size: 11.5px; }
+  text.ac { fill: var(--accent); } text.wa { fill: var(--warn); font-size: 11.5px; }
+  text.pt { font-weight: 600; }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">P2 · single-leg wall rig</p>
+    <h1>Position of the FKP triangle relative to the glass</h1>
+    <p class="sub">Both figures share one scale. Poses are computed by <code>leg_ik</code> from the <code>config.py</code> calibrated on 2026-07-19; the FP edge can be checked directly with a tape measure.</p>
+  </header>
+
+  <div class="pair">
+
+  <figure>
+    <svg viewBox="0 0 480 524" role="img" aria-label="Lift-off pose: FKP triangle, cup lip 20 mm off the glass">
+      <defs>
+        <marker id="a1m" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto-start-reverse"><path class="mk-m" d="M0,0 L8,3 L0,6 z"/></marker>
+        <marker id="a1a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path class="mk-a" d="M0,0 L8,3 L0,6 z"/></marker>
+      </defs>
+
+      <!-- Glass / hip plane / coxa axis -->
+      <rect class="sv-glass" x="328" y="22" width="8" height="478"/>
+      <text class="mu" transform="rotate(90 346 66)" x="346" y="66">Glass (z = −90)</text>
+      <line class="sv-plane" x1="130" y1="22" x2="130" y2="500"/>
+      <text class="mu" x="130" y="516" text-anchor="middle">Shell mounting face (hip plane)</text>
+      <line class="sv-axis" x1="100" y1="60" x2="345" y2="60"/>
+      <text class="mu" x="208" y="52">coxa axis (⊥ glass)</text>
+
+      <!-- H=90 dimension -->
+      <path class="sv-dim" d="M130,29 V43 M328,29 V43"/>
+      <line class="sv-dim" x1="130" y1="36" x2="328" y2="36" marker-start="url(#a1m)" marker-end="url(#a1m)"/>
+      <text class="mu" x="229" y="30" text-anchor="middle">H = 90</text>
+
+      <!-- Triangle FKP -->
+      <polygon class="sv-tri" points="130,154.6 49.3,311 284,431.8"/>
+      <line class="sv-fp" x1="130" y1="154.6" x2="284" y2="431.8"/>
+      <line class="sv-fk" x1="130" y1="154.6" x2="49.3" y2="311"/>
+      <line class="sv-kp" x1="49.3" y1="311" x2="284" y2="431.8"/>
+      <line class="sv-kpx" x1="284" y1="431.8" x2="328.5" y2="454.7"/>
+
+      <!-- Knee angle θ -->
+      <path class="sv-arc" d="M61.2,287.9 A26,26 0 0 1 72.4,322.9"/>
+      <text class="pt" x="84" y="302">θ = 89.9°</text>
+
+      <!-- Cup axis + δ -->
+      <line class="sv-cupax" x1="254.1" y1="429.4" x2="328" y2="435.3" marker-end="url(#a1a)"/>
+      <text class="ac mu" x="248" y="416" text-anchor="end">Cup axis (4.5° off normal)</text>
+      <path class="sv-delta" d="M321.9,434.8 A38,38 0 0 1 317.8,449.2"/>
+      <text class="wa" x="306" y="467" text-anchor="middle">δ = 22.7°</text>
+
+      <!-- Bellows and lip (free state) -->
+      <path class="sv-fold" d="M262,421.5 a10,10 0 0 1 0,20.6 M274,420.5 a11,11 0 0 1 0,22.6"/>
+      <line class="sv-lip" x1="286.6" y1="398.9" x2="281.4" y2="464.7"/>
+
+      <!-- 20mm gap -->
+      <path class="sv-dim" d="M284,480 V494 M328,480 V494"/>
+      <line class="sv-dim" x1="284" y1="487" x2="328" y2="487" marker-start="url(#a1m)" marker-end="url(#a1m)"/>
+      <text class="mu" x="306" y="506" text-anchor="middle">20mm</text>
+
+      <!-- Side lengths and vertices -->
+      <text class="mu" x="80" y="230" text-anchor="end">80</text>
+      <text class="mu" x="160" y="360" text-anchor="middle">120</text>
+      <text class="mu" x="198" y="288" text-anchor="end">FP ≈ 144</text>
+      <circle class="sv-dot" cx="130" cy="60" r="4.5"/><text class="pt" x="122" y="54" text-anchor="end">C (hip)</text>
+      <circle class="sv-dot" cx="130" cy="154.6" r="4.5"/><text class="pt" x="141" y="153">F</text>
+      <circle class="sv-dot" cx="49.3" cy="311" r="4.5"/><text class="pt" x="40" y="308" text-anchor="end">K</text>
+      <circle class="sv-dot" cx="284" cy="431.8" r="4.5"/><text class="pt" x="276" y="394" text-anchor="end">P</text>
+    </svg>
+    <figcaption><b>Fig. 1 · Lift-off pose (initial, z = −70)</b>: lip 20 mm off the glass, cup axis 4.5° off the normal, knee angle 89.9°, FP ≈ 144 mm.</figcaption>
+  </figure>
+
+  <figure>
+    <svg viewBox="0 0 480 524" role="img" aria-label="Press pose: FKP triangle, cup axis perpendicular to the glass, target point 15 mm past the glass">
+      <defs>
+        <marker id="a2m" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto-start-reverse"><path class="mk-m" d="M0,0 L8,3 L0,6 z"/></marker>
+        <marker id="a2a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path class="mk-a" d="M0,0 L8,3 L0,6 z"/></marker>
+      </defs>
+
+      <rect class="sv-glass" x="328" y="22" width="8" height="478"/>
+      <text class="mu" transform="rotate(90 346 66)" x="346" y="66">Glass (z = −90)</text>
+      <line class="sv-plane" x1="130" y1="22" x2="130" y2="500"/>
+      <text class="mu" x="130" y="516" text-anchor="middle">Shell mounting face (hip plane)</text>
+      <line class="sv-axis" x1="100" y1="60" x2="345" y2="60"/>
+      <text class="mu" x="208" y="52">coxa axis (⊥ glass)</text>
+
+      <path class="sv-dim" d="M130,29 V43 M328,29 V43"/>
+      <line class="sv-dim" x1="130" y1="36" x2="328" y2="36" marker-start="url(#a2m)" marker-end="url(#a2m)"/>
+      <text class="mu" x="229" y="30" text-anchor="middle">H = 90</text>
+
+      <!-- Triangle FKP (P is the kinematic target point, 15mm past the glass) -->
+      <polygon class="sv-tri" points="130,154.6 117.5,330.2 361,431.8"/>
+      <line class="sv-fp" x1="130" y1="154.6" x2="361" y2="431.8"/>
+      <line class="sv-fk" x1="130" y1="154.6" x2="117.5" y2="330.2"/>
+      <line class="sv-kp" x1="117.5" y1="330.2" x2="361" y2="431.8"/>
+
+      <path class="sv-arc" d="M119.3,304.3 A26,26 0 0 1 141.5,340.2"/>
+      <text class="pt" x="150" y="310">θ = 108.5°</text>
+
+      <!-- Cup axis ⊥ glass + δ -->
+      <line class="sv-cupax" x1="296" y1="431.8" x2="383" y2="431.8" marker-end="url(#a2a)"/>
+      <text class="ac mu" x="292" y="400" text-anchor="end">Cup axis ⊥ glass</text>
+      <path class="sv-delta" d="M358,431.8 A30,30 0 0 1 355.7,443.4"/>
+      <text class="wa" x="415" y="452" text-anchor="middle">δ = 22.7°</text>
+
+      <!-- Compressed bellows and lip (against the glass) -->
+      <path class="sv-fold" d="M315,414 a19,19 0 0 1 0,36 M321,410 a22,22 0 0 1 0,44"/>
+      <line class="sv-lip" x1="328" y1="398.8" x2="328" y2="464.8"/>
+
+      <!-- 15mm preload -->
+      <path class="sv-dim" d="M328,480 V494 M361,480 V494"/>
+      <line class="sv-dim" x1="328" y1="487" x2="361" y2="487" marker-start="url(#a2m)" marker-end="url(#a2m)"/>
+      <text class="mu" x="345" y="506" text-anchor="middle">Preload 15</text>
+
+      <text class="mu" x="114" y="242" text-anchor="end">80</text>
+      <text class="mu" x="233" y="370" text-anchor="middle">120</text>
+      <text class="ac" x="237" y="286" text-anchor="end" font-weight="600">FP ≈ 164 ✓</text>
+      <circle class="sv-dot" cx="130" cy="60" r="4.5"/><text class="pt" x="122" y="54" text-anchor="end">C (hip)</text>
+      <circle class="sv-dot" cx="130" cy="154.6" r="4.5"/><text class="pt" x="141" y="153">F</text>
+      <circle class="sv-dot" cx="117.5" cy="330.2" r="4.5"/><text class="pt" x="108" y="327" text-anchor="end">K</text>
+      <circle class="sv-ghost" cx="361" cy="431.8" r="4.5"/><text class="pt wa" x="369" y="428">P</text>
+    </svg>
+    <figcaption><b>Fig. 2 · Press pose (attached, z = −105)</b>: cup axis ⊥ glass (0.05° off), knee angle 108.5°, FP ≈ 164 mm — the 2026-07-19 measurement was exactly 164 ✓. Target point P is 15 mm past the glass.</figcaption>
+  </figure>
+
+  </div>
+
+  <div class="note">
+    <b>How to read the figures</b> C = coxa axis (hip) · F = femur axis · K = knee axis · P = center of the cup lip (free state).
+    FK = 80 and KP = 120 are constants; <b>FP changes with the knee angle</b> — measure FP with a tape and θ follows, which is the principle of the three-side calibration.
+    The solid blue line K→P is the model's virtual line; it differs from the real <b>cup axis</b> (blue dash-dot) by a constant <b class="d">δ = 22.7°</b>: in Fig. 1 the cup axis is 4.5° off the normal, and by Fig. 2 it has rotated exactly to perpendicular.
+    From Fig. 1 to Fig. 2: the knee opens 18.6°, the foot advances 35 mm along the glass normal, and <b>C and F never move</b> (this is the "step straight into the glass" mechanism — the pose is guaranteed by the triangle itself, not by alignment).
+    In Fig. 2, P is the kinematic target point; the 15 mm past the glass is the compression of the bellows cup (13.5 preload travel + 1.5 preload).
+  </div>
+</main>

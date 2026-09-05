@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<!-- English translation of html/dev-timeline-20260821.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Development timeline: from closing out P2 to zero-force handover (2026-07-21 ~ 08-21)</title>
+<style>
+  body { font-family: "Noto Sans SC", "PingFang SC", sans-serif; margin: 0;
+         color: #1c2733; background: #f6f8fa; line-height: 1.75; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 20px; margin-top: 44px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  .card { background: #fff; border: 1px solid #e3e8ee; border-radius: 10px;
+          padding: 18px 20px; margin: 18px 0; }
+  .tldr { border-left: 4px solid #c0392b; }
+  .day { border-left: 4px solid #b9c4d0; }
+  .day.big { border-left-color: #c0392b; }
+  .dayhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .dayhead b { font-size: 16px; }
+  .chip { font-size: 12px; color: #556; background: #eef2f6; border-radius: 10px; padding: 0 8px; white-space: nowrap; }
+  .theme { color: #35506e; font-weight: 700; }
+  ul { margin: 6px 0 2px; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 4px;
+         padding: 0 6px; margin-right: 4px; vertical-align: 1px; white-space: nowrap; }
+  .t-wt  { background: #fdeeee; color: #c0392b; }  /* Problem */
+  .t-ask { background: #e8f0fb; color: #2a5da8; }  /* Question */
+  .t-dec { background: #e9f6ec; color: #1e7a3c; }  /* Decision */
+  .t-acc { background: #4a1414; color: #ffd9d9; }  /* Incident */
+  .t-brk { background: #fff3e0; color: #b05c00; }  /* Breakthrough */
+  .t-fix { background: #f0eafa; color: #6b3fa0; }  /* Correction (user correcting the AI)*/
+  .num { font-weight: 700; color: #c0392b; }
+  .tm { font-size: 12px; color: #8896a5; font-variant-numeric: tabular-nums; margin-right: 2px; }
+  .quote { border-left: 3px solid #b9c4d0; background: #f2f5f8; border-radius: 0 8px 8px 0;
+           padding: 8px 14px; margin: 10px 0; font-size: 14px; color: #3a4a5a; }
+  .quote b { color: #1c2733; }
+  code { background: #eef2f6; border-radius: 4px; padding: 1px 5px; font-size: 0.92em; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #dfe5ec; padding: 5px 9px; }
+  th { background: #eef2f6; text-align: left; }
+  td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .cap { font-size: 13px; color: #556; margin: 2px 0 0; }
+  .warn { background: #fff8e6; border: 1px solid #e8d9a0; border-radius: 8px;
+          padding: 10px 14px; font-size: 14px; }
+  .tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Development timeline: closing out P2 → the wall push → zero-force handover</h1>
+<p>2026-07-21 ~ 08-21 · compiled from the 28 Claude Code session records (JSONL) of this project,
+extracting <b>403 messages</b> typed by hand by the user (tool output and system messages filtered out), merged by day and expanded by event.
+Tag meanings: <span class="tag t-wt">Problem</span>a fault/anomaly hit
+<span class="tag t-ask">Question</span>a question about understanding
+<span class="tag t-dec">Decision</span>a call made that day
+<span class="tag t-acc">Incident</span>a hardware-level event
+<span class="tag t-brk">Breakthrough</span>a key action that turned the direction around
+<span class="tag t-fix">Correction</span>the user correcting an AI mistake. The small grey text is the time of day the message was sent (HH:MM).</p>
+
+<div class="card tldr">
+<b>TL;DR</b>: one month covering <b>P2 single-leg adhesion acceptance → P3 assembly and 18-channel calibration → P4 pneumatics and electrics →
+the first wall test</b>. On the wall it got stuck on "stepping in place" for four days (08-17 ~ 08-20), until on
+08-19 the user himself named the root cause — <b>the elastic energy stored in the lifted leg is released at the instant of detachment and pulls the body down</b> —
+and on 08-20 the experiment nailed it quantitatively (<span class="num">83%</span> of the slip happens at the instant the vented seal ruptures),
+the same day settling on the "zero-force handover before vent" scheme and finishing its implementation (<code>--handover</code>).
+All three key breakthroughs came from <b>pushing a wrong assumption back with a photo of the real part or with measured data</b>:
+the tibia three-view correction (08-07), the USB3.0 undervoltage pattern (08-16), the elastic-energy root cause (08-19).
+</div>
+
+<div class="tablewrap"><table>
+<tr><th>Date</th><th>Msgs</th><th>Main thread of the day</th></tr>
+<tr><td>07-21</td><td class="r">14</td><td>P2 single-leg adhesion validation; found the foot lurching toward the wall at the instant of attachment</td></tr>
+<tr><td>07-22</td><td class="r">43</td><td>P2 acceptance passed, on to P3; concentrated round of questions on the overall pneumatic scheme</td></tr>
+<tr><td>07-23~26</td><td class="r">10</td><td>Wiring diagrams, relay/MOSFET selection, design of the pneumatic-bay mounting parts</td></tr>
+<tr><td>08-02</td><td class="r">7</td><td>Assembly starts (left leg), assembly order settled</td></tr>
+<tr><td>08-05</td><td class="r">4</td><td>All six legs assembled; the right legs' tibia points the wrong way</td></tr>
+<tr><td>08-06</td><td class="r">16</td><td>±45° pulse-width calibration starts, measurement method confirmed item by item</td></tr>
+<tr><td>08-07</td><td class="r">46</td><td>The "L3 dispute": tibia three-view correction, l3=123.7 settled</td></tr>
+<tr><td>08-08</td><td class="r">15</td><td>18/18 channels calibrated and closed out, standing + walking work</td></tr>
+<tr><td>08-09</td><td class="r">12</td><td>R1 servo horn stripped and replaced; walking veers left, left open</td></tr>
+<tr><td>08-11</td><td class="r">33</td><td>Divider board bring-up; S7 dropout troubleshooting; questions on the power circuit</td></tr>
+<tr><td>08-13~14</td><td class="r">17</td><td>SS34/capacitor soldering; MOSFET + valves + pump jog test all pass; found that vacuum does not hold</td></tr>
+<tr><td>08-15~16</td><td class="r">31</td><td>Relay wired in; the 0x50000 undervoltage pinned to the USB3.0 port; vertical-stance correction</td></tr>
+<tr><td>08-17</td><td class="r">42</td><td>Tankless mode + check valves installed; first wall test → stepping in place</td></tr>
+<tr><td>08-18</td><td class="r">35</td><td>Pi red LED, "suspected burnt board", actually the power supply; exit sequence redone</td></tr>
+<tr><td>08-19</td><td class="r">67</td><td>Push day: a run of fixes along the land-and-attach chain; the user names the elastic-energy root cause</td></tr>
+<tr><td>08-20</td><td class="r">9</td><td>Ratchet nailed down quantitatively; zero-force handover designed + implemented</td></tr>
+<tr><td>08-21</td><td class="r">2</td><td>Searching the session history, and this timeline</td></tr>
+</table></div>
+
+<h2>Late July · closing out P2 and P4 pre-study</h2>
+
+<div class="card day">
+<div class="dayhead"><b>07-21 Tue</b><span class="chip">14 msgs</span>
+<span class="theme">P2 single-leg adhesion validation</span></div>
+<ul>
+<li><span class="tm">04:01</span>watched <code>wall_suck_new.mp4</code> hunting for problems;
+<span class="tm">06:42</span>added a per-second pressure printout to <code>single_leg_wall.py</code>
+(noting in passing that the Pi's venv lives in <code>software/.venv</code>).</li>
+<li><span class="tm">06:57</span><span class="tag t-wt">Problem</span>measured hold-phase pressure
+decays slowly from -69.60 to -68.15 kPa, but the report says "worst case during hold -57.2kPa" — questioned the statistics convention as wrong, fixed the same day.</li>
+<li><span class="tm">08:58</span><span class="tag t-ask">Question</span>when attached, the cup axis is not exactly perpendicular to the wall;
+is that because the computation uses the geometry of an "un-squashed cup", and the squashing produces a displacement?</li>
+<li><span class="tm">09:29</span><span class="tag t-wt">Problem</span>at the instant of attachment the suction visibly drags the foot a few millimetres toward the wall.
+<span class="tm">09:34</span>call: "ignore it for now" — this phenomenon (attach-lurch) became a long-running background observation,
+and was corrected on 08-19 when the AI cited it wrongly.</li>
+</ul>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>07-22 Wed</b><span class="chip">43 msgs</span>
+<span class="theme">P2 acceptance passed, moving to P3; concentrated questions on the pneumatic scheme</span></div>
+<ul>
+<li><span class="tm">02:28</span><span class="tag t-ask">Question</span>what is the current top-up pumping threshold?
+<span class="tm">02:30</span>changed to -50/-60 first; <span class="tm">02:41</span>after pasting a hold-phase log
+(pressure sliding slowly from -60.67 through the threshold), <span class="tag t-dec">Decision</span>change it again to -55 trigger / -65 stop.</li>
+<li><span class="tm">04:51</span><span class="tag t-dec">Decision</span>all of P2 validated:
+1.5kg hanging for 300s without letting go (<code>p2_1_5_kg_hold300s.csv</code>), 50 cycles
+(<code>p2_50cycles.csv</code>). <span class="tm">05:01</span>followed up asking whether "2.5kg ÷ 3 load-bearing feet = 1.5kg"
+already includes margin. <span class="tm">05:03</span>formally into P3.</li>
+<li><span class="tm">06:19-06:43</span><span class="tag t-ask">Question</span>a chain of forward-looking questions:
+① can vision be added later, so that it recognises a wall, walks to the corner and climbs up; ② does an uneven/rough wall surface mean a full redesign;
+③ can microspines walk on a smooth surface; ④ made clear that "the advanced route I want is all of them" and that it must <b>switch automatically</b> rather than swap legs
+(this goal was later set to start after P5, with P4 only leaving an arbitration interface); ⑤ how many pumps does P4 need;
+⑥ on the wall, move one foot at a time or three; ⑦ what is the vacuum tank for (not bought yet at that point).</li>
+<li><span class="tm">07:33-08:03</span><span class="tag t-ask">Question</span>practical questions about pneumatic components:
+one XGZP6847A sensor or one per foot; how one pump connects to the six legs' "valve + cup + sensor" assemblies
+→ manifold added to the parts list → the six manifold inlets are all 8mm, confirmed that 8-to-4 barbed reducers are needed,
+and the inlet and outlet actually sourced both turned out to be barbed.</li>
+<li><span class="tm">08:06-08:14</span>discussion of vacuum-tank details; the bottle-cap approach is too much work, asked whether there is an off-the-shelf solution.</li>
+<li><span class="tm">08:53</span>confirmed that the P3 purchase already covers P4 in the main, so P4 needs almost nothing more bought.</li>
+<li><span class="tm">08:56-09:49</span>launched a sub-agent to generate an HTML connection diagram of the whole robot;
+pointed out that the divider circuit was still on a breadboard at the time → asked for the wiring of the "7-channel voltage-divider junction board (perfboard)" to be drawn as
+<code>p4-divider-board.html</code>.</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>07-23 ~ 07-26</b><span class="chip">10 msgs</span>
+<span class="theme">Wiring diagrams and part selection</span></div>
+<ul>
+<li>23: <span class="tm">03:01</span>sub-agent generated the Pi wiring diagram <code>p4-pi-wiring.html</code>;
+<span class="tm">04:59</span><span class="tag t-ask">Question</span>will Dupont jumpers still be used to connect the Pi later;
+<span class="tm">08:35</span>what to watch out for when buying the relay between the battery and the servo2040.</li>
+<li>24: <span class="tm">03:45</span><span class="tag t-wt">Problem</span>stuck on part selection —
+cannot find a high-current MOSFET module rated ≥30A that 3.3V can drive; the D4184 only goes up to 5A.</li>
+<li>25: <span class="tm">16:50</span>shot <code>dianqi.jpg</code> (family photo of the electrical + pneumatic bay components),
+launched a sub-agent to design the 3D-printed parts that mount them (produced the P4-BAY-DESIGN document). 26: commits only.</li>
+</ul>
+</div>
+
+<h2>Early August · P3 assembly and calibration</h2>
+
+<div class="card day">
+<div class="dayhead"><b>08-02 Sun</b><span class="chip">7 msgs</span>
+<span class="theme">Assembly starts</span></div>
+<ul>
+<li><span class="tm">12:35</span>had the whole project reviewed first (coming back after a week away).</li>
+<li><span class="tm">12:47</span><span class="tag t-wt">Problem</span>servos and printed parts have arrived, ready to assemble,
+but the official YouTube assembly video (MakeYourPet channel) cannot be found.
+<span class="tag t-ask">Question</span>is the assembly order I worked out right: mount the femur/tibia servos on all six legs first
+(same angle on all six), the coxa angle depending on how the legs are splayed — confirmed workable.</li>
+<li><span class="tm">13:57</span>confirmed that of channels 15/16/17, 15 is the coxa;
+<span class="tm">16:03</span>with the left leg (15/16/17) on the rig, asked for a single-leg walk/stand simulation script;
+<span class="tm">16:38</span><span class="tag t-ask">Question</span>how are the frame and bottom-cover
+fastened, and what screws go in the small holes.</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-05 Wed</b><span class="chip">4 msgs</span>
+<span class="theme">All six legs assembled</span></div>
+<ul>
+<li><span class="tm">13:39</span><span class="tag t-wt">Problem</span>in <code>leg_exercise.py</code>
+the left legs are fine but the right legs' tibia moves forward and up instead of down (a left-right mirror problem), fixed the same day.</li>
+<li><span class="tm">13:59</span>six-leg assembly finished, servo-center pose photographed for the record
+(<code>P3_servo_center_20260805.jpg</code>);
+<span class="tm">14:19</span><span class="tag t-ask">Question</span>how exactly is the coxa γ baseline method measured.</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-06 Thu</b><span class="chip">16 msgs</span>
+<span class="theme">±45° pulse-width calibration starts</span></div>
+<ul>
+<li><span class="tm">02:22</span><span class="tag t-dec">Decision</span>measure the ±45° pulse width of every joint first;
+<code>calib_fit.py</code> committed.</li>
+<li><span class="tag t-ask">Question</span>the measurement method gone through item by item: <span class="tm">02:41</span>"suggested k≈50/90/120"
+is in degrees and I have to convert it to pulse width myself, right; <span class="tm">03:01</span>can γ really be computed from just the baseline plus the projected lip centre;
+<span class="tm">03:07</span>with the coxa fixed and only the tibia turning, are the lip projection and the hip projection necessarily collinear;
+<span class="tm">13:03</span>is this script used for tibia/femur/coxa alike, and do they all have to be measured in one go;
+<span class="tm">13:09</span>does a single servo need all three angles measured before it can save.</li>
+<li><span class="tm">13:55-14:00</span>hands-on femur height-difference method: confirmed the sign convention (height difference 28 at 1750,
+60 at 1500 — enter 28 or -28); measured the L2.femur fit attach=49.43°, us_m45=1923,
+<span class="tag t-wt">Problem</span>max residual 2.35° exceeds the 1.5° threshold — asked whether re-measuring means quitting and starting over.</li>
+<li><span class="tm">14:03-14:15</span>confirmed that "hip-axis screw centre = femur servo screw centre";
+<span class="tag t-dec">Decision</span>the hip-to-knee screw-centre distance is re-measured and settled at <b>81mm</b> (the earlier measurement was off).</li>
+<li><span class="tm">14:20-14:25</span><span class="tag t-wt">Problem</span>the distance from the tibia servo-horn screw centre
+to the suction-cup lip is "not in one plane, hard to measure" — the seed of the next day's big disagreement.</li>
+</ul>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>08-07 Fri</b><span class="chip">46 msgs</span>
+<span class="theme">The "L3 dispute": the biggest correction of understanding this month</span></div>
+<ul>
+<li><span class="tm">04:21</span><span class="tag t-ask">Question</span>the plumb projections of the K screw centre,
+the femur screw centre and the lip are not collinear (the screws are on the side of the leg) — does that affect the measurement and the computation?</li>
+<li><span class="tm">05:01</span>measured the vertical offset Δy=30mm, giving l3=<b>123.7</b>;
+<span class="tm">05:13</span>uploaded <code>leg_side_view.jpg</code>/<code>leg_top_view.jpg</code>
+as supporting evidence (the femur is 60mm wide → Δy=30 is reasonable).</li>
+<li><span class="tm">05:26-05:50</span><span class="tag t-wt">Problem</span>it does not match the design model;
+questioned every single number the AI used in turn: what is h_cup, where do 46.5/85.4 come from, what is the "tibia flat back face".
+<span class="tm">05:53</span>communication broke down:</li>
+</ul>
+<div class="quote">"Write your several doubts into a temporary document, and I will open a new session to talk it through. <b>Right now I have absolutely no idea what you are talking about</b>."
+→ produced L3-DISPUTE-OPEN.md, opened a new session.</div>
+<ul>
+<li><span class="tm">05:56</span><span class="tag t-brk">Breakthrough</span>first thing in the new session:
+had a tibia three-view HTML drawn from the printed part's STL. <span class="tm">07:27</span>one look at the drawing and:
+"your screw position for the tibia servo horn is <b>wildly wrong</b>", uploaded <code>k.jpg</code> with the actual horn position marked in purple.</li>
+<li><span class="tm">08:10-08:21</span><span class="tag t-fix">Correction</span>gave the correct geometry step by step:
+servo body at y=-18~+26mm, servo horn at y=32mm, the femur bars clamping both sides; asked for the femur assembly to be drawn into the three-view too, to make discussion easier.</li>
+<li><span class="tm">08:54-10:31</span>re-checked everything with a tape measure: K screw to the crease face, drop 92mm;
+purple horn centre offset ~10mm toward the hip confirmed; h_cup re-measured at <b>19mm</b>; K to the flat back face <b>32mm</b> (y=-32);
+a second leg re-measured to the same numbers — <span class="tag t-dec">Decision</span><b>l3=123.7 settled</b>.</li>
+<li><span class="tm">10:45-11:13</span>wrap-up: CUP_DELTA in the downstream <code>workspace_analysis.py</code> corrected to match;
+added the recz height-difference method to <code>calib_fit.py</code>; opened a new session to review that script
+(found the help text missing the recz explanation and so on, fixed).</li>
+<li><span class="tm">11:47-16:09</span>back to measuring: the L2 femur four-sample fit passes;
+<span class="tm">12:47</span><span class="tag t-wt">Problem</span>selected L3 femur but the coxa moved
+— self-diagnosed as a wrongly plugged cable; <span class="tm">13:47</span>confirmed that the mirrored 1800µs direction on the L/R sides (left goes down, right goes up) is normal;
+6/18 channels archived, then asked how to measure the tibia and the coxa.</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-08 Sat</b><span class="chip">15 msgs</span>
+<span class="theme">Calibration closed out, the robot stands up</span></div>
+<ul>
+<li><span class="tm">08:22</span><b>all 18/18 channels calibrated</b>, the block pasted into
+<code>config.py</code>, JSON committed as <code>docs/data/calib_pm45.json</code>;
+<span class="tm">10:33</span>found the L3 tibia data bad, re-measured and updated.</li>
+<li><span class="tm">10:56</span><span class="tag t-wt">Problem</span>the contact printout showing all six legs True makes no sense —
+the feet are suction cups now, the official foot contact switches are not wired, so <code>touch_states()</code> readings are meaningless
+(from here on the contact criterion is the paper-strip method / the current difference).</li>
+<li><span class="tm">11:07-11:21</span>standing validated; <code>walk_teleop.py</code> starts walking,
+live current printout added.</li>
+<li><span class="tm">12:55-13:45</span><span class="tag t-ask">Question</span>groundwork for P4:
+the relation between servo command → output force → current, what happens beyond a certain force, whether per-servo current can be read;
+in the next stage, when the cup is compressed and the whole leg is pushed into the ground by an external force, how is that handled → conclusion "the press onto the ground has to be near-perpendicular";
+followed up asking whether walk_teleop already uses a vertical-descent gait; asked for P4-GUIDE to be generated.</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-09 Sun</b><span class="chip">12 msgs</span>
+<span class="theme">First hardware damage</span></div>
+<ul>
+<li><span class="tm">01:55-02:53</span><span class="tag t-ask">Question</span>walk_teleop
+speed limit; is 2~4A while walking reasonable.</li>
+<li><span class="tm">06:58</span>asked for a hexapod dance routine to be choreographed (the body may be raised).</li>
+<li><span class="tm">07:31</span><span class="tag t-wt">Problem</span>the R1 femur centre angle has changed
+→ <span class="tm">07:58</span>self-diagnosed as stripped servo-horn splines, the horn needs replacing;
+<span class="tm">08:27-09:59</span>re-checked the rech data of R1/R2, found two or three millimetres of difference between legs,
+accepted the explanation "a small error caused by the body tilting, negligible"; <span class="tm">10:00</span>new horn fitted.</li>
+<li><span class="tm">10:03</span><span class="tag t-wt">Problem</span>left open: walking veers slightly left (moved to a separate session).</li>
+</ul>
+</div>
+
+<h2>Mid-August · P4 electrics and pneumatics</h2>
+
+<div class="card day">
+<div class="dayhead"><b>08-11 Tue</b><span class="chip">33 msgs</span>
+<span class="theme">Divider board bring-up + S7 dropout troubleshooting + power-circuit questions</span></div>
+<ul>
+<li><span class="tm">03:34</span>divider board soldered per the drawing, Pi connected, sensors connected (tank pressure not connected — the vacuum tank had not been bought yet),
+asked for a check list and for a pressure-reading script (validated by sucking to create negative pressure) → <code>p4_sensor_check.py</code>.
+<span class="tm">04:57</span><span class="tag t-ask">Question</span>is a 106M monolithic capacitor acceptable between 5V and GND.</li>
+<li><span class="tm">05:09</span>self-test passes: both ADS1115 chips (0x48/0x49) online,
+all six foot pressures a normal 0.0 kPa, S1 tank pressure correctly judged "not connected".</li>
+<li><span class="tm">05:32</span><span class="tag t-wt">Problem</span>S7 (foot R3) readings
+fluctuate when the sensor is wiggled. Troubleshooting chain: <span class="tm">08:47</span>--wiggle seven-step point-by-point localisation (sampling ≈1929Hz,
+caught 4 dropouts of ±2kPa lasting 6~7ms) → <span class="tm">10:10</span>--scope spectrum
+(the 50Hz main peak is only 3% of peak-to-peak, judged a broadband isolated pulse) → <span class="tm">10:24</span>conclusion:
+<b>static/coupling, not a bad contact</b> (S7 and S2 behave the same).
+<span class="tm">10:33</span>recorded the "contamination test with pump start/stop and per-valve switching, to run once the pump and valves are installed" into P4-GUIDE.</li>
+<li><span class="tm">10:36</span>--zero atmospheric-point calibration committed: V_ATM 4.481~4.498V per channel,
+max deviation from nominal +0.31kPa.</li>
+<li><span class="tm">10:43-14:23</span><span class="tag t-ask">Question</span>digging to the bottom of the power circuit:
+can one pump plus six valves run on a single XL6009 (analyse only for now, do not change the docs); is the SS34 mandatory → measured the YYNMOS-8
+on-board diode (OUT7 on the diode range 0.591V) plus three continuity confirmations (DC+ conducts to OUT+, the IN− do not conduct to each other,
+IN− does not conduct to DC−); why is "do not run the 8 IN− back to the Pi with 16 wires" 16 wires;
+why does the common ground need two wires, would one do, "does going the long way round make it slower" — four rounds of questions, ending with:</li>
+</ul>
+<div class="quote">"I still do not really follow why two ground wires are necessary. <b>If it is not necessary, answer that it is not necessary;
+if it is necessary, then explain briefly</b>." — a typical moment of zero tolerance for a vague explanation.</div>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-13 ~ 08-14</b><span class="chip">17 msgs</span>
+<span class="theme">Soldering details and MOSFET/pneumatics bring-up</span></div>
+<ul>
+<li>13: <span class="tm">12:59</span><span class="tag t-ask">Question</span>no 10k resistor on hand,
+will 15k do? will 6.2k do? after the change, also had the doc note that the current scheme is single-pump.</li>
+<li>14: <span class="tm">04:32-05:12</span>how to wire the SS34 across the pump's positive and negative terminals;
+<span class="tag t-wt">Problem</span>after the 100nF was added the multimeter shows the pump terminals as "shorted" — is that normal;
+the SS34 gets very hot while soldering and the diodes already soldered might be cooked, asked how to test for that.</li>
+<li><span class="tm">05:21-07:03</span>Pi + YYNMOS-8 + six valves + pump wired up, wrote a circuit check script:
+the six valves (GPIO5/6/13/16/19/21) plus the pump (GPIO20) all jog fine, get_throttled=0x0,
+and the extra powered-off multimeter check "pump and board DC+ do not conduct" passes too.</li>
+<li><span class="tm">07:31-07:37</span><span class="tag t-ask">Question</span>what happens if a valve is energised while the pump is pumping;
+does --hold pump continuously or only for a while.</li>
+<li><span class="tm">07:43</span><span class="tag t-wt">Problem</span>the negative pressure decays to zero a few seconds after pumping stops —
+the first direct encounter with the pressure-holding/leak problem (a single-leg test at the time).</li>
+<li><span class="tm">09:40</span><span class="tag t-dec">Decision</span>the pneumatics are nearly done, start the software rework:
+vertical leg descent + walking coordinated with the pneumatics; ran /code-review high.</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-15 ~ 08-16</b><span class="chip">31 msgs</span>
+<span class="theme">Relay wired in, and the Pi undervoltage pinned down</span></div>
+<ul>
+<li>15: <span class="tm">06:49-08:34</span>wiring the relay between battery and servo2040
+(against <code>relay_A/B.jpg</code>): can IN1 go to the Pi → switched to GPIO17 (docs and code adjusted),
+control-side 5V/ground taken from the Pi, wiring diagram added to <code>p4-system-diagram.html</code>.</li>
+<li><span class="tm">15:35</span><span class="tag t-wt">Problem</span>the Pi reports
+<code>get_throttled=0x50000</code> (undervoltage-history flag) right at boot.</li>
+<li>16: <span class="tm">03:01</span><span class="tag t-brk">Breakthrough</span>the user worked out the pattern himself:
+with the servo2040 plugged into the Pi's <b>USB3.0 (blue port) it reports 0x50000, on USB2.0 (black port) it does not</b>.
+<span class="tm">03:12</span>follow-up: after cutting the "Separate USB &amp; Ext. Power" jumper,
+will the board still feed the servo rail from USB 5V; <span class="tm">03:18-03:45</span>all four cores maxed out plus
+a <code>pmic_read_adc</code> stress test: EXT5V 4.81→4.94V, throttled=0x0, closed.</li>
+<li><span class="tm">04:38</span><span class="tag t-wt">Problem</span>after the relay was wired in
+<code>read_voltage_v()</code> reads only 0.055V → changed the script himself to close the relay first and then read, 8.06V, normal
+— confirming the logic is fine, it was a question of when the reading is taken.</li>
+<li><span class="tm">08:36-08:54</span><span class="tag t-ask">Question</span>the exact flow of climb_walk --air,
+what the full attach sequence does with the robot suspended, and whether the "tank-pressure gate" means the vacuum tank.</li>
+<li><span class="tm">09:16</span><span class="tag t-fix">Correction</span>found that "vertical stance" was implemented wrong:
+it made the "K-to-lip-centre line" perpendicular to the ground, whereas it is the <b>cup axis</b> that should be perpendicular (compare tibia-three-view.html)
+— corrected, and the walk_teleop gait updated to match; <span class="tm">09:34</span>had climb_walk support pure walking without starting
+the pneumatics; <span class="tm">09:42</span><span class="tag t-wt">Problem</span>--dry does not walk (fixed);
+<span class="tm">09:47</span>sub-agent review of climb_walk's functionality.</li>
+</ul>
+</div>
+
+<h2>Late August · the wall push and the root-cause hunt</h2>
+
+<div class="card day big">
+<div class="dayhead"><b>08-17 Mon</b><span class="chip">42 msgs</span>
+<span class="theme">Tankless mode + check valves installed, the first wall test exposes "stepping in place"</span></div>
+<ul>
+<li><span class="tm">05:24</span>killing the process during the swing phase vents the tank pressure — call: handle it by operating discipline (watch out when exiting).</li>
+<li><span class="tm">05:26-05:33</span><span class="tag t-ask">Question</span>while walking, does a foot already attached
+trigger top-up pumping if its pressure is insufficient? and with no tank? → <span class="tag t-dec">Decision</span>add support for
+<code>--no-tank</code> (positioned at the time as: short floor tests only). Sub-agent reviewed the change.</li>
+<li><span class="tm">06:54-07:23</span>experience polish: make the initial stand-up slow (stand_up/walk_teleop changed together);
+<span class="tag t-wt">Problem</span>after standing up, turning the cups vertical drags them across the floor → go from the crouch to cups-vertical in one move.</li>
+<li><span class="tm">07:57-08:12</span>added a p-key pause for confirmation between the slow stand-up and the full attach sequence;
+<span class="tag t-wt">Problem</span>after a clean ESC×2 exit the six solenoid valves are actually left energised (exit logic to be checked).</li>
+<li><span class="tm">09:13</span><span class="tag t-wt">Problem</span>first run of --no-tank:
+at t=37.2s the R2 leak rescue ran past 2s → the whole robot froze (hint: look first at the L2 cup not sealing while landing and dragging the pressure down with it).
+<span class="tm">09:28</span>followed up asking whether the pump would just keep pumping in that case.</li>
+<li><span class="tm">09:33</span><span class="tag t-brk">Breakthrough</span>user's observation: with the six valves de-energised
+the whole pneumatic circuit is connected and all six sensors read about the same → <span class="tm">09:38</span>inference that the tank-pressure sensor was fitted for nothing
+→ <span class="tm">09:42</span>"if each foot gets a check valve, does its pressure become independent?"
+→ <span class="tag t-dec">Decision</span>fit check valves (no code change needed), <b>all installed the same day</b>.</li>
+<li><span class="tm">10:20</span><span class="tag t-ask">Question</span>what happens if dust or small objects get sucked into a cup
+→ recorded in the P4 hardware list (filter element).</li>
+<li><span class="tm">13:35</span>added an oo double-tap shortcut to release the cups (allowed only when standing, not walking: open the valves + stop pumping,
+so the robot can be taken off the glass).</li>
+<li><span class="tm">13:58-14:32</span><span class="tag t-dec">Decision</span>changed the top-up hysteresis to
+-60/-75 (fewer top-up events) and accepted it the same day: the cups can be pulled past -75, the pump does stop, foot-lifting isolation passes — the check-valve line is closed.</li>
+<li><span class="tm">14:37</span><span class="tag t-wt">Problem</span>first wall test on the safety line:</li>
+</ul>
+<div class="quote">"On flat ground the robot can walk forward, but on the glass wall... it seems to be <b>stepping in place</b> the whole time,
+because of gravity the whole robot is being 'dragged' down; it feels like every time it lifts a leg it gets dragged down a bit,
+and then walking forward is really stepping in place." — the main problem for the four days that followed.</div>
+<ul>
+<li><span class="tm">14:57</span>that day's countermeasure: cup pressure added to the status line + <code>--sag-comp</code> sag compensation
+(in hindsight: a symptomatic fix).</li>
+</ul>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>08-18 Tue</b><span class="chip">35 msgs</span>
+<span class="theme">The "suspected burnt Pi" red-LED incident, and the exit-sequence redo</span></div>
+<ul>
+<li><span class="tm">02:58</span><span class="tag t-wt">Problem</span>the R3 pressure sensor reads erratically
+even though the foot is confirmed firmly attached.</li>
+<li><span class="tm">04:28</span><span class="tag t-acc">Incident</span>in the middle of running
+<code>climb_walk --no-tank --sag-comp 4</code> the Pi went red-LED, SSH dropped and it locked up;
+after a restart the LED stays red and never turns green, still red with every connector pulled, Pin1→Pin6 reads 0V — suspected a burnt board.</li>
+<li><span class="tm">04:44-07:05</span>the whole troubleshooting run (the user calling out multimeter readings item by item):
+measured gate-drain/gate-source on every channel of the MOSFET board hunting for a punched-through FET; identified the input-side components (104/103/471/A042 EL3H7/222);
+isolation integrity: IN↔V+ and IN↔OUT− all OL, IN1~7 to input ground 1.77, IN8 is 0 (never wired in the first place);
+<span class="tag t-wt">Problem</span>the difference between OUT7 1.6 and OUT6 0.6 on the diode range — with the solenoid valve unplugged both read 1.6, a false alarm;
+3.3V to GND 9.8 on the 200kΩ range, 3.3V↔5V 106, both going to "1" once the sensor is unplugged.</li>
+<li><span class="tm">07:06</span><span class="tag t-brk">Breakthrough</span>"would an iPhone charger do?"
+— <span class="tm">07:11</span>swapped it in and it was fine. <b>The board was not broken, it was the original power supply</b>;
+followed up on the mechanism (that supply cannot take the transient).</li>
+<li><span class="tm">12:03-12:07</span>post-mortem attribution: was it several high-power devices running at once?
+and pointed out the key fact — <b>the incident happened right after pressing ESC×2</b> (the transient of the exit sequence).</li>
+<li><span class="tm">12:15-12:30</span><span class="tag t-dec">Decision</span>rework the ESC×2 exit sequence:
+delete outright the step "18 servos glide the whole robot's weight back to the standing pose" (it is already close to the standing pose), stop the pump first,
+and change venting all six feet at once to valve-by-valve switching at 0.2s intervals.</li>
+<li><span class="tm">07:34</span><span class="tag t-dec">Decision</span>gave climb_walk a file log,
+"record everything worth recording" — the quantitative analyses of 08-19/08-20 all rest on this black box.</li>
+<li><span class="tm">12:40-15:08</span>code-review of this batch of changes (9+1 findings) → fixed;
+<code>requirements.txt</code> added to the software directory.</li>
+</ul>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>08-19 Wed</b><span class="chip">67 msgs · month's peak</span>
+<span class="theme">Push day: a run of fixes along the land-and-attach chain, the user names the elastic-energy root cause</span></div>
+<ul>
+<li><span class="tm">02:13</span><span class="tag t-wt">Problem</span>while climbing on the wall the foot does not land
+perpendicular enough and often fails to seal — asked for analysis first, no changes yet.</li>
+<li><span class="tm">02:41</span><span class="tag t-fix">Correction</span>found the analysis citing
+"in tank mode the foot is dragged a few millimetres toward the wall the instant the valve opens" — "that is made up, tank mode was never tested; if it is written down anywhere, remove it".</li>
+<li><span class="tm">02:41-02:52</span><span class="tag t-dec">Decision</span>three timing changes:
+① open the valve 0.3s before driving the leg up (previously it lifted first and vented after, so the lift you saw was a "yank");
+② at startup all six legs press down at once with nothing to react against, which just raises the body — changed to per-leg "press → attach → next leg";
+③ the retry path changed from "lift 5mm, press back to the same depth" to "lift 5mm, press 5mm deeper".</li>
+<li><span class="tm">03:21-03:29</span><span class="tag t-ask">Question</span>should the body lean forward while a leg is lifted
+(self-corrected: "not lean forward, lean in the direction of gravity"); added an i key for single-step walking (it should record whose turn it is).</li>
+<li><span class="tm">03:42-04:06</span>sub-agent review of this session's changes → three issues closed together.</li>
+<li><span class="tm">04:39-04:52</span><span class="tag t-wt">Problem</span>still not pressing deep enough after a retry:
+the press is only a "slight press", the noticeable stepping-down movement only comes after pumping → press depth changed from 13mm to 18mm to try.</li>
+<li><span class="tm">05:10-06:28</span>a separate session dedicated to reviewing the "devices fighting each other" bug:
+confirmed that finding one (the situation after pressing p) and finding two (the oo cup release has no per-valve interval) are real, both fixed.</li>
+<li><span class="tm">07:08</span><span class="tag t-wt">Problem</span>re-test on the wall:
+"as soon as a foot lets go it feels dragged down a bit, and going up is stepping in place" — proposed
+<b>pressing the other feet against the wall while a leg is lifted, plus leaning the body forward</b>, so the landing leg can reach forward and press onto the wall.</li>
+<li><span class="tm">08:01-08:11</span>bigger steps; the i key changed to half steps (press once to lift, again to land, again to change leg).</li>
+<li><span class="tm">08:35</span><span class="tag t-wt">Problem</span>caught a top-up pumping logic bug:
+the pump runs the whole time a leg is lifted with i — the top-up decision was counting the pressure of the <b>lifted leg</b> too, when it should look only at stance legs.
+<span class="tm">08:41</span>added a "pump" field to the status line for easy visual checking.</li>
+<li><span class="tm">08:57</span><span class="tag t-wt">Problem</span>three at once: R1 does not step forward;
+R2/R3 are clearly dragged down when lifted; in w continuous-walk mode R3 lifts before R2 has sealed.</li>
+<li><span class="tm">09:09-09:29</span><span class="tag t-dec">Decision</span>tidied up the step order:
+why does L1 sometimes go first and L2 other times (uncertainty removed); compared L1→L2→L3→R1→R2→R3 against a left-right alternating order,
+finally settling on <b>the alternating order starting with R3</b> (R3→L1→R2→L3→R1→L2).</li>
+<li><span class="tm">09:30-09:58</span><span class="tag t-ask">Question</span>confirming the drive principle:
+is forward motion mainly from hip rotation? do the other legs' coxas move along with it? default stride 40mm? why can the coxa not sweep 25°
+→ changed to 22° to try; do --max-step 66 and --speed 22 have to be given together, and are they compatible with --no-tank.</li>
+<li><span class="tm">10:15</span>bring the landing point a bit closer to the body, so the cup axis is closer to perpendicular.</li>
+<li><span class="tm">11:10</span>uploaded the black-box log + <code>real_climb.mp4</code>:
+pointed at R1 at 21-22s and L1 at 32-34s — when the leg lifts, the coxa clearly "gets dragged down first, then moves up".</li>
+<li><span class="tm">12:52</span><span class="tag t-fix">Correction</span>the AI's attribution "the front legs' press reaction force
+points differently" was rejected: "your analysis is wrong, the other legs do it too, I just did not mention it; I compared it with the floor-crawling video" —
+and he gave his own explanation: after the previous leg lands and before this one lifts there is a forward body-lean move, and under gravity R1's coxa rotation within that lean
+<b>came a beat late</b>, executing only after the lift, which is why you see it go down first and then up.</li>
+<li><span class="tm">13:05-13:20</span>cleared up the semantic disagreement about "leaning forward" (= the body moves in the L1/R1 forward direction,
+not tilting toward the wall), confirmed the 18 joints can do it → <span class="tag t-dec">Decision</span>split it into a separate script
+<code>body_lean.py</code>: ↑↓ keys for forward/backward lean + single-leg lift, not mixed into climb_walk.</li>
+<li><span class="tm">13:43-14:53</span>a catch-up lesson: asked for <code>gait-to-servo.html</code>
+(diagrams + animation explaining "how the joints move, and how a movement becomes a pulse-width command"); followed up asking which other legs' joints also move throughout VENT→WAIT;
+found the "stance phase and swing phase" chapter not detailed enough and asked for a rewrite.</li>
+<li><span class="tm">15:41</span>proposed switching to a slow serial gait "driven by the walking length per cycle" (valves and joint
+moves in series, the whole process slow enough to debug); reported a comparison experiment: <b>lean measures ~40mm on the floor but only ~20mm on the wall</b>
+(target 50mm). <span class="tm">15:53</span>settled in passing: --no-tank on the wall has been validated several times,
+so the "never use on the wall" wording was deleted.</li>
+<li><span class="tm">16:16</span><span class="tag t-brk">Breakthrough</span>the most important passage of the day (the user's own words):</li>
+</ul>
+<div class="quote">"If the elastic energy in the lifted leg is fairly large, the lifted leg releases that energy and
+<b>the whole body actually moves down some distance, and I think this is what keeps it from advancing</b>. Analyse it."
+— confirmed by data the next day as 83% of the cause.</div>
+</div>
+
+<div class="card day big">
+<div class="dayhead"><b>08-20 Thu</b><span class="chip">9 msgs</span>
+<span class="theme">The ratchet nailed down quantitatively → zero-force handover designed and implemented</span></div>
+<ul>
+<li><span class="tm">02:47</span>reported experiment ① (zero command, each leg lifted and landed in the order R3→L1→R2→L3→R1→L2 for 2 rounds),
+readings taken by hand: round one 148→143→131→128→119→103→91, round two 81→60→56→42→25→17
+— slip of 57→74mm per round. <span class="tm">03:03</span>added the video
+<code>lean_20260820.mp4</code> + the black-box log, and answered the questions point by point: zero cup slip, zero drift at rest,
+unit mm, a decreasing value = downward along the wall.</li>
+<li>Frame-by-frame quantification of the video (NCC tracking, 0.881mm/px) produced the report <code>vent-snap-20260820.html</code>:
+<span class="num">83%</span> of the slip happens <b>at the instant the vented seal ruptures</b> (during the 0.4s of pressure release after the valve opens
+the body moves &lt;0.15mm; after the rupture it drops all the way in 1~2 frames); the press landing accounts for only 4%;
+the largest single bounce is L1 at 20.9mm, capped at ~21mm (servo torque saturation); whole-robot current ratchets up cycle by cycle from 0.73 to ~1.9A.
+<b>The slow-venting idea was vetoed by the data</b>.</li>
+<li><span class="tm">03:25-03:31</span><span class="tag t-dec">Decision</span>the remedy =
+<b>zero-force handover before vent</b> (the lifted leg "gives back" δ along the uphill direction to unload, the other five legs take δ/5 each, and only when force ≈ 0 does it vent).
+Working method made explicit: "you write the design document first, I will implement it in the next session" → HANDOVER-DESIGN.md
+(δ starting value = measured bounce × 0.8).</li>
+<li><span class="tm">03:41</span>new session: "review the document; if it is right, implement it directly, otherwise correct it and then implement"
+→ <code>--handover</code> finished the same day (including 8 new tests, 81 all green);
+<span class="tm">04:11</span>asked for the §9.3 on-robot A/B protocol to be designed:
+<code>body_lean --handover L1:17,R1:15,L3:11,R3:9,R2:5,L2:5</code>
+→ produced HANDOVER-AB-PROTOCOL.md + the quantification pipeline <code>ab_quant.py</code>, committed.</li>
+</ul>
+</div>
+
+<div class="card day">
+<div class="dayhead"><b>08-21 Fri</b><span class="chip">2 msgs</span>
+<span class="theme">Retrospective</span></div>
+<ul>
+<li>Confirmed that searching the session history is feasible → compiled this timeline (all 403 hand-typed messages extracted).</li>
+</ul>
+</div>
+
+<h2>Patterns across the days, and the retrospective</h2>
+
+<div class="card">
+<ul>
+<li><b>What the three breakthroughs have in common</b>: the tibia three-view correction (08-07), the USB3.0 undervoltage pattern (08-16),
+the elastic-energy root cause (08-19) — all of them are the user pushing the AI's wrong assumption back with a photo of the real part or with a measurement,
+not something obtained by asking more questions. <b>Confronting it with a drawing</b> (a three-view, a schematic HTML) is the most effective way to resolve a disagreement about the facts;
+the gait-to-servo explainer page of 08-19 belongs to the same pattern — first fill the gap in understanding, then judge whether the AI's analysis is right.</li>
+<li><b>The full causal chain of "stepping in place"</b>: exposed by the first wall test on 08-17 → --sag-comp compensation (symptomatic) →
+seven or eight fixes along the land-and-attach chain during the day of 08-19 (necessary, but not the main cause) → the user names the elastic-energy root cause on the evening of 08-19 →
+quantified and nailed down on 08-20 (83% at the instant of seal rupture) → zero-force handover as the root fix. Exactly four days end to end.</li>
+<li><b>Both "suspected dead hardware" scares were false alarms</b>: 08-09 R1 servo-horn splines stripped (a new horn settled it),
+08-18 the Pi red LED and no boot (a different power supply fixed it). Components actually written off: zero;
+but the 08-18 troubleshooting cost the most (a whole morning of point-by-point multimeter measurements), and the lesson was banked as the exit-sequence redo plus the file log.</li>
+<li><b>Four recorded cases of the user correcting the AI</b>: the servo-horn position "wildly wrong" on 08-07, deleting the unsourced
+"dragged toward the wall in tank mode" record on 08-19, rejecting the "front-leg press reaction force" attribution on 08-19, clearing up the semantic disagreement about "leaning forward" on 08-19.
+What they share: the user held physical or video evidence the AI did not have.</li>
+<li><b>Message volume equals conflict volume</b>: 67 messages (the push day), 46 (the L3 dispute), 43/42/35 corresponding respectively to
+scheme questions, the first wall test and incident troubleshooting; conversely 08-20 needed only 9 messages to go "experiment → report → design → implementation"
+— once the problem had been thought through the day before, the rest goes fast.</li>
+</ul>
+</div>
+
+<div class="warn">
+<b>Current to-do</b>: with <code>--handover</code> (δ starting values L1:17 / R1:15 / L3:11 / R3:9 / R2:5 / L2:5)
+run the §9.3 on-robot A/B experiment on the wall; the protocol is in <code>docs/HANDOVER-AB-PROTOCOL.md</code>,
+the quantification pipeline in <code>software/logs_analysis/ab_quant.py</code>.
+Acceptance criteria: displacement per round &lt;10mm (baseline 76.4), per-leg vent jump |x|≤2mm,
+current no longer climbing cycle by cycle, body smooth to |x|≤3mm during the handover segment. Judgement is always on round 2; --sag-comp stays 0 during the A/B.
+</div>
+
+<p class="cap">Data source: <code>~/.claude/projects/-home-shaopeng-spider/*.jsonl</code> (28 sessions),
+extracted 2026-08-21; only hand-typed user messages are counted, tool output and system messages excluded. Times are in the machine's local timezone.</p>
+
+</main>
+</body>
+</html>

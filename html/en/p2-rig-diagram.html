@@ -1,0 +1,194 @@
+<!-- English translation of html/p2-rig-diagram.html (2026-09-05). The Chinese original is the maintained source. -->
+<title>P2 single-leg wall rig geometry</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 10px 6px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+
+  .sv-part { fill: var(--part); fill-opacity: .55; stroke: var(--part-stroke); stroke-width: 1.5; stroke-linejoin: round; }
+  .sv-solid { fill: var(--part); fill-opacity: .85; stroke: var(--part-stroke); stroke-width: 1.2; }
+  .sv-glass { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .sv-femur { stroke: var(--part-stroke); stroke-width: 11; stroke-linecap: round; }
+  .sv-link  { stroke: var(--part-stroke); stroke-width: 9; stroke-linecap: round; }
+  .sv-axis  { stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 11 4 2 4; fill: none; }
+  .sv-cupax { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 11 4 2 4; fill: none; }
+  .sv-plane { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 6; fill: none; }
+  .sv-kp    { stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: 8 6; fill: none; }
+  .sv-delta { stroke: var(--warn); stroke-width: 2.2; fill: none; }
+  .sv-dim   { stroke: var(--muted); stroke-width: 1.1; fill: none; }
+  .sv-fold  { stroke: var(--part-stroke); stroke-width: 1.1; opacity: .85; }
+  .sv-lip   { stroke: var(--part-stroke); stroke-width: 5; stroke-linecap: round; }
+  .sv-dot   { fill: var(--accent); stroke: var(--panel); stroke-width: 2.5; }
+  .sv-warnfill { fill: var(--warn); fill-opacity: .55; stroke: var(--warn); stroke-width: 1; }
+  .sv-cush  { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1; stroke-dasharray: 3 3; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-pt   { font-size: 14px; font-weight: 700; fill: var(--accent); }
+  .t-seg  { font-size: 11.5px; fill: var(--muted); }
+  .t-dim  { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-warn { font-size: 12px; font-weight: 700; fill: var(--warn); }
+  .t-acc  { font-size: 11.5px; fill: var(--accent); }
+  .t-h    { font-size: 13.5px; font-weight: 700; }
+  .t-b    { font-size: 12px; fill: var(--ink); }
+  .t-bm   { font-size: 11.5px; fill: var(--muted); }
+  .t-foot { font-size: 10.5px; fill: var(--muted); }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">Spider · P2 single-leg wall climbing · P2-GUIDE steps 2–4</p>
+    <h1>P2 rig geometry (side view, to scale in mm)</h1>
+    <p class="sub">Pose = wall-touch position (z=−90, free cup just touching the glass). The blue dashed line is the model's virtual K→P line;
+    the real cup axis runs along the square shaft and differs from it by a constant δ=22.7° — every rig number is solved for "cup axis ⊥ glass".</p>
+  </header>
+
+  <figure>
+    <svg viewBox="0 0 660 600" role="img" aria-label="P2 rig side view: post, rail and carriage; coxa servo pointing horizontally at the glass; leg reaching down with the cup touching the wall">
+      <!-- Glass and backing board -->
+      <rect class="sv-glass" x="363" y="36.5" width="10.2" height="501.5"/>
+      <rect class="sv-solid" x="373.2" y="36.5" width="13.6" height="501.5"/>
+      <!-- Column / base / floor -->
+      <rect class="sv-solid" x="65.5" y="19.5" width="23.8" height="535.5"/>
+      <rect class="sv-solid" x="48.5" y="555" width="136" height="17"/>
+      <line class="sv-dim" x1="20" y1="572" x2="420" y2="572"/>
+      <!-- Rail / carriage plate / lock pin / counterweight -->
+      <rect class="sv-part" x="89.3" y="36.5" width="13.6" height="493"/>
+      <rect class="sv-part" x="102.9" y="70.5" width="30.6" height="195.5"/>
+      <rect class="sv-warnfill" x="82.5" y="82.4" width="30.6" height="10.2"/>
+      <rect class="sv-solid" x="133.5" y="215" width="42.5" height="23.8"/>
+      <rect class="sv-solid" x="133.5" y="242.2" width="42.5" height="23.8"/>
+      <!-- Bumper pad -->
+      <rect class="sv-cush" x="102.9" y="529.5" width="56.1" height="22.1"/>
+      <!-- coxa servo case (output shaft points horizontally at the glass) -->
+      <rect class="sv-part" x="133.5" y="109.6" width="73.1" height="40.8"/>
+      <!-- Virtual body plane (case mounting face) -->
+      <line class="sv-plane" x1="210" y1="28" x2="210" y2="470"/>
+      <!-- coxa axis -->
+      <line class="sv-axis" x1="125" y1="130" x2="359.6" y2="130"/>
+      <!-- 90mm dimension -->
+      <line class="sv-dim" x1="210" y1="70.5" x2="363" y2="70.5"/>
+      <line class="sv-dim" x1="210" y1="65" x2="210" y2="76"/>
+      <line class="sv-dim" x1="363" y1="65" x2="363" y2="76"/>
+      <!-- FOOT_X dimension -->
+      <line class="sv-dim" x1="244" y1="130" x2="244" y2="417.3"/>
+      <line class="sv-plane" x1="363" y1="417.3" x2="244" y2="417.3"/>
+      <line class="sv-dim" x1="238" y1="130" x2="250" y2="130"/>
+      <line class="sv-dim" x1="238" y1="417.3" x2="250" y2="417.3"/>
+      <!-- Leg: coxa link C→F, femur F→K -->
+      <line class="sv-link" x1="210" y1="130" x2="210" y2="203.1"/>
+      <line class="sv-femur" x1="210" y1="203.1" x2="176.3" y2="334.9"/>
+      <!-- tibia-suction rigid body (STL silhouette) -->
+      <polygon class="sv-part" points="138.8,289.6 210.2,291.0 208.0,401.5 311.7,403.4 312.0,387.6 339.2,388.1 338.2,445.9 311.0,445.4 311.3,427.2 161.0,424.3"/>
+      <!-- Bellows suction cup (free state, lip against the glass) -->
+      <polygon class="sv-part" points="339.2,391.5 363,391.8 363,442.8 338.2,442.5"/>
+      <line class="sv-fold" x1="347" y1="393.5" x2="346.6" y2="441"/>
+      <line class="sv-fold" x1="355" y1="394" x2="354.6" y2="441.5"/>
+      <line class="sv-lip" x1="363" y1="392" x2="363" y2="442.6"/>
+      <!-- K→P virtual line and cup axis -->
+      <line class="sv-kp" x1="176.3" y1="334.9" x2="363" y2="417.3"/>
+      <line class="sv-cupax" x1="303.5" y1="416.8" x2="383.4" y2="416.8"/>
+      <path class="sv-delta" d="M 277.5 379.6 A 93.5 93.5 0 0 0 269.5 415.6"/>
+      <!-- Unlock / slide-down arrow -->
+      <line class="sv-dim" x1="118" y1="272" x2="118" y2="298"/>
+      <polygon points="118,306 113.5,297 122.5,297" style="fill: var(--muted)"/>
+      <!-- Joint points -->
+      <circle class="sv-dot" cx="210" cy="130" r="6"/>
+      <circle class="sv-dot" cx="210" cy="203.1" r="6"/>
+      <circle class="sv-dot" cx="176.3" cy="334.9" r="6"/>
+      <circle class="sv-dot" cx="363" cy="417.3" r="5"/>
+      <!-- Text: parts -->
+      <text class="t-seg" x="369" y="60" transform="rotate(90 369 60)">Glass (wiped with alcohol)</text>
+      <text class="t-seg" x="381" y="60" transform="rotate(90 381 60)">Backing board</text>
+      <text class="t-seg" x="77" y="260" transform="rotate(90 77 260)">Post</text>
+      <text class="t-seg" x="96" y="300" transform="rotate(90 96 300)">Rail</text>
+      <text class="t-seg" x="118" y="150" transform="rotate(90 118 150)">Carriage plate</text>
+      <text class="t-seg" x="97" y="77" text-anchor="middle">Lock pin</text>
+      <text class="t-seg" x="155" y="210" text-anchor="middle">Counterweight</text>
+      <text class="t-seg" x="170" y="103" text-anchor="middle">coxa servo (axis ⊥ glass)</text>
+      <text class="t-seg" x="131" y="545" text-anchor="middle">Bumper pad</text>
+      <text class="t-seg" x="124" y="296">Unlock → carriage slides down (loaded)</text>
+      <text class="t-seg" x="214" y="486">Virtual body plane</text>
+      <text class="t-seg" x="214" y="502">(shell mounting face)</text>
+      <!-- Text: geometry -->
+      <text class="t-dim" x="286" y="63" text-anchor="middle">H = 90 mm (slot ±20 adjustable)</text>
+      <text class="t-dim" x="252" y="270" transform="rotate(90 252 270)">FOOT_X = 169</text>
+      <text class="t-pt" x="216" y="124">C (hip)</text>
+      <text class="t-pt" x="222" y="208">F</text>
+      <text class="t-pt" x="166" y="330" text-anchor="end">K (knee)</text>
+      <text class="t-pt" x="358" y="460" text-anchor="end">P (lip)</text>
+      <text class="t-seg" x="188" y="270" text-anchor="end">femur</text>
+      <text class="t-seg" x="278" y="416" text-anchor="middle">tibia-suction</text>
+      <text class="t-acc" x="268" y="366" text-anchor="middle" transform="rotate(23.8 268 366)">K→P (model virtual line, l3=120)</text>
+      <text class="t-acc" x="300" y="437" text-anchor="end">Cup axis ⊥ glass</text>
+      <line class="sv-dim" x1="305" y1="432" x2="330" y2="419"/>
+      <text class="t-warn" x="258" y="396" text-anchor="end">δ=22.7°</text>
+      <!-- Right-column notes -->
+      <text class="t-h" x="398" y="84">Key geometry</text>
+      <text class="t-b" x="398" y="108">Hip plane to glass H = 90 mm</text>
+      <text class="t-b" x="398" y="128">FOOT_X = 169: cup axis ⊥ glass when pressed</text>
+      <text class="t-b" x="398" y="148">Press depth 15 = 13.5 preload travel + 1.5 preload</text>
+      <text class="t-b" x="398" y="168">Cup axis ≤4.5° off normal over the whole cycle (tolerance 15°)</text>
+      <text class="t-h" x="398" y="204">Cycle z phases (drawn = wall touch)</text>
+      <text class="t-b" x="398" y="228">Lift-off z=−70: lip 20 mm off the glass</text>
+      <text class="t-b" x="398" y="248">Touch z=−90: free cup just touches the glass</text>
+      <text class="t-b" x="398" y="268">Press z=−105: bellows compressed + preload</text>
+      <text class="t-h" x="398" y="304" style="fill: var(--warn)">What δ = 22.7° is</text>
+      <text class="t-b" x="398" y="328">Knee axis K sits 46.5 mm off the square shaft; the model's</text>
+      <text class="t-b" x="398" y="348">virtual line K→P differs from the real cup axis by a constant 22.7°.</text>
+      <text class="t-b" x="398" y="368">Solving for K→P ⊥ glass (old value 122) would push the cup</text>
+      <text class="t-b" x="398" y="388">into the glass at a 22.5° slant → no seal.</text>
+      <text class="t-b" x="398" y="408">Correct: a_t=−67.3° → FOOT_X=169.</text>
+      <text class="t-bm" x="398" y="444">Servo travel used (press pose):</text>
+      <text class="t-bm" x="398" y="460">α −45.6°, k −22.1°, margin ≥44°</text>
+      <text class="t-bm" x="398" y="492">Once the pin is pulled, carriage + 1.5 kg counterweight all</text>
+      <text class="t-bm" x="398" y="508">hang on the attached leg = the real single-leg load of the whole robot</text>
+      <text class="t-foot" x="16" y="592">Side-view sketch, to scale in mm (1.7 px/mm); pose = wall touch. The tibia outline is the STL projection; the cup is drawn in its free state. In the press pose the bellows collapse and the rigid part advances about 1 mm more as preload.</text>
+    </svg>
+  </figure>
+
+  <div class="note">
+    <b class="d">This figure carries an important correction (2026-07-18)</b>: all earlier analyses used the model's K→P direction
+    (<code>a_t</code>) as the cup axis — but the knee axis K is not on the square shaft, and the two differ by a constant <b class="d">δ=22.7°</b>
+    (<code>LEG-GEOMETRY-OPEN.md</code> §2.13, downstream of the old error in §3.1).
+    The floor-stance sanity check comes out right: in the official stance the cup axis is only 9.7° off vertical, almost flat on the ground.
+    Follow-on corrections: <code>single_leg_wall.py</code> FOOT_X 122→169; CLIMBING-DESIGN §6
+    wall stance reach 130→170; the usable footfall band for the floor-to-wall transition actually gets wider. Rig setup steps are in
+    <code>docs/P2-GUIDE.md</code> steps 2–3.
+  </div>
+</main>

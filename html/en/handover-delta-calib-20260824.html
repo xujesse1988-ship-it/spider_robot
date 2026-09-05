@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<!-- English translation of html/handover-delta-calib-20260824.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>δ three-run calibration: bounce ≠ stored energy (2026-08-24)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+  /* Same family as vent-snap-20260820.html: committed to the repo for local browsing, single light theme (deliberate; background and text colors all explicit) */
+  * { box-sizing: border-box; }
+  body { font-family: "Noto Sans SC", "PingFang SC", sans-serif; margin: 0;
+         color: #1c2733; background: #f6f8fa; line-height: 1.75; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 26px; line-height: 1.35; text-wrap: balance; margin: 10px 0 6px; }
+  h2 { font-size: 20px; margin: 44px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  h3 { font-size: 16px; margin: 20px 0 6px; }
+  p { margin: 8px 0; }
+  .meta { font-size: 14px; color: #55606e; }
+  .card { background: #fff; border: 1px solid #e3e8ee; border-radius: 10px;
+          padding: 18px 20px; margin: 18px 0; }
+  .tldr { border-left: 4px solid #c0392b; }
+  .warn { background: #fff8e6; border: 1px solid #e8d9a0; border-radius: 8px;
+          padding: 10px 14px; font-size: 14px; margin: 12px 0; }
+  .note { background: #eef5ee; border: 1px solid #cfe3cf; border-radius: 8px;
+          padding: 10px 14px; font-size: 14px; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px;
+          font-variant-numeric: tabular-nums; }
+  th, td { border: 1px solid #dfe5ec; padding: 5px 9px; text-align: right; }
+  th { background: #eef2f6; font-weight: 500; }
+  td:first-child, th:first-child { text-align: left; }
+  tr.hl td { background: #fdeeee; }
+  .num { font-weight: 700; color: #c0392b; }
+  .cap { font-size: 13px; color: #556170; margin: 4px 0 0; }
+  code { background: #eef2f6; border-radius: 4px; padding: 1px 5px; font-size: 0.92em; }
+  pre { background: #f2f5f8; border: 1px solid #e0e6ec; border-radius: 8px;
+        padding: 12px 14px; font-size: 12.5px; line-height: 1.55; overflow-x: auto;
+        font-variant-numeric: tabular-nums; }
+  pre code { background: none; padding: 0; }
+  .figwrap { overflow-x: auto; }
+  svg text { font-family: "Noto Sans SC", "PingFang SC", sans-serif; }
+  .cols { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  details { margin: 10px 0; }
+  summary { cursor: pointer; color: #2a5a8c; font-size: 14.5px; }
+  summary:focus-visible, a:focus-visible { outline: 2px solid #c0392b; outline-offset: 2px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px;
+            color: #3a4552; margin: 4px 0 2px; }
+  .legend span::before { content: ""; display: inline-block; width: 11px; height: 11px;
+            border-radius: 3px; margin-right: 5px; vertical-align: -1px;
+            background: var(--c); }
+  #tip { position: fixed; pointer-events: none; background: #1c2733; color: #f6f8fa;
+         font-size: 12.5px; padding: 4px 9px; border-radius: 6px; opacity: 0;
+         transition: opacity .08s; z-index: 10; white-space: nowrap;
+         font-variant-numeric: tabular-nums; }
+  a { color: #2a5a8c; }
+  ul, ol { margin: 8px 0; padding-left: 1.6em; }
+  li { margin: 3px 0; }
+  @media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
+</style>
+</head>
+<body>
+<div id="tip" role="status"></div>
+<main>
+<h1>Zero-force handover δ three-run calibration: bounce ≠ stored energy</h1>
+<p class="meta">2026-08-24 · glass wall, per-leg lift/land in place (window order R3→L1→R2→L3→R1→L2, about two and a half rounds each) ·
+code <code>dd778e6</code> · iPhone 16 Pro Max 4K@30 HEVC originals ·
+NCC tracking of the body PCB + static reference on hazard-stripe tape (hand-held shake of 22–25 px removed) ·
+scale: cm graph paper 0.358 → glass plane <b>0.318 mm/px</b> (the mm convention of this page, ±10% systematic uncertainty on absolute values; the δ* extrapolation is independent of scale) ·
+conclusions already landed: <code>2990449</code> (δ parse cap 25→45 + calibration method changed to linear extrapolation)</p>
+
+<div class="card tldr">
+<b>TL;DR</b>: the three-run comparison δ=0 / 12 / 24 shows the per-leg vent bounce falling <b>strictly linearly</b> with δ, but
+at the cap δ=24 every leg still bounces down — extrapolating to zero bounce needs <span class="num">δ* ≈ 28–42 mm/leg</span> (front legs ~40),
+all above the 25 mm parse cap of the time. The root is a semantic error in the calibration: <b>the bounce at the vent instant is only the reading after the stored energy has been caught in parallel by the other five legs
+(≈1/5–1/8 of the stored energy); what δ must give back is the stored energy itself</b> — so the "bounce×0.8" starting table was systematically
+4–8× low. Total slip per round <span class="num">66 → 50 → 39 mm</span>: right direction, insufficient dose.
+The handover mechanism itself works (body displacement during the handover segment essentially zero, criterion 4 passed).
+</div>
+
+<h2>1. Experimental setup</h2>
+<div class="card">
+<table>
+<tr><th>Run</th><th>δ (same for all six legs)</th><th>Command-line difference</th><th>Log / video (<code>lean_20260824_*</code>)</th><th>Lift/land count</th><th>Sync off</th></tr>
+<tr><td>A</td><td>0 (off)</td><td>— (baseline replica)</td><td>130355</td><td>17 valid</td><td>76.14s</td></tr>
+<tr><td>B</td><td>12</td><td><code>--handover …:12</code></td><td>130830</td><td>17 valid</td><td>47.24s</td></tr>
+<tr><td>C</td><td>24</td><td><code>--handover …:24</code></td><td>131437</td><td>17 valid</td><td>53.14s</td></tr>
+</table>
+<p class="cap">Common parameters: <code>body_lean.py --no-tank --stand-height 62 --tilt-trim 6</code> (press 18, same condition as the 08-20 baseline).
+The last L2#3 of each run was not covered by the video; all three recordings started only 1–2 s before the first lift (see §2 errata).</p>
+</div>
+
+<h2>2. Data quality and two errata</h2>
+<div class="warn"><b>Erratum 1: the ab_quant activity-contrast sync was wrong for all three runs.</b>
+Run A was off by one lift/land interval (off 83.25 vs. true 76.14, contrast 0.1, clearly unlocked); runs B/C were off by 5–6 slots
+(82.05/93.70 vs. 47.24/53.14) — and B/C's contrasts of 4.8/8.6 <b>looked healthy</b>: the lift/land rhythm is quasi-periodic,
+so an integer-slot offset scores just as well. Root cause = the ↑↓ lean sync marker of protocol §4.3 was skipped + the recordings had no quiet reference segment before the first lift.
+All numbers on this page are based on a <b>step-basis regression</b> re-sync (y(t) fitted by least squares to steps at the 18 rel instants,
+R² = 0.9998 / 0.9997 / 0.9995 for the three runs, clearly separated from the second-best peak; script <code>~/ab_cache/redecompose.py</code>).
+Next experiment: do the sync marker without fail; adding a step fallback / manual <code>--off</code> to the pipeline is a separate item.</div>
+<div class="warn"><b>Erratum 2: no tape ruler for scale calibration; three-plane geometry used instead.</b>
+The background is a 1 m tall sheet of cm graph paper (uniform 27.9 px/cm top to bottom → paper plane 0.358 mm/px), but the paper sits about 9 cm behind the glass,
+with parallax relative to the cup plane. Closing the loop with the lens FOV + joint height differences gives glass plane ≈0.318, body plane ≈0.27 mm/px.
+The mm values on this page use the <b>glass-plane convention</b> (comparable with the 08-20 practice of a tape ruler on the glass), ±10% systematic uncertainty on absolute values;
+<b>δ* = intercept/|slope| scales numerator and denominator alike, so the extrapolation is independent of calibration</b> — the hardest number of this experiment.</div>
+<p>Tracking health: median body_score 0.85 / 0.93 / 0.88, ref_score min ≥ 0.67; camera shake (ref_y range)
+22–25 px is hand-held grade and was removed frame by frame against the static reference — after removal the trajectory is explained by a pure step basis to R²≥0.9995,
+which is itself proof that the tracking is clean.</p>
+
+<h2>3. Main result: bounce is linear in δ, extrapolated δ* = 28–42 mm</h2>
+<div class="card">
+<div class="legend">
+  <span style="--c:#2a78d6">L1</span><span style="--c:#eb6834">R1</span>
+  <span style="--c:#1baf7a">L3</span><span style="--c:#eda100">R3</span>
+  <span style="--c:#e87ba4">R2</span><span style="--c:#008300">L2</span>
+</div>
+<div class="figwrap"><div id="chartA"></div></div>
+<p class="cap">Fig. 1 · Per-leg vent jump (round 2, mm) vs. handover amount δ. Solid = three-point least-squares fit (measured range 0–24),
+dashed = extrapolation to the zero-bounce point δ* (△ marker). Vertical grey line = the parse cap of 25 at the time (raised to 45 today).
+The three δ points are almost exactly collinear (mid-point residual ≤1 mm) ⇒ bounce = (stored energy − δ)×constant, and the stored energy does not change with δ.</p>
+<table style="margin-top:12px">
+<tr><th>Leg</th><th>δ=0</th><th>δ=12</th><th>δ=24</th><th>Slope<br>(mm bounce/mm δ)</th><th>δ* (round 2)</th><th>δ* (round 3 check)</th><th>New table δ*×0.8</th></tr>
+<tr class="hl"><td>L1</td><td>22.5</td><td>14.4</td><td>8.9</td><td>−0.57</td><td class="num">38.9</td><td>41.7</td><td><b>31</b></td></tr>
+<tr class="hl"><td>R1</td><td>16.3</td><td>11.3</td><td>6.9</td><td>−0.39</td><td class="num">41.4</td><td>39.1</td><td><b>33</b></td></tr>
+<tr><td>L3</td><td>7.7</td><td>5.0</td><td>2.7</td><td>−0.21</td><td class="num">36.6</td><td>(round 3 noisy)</td><td><b>29</b></td></tr>
+<tr><td>R3</td><td>7.2</td><td>3.4</td><td>1.2</td><td>−0.25</td><td class="num">27.7</td><td>32.3</td><td><b>22</b></td></tr>
+<tr><td>R2</td><td>3.5</td><td>2.0</td><td>0.5</td><td>−0.13</td><td class="num">28.0</td><td>30.4</td><td><b>22</b></td></tr>
+<tr><td>L2</td><td>4.1</td><td>3.0</td><td>0.7</td><td>−0.14</td><td class="num">30.4</td><td>(not covered by video)</td><td><b>24</b></td></tr>
+</table>
+<p class="cap">The slopes differ 4× between legs (L1 −0.57 vs. R2 −0.13) = leg-chain stiffness differences: this also rules out the conversion
+"δ = 5× own bounce" under the uniform-stiffness approximation — the correct calibration is per-leg linear extrapolation, each leg growing its own conversion factor
+(L1 needs only 1.7× its own bounce, R2 needs 8×). The first-lift R3 bounce ≈0 in round 1 matches the model's prediction "zero preload at landing, no stored energy at the first lift".</p>
+</div>
+
+<h2>4. Slip per round and trajectories</h2>
+<div class="card">
+<div class="cols">
+<div class="figwrap"><div id="chartC"></div></div>
+<div style="flex:1;min-width:260px">
+<p>Clean dose-response: round-2 total slip <b>65.6 → 50.0 → 38.7 mm</b> (−24% / −41%).
+Right direction, but still far from the protocol's &lt;10 mm/round pass line — δ=24 returned only 58–86% of each leg's stored energy.</p>
+<p>The within-round shape is consistent across the three runs (round 1 includes the first-round ramp, round 3 lacks the last L2 in each), so the decrease is the effect of δ, not day-to-day drift;
+run A's shape matches the 08-20 baseline (L1/R1 largest, total 66 vs. 74, −11% within day-to-day range).</p>
+</div>
+</div>
+<div class="figwrap"><div id="chartB"></div></div>
+<p class="cap">Fig. 3 · Body trajectories of the three runs (cumulative slip mm, down positive; after reference correction). Top ticks = seal-rupture instants (rel).
+All three are clean staircases: displacement happens almost entirely at the rupture instants, and δ only makes each step shorter — the 08-20 conclusion that slow venting does not help still stands.</p>
+</div>
+
+<h2>5. Three mechanism checks</h2>
+<div class="card">
+<ol>
+<li><b>Linearity ⇒ stored energy does not change with δ.</b> The share handed to the stance legs is returned exactly during the rotation (geometric closure),
+so increasing δ does not lower the system's wind-up level; it only deducts one more share at the vent instant — the collinearity of the three points is exactly this prediction.</li>
+<li><b>Step-basis R²≥0.9995 ⇒ displacement still concentrates at the rupture instant.</b> Including the δ=24 run: the handover changes the step height,
+not the moment when displacement occurs.</li>
+<li><b>Body displacement during the handover segment ≈ 0 (criterion 4 passed, with one explained exception).</b> Run B all ≤0.7 mm;
+run C all ≤2 mm except L1 at +2.4 to +3.3 mm (on the protocol's 3 mm line). L1's slight sinking is the inherent physics of unequal stiffness:
+when the stiffest leg of the whole robot is unloaded, the k-weighted mechanical equilibrium must shift a little toward the soft side, growing linearly with δ — not an apportioning-direction bug;
+in the reading it is waved through as the same kind as a "small step on the uphill side".</li>
+</ol>
+</div>
+
+<h2>6. Current: the ratchet persists, and the original v2 idea "look for a plateau in total current" is refuted by the data</h2>
+<div class="card">
+<p>Total current (driver-board ADC, quantization 81 mA/LSB): all three runs start at rest around ~0.76 A and end at rest at
+<b>1.65 / 2.39 / 2.90 A</b> without coming back down — if δ is not sufficient, internal stress accumulates as before (absolute values across runs are disturbed by battery state, qualitative only).</p>
+<div class="legend">
+  <span style="--c:#eb6834">R1#1 (unloading a front leg: falls to a "plateau")</span>
+  <span style="--c:#e87ba4">R2#3 (unloading a middle leg: the sum rises instead)</span>
+</div>
+<div class="figwrap"><div id="chartD"></div></div>
+<p class="cap">Fig. 4 · Bus current inside two handover windows of run C (pump-off samples, 0.5 s sampling; t=0 handover start, dashed = δ=24 fully apportioned, vent).
+R1 "falls to a plateau" as soon as δ≈10 mm is apportioned — but the video quantification shows R1 still has a residual 6.9 mm bounce at δ=24 (δ*=41):
+<b>the knee in the total current is the balance point "unloading gain = loading gain", not the zero-force point</b>. R2 is even more direct: its own stored energy is small,
+its loading share is pushed onto the front legs that were already the heaviest, and the sum rises all the way with no usable falling signal.</p>
+<p><b>Meaning for v2</b>: total robot current is unfit as a per-leg zero-force detector, but adequate as <b>residual telemetry</b> —
+instead measure the current step <b>at the instant of seal rupture</b> (the rupture instant is given by the cup pressure venting→released transition; the vent valve coil
+was energized 0.4 s before rupture, so differencing cancels it automatically; 50 Hz per-tick sampling suffices); the step height ∝ residual stored energy,
+feeding directly into the per-leg correction rule of protocol §6 — from then on calibrating δ needs no camera. The endgame sensor is an IMU
+(the body acceleration pulse at rupture is an order of magnitude cleaner than bus current, and it also captures the true gravity direction of _down).</p>
+</div>
+
+<h2>7. Landed and next steps</h2>
+<div class="card">
+<p><b>Landed (commit <code>2990449</code>, 96 tests green + pty smoke on three branches):</b></p>
+<ul>
+<li><code>parse_handover</code> cap 25→45 (the old reason "&gt;21 makes no sense beyond the bounce ceiling" came from the same wrong account as the "bounce×0.8" starting method);
+the workspace is guarded by climb_walk's hard refusal at startup (δmax ≤ comp_tail − half stride) + the step-4.7 per-tick envelope clipping — the smoke test confirms the budget account takes over correctly after the cap is lifted.</li>
+<li>The <code>--handover</code> help of both scripts now describes the new calibration method; the design §5 calibration-semantics correction ⚠ is on record (the old table is annotated as archive only);
+the protocol §6 correction clamp 21→45, and the correction amount is now converted by the per-leg slope δ_i ← min(δ_i + 0.8×residual/|slope_i|, 45).</li>
+</ul>
+<p><b>Next (in priority order):</b></p>
+<ol>
+<li>Re-verify the new table on the wall (a fourth run under the same conditions):<br>
+<code>python scripts/body_lean.py --no-tank --stand-height 62 --tilt-trim 6 --handover L1:31,R1:33,L3:29,R3:22,R2:22,L2:24</code><br>
+Expected round-2 residual bounce ≈ L1 4.4 / R1 3.2 / L3 1.5 / R3 1.4 / R2 0.7 / L2 0.9 mm, total slip per round ~12 mm;
+legs off expectation are tightened by the new correction rule. <b>Do the ↑↓ sync marker without fail.</b></li>
+<li>Walking convention: the new table's δmax=33 fits under the current parameters (stand 60 / press 18 / trim 8 / step 78 → budget 40.1),
+no need to shorten the stride; enabling <code>--handover-weights</code> is a separate variable and is done apart from the δ calibration.</li>
+<li>v2a residual step meter piggy-backed (50 Hz ring buffer + differencing before/after rupture, script level, zero engine changes).</li>
+</ol>
+</div>
+
+<h2>8. Appendix: full decomposition tables and reproduction</h2>
+<details><summary>Run A (δ=0) per-event decomposition · off=76.14 R²=0.9998</summary>
+<pre>  # leg   | vent jump | swing  | landing  | rest  | full cycle (mm, +=down)
+  0 R3#1 |    -0.0 |   -1.8 |    +7.1 |  -7.6 |   -2.3
+  1 L1#1 |   +27.9 |   -0.4 |    -0.1 |  -0.0 |  +27.4
+  2 R2#1 |    +1.1 |   +1.7 |    +0.3 |  -0.1 |   +3.1
+  3 L3#1 |    +4.3 |   +1.8 |    +1.5 |  +0.0 |   +7.5
+  4 R1#1 |   +18.5 |   -0.0 |    +0.2 |  -0.0 |  +18.7
+  5 L2#1 |    +4.9 |   +0.5 |    +0.5 |  -0.1 |   +5.8
+  6 R3#2 |    +7.2 |   +0.2 |    +0.5 |  +0.1 |   +7.9
+  7 L1#2 |   +22.5 |   -0.4 |    -0.3 |  +0.1 |  +21.9
+  8 R2#2 |    +3.5 |   +1.5 |    +0.2 |  +0.0 |   +5.2
+  9 L3#2 |    +7.7 |   +0.9 |    +1.0 |  -0.2 |   +9.4
+ 10 R1#2 |   +16.3 |   -0.2 |    +0.2 |  -0.1 |  +16.1
+ 11 L2#2 |    +4.1 |   +0.3 |    +3.8 |  -3.1 |   +5.0
+ 12 R3#3 |    +7.2 |   +0.5 |    +0.4 |  +0.1 |   +8.1
+ 13 L1#3 |   +24.0 |   -0.7 |    -0.6 |  -0.0 |  +22.7
+ 14 R2#3 |    +3.0 |   +1.7 |    +0.4 |  -0.2 |   +4.9
+ 15 L3#3 |    +7.2 |   +0.6 |    +1.2 |  -0.2 |   +8.8
+ 16 R1#3 |   +17.7 |   -0.3 |    +3.3 |  -3.0 |  +17.8
+ 17 L2#3 | (not covered by video, skipped)
+Round 1 +60.2 mm | Round 2 +65.6 mm | Round 3 +62.3 mm (L2 missing)</pre>
+</details>
+<details><summary>Run B (δ=12) per-event decomposition · off=47.24 R²=0.9997</summary>
+<pre>  # leg   | handover | vent jump | swing  | landing  | rest  | full cycle (mm, +=down)
+  0 R3#1 |   -0.2 |    +0.3 |   -0.7 |    -1.2 |  +0.1 |   -1.8
+  1 L1#1 |   +0.7 |   +17.1 |   +0.4 |    +0.1 |  +0.0 |  +18.4
+  2 R2#1 |   +0.3 |    +0.2 |   +2.1 |    +0.3 |  +0.0 |   +3.0
+  3 L3#1 |   +0.1 |    +2.8 |   +1.2 |    +0.7 |  +0.2 |   +5.0
+  4 R1#1 |   +0.0 |   +13.8 |   -0.4 |    +0.2 |  +0.0 |  +13.6
+  5 L2#1 |   +0.3 |    +4.3 |   +1.0 |    +0.4 |  -0.0 |   +6.0
+  6 R3#2 |   +0.0 |    +3.4 |   +0.2 |    +0.5 |  -0.1 |   +4.0
+  7 L1#2 |   +0.6 |   +14.4 |   +0.6 |    +0.2 |  -0.0 |  +15.8
+  8 R2#2 |   +0.4 |    +2.0 |   +2.5 |    +0.2 |  +0.0 |   +5.1
+  9 L3#2 |   +0.1 |    +5.0 |   +1.3 |    +0.6 |  +0.1 |   +7.1
+ 10 R1#2 |   +0.4 |   +11.3 |   -0.2 |    +0.4 |  +0.1 |  +12.1
+ 11 L2#2 |   +0.1 |    +3.0 |   +2.1 |    +0.5 |  +0.0 |   +5.8
+ 12 R3#3 |   -0.1 |    +4.0 |   +0.1 |    +0.4 |  -0.0 |   +4.4
+ 13 L1#3 |   +0.1 |   +14.7 |   +0.5 |    +0.2 |  -0.1 |  +15.4
+ 14 R2#3 |   +0.5 |    +1.6 |   +2.6 |    +0.5 |  +0.0 |   +5.2
+ 15 L3#3 |   -0.1 |    +7.3 |   -0.9 |    +0.6 |  -0.0 |   +6.9
+ 16 R1#3 |   +0.6 |   +10.7 |   +0.5 |    +0.4 |  -0.0 |  +12.2
+ 17 L2#3 | (not covered by video, skipped)
+Round 1 +44.2 mm | Round 2 +50.0 mm | Round 3 +44.0 mm (L2 missing)
+Handover-segment displacement (criterion 4): all ≤0.7 mm</pre>
+</details>
+<details><summary>Run C (δ=24) per-event decomposition · off=53.14 R²=0.9995</summary>
+<pre>  # leg   | handover | vent jump | swing  | landing  | rest  | full cycle (mm, +=down)
+  0 R3#1 |   -1.3 |    +0.1 |   -0.1 |    -1.6 |  -0.0 |   -2.8
+  1 L1#1 |   +2.4 |   +11.8 |   +0.6 |    -0.2 |  +0.1 |  +14.8
+  2 R2#1 |   -0.1 |    +0.1 |   +1.8 |    +0.5 |  -0.0 |   +2.2
+  3 L3#1 |   -0.0 |    +1.3 |   +1.6 |    +0.7 |  +0.0 |   +3.6
+  4 R1#1 |   +1.1 |    +7.3 |   +0.2 |    +0.4 |  +0.1 |   +9.0
+  5 L2#1 |   +0.5 |    +1.8 |   +2.6 |    +0.4 |  +0.0 |   +5.4
+  6 R3#2 |   -0.1 |    +1.2 |   +1.4 |    +0.2 |  +0.0 |   +2.7
+  7 L1#2 |   +3.2 |    +8.9 |   +0.2 |    +0.2 |  -0.0 |  +12.5
+  8 R2#2 |   +0.6 |    +0.5 |   +3.0 |    +0.5 |  -0.1 |   +4.4
+  9 L3#2 |   -0.1 |    +2.7 |   +1.3 |    +0.8 |  +0.0 |   +4.8
+ 10 R1#2 |   +2.0 |    +6.9 |   +0.2 |    +0.5 |  -0.0 |   +9.6
+ 11 L2#2 |   +0.9 |    +0.7 |   +2.5 |    +0.5 |  -0.0 |   +4.6
+ 12 R3#3 |   -0.1 |    +2.0 |   +1.5 |    +0.2 |  -0.1 |   +3.6
+ 13 L1#3 |   +3.3 |   +10.7 |   -0.4 |    +0.1 |  +0.0 |  +13.9
+ 14 R2#3 |   +0.6 |    +0.7 |   +2.5 |    +0.1 |  +0.0 |   +4.0
+ 15 L3#3 |   +0.2 |    +5.4 |   -1.4 |    +0.5 |  +0.2 |   +4.9
+ 16 R1#3 |   +1.7 |    +7.2 |   +0.3 |    +0.4 |  -0.0 |   +9.6
+ 17 L2#3 | (not covered by video, skipped)
+Round 1 +32.2 mm | Round 2 +38.7 mm | Round 3 +35.9 mm (L2 missing)
+Handover-segment displacement (criterion 4): L1 +2.4/+3.2/+3.3 (on the 3 mm line, inherent physics of unequal stiffness); all others ≤2 mm</pre>
+</details>
+<div class="card">
+<p><b>Reproduction</b> (dev machine; ~2 GB frame cache in <code>~/ab_cache/*/seq</code>, deletable once <code>--zoom</code> is no longer needed):</p>
+<pre>python software/logs_analysis/ab_quant.py --video images/lean_20260824_1*.MOV \
+    --log software/logs_analysis/lean_20260824_1*.log --out ~/ab_cache/&lt;run&gt; \
+    --body 2540:2720,960:1200 --ref 420:640,355:475 --mmppx 0.318   # track + cache
+python ~/ab_cache/redecompose.py 0.318    # step sync + decomposition (replacement sync for erratum 1)</pre>
+<p class="cap">Related: <a href="vent-snap-20260820.html">Vent-snap ratchet (08-20 baseline)</a> ·
+design <code>docs/en/HANDOVER-DESIGN.md</code> §5/§10 · protocol <code>docs/en/HANDOVER-AB-PROTOCOL.md</code> §6</p>
+</div>
+
+<script>
+const DATA = {"scale": 0.318, "traj": {"A0": [[76.1, 0.0], [76.8, -0.1], [77.5, -0.1], [78.1, -0.1], [78.8, -0.5], [79.5, 0.2], [80.1, -2.1], [80.8, -1.6], [81.5, -1.8], [82.1, -1.9], [82.8, -2.3], [83.5, -2.3], [84.1, 4.9], [84.8, 26.6], [85.5, 25.2], [86.1, 25.2], [86.8, 25.2], [87.5, 25.3], [88.1, 25.3], [88.8, 25.8], [89.5, 24.9], [90.1, 25.1], [90.8, 25.1], [91.5, 25.1], [92.1, 25.1], [92.8, 26.2], [93.5, 27.7], [94.1, 27.8], [94.8, 27.9], [95.5, 27.9], [96.1, 28.0], [96.8, 28.3], [97.5, 28.2], [98.1, 28.2], [98.8, 28.2], [99.5, 32.7], [100.1, 33.9], [100.8, 34.1], [101.5, 34.2], [102.1, 34.3], [102.8, 34.2], [103.5, 34.3], [104.1, 35.1], [104.8, 35.4], [105.5, 35.5], [106.1, 35.6], [106.8, 53.9], [107.5, 54.1], [108.1, 54.2], [108.8, 54.1], [109.5, 54.2], [110.1, 54.3], [110.8, 54.7], [111.5, 54.2], [112.1, 54.1], [112.8, 54.3], [113.5, 54.2], [114.1, 59.2], [114.8, 59.6], [115.5, 59.6], [116.1, 59.8], [116.8, 59.8], [117.5, 60.1], [118.1, 60.3], [118.8, 60.1], [119.5, 60.2], [120.1, 60.3], [120.8, 63.2], [121.5, 67.2], [122.1, 67.5], [122.8, 67.7], [123.5, 67.9], [124.1, 67.9], [124.8, 67.7], [125.5, 68.3], [126.1, 68.1], [126.8, 68.1], [127.5, 90.5], [128.1, 90.5], [128.8, 90.1], [129.5, 90.3], [130.1, 90.3], [130.8, 90.5], [131.5, 89.9], [132.1, 89.9], [132.8, 89.7], [133.5, 90.4], [134.1, 94.7], [134.8, 94.9], [135.5, 94.9], [136.1, 95.0], [136.8, 95.2], [137.5, 95.4], [138.1, 95.2], [138.8, 95.2], [139.5, 95.2], [140.1, 97.9], [140.8, 103.8], [141.5, 103.9], [142.1, 103.9], [142.8, 104.1], [143.5, 103.7], [144.1, 103.8], [144.8, 104.4], [145.5, 104.8], [146.1, 121.6], [146.8, 120.6], [147.5, 120.6], [148.1, 120.7], [148.8, 120.7], [149.5, 120.7], [150.1, 121.3], [150.8, 120.7], [151.5, 120.7], [152.1, 125.4], [152.8, 124.9], [153.5, 125.1], [154.1, 125.4], [154.8, 125.6], [155.5, 126.0], [156.1, 125.7], [156.8, 126.2], [157.5, 127.1], [158.1, 133.2], [158.8, 133.4], [159.5, 133.3], [160.1, 133.5], [160.8, 133.4], [161.5, 133.0], [162.1, 133.9], [162.8, 133.8], [163.5, 133.9], [164.1, 157.2], [164.8, 157.2], [165.5, 157.2], [166.1, 157.1], [166.8, 157.0], [167.5, 157.3], [168.1, 156.5], [168.8, 156.5], [169.5, 156.5], [170.1, 156.5], [170.8, 159.4], [171.5, 161.1], [172.1, 161.2], [172.8, 161.3], [173.5, 161.4], [174.1, 161.4], [174.8, 161.5], [175.5, 161.4], [176.1, 161.5], [176.8, 161.5], [177.5, 168.6], [178.1, 169.1], [178.8, 169.3], [179.5, 169.2], [180.1, 169.5], [180.8, 169.5], [181.5, 170.2], [182.1, 170.3], [182.8, 170.4], [183.5, 187.4], [184.1, 187.6], [184.8, 187.7], [185.5, 187.7], [186.1, 187.6], [186.8, 187.9], [187.5, 188.4], [188.1, 187.6], [188.8, 187.7], [189.5, 191.5], [190.1, 191.9], [190.8, 192.2], [191.5, 192.1], [192.1, 192.1], [192.8, 192.5], [193.5, 192.8], [194.1, 192.7], [194.8, 192.7], [195.5, 192.7], [196.1, 192.7], [196.8, 192.7], [197.5, 192.7]], "B12": [[47.2, 0.3], [47.9, 0.2], [48.6, -0.2], [49.2, -0.3], [49.9, -0.3], [50.6, 0.6], [51.2, -1.4], [51.9, -0.8], [52.6, -1.1], [53.2, -1.1], [53.9, -0.9], [54.6, -0.6], [55.2, -1.7], [55.9, -2.0], [56.6, -2.1], [57.2, -1.4], [57.9, 14.9], [58.6, 16.3], [59.2, 16.2], [59.9, 16.3], [60.6, 16.4], [61.2, 16.4], [61.9, 16.5], [62.6, 16.5], [63.2, 16.5], [63.9, 16.4], [64.6, 16.5], [65.2, 16.5], [65.9, 16.8], [66.6, 17.1], [67.2, 20.2], [67.9, 19.1], [68.6, 19.1], [69.2, 19.1], [69.9, 19.2], [70.6, 19.3], [71.2, 19.4], [71.9, 19.5], [72.6, 19.4], [73.2, 19.5], [73.9, 19.6], [74.6, 19.6], [75.2, 20.4], [75.9, 23.3], [76.6, 23.3], [77.2, 23.5], [77.9, 23.7], [78.6, 23.7], [79.2, 24.0], [79.9, 24.0], [80.6, 24.2], [81.2, 24.4], [81.9, 24.5], [82.6, 24.4], [83.2, 24.6], [83.9, 38.4], [84.6, 37.8], [85.2, 37.8], [85.9, 37.9], [86.6, 37.8], [87.2, 37.9], [87.9, 38.0], [88.6, 38.0], [89.2, 38.0], [89.9, 38.1], [90.6, 38.1], [91.2, 38.1], [91.9, 38.4], [92.6, 43.4], [93.2, 43.5], [93.9, 43.7], [94.6, 43.7], [95.2, 43.7], [95.9, 44.0], [96.6, 44.3], [97.2, 44.3], [97.9, 44.1], [98.6, 44.1], [99.2, 44.0], [99.9, 44.1], [100.6, 47.5], [101.2, 47.6], [101.9, 47.7], [102.6, 47.7], [103.2, 47.8], [103.9, 47.7], [104.6, 48.0], [105.2, 48.3], [105.9, 48.1], [106.6, 48.2], [107.2, 48.2], [107.9, 48.7], [108.6, 62.8], [109.2, 63.7], [109.9, 63.7], [110.6, 63.7], [111.2, 64.0], [111.9, 64.1], [112.6, 63.9], [113.2, 64.2], [113.9, 63.8], [114.6, 63.9], [115.2, 63.8], [115.9, 64.1], [116.6, 64.7], [117.2, 69.1], [117.9, 68.6], [118.6, 68.8], [119.2, 68.7], [119.9, 69.1], [120.6, 68.9], [121.2, 69.2], [121.9, 69.1], [122.6, 69.1], [123.2, 69.2], [123.9, 69.1], [124.6, 69.1], [125.2, 70.8], [125.9, 75.7], [126.6, 75.4], [127.2, 75.6], [127.9, 75.7], [128.6, 75.8], [129.2, 75.9], [129.9, 76.1], [130.6, 76.1], [131.2, 76.2], [131.9, 76.3], [132.6, 76.3], [133.2, 87.8], [133.9, 87.7], [134.6, 87.7], [135.2, 87.7], [135.9, 87.8], [136.6, 88.2], [137.2, 88.1], [137.9, 88.2], [138.6, 88.3], [139.2, 88.1], [139.9, 88.3], [140.6, 90.5], [141.2, 93.1], [141.9, 93.3], [142.6, 93.5], [143.2, 93.5], [143.9, 93.5], [144.6, 93.7], [145.2, 94.1], [145.9, 94.0], [146.6, 93.9], [147.2, 93.9], [147.9, 94.0], [148.6, 93.9], [149.2, 98.0], [149.9, 98.1], [150.6, 98.1], [151.2, 98.2], [151.9, 98.3], [152.6, 98.4], [153.2, 98.6], [153.9, 98.3], [154.6, 98.5], [155.2, 97.8], [155.9, 98.4], [156.6, 112.4], [157.2, 113.8], [157.9, 113.7], [158.6, 113.7], [159.2, 113.7], [159.9, 114.0], [160.6, 113.7], [161.2, 113.8], [161.9, 113.8], [162.6, 114.0], [163.2, 114.3], [163.9, 114.6], [164.6, 118.5], [165.2, 118.5], [165.9, 118.6], [166.6, 118.7], [167.2, 118.9], [167.9, 119.1], [168.6, 119.0], [169.2, 119.1], [169.9, 119.0], [170.6, 119.1], [171.2, 118.9], [171.9, 126.4], [172.6, 125.2], [173.2, 125.3], [173.9, 125.4], [174.6, 125.5], [175.2, 125.7], [175.9, 126.0], [176.6, 125.8], [177.2, 125.9], [177.9, 126.0], [178.6, 126.0], [179.2, 127.6], [179.9, 137.7], [180.6, 137.6], [181.2, 137.8], [181.9, 137.6], [182.6, 137.7], [183.2, 137.8], [183.9, 137.9], [184.6, 138.0], [185.2, 138.1], [185.9, 138.0], [186.6, 138.2], [187.2, 140.5], [187.9, 143.4], [188.6, 143.4], [189.2, 143.3], [189.9, 143.4], [190.6, 143.7], [191.2, 144.2], [191.9, 143.9], [192.6, 143.9], [193.2, 144.0], [193.9, 143.9], [194.6, 144.0], [195.2, 143.9]], "C24": [[53.1, 1.0], [53.8, 0.4], [54.5, 0.0], [55.1, -0.2], [55.8, -0.2], [56.5, -0.7], [57.1, -0.4], [57.8, -0.4], [58.5, -1.3], [59.1, -0.6], [59.8, -0.9], [60.5, -0.9], [61.1, -0.7], [61.8, -1.5], [62.5, -2.0], [63.1, -2.3], [63.8, -2.5], [64.5, -2.5], [65.1, -1.3], [65.8, 0.0], [66.5, 11.5], [67.1, 12.3], [67.8, 12.3], [68.5, 12.5], [69.1, 12.6], [69.8, 12.6], [70.5, 12.8], [71.1, 12.7], [71.8, 12.7], [72.5, 12.4], [73.1, 12.7], [73.8, 12.7], [74.5, 12.7], [75.1, 12.3], [75.8, 12.5], [76.5, 14.2], [77.1, 14.4], [77.8, 14.4], [78.5, 14.4], [79.1, 14.5], [79.8, 14.6], [80.5, 14.7], [81.1, 14.8], [81.8, 14.7], [82.5, 14.8], [83.1, 14.7], [83.8, 15.0], [84.5, 14.8], [85.1, 15.2], [85.8, 17.0], [86.5, 17.6], [87.1, 17.6], [87.8, 17.8], [88.5, 17.8], [89.1, 17.9], [89.8, 18.1], [90.5, 18.3], [91.1, 18.3], [91.8, 18.4], [92.5, 18.4], [93.1, 18.3], [93.8, 17.9], [94.5, 19.1], [95.1, 28.7], [95.8, 27.0], [96.5, 26.8], [97.1, 26.9], [97.8, 27.0], [98.5, 27.0], [99.1, 27.1], [99.8, 27.2], [100.5, 27.3], [101.1, 27.2], [101.8, 27.4], [102.5, 27.3], [103.1, 27.2], [103.8, 27.6], [104.5, 27.9], [105.1, 29.1], [105.8, 32.0], [106.5, 32.2], [107.1, 32.3], [107.8, 32.4], [108.5, 32.7], [109.1, 33.0], [109.8, 32.6], [110.5, 32.7], [111.1, 32.8], [111.8, 32.7], [112.5, 32.6], [113.1, 33.1], [113.8, 32.9], [114.5, 32.6], [115.1, 33.4], [115.8, 35.1], [116.5, 35.3], [117.1, 35.4], [117.8, 35.4], [118.5, 35.2], [119.1, 35.7], [119.8, 35.4], [120.5, 35.4], [121.1, 35.4], [121.8, 35.5], [122.5, 36.0], [123.1, 37.5], [123.8, 39.0], [124.5, 47.5], [125.1, 47.7], [125.8, 47.8], [126.5, 47.7], [127.1, 48.1], [127.8, 47.9], [128.5, 47.8], [129.1, 47.8], [129.8, 47.8], [130.5, 47.9], [131.1, 48.0], [131.8, 48.0], [132.5, 48.4], [133.1, 48.9], [133.8, 52.4], [134.5, 51.9], [135.1, 51.9], [135.8, 52.0], [136.5, 52.1], [137.1, 52.2], [137.8, 52.5], [138.5, 52.3], [139.1, 52.3], [139.8, 52.3], [140.5, 52.3], [141.1, 52.4], [141.8, 52.3], [142.5, 52.4], [143.1, 52.3], [143.8, 56.0], [144.5, 56.4], [145.1, 56.3], [145.8, 56.4], [146.5, 56.5], [147.1, 56.6], [147.8, 56.8], [148.5, 57.0], [149.1, 56.9], [149.8, 57.1], [150.5, 57.2], [151.1, 57.1], [151.8, 57.7], [152.5, 58.7], [153.1, 67.2], [153.8, 66.1], [154.5, 66.1], [155.1, 66.1], [155.8, 66.2], [156.5, 66.3], [157.1, 66.3], [157.8, 66.5], [158.5, 66.5], [159.1, 66.6], [159.8, 66.6], [160.5, 66.8], [161.1, 67.1], [161.8, 67.8], [162.5, 68.4], [163.1, 70.9], [163.8, 71.1], [164.5, 71.0], [165.1, 71.6], [165.8, 71.9], [166.5, 71.5], [167.1, 71.3], [167.8, 71.4], [168.5, 71.4], [169.1, 71.3], [169.8, 71.4], [170.5, 71.3], [171.1, 72.7], [171.8, 74.2], [172.5, 74.7], [173.1, 74.9], [173.8, 74.8], [174.5, 75.0], [175.1, 74.8], [175.8, 74.6], [176.5, 75.2], [177.1, 75.0], [177.8, 75.2], [178.5, 75.2], [179.1, 76.3], [179.8, 77.9], [180.5, 90.3], [181.1, 88.7], [181.8, 88.7], [182.5, 88.8], [183.1, 88.6], [183.8, 88.6], [184.5, 88.8], [185.1, 88.7], [185.8, 88.7], [186.5, 88.8], [187.1, 88.8], [187.8, 89.0], [188.5, 89.2], [189.1, 89.5], [189.8, 89.8], [190.5, 93.1], [191.1, 92.7], [191.8, 92.8], [192.5, 92.8], [193.1, 93.0], [193.8, 93.0], [194.5, 92.8], [195.1, 92.8], [195.8, 92.8], [196.5, 92.9], [197.1, 92.8], [197.8, 93.2], [198.5, 93.1], [199.1, 98.6], [199.8, 97.2], [200.5, 97.0], [201.1, 96.9], [201.8, 97.3], [202.5, 97.1], [203.1, 97.4], [203.8, 97.3], [204.5, 97.6], [205.1, 97.4], [205.8, 97.4], [206.5, 97.9], [207.1, 98.9], [207.8, 100.0], [208.5, 106.5], [209.1, 106.7], [209.8, 106.6], [210.5, 106.9], [211.1, 106.9], [211.8, 106.7], [212.5, 107.0], [213.1, 106.7], [213.8, 107.3], [214.5, 107.3], [215.1, 107.0], [215.8, 107.0], [216.5, 107.5], [217.1, 108.0], [217.8, 108.4], [218.5, 109.5], [219.1, 112.2], [219.8, 112.0], [220.5, 112.2], [221.1, 112.3], [221.8, 111.9], [222.5, 112.2], [223.1, 112.2], [223.8, 112.9], [224.5, 112.5], [225.1, 112.4], [225.8, 112.6], [226.5, 112.6], [227.1, 112.4], [227.8, 112.6], [228.5, 112.4], [229.1, 112.5], [229.8, 112.3]]}, "rels": {"A0": [78.7, 84.8, 92.4, 99.0, 106.7, 113.9, 120.8, 127.1, 133.4, 140.0, 146.0, 152.0, 157.5, 163.6, 170.4, 176.9, 183.0, 189.1], "B12": [50.6, 57.8, 66.5, 75.1, 83.6, 92.1, 100.1, 108.3, 116.6, 125.0, 133.1, 140.4, 148.8, 156.4, 163.9, 171.6, 179.3, 187.2], "C24": [57.0, 66.3, 75.3, 85.0, 95.1, 104.9, 114.8, 124.0, 133.0, 143.3, 153.1, 162.0, 171.0, 180.4, 189.4, 198.8, 208.0, 218.1]}, "fits": {"L1": {"pts": [22.5, 14.4, 8.9], "k": -0.567, "b0": 22.07, "dstar": 38.9}, "R1": {"pts": [16.3, 11.3, 6.9], "k": -0.392, "b0": 16.2, "dstar": 41.4}, "L3": {"pts": [7.7, 5.0, 2.7], "k": -0.208, "b0": 7.63, "dstar": 36.6}, "R3": {"pts": [7.2, 3.4, 1.2], "k": -0.25, "b0": 6.93, "dstar": 27.7}, "R2": {"pts": [3.5, 2.0, 0.5], "k": -0.125, "b0": 3.5, "dstar": 28.0}, "L2": {"pts": [4.1, 3.0, 0.7], "k": -0.142, "b0": 4.3, "dstar": 30.4}}, "dstar3": {"L1": 41.7, "R1": 39.1, "R3": 32.3, "R2": 30.4}, "rounds": {"A0": [60.2, 65.6, 62.2], "B12": [44.2, 50.0, 44.1], "C24": [32.2, 38.7, 35.9]}, "current": {"R1#1": {"ho": 0.0, "vent": 2.4, "pts": [[-3.6, 2.85], [-1.5, 3.01], [-1.0, 3.09], [-0.5, 3.09], [0.0, 3.01], [0.5, 2.6], [1.0, 1.95], [1.5, 1.95], [2.0, 1.95], [2.6, 2.44]]}, "R2#3": {"ho": 0.0, "vent": 2.4, "pts": [[-3.8, 2.52], [-3.3, 2.52], [-2.8, 2.44], [-1.3, 2.52], [-0.7, 2.52], [-0.2, 2.52], [0.3, 2.36], [0.8, 2.52], [1.3, 2.77], [1.8, 3.01], [2.3, 2.93]]}}};
+const LEGC = {L1:"#2a78d6", R1:"#eb6834", L3:"#1baf7a", R3:"#eda100", R2:"#e87ba4", L2:"#008300"};
+const INK = "#1c2733", MUT = "#8a94a2", GRID = "#e6ebf1";
+const tip = document.getElementById("tip");
+function showTip(ev, txt){ tip.textContent = txt; tip.style.opacity = 1;
+  tip.style.left = (ev.clientX + 14) + "px"; tip.style.top = (ev.clientY - 10) + "px"; }
+function hideTip(){ tip.style.opacity = 0; }
+function svgEl(t, at){ const e = document.createElementNS("http://www.w3.org/2000/svg", t);
+  for (const k in at) e.setAttribute(k, at[k]); return e; }
+function baseSvg(w, h){ const s = svgEl("svg", {viewBox:`0 0 ${w} ${h}`, width:"100%",
+  style:`max-width:${w}px;display:block;background:#fff`}); return s; }
+function txt(s, x, y, str, fs, fill, anchor, extra){ const e = svgEl("text",
+  Object.assign({x, y, "font-size":fs, fill, "text-anchor":anchor||"start"}, extra||{}));
+  e.textContent = str; s.appendChild(e); return e; }
+
+/* ---- Fig. 1: bounce vs δ ---- */
+(function(){
+  const W=900, H=430, L=52, R=70, T=18, B=44;
+  const xmax=46, ymax=24;
+  const X = v => L + (W-L-R)*v/xmax, Y = v => T + (H-T-B)*(1-v/ymax);
+  const s = baseSvg(W,H);
+  for (let g=0; g<=24; g+=6){ s.appendChild(svgEl("line",{x1:L,x2:W-R,y1:Y(g),y2:Y(g),stroke:GRID}));
+    txt(s, L-8, Y(g)+4, g, 12, MUT, "end"); }
+  for (let d=0; d<=45; d+=12){ txt(s, X(d), H-B+18, d, 12, MUT, "middle"); }
+  txt(s, X(45)+4, H-B+18, "45", 12, MUT, "middle");
+  txt(s, W-R+8, Y(0)+4, "δ (mm)", 12, MUT);
+  txt(s, L, T-4, "Vent jump mm (round 2)", 12.5, "#556170");
+  // 25 upper-limit vertical line
+  s.appendChild(svgEl("line",{x1:X(25),x2:X(25),y1:T,y2:Y(0),stroke:"#c9d2dc","stroke-dasharray":"3 4"}));
+  txt(s, X(25), T+12, "Old cap 25", 11, MUT, "middle");
+  s.appendChild(svgEl("line",{x1:L,x2:W-R,y1:Y(0),y2:Y(0),stroke:"#b8c2cd"}));
+  const order = ["L1","R1","L3","R3","R2","L2"];
+  // direct labels, collision-avoided
+  const lab = order.map(g => ({g, y: Y(DATA.fits[g].pts[0])})).sort((a,b)=>a.y-b.y);
+  for (let i=1;i<lab.length;i++) if (lab[i].y - lab[i-1].y < 15) lab[i].y = lab[i-1].y + 15;
+  for (const {g, y} of lab) txt(s, L-8, y+4, g, 12.5, LEGC[g], "end", {"font-weight":700});
+  for (const g of order){
+    const f = DATA.fits[g], c = LEGC[g];
+    s.appendChild(svgEl("line",{x1:X(0),y1:Y(f.b0),x2:X(24),y2:Y(f.b0+24*f.k),
+      stroke:c,"stroke-width":2}));
+    s.appendChild(svgEl("line",{x1:X(24),y1:Y(f.b0+24*f.k),x2:X(f.dstar),y2:Y(0),
+      stroke:c,"stroke-width":1.6,"stroke-dasharray":"5 4",opacity:.75}));
+    const tri = svgEl("path",{d:`M ${X(f.dstar)} ${Y(0)-6} l 5 9 l -10 0 Z`,fill:c});
+    tri.addEventListener("pointerenter",ev=>showTip(ev,`${g} zero-bounce extrapolation δ* = ${f.dstar}mm`));
+    tri.addEventListener("pointerleave",hideTip); s.appendChild(tri);
+    [0,12,24].forEach((d,i)=>{
+      const dot = svgEl("circle",{cx:X(d),cy:Y(f.pts[i]),r:4.5,fill:c,stroke:"#fff","stroke-width":2});
+      dot.addEventListener("pointerenter",ev=>showTip(ev,`${g} · δ=${d} → bounce ${f.pts[i]}mm`));
+      dot.addEventListener("pointerleave",hideTip); s.appendChild(dot);
+    });
+  }
+  // δ* label (front legs)
+  txt(s, X(38.9)-4, Y(0)+26, "δ*≈39", 11, LEGC.L1, "middle");
+  txt(s, X(41.4)+16, Y(0)+26, "41", 11, LEGC.R1, "middle");
+  document.getElementById("chartA").appendChild(s);
+})();
+
+/* ---- Fig. 2 (chartC): per-round slip bars ---- */
+(function(){
+  const W=420, H=300, L=46, R=8, T=26, B=40, ymax=70;
+  const s = baseSvg(W,H);
+  const groups=["A0","B12","C24"], gc={A0:"#9ec2ec",B12:"#5f9ce0",C24:"#2a78d6"},
+        gl={A0:"δ=0",B12:"δ=12",C24:"δ=24"};
+  const Y = v => T + (H-T-B)*(1-v/ymax);
+  for (let g=0; g<=70; g+=20){ s.appendChild(svgEl("line",{x1:L,x2:W-R,y1:Y(g),y2:Y(g),stroke:GRID}));
+    txt(s, L-6, Y(g)+4, g, 11, MUT, "end"); }
+  txt(s, L, T-10, "Total slip per round mm", 12.5, "#556170");
+  const bw=30, cw=(W-L-R)/3;
+  for (let r=0;r<3;r++){
+    txt(s, L+cw*r+cw/2, H-B+18, `Round ${r+1}`+(r===2?"(L2 missing)":""), 11.5, MUT, "middle");
+    groups.forEach((g,i)=>{
+      const v = DATA.rounds[g][r], x = L+cw*r+cw/2+(i-1)*(bw+2)-bw/2;
+      const b = svgEl("rect",{x, y:Y(v), width:bw, height:Y(0)-Y(v), fill:gc[g], rx:4});
+      b.addEventListener("pointerenter",ev=>showTip(ev,`${gl[g]} round ${r+1}: ${v}mm`));
+      b.addEventListener("pointerleave",hideTip); s.appendChild(b);
+      txt(s, x+bw/2, Y(v)-5, v.toFixed(0), 10.5, "#3a4552", "middle");
+    });
+  }
+  groups.forEach((g,i)=>{ const x=L+8+i*86;
+    s.appendChild(svgEl("rect",{x, y:H-14, width:10, height:10, fill:gc[g], rx:3}));
+    txt(s, x+14, H-5, gl[g], 11.5, "#3a4552"); });
+  document.getElementById("chartC").appendChild(s);
+})();
+
+/* ---- Fig. 3 (chartB): trajectory small multiples ---- */
+(function(){
+  const wrap = document.getElementById("chartB");
+  wrap.style.display="flex"; wrap.style.gap="10px"; wrap.style.flexWrap="wrap";
+  const names={A0:"A · δ=0",B12:"B · δ=12",C24:"C · δ=24"};
+  for (const g of ["A0","B12","C24"]){
+    const pts = DATA.traj[g], rel = DATA.rels[g];
+    const W=300, H=250, L=36, R=8, T=22, B=26, ymax=195;
+    const t0=pts[0][0], t1=pts[pts.length-1][0];
+    const X=t=>L+(W-L-R)*(t-t0)/(t1-t0), Y=v=>T+(H-T-B)*v/ymax;
+    const s = baseSvg(W,H);
+    for (let v=0; v<=180; v+=60){ s.appendChild(svgEl("line",{x1:L,x2:W-R,y1:Y(v),y2:Y(v),stroke:GRID}));
+      txt(s, L-4, Y(v)+4, v, 10, MUT, "end"); }
+    txt(s, L, T-8, names[g], 12, "#3a4552", "start", {"font-weight":700});
+    txt(s, W-R, H-8, "Log s", 10, MUT, "end");
+    for (const r of rel) if (r>=t0 && r<=t1)
+      s.appendChild(svgEl("line",{x1:X(r),x2:X(r),y1:T,y2:T+6,stroke:"#c0392b","stroke-width":1.5}));
+    const d = pts.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" ");
+    const path = svgEl("path",{d, fill:"none", stroke:"#2a78d6","stroke-width":2});
+    s.appendChild(path);
+    const hov = svgEl("rect",{x:L,y:T,width:W-L-R,height:H-T-B,fill:"transparent"});
+    hov.addEventListener("pointermove",ev=>{
+      const r = s.getBoundingClientRect(), sc = W/r.width;
+      const tt = t0 + (ev.clientX-r.left)*sc>(L)? t0+(( (ev.clientX-r.left)*sc -L)/(W-L-R))*(t1-t0):t0;
+      let best=pts[0]; for (const p of pts) if (Math.abs(p[0]-tt)<Math.abs(best[0]-tt)) best=p;
+      showTip(ev, `t=${best[0]}s · cumulative slip ${best[1]}mm`);
+    });
+    hov.addEventListener("pointerleave",hideTip); s.appendChild(hov);
+    const box=document.createElement("div"); box.appendChild(s); wrap.appendChild(box);
+  }
+})();
+
+/* ---- Fig. 4 (chartD): current in the handover window ---- */
+(function(){
+  const W=900, H=300, L=50, R=150, T=20, B=40;
+  const x0=-4, x1=3.0, ymin=1.6, ymax=3.3;
+  const X=t=>L+(W-L-R)*(t-x0)/(x1-x0), Y=v=>T+(H-T-B)*(1-(v-ymin)/(ymax-ymin));
+  const s = baseSvg(W,H);
+  for (let v=1.8; v<=3.2; v+=0.4){ const vv=Math.round(v*10)/10;
+    s.appendChild(svgEl("line",{x1:L,x2:W-R,y1:Y(vv),y2:Y(vv),stroke:GRID}));
+    txt(s, L-6, Y(vv)+4, vv.toFixed(1), 11, MUT, "end"); }
+  for (let t=-4; t<=3; t+=1) txt(s, X(t), H-B+18, t, 11, MUT, "middle");
+  txt(s, L, T-6, "Total current A (pump-off samples)", 12.5, "#556170");
+  txt(s, W-R, H-8, "Time since handover start s", 11, MUT, "end");
+  s.appendChild(svgEl("rect",{x:X(0),y:T,width:X(2.4)-X(0),height:H-T-B,fill:"#f2f6fb"}));
+  s.appendChild(svgEl("line",{x1:X(0),x2:X(0),y1:T,y2:H-B,stroke:"#b8c2cd","stroke-dasharray":"3 4"}));
+  s.appendChild(svgEl("line",{x1:X(2.4),x2:X(2.4),y1:T,y2:H-B,stroke:"#c0392b","stroke-dasharray":"3 4"}));
+  txt(s, X(1.2), T+14, "Handover apportioning 0→24mm", 11, MUT, "middle");
+  txt(s, X(2.4), T+14, " vent", 11, "#c0392b");
+  const conf={"R1#1":"#eb6834","R2#3":"#e87ba4"};
+  for (const k in conf){
+    const c=conf[k], P=DATA.current[k].pts.filter(p=>p[0]>=x0&&p[0]<=x1);
+    s.appendChild(svgEl("path",{d:P.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" "),
+      fill:"none",stroke:c,"stroke-width":2}));
+    for (const p of P){ const dot=svgEl("circle",{cx:X(p[0]),cy:Y(p[1]),r:4,fill:c,stroke:"#fff","stroke-width":2});
+      dot.addEventListener("pointerenter",ev=>showTip(ev,`${k} · t=${p[0]}s → ${p[1].toFixed(2)}A`));
+      dot.addEventListener("pointerleave",hideTip); s.appendChild(dot); }
+    const last=P[P.length-1];
+    txt(s, X(last[0])+10, Y(last[1])+4, k, 12, c, "start", {"font-weight":700});
+  }
+  txt(s, X(1.5), Y(1.95)+20, "False plateau (appears once δ≈10 is apportioned, but δ*=41)", 11, "#8a5a2a");
+  txt(s, X(1.6), Y(3.01)-10, "Loading pushed onto the front legs, the sum rises instead", 11, "#a44770");
+  document.getElementById("chartD").appendChild(s);
+})();
+</script>
+</main>
+</body>
+</html>

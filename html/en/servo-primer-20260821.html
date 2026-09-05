@@ -1,0 +1,913 @@
+<!-- English translation of html/servo-primer-20260821.html (2026-09-05). The Chinese original is the maintained source. -->
+<title>Servo primer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+
+<style>
+:root{
+  --paper:#F4F2EF;
+  --surface:#FFFFFF;
+  --surface-2:#EDEAE5;
+  --ink:#1B1815;
+  --ink-mid:#4A443D;
+  --ink-soft:#7A7269;
+  --rule:#DCD7D0;
+  --rule-soft:#E8E4DE;
+  --accent:#C25610;
+  --accent-soft:#F8E8DA;
+  --steel:#35566B;
+  --steel-soft:#E1E9EE;
+  --shadow:0 1px 2px rgba(27,24,21,.05),0 10px 26px -18px rgba(27,24,21,.35);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#141210;
+    --surface:#1D1A16;
+    --surface-2:#26211A;
+    --ink:#EDE9E3;
+    --ink-mid:#BDB5AA;
+    --ink-soft:#8C8478;
+    --rule:#332D25;
+    --rule-soft:#262019;
+    --accent:#F08A3C;
+    --accent-soft:#33210F;
+    --steel:#84AEC7;
+    --steel-soft:#18262D;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 32px -20px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141210;
+  --surface:#1D1A16;
+  --surface-2:#26211A;
+  --ink:#EDE9E3;
+  --ink-mid:#BDB5AA;
+  --ink-soft:#8C8478;
+  --rule:#332D25;
+  --rule-soft:#262019;
+  --accent:#F08A3C;
+  --accent-soft:#33210F;
+  --steel:#84AEC7;
+  --steel-soft:#18262D;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 32px -20px rgba(0,0,0,.9);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:'Barlow','Noto Sans SC',system-ui,-apple-system,sans-serif;
+  font-size:16.5px;line-height:1.8;-webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:900px;margin:0 auto;padding:0 24px 100px}
+.mono{font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+
+/* header */
+header.top{padding:56px 0 30px;border-bottom:2px solid var(--ink);margin-bottom:12px}
+.kicker{
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--accent);margin:0 0 16px;
+}
+h1{
+  font-size:clamp(34px,6vw,54px);line-height:1.06;font-weight:700;
+  letter-spacing:-.015em;margin:0 0 18px;text-wrap:balance;
+}
+.lede{font-size:18px;color:var(--ink-mid);max-width:60ch;margin:0}
+.lede b{color:var(--ink);font-weight:600}
+.idcard{
+  display:flex;flex-wrap:wrap;gap:0;margin:28px 0 0;
+  border:1px solid var(--rule);background:var(--surface);border-radius:2px;overflow:hidden;
+}
+.idcard div{flex:1 1 120px;padding:11px 15px;border-right:1px solid var(--rule-soft)}
+.idcard div:last-child{border-right:0}
+.idcard b{
+  display:block;font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:500;
+  font-variant-numeric:tabular-nums;line-height:1.4;
+}
+.idcard span{font-size:11.5px;color:var(--ink-soft);letter-spacing:.03em}
+
+/* sections */
+section{scroll-margin-top:20px}
+h2{
+  font-size:15px;font-weight:600;letter-spacing:.02em;margin:66px 0 20px;
+  display:flex;align-items:center;gap:14px;text-transform:none;
+}
+h2 .n{
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;
+  color:var(--paper);background:var(--accent);
+  width:24px;height:24px;border-radius:2px;
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+}
+h2 .t{font-size:23px;font-weight:700;letter-spacing:-.01em}
+h2::after{content:"";flex:1 1 auto;height:1px;background:var(--rule)}
+h3{font-size:17.5px;font-weight:600;margin:34px 0 8px}
+p{max-width:64ch;margin:0 0 16px}
+ul,ol{max-width:64ch;padding-left:22px;margin:0 0 16px}
+li{margin-bottom:7px}
+code{
+  font-family:'JetBrains Mono',monospace;font-size:.86em;
+  background:var(--surface-2);padding:1px 5px;border-radius:2px;color:var(--ink-mid);
+}
+strong{font-weight:600}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* measured callout */
+.measured{
+  border:1px solid var(--rule);border-left:3px solid var(--accent);
+  background:var(--surface);border-radius:2px;padding:16px 20px;margin:22px 0;
+  box-shadow:var(--shadow);
+}
+.measured .tag{
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent);display:block;margin-bottom:6px;
+}
+.measured p{margin:0;font-size:15px;color:var(--ink-mid);max-width:none}
+.measured p + p{margin-top:9px}
+
+.warn{
+  border:1px solid var(--steel);background:var(--steel-soft);
+  border-radius:2px;padding:14px 18px;margin:20px 0;
+}
+.warn p{margin:0;font-size:15px;color:var(--ink-mid);max-width:none}
+.warn b{color:var(--ink)}
+
+/* figures */
+.fig{
+  margin:26px 0 10px;border:1px solid var(--rule);background:var(--surface);
+  border-radius:2px;padding:18px 12px 10px;overflow-x:auto;box-shadow:var(--shadow);
+}
+.fig svg{display:block;margin:0 auto;min-width:560px}
+.cap{font-size:13px;color:var(--ink-soft);margin:12px 6px 2px;max-width:none;line-height:1.6}
+
+.blk{fill:var(--surface-2);stroke:var(--rule);stroke-width:1.2}
+.blk-a{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.2}
+.ln{stroke:var(--ink-soft);stroke-width:1.4;fill:none}
+.ln-a{stroke:var(--accent);stroke-width:1.8;fill:none}
+.ln-d{stroke:var(--steel);stroke-width:1.6;fill:none;stroke-dasharray:5 4}
+.tx{fill:var(--ink);font-family:'Noto Sans SC','Barlow',sans-serif;font-size:13px}
+.tx-s{fill:var(--ink-soft);font-family:'JetBrains Mono',monospace;font-size:11px}
+.tx-a{fill:var(--accent);font-family:'Noto Sans SC','Barlow',sans-serif;font-size:12.5px;font-weight:500}
+.tx-b{fill:var(--steel);font-family:'Noto Sans SC','Barlow',sans-serif;font-size:12.5px;font-weight:500}
+
+/* simulator */
+.sim{
+  border:1px solid var(--rule);background:var(--surface);border-radius:2px;
+  padding:20px;margin:26px 0 10px;box-shadow:var(--shadow);
+}
+.sim-top{display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:center}
+.sim-readout{
+  display:flex;gap:0;flex-wrap:wrap;margin-top:18px;
+  border:1px solid var(--rule);border-radius:2px;overflow:hidden;
+}
+.sim-readout div{flex:1 1 110px;padding:9px 13px;border-right:1px solid var(--rule-soft)}
+.sim-readout div:last-child{border-right:0}
+.sim-readout b{
+  display:block;font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:500;
+  font-variant-numeric:tabular-nums;color:var(--accent);
+}
+.sim-readout span{font-size:11px;color:var(--ink-soft);letter-spacing:.03em}
+.sim-ctl{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+.sim-ctl label{
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;
+  letter-spacing:.08em;color:var(--ink-soft);
+}
+input[type=range]{width:100%;accent-color:var(--accent);height:24px}
+.sim-toggle{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--ink-mid)}
+.sim-toggle input{accent-color:var(--steel);width:16px;height:16px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.presets button{
+  font-family:'JetBrains Mono',monospace;font-size:12px;
+  background:var(--surface-2);color:var(--ink-mid);
+  border:1px solid var(--rule);border-radius:2px;padding:4px 10px;cursor:pointer;
+}
+.presets button:hover{border-color:var(--accent);color:var(--accent)}
+
+/* tables */
+.tw{overflow-x:auto;margin:22px 0;border:1px solid var(--rule);border-radius:2px}
+table{border-collapse:collapse;width:100%;min-width:560px;background:var(--surface)}
+th,td{text-align:left;padding:10px 14px;font-size:14.5px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{
+  font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-soft);font-weight:500;
+  background:var(--surface-2);border-bottom:1px solid var(--rule);
+}
+tbody tr:last-child td{border-bottom:0}
+td.k{font-weight:600;white-space:nowrap}
+td.num{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* checklist */
+.check{display:grid;gap:12px;grid-template-columns:1fr;margin-top:20px}
+@media(min-width:680px){.check{grid-template-columns:1fr 1fr 1fr}}
+.check div{
+  background:var(--surface);border:1px solid var(--rule);border-top:3px solid var(--accent);
+  border-radius:2px;padding:14px 16px;
+}
+.check h4{
+  margin:0 0 8px;font-size:14px;font-weight:700;letter-spacing:.02em;
+}
+.check ul{margin:0;padding-left:17px;max-width:none}
+.check li{font-size:13.5px;color:var(--ink-mid);line-height:1.6;margin-bottom:6px}
+
+footer{margin-top:76px;padding-top:20px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-soft)}
+footer p{max-width:none;margin:0 0 6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">spider · wall-climbing hexapod · parts notes</p>
+  <h1>Servo primer</h1>
+  <p class="lede">
+    This machine has 18 servos: the most numerous, most expensive and most misunderstood part on the whole robot.
+    A servo is not a "motor" — you do not give it a voltage, you give it an <b>angle</b>, and it closes the loop internally to get there.
+    But that loop is <b>sealed inside the case</b>; the outside never sees the position. The program only ever knows "the command was sent",
+    never whether the joint actually got there. More than half of the pitfalls hit while climbing grow out of that one sentence.
+  </p>
+  <div class="idcard">
+    <div><b>DS3235</b><span>this project's choice</span></div>
+    <div><b>35 kg·cm</b><span>rated stall torque</span></div>
+    <div><b>180°</b><span>control angle (not 270°)</span></div>
+    <div><b>7.4 V</b><span>2S battery direct</span></div>
+    <div><b>25 teeth</b><span>output-shaft spline</span></div>
+    <div><b>× 18</b><span>six legs × three joints</span></div>
+  </div>
+</header>
+
+<!-- ===== 1 ===== -->
+<section id="what">
+  <h2><span class="n">1</span><span class="t">What is inside the case</span></h2>
+
+  <p>
+    A standard servo = <strong>small DC motor + reduction gear train + position potentiometer + a control board</strong>, packed into a small box,
+    with three wires out: power, ground, signal. The control board keeps comparing "the angle the signal wire asks for" with "the actual angle the potentiometer measures",
+    drives the motor toward whichever side the error points, and stops when the error is about zero — <strong>a complete position loop, just inside the box</strong>.
+  </p>
+
+  <div class="fig">
+    <svg viewBox="0 0 620 300" role="img" aria-labelledby="t1 d1">
+      <title id="t1">Servo internals and signal flow</title>
+      <desc id="d1">The signal wire only carries the target angle into the control board; the potentiometer's actual-angle feedback closes the loop inside the case and never returns to the external controller.</desc>
+
+      <!-- case -->
+      <rect x="86" y="46" width="452" height="196" rx="6" class="blk"/>
+      <text class="tx-s" x="96" y="66">SERVO CASE</text>
+
+      <!-- wires in -->
+      <line class="ln-a" x1="8" y1="98" x2="86" y2="98"/>
+      <text class="tx-a" x="10" y="90">Signal (pulse width)</text>
+      <line class="ln" x1="8" y1="132" x2="86" y2="132"/>
+      <text class="tx-s" x="10" y="150">Power + / −</text>
+
+      <!-- board -->
+      <rect x="112" y="80" width="96" height="62" rx="3" class="blk-a"/>
+      <text class="tx" x="128" y="106">Control board</text>
+      <text class="tx-s" x="122" y="126">compare &amp; drive</text>
+
+      <!-- motor -->
+      <rect x="234" y="80" width="86" height="62" rx="3" class="blk"/>
+      <text class="tx" x="252" y="107">DC motor</text>
+      <text class="tx-s" x="256" y="126">high speed</text>
+
+      <!-- gears -->
+      <rect x="346" y="80" width="96" height="62" rx="3" class="blk"/>
+      <text class="tx" x="360" y="107">Reduction gears</text>
+      <text class="tx-s" x="358" y="126">~1:270 metal</text>
+
+      <!-- output shaft -->
+      <circle cx="496" cy="111" r="27" class="blk-a"/>
+      <circle cx="496" cy="111" r="9" fill="none" stroke="currentColor" stroke-width="1.2" style="color:var(--accent)"/>
+      <text class="tx" x="470" y="164">Output shaft</text>
+      <text class="tx-s" x="466" y="181">25-tooth spline</text>
+
+      <!-- pot -->
+      <rect x="346" y="182" width="96" height="44" rx="3" class="blk"/>
+      <text class="tx" x="366" y="209">Potentiometer</text>
+
+      <!-- flow arrows -->
+      <line class="ln" x1="208" y1="111" x2="228" y2="111"/>
+      <polygon points="234,111 226,107 226,115" fill="currentColor" style="color:var(--ink-soft)"/>
+      <line class="ln" x1="320" y1="111" x2="340" y2="111"/>
+      <polygon points="346,111 338,107 338,115" fill="currentColor" style="color:var(--ink-soft)"/>
+      <line class="ln" x1="442" y1="111" x2="463" y2="111"/>
+      <polygon points="469,111 461,107 461,115" fill="currentColor" style="color:var(--ink-soft)"/>
+      <line class="ln" x1="496" y1="138" x2="496" y2="204"/>
+      <line class="ln" x1="496" y1="204" x2="442" y2="204"/>
+
+      <!-- feedback -->
+      <path class="ln-d" d="M346 204 L160 204 L160 142"/>
+      <polygon points="160,136 156,144 164,144" fill="currentColor" style="color:var(--steel)"/>
+      <text class="tx-b" x="196" y="224">In-case feedback: the actual angle returns only to the control board</text>
+
+      <!-- blocked readback -->
+      <line class="ln-d" x1="86" y1="262" x2="538" y2="262" style="stroke:var(--ink-soft);opacity:.45"/>
+      <text class="tx-s" x="86" y="284" style="fill:var(--ink-soft)">The external controller never gets this angle — to the Raspberry Pi the whole motion chain is open loop</text>
+      <g style="color:var(--accent)">
+        <line x1="300" y1="254" x2="316" y2="270" stroke="currentColor" stroke-width="2"/>
+        <line x1="316" y1="254" x2="300" y2="270" stroke="currentColor" stroke-width="2"/>
+      </g>
+    </svg>
+    <p class="cap">
+      Orange is the command flow, blue dashed is the feedback flow. <strong>The feedback never leaves the case</strong> — this one figure explains half of the design decisions later in this project.
+    </p>
+  </div>
+
+  <h3>How it differs from other "things that turn"</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:120px">Type</th><th>What you give it</th><th>What it gives you</th><th style="width:150px">Good for</th></tr></thead>
+      <tbody>
+        <tr><td class="k">DC motor</td><td>Voltage / current</td><td>Speed; position needs your own encoder</td><td>Wheels, pumps, fans</td></tr>
+        <tr><td class="k">Stepper motor</td><td>Step-by-step pulses</td><td>Open-loop angle; lost steps go unreported</td><td>3D printers, machine tools</td></tr>
+        <tr><td class="k">PWM servo</td><td>Target angle (pulse width)</td><td>Motion only, no read-back of any kind</td><td>Joints, control surfaces, this machine</td></tr>
+        <tr><td class="k">Bus servo</td><td>Target angle + speed + torque limit</td><td><strong>Can read back position, current, temperature</strong></td><td>Joints that need force control or diagnostics</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    This project uses the third kind. Servos themselves split into several families (analog / digital / bus / joint module,
+    plus three motion types: limited, continuous rotation, multi-turn), expanded in <strong>Section 3</strong>;
+    what switching to another type would mean for this machine is costed in <strong>Section 10</strong>.
+  </p>
+</section>
+
+<!-- ===== 2 ===== -->
+<section id="pwm">
+  <h2><span class="n">2</span><span class="t">How it understands an "angle"</span></h2>
+
+  <p>
+    The signal wire carries a square wave: <strong>one high pulse every 20 milliseconds</strong>; the width of the pulse sets where the horn stops.
+    By industry convention 1500 µs is center and 1000/2000 µs are the usual ends; this project widens the range to
+    <code>500–2500µs</code> to use the full travel, with a measured slope of about <strong>10 µs = 1°</strong>.
+    The 20 ms gap between pulses does not mean "released" — as long as pulses keep coming, the servo keeps pushing against that angle.
+  </p>
+
+  <div class="sim">
+    <div class="sim-top">
+      <svg id="pulse" viewBox="0 0 340 130" width="340" height="130" role="img" aria-label="Pulse waveform">
+        <line class="ln" x1="16" y1="96" x2="326" y2="96" style="stroke:var(--rule)"/>
+        <path id="wave" class="ln-a" d=""/>
+        <line id="mark1" class="ln-d" x1="0" y1="26" x2="0" y2="104" style="stroke:var(--ink-soft);opacity:.5;stroke-dasharray:3 3"/>
+        <line id="mark2" class="ln-d" x1="0" y1="26" x2="0" y2="104" style="stroke:var(--ink-soft);opacity:.5;stroke-dasharray:3 3"/>
+        <text id="wlab" class="tx-a" x="20" y="20">1500 µs</text>
+        <text class="tx-s" x="16" y="120">20 ms period · pulse width magnified 4× for visibility</text>
+      </svg>
+
+      <svg id="horn" viewBox="0 0 190 190" width="180" height="180" role="img" aria-label="Horn angle">
+        <circle cx="95" cy="95" r="72" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+        <line x1="95" y1="95" x2="95" y2="17" stroke="var(--rule)" stroke-width="1"/>
+        <text class="tx-s" x="82" y="12">0°</text>
+        <text class="tx-s" x="2" y="99">−90</text>
+        <text class="tx-s" x="162" y="99">+90</text>
+        <g id="ghost" style="display:none">
+          <line id="ghostArm" x1="95" y1="95" x2="95" y2="30"
+                stroke="var(--steel)" stroke-width="4" stroke-linecap="round" stroke-dasharray="5 4"/>
+        </g>
+        <line id="arm" x1="95" y1="95" x2="95" y2="30"
+              stroke="var(--accent)" stroke-width="6" stroke-linecap="round"/>
+        <circle cx="95" cy="95" r="11" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/>
+      </svg>
+    </div>
+
+    <div class="sim-readout">
+      <div><b id="oUs">1500</b><span>pulse width µs</span></div>
+      <div><b id="oServo">0.0°</b><span>servo's own angle</span></div>
+      <div><b id="oJoint">47.8°</b><span>L2 femur joint angle</span></div>
+      <div><b id="oNote">center</b><span>state</span></div>
+    </div>
+
+    <div class="sim-ctl">
+      <label for="slider">Drag to change the pulse width · 500 – 2500 µs</label>
+      <input id="slider" type="range" min="500" max="2500" step="1" value="1500" aria-describedby="oUs">
+      <div class="presets">
+        <button type="button" data-us="1953">servo −45°</button>
+        <button type="button" data-us="1500">center 1500</button>
+        <button type="button" data-us="1739">stance working point</button>
+        <button type="button" data-us="1048">servo +45°</button>
+      </div>
+      <label class="sim-toggle">
+        <input id="load" type="checkbox">
+        <span>Overlay "give under load" (illustrative) — the load pulls the horn a few degrees toward the force, and commanded and actual position part ways</span>
+      </label>
+    </div>
+  </div>
+  <p class="cap">
+    The joint-angle field uses the measured calibration of the L2 femur servo (channel 10): <code>attach = 47.81°</code> (at center the joint is actually at 47.8°,
+    not 0°), servo's own <code>∓45° = 1952.5 / 1047.5 µs</code>.
+    <strong>On this channel a larger pulse width gives a smaller joint angle</strong> — left and right legs are mirror-assembled; the direction difference does not change the formula, it is absorbed into the two endpoints of the calibration table.
+    Swap in a different servo and the same pulse width maps to a completely different joint angle, which is why all 18 channels must be calibrated individually.
+    Also, the slider's 500–2500 µs is a software soft limit; <strong>the real mechanical travel is narrower</strong>, and going beyond it hits structure — the code has a separate joint-angle envelope check for that.
+  </p>
+
+  <h3>Digital vs. analog servos</h3>
+  <p>
+    The difference is not in the signal (both take the same pulse width) but inside: an analog servo drives the motor at roughly the 50 Hz rhythm, with a large dead band, jitter and weak holding force;
+    a digital servo drives at several hundred Hz internally, with <strong>a small dead band, fast response and clearly higher holding torque</strong>, at the cost of more current and heat.
+    Joints must use digital servos — on the wall every stance leg carries shear load continuously, and that holding torque is what it relies on.
+  </p>
+</section>
+
+<!-- ===== 3 ===== -->
+<section id="kinds">
+  <h2><span class="n">3</span><span class="t">The main families of servos</span></h2>
+
+  <h3>First, two things both called "servo"</h3>
+  <p>
+    In Chinese "伺服电机" (servo motor) and "舵机" (RC servo) are often mixed up, but a search leads to two different worlds:
+  </p>
+  <ul>
+    <li><strong>RC servo</strong> (the kind this page is about): motor, gears, feedback and driver all in one small box, three wires out, tens to a few hundred yuan.</li>
+    <li><strong>Industrial servo</strong>: brushless motor + encoder + <strong>a separate drive</strong>, with the loop closed in the drive; the interface is pulse train, EtherCAT or CANopen; thousands per set, and the size and weight are beyond what a DIY robot can carry.</li>
+  </ul>
+  <p>When searching use "舵机" or <code>RC servo</code>, not "伺服电机" — that leads into a completely unrelated industry.</p>
+
+  <h3>By interface: four generations, the divide is "can it read back"</h3>
+  <div class="tw">
+    <table>
+      <thead>
+        <tr><th style="width:120px">Type</th><th style="width:150px">How you command it</th><th>What it reads back</th><th style="width:130px">Cost</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="k">Analog servo</td>
+          <td>PWM pulse width</td>
+          <td>Nothing; ~50 Hz internal drive, large dead band, jitters, weak holding force</td>
+          <td>cheapest</td>
+        </tr>
+        <tr>
+          <td class="k">Digital servo<br><span class="mono" style="font-size:11px;color:var(--accent)">this project</span></td>
+          <td>PWM pulse width</td>
+          <td>Nothing; but several hundred Hz internal drive, small dead band, clearly higher holding torque</td>
+          <td>best value</td>
+        </tr>
+        <tr>
+          <td class="k">Bus servo</td>
+          <td>Half-duplex serial, one wire daisy-chaining all joints</td>
+          <td><strong>Position, current, temperature and voltage can all be read back; torque limit and multi-turn mode can be set</strong></td>
+          <td>one tier pricier, you write the driver layer yourself</td>
+        </tr>
+        <tr>
+          <td class="k">Joint module<br><span class="mono" style="font-size:11px;color:var(--ink-soft)">FOC</span></td>
+          <td>CAN bus, accepts <strong>torque</strong> commands directly</td>
+          <td>Position, speed and torque fully closed loop, real compliance control possible</td>
+          <td>an order of magnitude pricier, much heavier</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    With the first two generations you can only "send the command and pray"; real feedback starts with the third.
+    This divide determines what the control software can look like — four of the five pitfalls in Section 6 are stuck on this line.
+  </p>
+  <p>
+    Models change fast, so remembering the category is more useful than remembering models. Some common ones as search entry points:
+    analog: the SG90, MG996R family; digital: DS3218 / DS3235 / ZOSKAY, high-end RC is Savox, Futaba;
+    bus servos: Feetech SCS / STS series, Hiwonder LX-16A, and the most complete but priciest ecosystem, Robotis Dynamixel;
+    joint modules: Unitree GO-M8010, DaMiao DM-J4310, MyActuator RMD-X, the ones used in quadruped robot dogs.
+  </p>
+
+  <h3>By motion type: three kinds</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:150px">Type</th><th>Behavior</th><th style="width:200px">Usable as a joint?</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">Limited-travel servo</td>
+          <td>180° / 270° / 300° are common. Pulse width = <strong>absolute angle</strong>; after a power cycle it is still that angle</td>
+          <td>Yes, this project uses this kind</td>
+        </tr>
+        <tr>
+          <td class="k">Continuous-rotation servo</td>
+          <td>With the stop removed and the potentiometer fixed at center, pulse width now means <strong>speed and direction</strong>, 1500 µs = stop</td>
+          <td><strong>No.</strong> It has no notion of position any more; it is essentially a speed-controlled geared motor — fine for wheels</td>
+        </tr>
+        <tr>
+          <td class="k">Multi-turn / winch servo</td>
+          <td>Turns several revolutions and remembers the count (a mode of bus servos; RC winch servos also count)</td>
+          <td>Yes, but leg joints do not need it; suited to reeling rope or lead screws</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>By construction: the four parts that decide life and price</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:110px">Part</th><th style="width:150px">Cheap way</th><th style="width:170px">Expensive way</th><th>Where the difference shows</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Motor</td><td>Cored brushed</td><td>Coreless → brushless</td><td>Response speed, heat, life</td></tr>
+        <tr><td class="k">Gears</td><td>Plastic</td><td>Hybrid → all metal → titanium</td><td><strong>Whether teeth strip at stall</strong> — no room for negotiation in wall climbing</td></tr>
+        <tr><td class="k">Feedback</td><td>Potentiometer</td><td>Magnetic encoder</td><td>A potentiometer is a contact device that wears and is noisy; it is the real life bottleneck of many servos</td></tr>
+        <tr><td class="k">Bearings</td><td>None / single bearing</td><td>Double bearing</td><td>Whether the output shaft wobbles under side load</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    A climbing leg is exactly <strong>side load + long periods near stall</strong>, the two harshest servo conditions stacked together,
+    so all-metal gears and double bearings are hard requirements in this project, not bonuses.
+  </p>
+
+  <h3>By size: three tiers</h3>
+  <ul>
+    <li><strong>Micro (9 g class)</strong>: SG90 types, a few yuan each, plastic gears, 1–2 kg·cm. Enough for camera gimbals and toys.</li>
+    <li><strong>Standard (about 40×20×40, 55–65 g)</strong>: this project's tier, 15–40 kg·cm, the workhorse size for robot joints,
+      and the whole ecosystem of structural parts is built around it.</li>
+    <li><strong>High torque (1/5-scale car)</strong>: 60 kg·cm and up, 100–200 g each. Strong enough, but the weight is fatal for wall climbing.</li>
+  </ul>
+</section>
+
+<!-- ===== 4 ===== -->
+<section id="spec">
+  <h2><span class="n">4</span><span class="t">Reading the specs and choosing</span></h2>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:130px">Spec</th><th>Real meaning</th><th style="width:220px">This project's decision</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">Torque kg·cm</td>
+          <td>How many kg it can lift at a 1 cm arm; a <strong>stall</strong> value, not a working value; tied to voltage, so torque shrinks proportionally at lower voltage</td>
+          <td>35 kg·cm tier, <strong>derated to 50%</strong> in use</td>
+        </tr>
+        <tr>
+          <td class="k">Speed sec/60°</td>
+          <td>Seconds to turn 60° unloaded. Clearly slower under load</td>
+          <td>Not the bottleneck — the climbing gait has to be slow anyway</td>
+        </tr>
+        <tr>
+          <td class="k">Control angle</td>
+          <td>Whether the same 500–2500 µs spans 180° or 270°. Spanning 270° means <strong>one third less pulse width per degree, worse resolution</strong></td>
+          <td>Must buy the <strong>180° version</strong>; ask when ordering</td>
+        </tr>
+        <tr>
+          <td class="k">Operating voltage</td>
+          <td>The same model often comes in a 6.8 V-max version and a 7.4 V version</td>
+          <td>2S battery direct at 7.4 V, <strong>the label must include 7.4 V</strong></td>
+        </tr>
+        <tr>
+          <td class="k">Gear material</td>
+          <td>Plastic is cheap but strips at stall; metal is pricier, heavier, with slight backlash</td>
+          <td>Metal gears, non-negotiable</td>
+        </tr>
+        <tr>
+          <td class="k">Spline tooth count</td>
+          <td>The tooth count of the output shaft decides which angles the horn can be mounted at</td>
+          <td>25 teeth → <strong>14.4° per step</strong>, see Section 7</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="warn">
+    <p>
+      <b>Do not buy the cheapest no-name.</b> Near-stall is the normal state while climbing; the consequence of stripped gears is not "this leg is weak",
+      it is the whole robot falling off the wall. At the same price, buy two fewer spares and a brand with a reputation.
+    </p>
+  </div>
+</section>
+
+<!-- ===== 5 ===== -->
+<section id="torque">
+  <h2><span class="n">5</span><span class="t">Is the torque enough: only the current can tell</span></h2>
+
+  <p>
+    A servo does not tell you how hard it is working, but <strong>the current does</strong>. It is the only window in this project through which force can be "seen",
+    so the driver board's current reading is shown in the status line from start to finish.
+  </p>
+
+  <div class="measured">
+    <span class="tag">measured in this project</span>
+    <p><strong>Single-leg press peak 0.73 A</strong>; holding a hanging weight after attachment, <strong>0.61 A continuous</strong>.</p>
+    <p>Whole robot walking <strong>2–4 A continuous, ~12 A transient</strong> — this number is why the servo master switch must be a ≥15 A relay.</p>
+    <p>Five-foot support on the wall carries shear load <strong>continuously</strong>, i.e. a continuous 3 A-class current + continuous heating. This is normal, not an anomaly.</p>
+  </div>
+
+  <h3>Three criteria built on current</h3>
+  <ul>
+    <li><strong>Total current must fall back</strong> to that pose's baseline after attachment. If it does not = that leg's preload has not been fully absorbed and the servo is fighting the vacuum — wasted power, wasted heat.</li>
+    <li><strong>Current climbing cycle by cycle without falling back</strong> = internal stress accumulating. On 08-20 the whole robot measured a climb from 0.73 A to about 1.9 A, the electrical evidence of the "elastic ratchet".</li>
+    <li><strong>Current jumping during press</strong> before the expected depth is reached = it hit something; stop immediately.</li>
+  </ul>
+</section>
+
+<!-- ===== 6 ===== -->
+<section id="honest">
+  <h2><span class="n">6</span><span class="t">Servos misbehave: five behaviors under load</span></h2>
+
+  <p>
+    None of the following five appears in any datasheet, yet each has caused real consequences in this project.
+    Their common root is the figure in Section 1: <strong>you send a position, you get "roughly that position", and you have no way of knowing the difference.</strong>
+  </p>
+
+  <h3>One · Give: under load it does not stop at the commanded position</h3>
+  <p>
+    The motor's holding torque is finite; the larger the external force, the further the actual angle from the command — like a very stiff spring, not a rigid body.
+    The most expensive appearance of this in the project: the foot preload travel is 13 mm by geometry, but on the real machine only a few mm went in,
+    most of it eaten by "servo position error under load + backlash"; the default ended up at <code>press_delta_mm = 18</code>,
+    trading <strong>command overshoot for real compression</strong>.
+  </p>
+
+  <h3>Two · Backlash: a little free play on reversal</h3>
+  <p>A metal gear train always has clearance. For the same target angle, arriving from above and from below stops at different positions. This makes "return to the original position" inherently imprecise.</p>
+
+  <h3>Three · Torque saturation: stored energy has a ceiling</h3>
+  <p>
+    Measured elastic rebound when lifting a single leg caps at about 21 mm; lifting more does not add — because servo torque tops out and no more energy can be stored.
+    Bad news (the leg chain is being bent all the time) and good news (the ratchet effect has a ceiling, the machine does not slide down without bound).
+  </p>
+
+  <h3>Four · It is a spring and stores energy</h3>
+  <p>
+    Servo give + rubber deformation of the cup = one spring in series. Before a leg lifts, this spring keeps storing energy,
+    <strong>released all at once the instant the cup's seal ruptures</strong> — measured 83% of the whole-robot slip happens in those 1–2 frames.
+    The fix is not a stiffer servo but handing this leg's load to the other five before venting, so there is no energy left in the spring.
+  </p>
+
+  <h3>Five · Heat and derating</h3>
+  <p>
+    A servo holding load continuously gets hot. A rough way to judge whether it has left the safe zone: after adding 3 mm of preload, if <strong>the current increase is still gentle</strong>,
+    no jump, no odd noise, not too hot to touch, then there is margin; a jump means it is already near the stall region.
+  </p>
+
+  <div class="warn">
+    <p>
+      <b>One iron rule: never force a joint by hand while enabled.</b>
+      35 kg·cm of stall torque is enough to break gears, and the angle you force is fake — let go and it turns itself back to the command.
+      To adjust a pose, cut servo power first.
+    </p>
+  </div>
+</section>
+
+<!-- ===== 7 ===== -->
+<section id="mount">
+  <h2><span class="n">7</span><span class="t">Assembly and calibration: misalignment is normal</span></h2>
+
+  <p>
+    The horn is splined onto the output shaft. This project's servos have a <strong>25-tooth</strong> spline,
+    i.e. <code>360 ÷ 25 = 14.4°</code> per step — the horn can only sit at these discrete angles,
+    <strong>in the worst case ±7.2° off</strong>. So the official mounting angles (−8° / 35° / 68°) are design intent, not tolerance requirements;
+    misalignment is normal, no need to take it apart and remount.
+  </p>
+
+  <p>The right way is three steps:</p>
+  <ol>
+    <li><strong>Center first, then mount the horn</strong>: power up with all servos at 1500 µs, and with power on push the horn onto the nearest tooth (<code>servo_center.py</code>).</li>
+    <li><strong>Measure two points</strong>: swing the joint to −45° and +45° and note the corresponding pulse widths.</li>
+    <li><strong>Write the residual into the calibration table</strong>: <code>attach_deg</code> records "what the joint actually is at servo center"; if the direction is reversed, change <code>sign</code>. One entry per servo, 18 in all.</li>
+  </ol>
+
+  <div class="measured">
+    <span class="tag">how much work this is</span>
+    <p>
+      Calibrating 18 channels is the most time-consuming step of the whole assembly stage; this project spent several days and wrote a dedicated least-squares fit script
+      (<code>calib_fit.py</code>): 2–4 points per servo, fit slope and zero, judge by residual.
+      The full algorithm of the calibration table and a reproducible worked example are in the <strong>"From walking commands to 18 servos"</strong> illustrated page.
+    </p>
+  </div>
+
+  <h3>A failure worth knowing: a stripped horn</h3>
+  <p>
+    The symptom is "this joint's center angle changed by itself". The cause is the horn's spline bore worn round and slipping on the output shaft.
+    Replace the horn, but that channel must then be recalibrated — <code>attach_deg</code> is no longer the old value.
+  </p>
+</section>
+
+<!-- ===== 8 ===== -->
+<section id="power">
+  <h2><span class="n">8</span><span class="t">Power, power-up order and power-loss behavior</span></h2>
+
+  <h3>Never share a power rail with the controller</h3>
+  <p>
+    18 servos moving together can pull 12 A transient, and the voltage dips visibly.
+    If the Raspberry Pi and the servos share one supply, <strong>the Pi reboots at the instant a servo stalls</strong> — a reboot on the wall means a fall.
+    This project: the 2S battery feeds the servos directly, a separate 5V/5A buck feeds the Pi, and the two share only ground.
+  </p>
+
+  <h3>Power-up order: pulse widths first, then enable</h3>
+  <p>
+    At the instant of power-up a servo slams straight to the position the signal wire asks for. So the correct order is
+    <strong>set all 18 target pulse widths first, then close servo power</strong> — the firmware guarantees the enable instant lands directly in place, no wild jump.
+    Whole-robot power-up has one more step: send the crouch pose first (closest to the unpowered lying pose, smallest jump), then transition slowly to standing.
+  </p>
+
+  <h3>Power loss = collapse; a feature, not a fault</h3>
+  <p>
+    Without power a servo has no holding force and the robot slumps into a heap. This project uses that as the <strong>emergency-stop mechanism</strong>:
+    servo master power goes through a relay controlled by the Pi; on normal script exit, a crash, or even a killed process,
+    the GPIO is released, the relay opens, and the servos lose power immediately.
+  </p>
+  <div class="warn">
+    <p>
+      <b>But on the wall "collapse" is not enough.</b> So the adhesion circuit is built to hold vacuum on power loss: with servo power off the robot goes soft,
+      but the six cups stay stuck to the wall. The two power-loss behaviors are designed separately — the most critical item in the whole-robot safety case.
+    </p>
+  </div>
+  <p>
+    The software also sets two voltage lines: <strong>6.4 V warning, 6.0 V raise an exception and stop</strong>.
+    LiPo undervoltage means a weak pump and weak servos; on the wall it is the prelude to a fall.
+  </p>
+</section>
+
+<!-- ===== 9 ===== -->
+<section id="checklist">
+  <h2><span class="n">9</span><span class="t">Three checklists</span></h2>
+
+  <div class="check">
+    <div>
+      <h4>Three checks on arrival</h4>
+      <ul>
+        <li>Label voltage includes 7.4 V (not the 6.8 V-max version)</li>
+        <li>Control angle is 180°, not 270°</li>
+        <li>Metal gears, horn and screws included</li>
+        <li>Power each one individually and sweep 1000→2000 µs; listen for odd noises, watch for sticking</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Before assembly</h4>
+      <ul>
+        <li>Center to 1500 µs before mounting the horn, keep power on</li>
+        <li>Push the horn onto the nearest tooth, leave the residual to calibration</li>
+        <li>Left/right legs mirror-assembled — the direction difference goes into the calibration table, not the formula</li>
+        <li>Measure ±45° right after assembly and back-fill</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Before every run</h4>
+      <ul>
+        <li>Pulse widths first, then enable; prop the body up first</li>
+        <li>Check voltage: do not start below 6.4 V</li>
+        <li>Watch the current in the status line: it must fall back after attachment</li>
+        <li>Keep hands out of the joint travel while enabled</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 10 ===== -->
+<section id="alt">
+  <h2><span class="n">10</span><span class="t">What if we switched to another type</span></h2>
+
+  <p>Put the types of Section 3 back onto this machine, and first lay down one hard constraint nobody gets around:</p>
+
+  <div class="measured">
+    <span class="tag">weight screens first</span>
+    <p>
+      The whole-robot hard weight limit is <strong>2.5 kg</strong>, and <strong>the 18 servos are the largest single block of weight</strong> —
+      one leg (3 servos + printed parts) measures 260 g, six legs is 1.56 kg, 80% of the whole-robot budget without adhesion.
+    </p>
+    <p>
+      So the path "swap in a stronger actuator" <strong>loses half its options to weight first</strong>; only then do money and interface get a say.
+    </p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:150px">Switch to</th><th>Result</th><th style="width:90px">Verdict</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">9 g micro servos</td>
+          <td>Torque an order of magnitude lower, plastic gears strip at the first stall</td>
+          <td>no</td>
+        </tr>
+        <tr>
+          <td class="k">Same model, 270° version</td>
+          <td>The same 500–2500 µs spread over a larger angle range, <strong>one third less pulse width per degree</strong>,
+              worse resolution, whole calibration table redone, nothing gained</td>
+          <td>no change</td>
+        </tr>
+        <tr>
+          <td class="k">Brushless digital servos</td>
+          <td>Interface completely unchanged, a drop-in swap; more durable, less heat, longer life, at a noticeably higher price.
+              Worth considering if the machine should run a few hundred more hours</td>
+          <td>optional upgrade</td>
+        </tr>
+        <tr>
+          <td class="k">Bus servos<br><span class="mono" style="font-size:11px">Feetech / Dynamixel</span></td>
+          <td><strong>The one that really deserves consideration in this project.</strong> Reads back position, current and temperature; four of the five pitfalls in Section 6 get much easier;
+              the "zero-force handover" could send torque commands directly instead of changing force indirectly through position commands.
+              Weight is in the same class as standard servos, so <strong>it passes the weight screen</strong>.
+              The cost: wiring changes from 18 PWM channels to a daisy chain, the driver layer must be rewritten, and the supply voltage may need adjusting</td>
+          <td>worth it</td>
+        </tr>
+        <tr>
+          <td class="k">FOC joint modules</td>
+          <td>Force control is genuinely great, but each is hundreds of grams and hundreds to thousands of yuan — 18 of them is over weight and over budget.
+              This is the quadruped robot-dog solution, not the solution for a 2.5 kg machine that sticks to glass</td>
+          <td>no</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="warn">
+    <p>
+      <b>Correcting an earlier sentence on this page.</b> It used to say bus servos are "2–4× the price" — that was comparing against the Dynamixel tier.
+      Domestic bus servos at the same torque tier are only slightly pricier, and the difference over 18 units is less scary than imagined.
+      The real cost is not money but <b>redoing the driver layer and the harness</b>: serial protocol, daisy-chain power, ID assignment, dropout handling all have to be built.
+    </p>
+  </div>
+
+  <div class="measured">
+    <span class="tag">conclusion</span>
+    <p>
+      <strong>Building the machine first with PWM digital servos is still the right choice</strong> — cheap, mature ecosystem, replaceable at any time,
+      and this machine's structural parts, driver board and the whole open-source design are built around them.
+    </p>
+    <p>
+      But be clear about what you bought: <strong>a cheap, strong actuator that reports absolutely nothing.</strong>
+      Every "measure and back-fill" and "criteria on pressure and current, not on commanded position" practice on this page is a patch over that blind spot.
+      When force control or finer gaits are needed, <strong>the first upgrade to consider is bus servos, not FOC modules</strong>.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <p>Page generated 2026-08-21. Parameter snapshot from <code>software/hexapod/config.py</code> (18 measured calibrations, fitted 2026-08-08),
+  <code>docs/BOM.md</code>, <code>docs/P2-GUIDE.md</code> and the two quantified experiment reports of 08-19/08-20.</p>
+  <p>Companion page: <strong>"From walking commands to 18 servos"</strong> (<code>html/en/gait-to-servo.html</code>) explains how a command becomes a pulse width;
+  this page explains what the part itself does once it has the pulse width.</p>
+</footer>
+
+</div>
+
+<script>
+"use strict";
+(function(){
+  // L2 femur (channel 10) measured calibration
+  var ATTACH = 47.81, M45 = 1952.5, P45 = 1047.5;
+  var CENTER = (M45 + P45) / 2;          // 1500
+  var SLOPE  = (P45 - M45) / 90;         // µs per servo-degree ≈ -10.06
+
+  var slider = document.getElementById('slider');
+  var load   = document.getElementById('load');
+  var arm    = document.getElementById('arm');
+  var ghost  = document.getElementById('ghost');
+  var ghostArm = document.getElementById('ghostArm');
+  var wave   = document.getElementById('wave');
+  var wlab   = document.getElementById('wlab');
+  var m1     = document.getElementById('mark1');
+  var m2     = document.getElementById('mark2');
+  var oUs    = document.getElementById('oUs');
+  var oServo = document.getElementById('oServo');
+  var oJoint = document.getElementById('oJoint');
+  var oNote  = document.getElementById('oNote');
+
+  function note(us){
+    if (Math.abs(us - 1500) < 8)  return 'center';
+    if (us < 700 || us > 2300)    return 'beyond mechanical travel';
+    if (Math.abs(us - 1739) < 10) return 'stance working point';
+    return us < 1500 ? 'femur raised' : 'femur lowered';
+  }
+
+  function draw(us){
+    // same form as config.py: servo_deg = (us − center) / slope, joint = attach + servo_deg
+    // this channel's slope is negative (left legs are mirror-mounted), so a larger pulse width → a smaller angle
+    var servoDeg = (us - CENTER) / SLOPE;
+    var jointDeg = ATTACH + servoDeg;
+
+    oUs.textContent    = Math.round(us);
+    oServo.textContent = (servoDeg >= 0 ? '+' : '') + servoDeg.toFixed(1) + '°';
+    oJoint.textContent = jointDeg.toFixed(1) + '°';
+    oNote.textContent  = note(us);
+
+    // servo horn: longer pulse width → clockwise
+    arm.setAttribute('transform', 'rotate(' + servoDeg.toFixed(2) + ' 95 95)');
+
+    if (load.checked){
+      // schematic (not measured): load direction fixed, the servo horn dragged 4° to one side — commanded position and actual position part ways here
+      ghost.style.display = '';
+      ghostArm.setAttribute('transform', 'rotate(' + (servoDeg + 4).toFixed(2) + ' 95 95)');
+    } else {
+      ghost.style.display = 'none';
+    }
+
+    // pulse waveform: the 20ms period spans 100px; the real pulse width is only 2.5~12.5px, magnified 4× to be visible
+    var x0 = 16, per = 100, base = 96, top = 34;
+    var w = us / 50;
+    var d = 'M' + x0 + ' ' + base;
+    for (var i = 0; i < 3; i++){
+      var s = x0 + i * per;
+      d += ' L' + s + ' ' + base + ' L' + s + ' ' + top +
+           ' L' + (s + w) + ' ' + top + ' L' + (s + w) + ' ' + base;
+    }
+    d += ' L' + (x0 + 3 * per) + ' ' + base;
+    wave.setAttribute('d', d);
+    m1.setAttribute('x1', x0); m1.setAttribute('x2', x0);
+    m2.setAttribute('x1', x0 + w); m2.setAttribute('x2', x0 + w);
+    wlab.setAttribute('x', Math.min(x0 + w + 6, 250));
+    wlab.textContent = Math.round(us) + ' µs';
+  }
+
+  slider.addEventListener('input', function(){ draw(+slider.value); });
+  load.addEventListener('change', function(){ draw(+slider.value); });
+  var btns = document.querySelectorAll('.presets button');
+  for (var i = 0; i < btns.length; i++){
+    btns[i].addEventListener('click', function(e){
+      slider.value = e.currentTarget.getAttribute('data-us');
+      draw(+slider.value);
+    });
+  }
+  draw(1500);
+})();
+</script>

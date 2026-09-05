@@ -1,0 +1,756 @@
+<!doctype html>
+<!-- English translation of html/p4-pneumatic-electrical.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pneumatic subsystem electrical wiring diagram</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+      --pwr: #E0A64F; --air: #4BC2A0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+    --pwr: #E0A64F; --air: #4BC2A0;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 17px; margin: 4px 0 -12px; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 10px 6px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  .note ul, .note ol { margin: 8px 0 2px; padding-left: 20px; }
+  .note li { margin: 3px 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+  table.vtab { border-collapse: collapse; margin: 10px 0 4px; }
+  .vtab th, .vtab td { border: 1px solid var(--line); padding: 4px 10px; font-size: 12.5px; text-align: left; }
+  .vtab th { background: var(--accent-soft); font-weight: 700; }
+  .st-ok { color: var(--accent); font-weight: 700; }
+  .st-tbd { color: var(--warn); font-weight: 700; }
+
+  /* Figure elements */
+  .sv-box   { fill: var(--part); fill-opacity: .35; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-boxa  { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .sv-boxoff{ fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 5 4; }
+  .sv-warnbox { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.2; }
+  .brd  { fill: var(--part); fill-opacity: .18; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .blk  { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .mos  { fill: var(--part); fill-opacity: .85; stroke: var(--part-stroke); stroke-width: 1.2; }
+  .rb   { fill: var(--part); fill-opacity: .95; stroke: var(--part-stroke); stroke-width: 1.2; }
+  .m3   { fill: var(--bg); stroke: var(--part-stroke); stroke-width: 1.6; }
+  .scr  { fill: none; stroke: var(--part-stroke); stroke-width: 1.4; }
+  .w-pwr  { stroke: var(--pwr); stroke-width: 3; fill: none; }
+  .w-pwr2 { stroke: var(--pwr); stroke-width: 2; fill: none; }
+  .w-sig  { stroke: var(--accent); stroke-width: 1.8; stroke-dasharray: 7 4; fill: none; }
+  .w-gnd  { stroke: var(--muted); stroke-width: 3; fill: none; }
+  .w-gnd2 { stroke: var(--muted); stroke-width: 1.8; fill: none; }
+  .w-off  { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 4 4; fill: none; opacity: .85; }
+  .sch  { stroke: var(--ink); stroke-width: 1.6; fill: none; opacity: .8; }
+  .nd   { fill: var(--pwr); }
+  .ndg  { fill: var(--muted); }
+  .nds  { fill: var(--accent); }
+  .lbl  { paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-bx  { font-size: 12.5px; font-weight: 700; text-anchor: middle; }
+  .t-bxm { font-size: 12.5px; font-weight: 700; text-anchor: middle; fill: var(--muted); }
+  .t-bs  { font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+  .t-bsw { font-size: 10.5px; fill: var(--warn); text-anchor: middle; }
+  .t-bsa { font-size: 10.5px; fill: var(--accent); text-anchor: middle; }
+  .t-pin { font-size: 8.5px; fill: var(--muted); }
+  .t-pinw{ font-size: 8.5px; fill: var(--warn); }
+  .t-seg { font-size: 11.5px; fill: var(--muted); }
+  .t-dim { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-warn{ font-size: 12px; font-weight: 700; fill: var(--warn); }
+  .t-acc { font-size: 11.5px; fill: var(--accent); }
+  .t-pw  { font-size: 11.5px; fill: var(--pwr); }
+  .t-b   { font-size: 12px; fill: var(--ink); }
+  .t-bm  { font-size: 11.5px; fill: var(--muted); }
+  .t-foot{ font-size: 10.5px; fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Spider · P4 whole robot · pneumatic-subsystem electrical wiring (companion to the system diagram / Pi pinout / divider-board drawings)</p>
+    <h1>Electrical wiring of the pneumatic subsystem</h1>
+    <p class="sub">Only <b>the electrical set that serves the pneumatics</b> is drawn: the 12 V power chain boost → MOSFET → 6 valves + 2 pump positions (1 fitted in V0), the Pi's 8-channel control chain,
+    and the 5 V sampling chain of the 7 pressure sensors. Servos / Servo2040 / relay are not part of the pneumatics, see
+    <code>html/en/p4-system-diagram.html</code>. This diagram goes down to <b>terminal level</b> — which wire goes into which screw terminal, with terminal names taken verbatim from
+    the back-side silkscreen in <code>images/YYNMOS-8_back.jpg</code>. Two deliberate design differences from existing documents:
+    the <b>dual-rail supply</b> in Fig. 1 and <b>pump "+" not via the board DC+, OUT7+/OUT8+ left open</b> in Fig. 3.</p>
+    <p class="sub"><b class="d">Pump count: this diagram draws both pump positions, but V0 fits a single pump.</b> The basis is the weight-saving measure in <code>P4-BAY-DESIGN</code>:
+    "first flight with one pump, second position kept". Wherever the diagram says <b>pump B / channel 8 / IN8± / OUT8±</b>, it stays empty in V0 — terminals and wire positions are kept,
+    the second pump plugs straight in later, and nothing else changes. The current budget lists both cases; <b>the dual-rail conclusion holds for a single pump too</b> (see the check below the budget table).</p>
+  </header>
+
+  <h2>Fig. 1 · Pneumatic electrical master wiring (terminal level)</h2>
+  <figure>
+    <svg viewBox="0 0 780 700" role="img" aria-label="Pneumatic electrical master wiring: the 2S battery goes through master switch and fuse into two XL6009 boosts; the valve rail enters the MOSFET board DC+ and feeds 6 solenoid valves, the pump rail feeds the vacuum pump directly (single pump in V0, second position kept); the Pi controls IN1+ to IN8+ over a 10-wire ribbon">
+      <defs>
+        <marker id="mp" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
+        </marker>
+        <marker id="ms" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <!-- Pi 5 and control ribbon cable -->
+      <rect class="sv-boxa" x="16" y="36" width="150" height="66" rx="6"/>
+      <text class="t-bx" x="91" y="60">Raspberry Pi 5</text>
+      <text class="t-bs" x="91" y="78">GPIO ×8 (3.3 V logic)</text>
+      <text class="t-bs" x="91" y="95">Pins per p4-pi-wiring.html</text>
+      <polyline class="w-sig" points="166,69 290,69 290,230 392,230" marker-end="url(#ms)"/>
+      <text class="t-acc" x="228" y="62" text-anchor="middle">10-wire control ribbon</text>
+      <text class="t-bm" x="298" y="118">GPIO ×8 → IN1+ ~ IN8+</text>
+      <text class="t-bm" x="298" y="135">IN1− to IN8− paralleled → GND ×1–2</text>
+
+      <!-- Battery · main switch · fuse -->
+      <rect class="sv-boxa" x="16" y="312" width="118" height="64" rx="6"/>
+      <text class="t-bx" x="75" y="336">2S 7.4 V LiPo</text>
+      <text class="t-bs" x="75" y="354">XT60 · 5~6.2Ah</text>
+      <text class="t-bs" x="75" y="370">Ventral battery-bar</text>
+      <line class="w-pwr" x1="134" y1="344" x2="150" y2="344"/>
+      <circle class="nd" cx="154" cy="344" r="3"/>
+      <line class="w-pwr2" x1="156" y1="343" x2="175" y2="332"/>
+      <circle class="nd" cx="179" cy="344" r="3"/>
+      <line class="w-pwr" x1="182" y1="344" x2="196" y2="344"/>
+      <rect class="sv-box" x="196" y="336" width="32" height="16" rx="3"/>
+      <line class="w-pwr" x1="228" y1="344" x2="250" y2="344"/>
+      <text class="t-bm" x="158" y="370" text-anchor="middle">Master switch</text>
+      <text class="t-bm" x="224" y="370" text-anchor="middle">5 A fuse (recommended)</text>
+
+      <!-- 7.4V bus -->
+      <line class="w-pwr" x1="250" y1="202" x2="250" y2="344"/>
+      <circle class="nd" cx="250" cy="202" r="3.5"/>
+      <circle class="nd" cx="250" cy="286" r="3.5"/>
+      <circle class="nd" cx="250" cy="344" r="3.5"/>
+      <text class="t-dim" x="256" y="322">7.4V</text>
+
+      <!-- XL6009 ×2, dual rails -->
+      <line class="w-pwr" x1="250" y1="202" x2="264" y2="202" marker-end="url(#mp)"/>
+      <rect class="sv-box" x="268" y="170" width="110" height="64" rx="6"/>
+      <text class="t-bx" x="323" y="192">XL6009 #2</text>
+      <text class="t-bs" x="323" y="209">7.4→12 V · valve rail</text>
+      <text class="t-bs" x="323" y="226">Set to 12.0 V unloaded</text>
+      <line class="w-pwr" x1="250" y1="286" x2="264" y2="286" marker-end="url(#mp)"/>
+      <rect class="sv-box" x="268" y="254" width="110" height="64" rx="6"/>
+      <text class="t-bx" x="323" y="276">XL6009 #1</text>
+      <text class="t-bs" x="323" y="293">7.4→12 V · pump rail</text>
+      <text class="t-bs" x="323" y="310">Separate rail isolates pump surges</text>
+
+      <!-- Valve rail 12V-V: enters the board at DC+, valve "+" fed from the on-board OUTn+ bus -->
+      <polyline class="w-pwr" points="378,202 386,202 386,168 392,168" marker-end="url(#mp)"/>
+      <text class="t-pw" x="590" y="124" text-anchor="middle">Valve "+" comes from the on-board DC+ → OUTn+ bus, no extra wire</text>
+      <text class="t-dim" x="382" y="160" text-anchor="end">12V-V → DC+</text>
+
+      <!-- Pump rail 12V-P: runs down past the board straight to the pump (V0 has one pump; the second pump position is kept) -->
+      <polyline class="w-pwr" points="378,286 386,286 386,540 700,540 700,494" marker-end="url(#mp)"/>
+      <text class="t-pw" x="520" y="558" text-anchor="middle">12V-P pump rail → pump "+" (single pump in V0; not via board DC+, see Fig. 3)</text>
+
+      <!-- MOSFET board -->
+      <rect class="sv-box" x="396" y="150" width="170" height="330" rx="6"/>
+      <text class="t-bx" x="481" y="178">YYNMOS-8 · 8-channel MOSFET</text>
+      <text class="t-bs" x="481" y="196">12 V low-side switches · optocoupler isolated</text>
+      <text class="t-bs" x="481" y="213">Active high (3–24 V)</text>
+      <text class="t-bs" x="481" y="230">93×54 mm · 4×Ø3.0 holes</text>
+      <text class="t-bs" x="481" y="247">Terminal silkscreen in Fig. 2</text>
+      <line x1="410" y1="264" x2="552" y2="264" stroke="var(--part-stroke)" stroke-width="1" opacity=".6"/>
+      <text class="t-bs" x="481" y="284">Channels 1–6 → valves L1 L2 L3 R1 R2 R3</text>
+      <text class="t-bs" x="481" y="301">Channels 7–8 → pump A / pump B</text>
+      <text class="t-bs" x="481" y="322">DC+ internally paralleled to the 8 OUTn+</text>
+      <text class="t-bsw" x="481" y="346">From power-up until the program takes over</text>
+      <text class="t-bsw" x="481" y="363">IN+ must be low = valves unpowered</text>
+      <text class="t-bsw" x="481" y="380">= cups hold vacuum (passive safety)</text>
+      <text class="t-bsa" x="481" y="404">GPIO5/6 default to pull-up at reset</text>
+      <text class="t-bsa" x="481" y="421">→ 6.2k across each IN± pair</text>
+      <text class="t-bs" x="481" y="446">Inputs are optocoupler-isolated pairs,</text>
+      <text class="t-bs" x="481" y="463">IN− is not DC− (see Fig. 4)</text>
+
+      <!-- Outputs to the loads -->
+      <line class="w-pwr" x1="566" y1="190" x2="612" y2="190" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="212" x2="612" y2="212" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="234" x2="612" y2="234" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="256" x2="612" y2="256" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="278" x2="612" y2="278" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="300" x2="612" y2="300" marker-end="url(#mp)"/>
+      <text class="t-bm" x="589" y="164" text-anchor="middle">OUT1± ~ OUT6±</text>
+      <line class="w-pwr" x1="566" y1="410" x2="612" y2="410" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="566" y1="440" x2="612" y2="440" marker-end="url(#mp)"/>
+      <text class="t-bm" x="589" y="400" text-anchor="middle">OUT7− / OUT8−</text>
+
+      <!-- Valve bank -->
+      <rect class="sv-box" x="616" y="166" width="152" height="144" rx="6"/>
+      <text class="t-bx" x="692" y="190">Solenoid valves ×6</text>
+      <text class="t-bs" x="692" y="208">0520B 3/2-way 12 V</text>
+      <text class="t-bs" x="692" y="225">Two wires across OUTn+ / OUTn−</text>
+      <text class="t-bsw" x="692" y="246">Unpowered = cup to vacuum</text>
+      <text class="t-bsw" x="692" y="263">Powered = cup vented to air</text>
+      <text class="t-bs" x="692" y="285">Coil has no polarity · flyback diode already on board</text>
+      <text class="t-bs" x="692" y="302">L1 L2 L3 R1 R2 R3</text>
+
+      <!-- Pump bank -->
+      <rect class="sv-box" x="616" y="380" width="152" height="110" rx="6"/>
+      <text class="t-bx" x="692" y="404">Vacuum pumps ×2 (1 fitted in V0)</text>
+      <text class="t-bs" x="692" y="422">555 dual-head diaphragm pump 12 V</text>
+      <text class="t-bs" x="692" y="439">"+" from the pump rail, "−" into OUTn−</text>
+      <text class="t-bsw" x="692" y="456">OUT7+ / OUT8+ left open</text>
+      <text class="t-bs" x="692" y="473">SS34 + 100 nF in parallel to absorb surges</text>
+
+      <!-- Legend -->
+      <line class="w-pwr" x1="24" y1="596" x2="64" y2="596" marker-end="url(#mp)"/>
+      <text class="t-bm" x="72" y="600">Power lines (solid, voltage/rail labeled)</text>
+      <line class="w-sig" x1="300" y1="596" x2="340" y2="596" marker-end="url(#ms)"/>
+      <text class="t-bm" x="348" y="600">Control / signal lines (dashed)</text>
+      <text class="t-foot" x="16" y="628">Terminal names from the back-side silkscreen (images/YYNMOS-8_back.jpg); physical positions in Fig. 2; ground wiring shown separately in Fig. 4, omitted here.</text>
+      <text class="t-foot" x="16" y="646">Why two rails: the XL6009's current limit is on the <tspan font-weight="700">input side</tspan>; boosting 7.4 V to 12 V is a ratio of about 1.9, and on a shared rail the pump start-up would hit the chip's 4 A limit;</text>
+      <text class="t-foot" x="16" y="664">when the rail collapses, a valve that is venting drops out, half-open, leaking air into the shared vacuum manifold → tank pressure rises → all six feet weaken together.</text>
+      <text class="t-foot" x="16" y="682">With separate rails the pump surge cannot reach the valve rail. <tspan font-weight="700">Fitting only one pump in V0 does not change this conclusion</tspan>; see the current budget table below.</text>
+    </svg>
+  </figure>
+  <h2>Fig. 2 · YYNMOS-8 terminal allocation and orientation in the bay (top view = component side)</h2>
+  <figure>
+    <svg viewBox="0 0 780 568" role="img" aria-label="YYNMOS-8 eight-channel MOSFET board top-view terminal allocation: upper row of 16 signal terminals in 4+6+6 blocks, lower row of 18 power output terminals in 6+6+6 blocks, four mounting hole coordinates labeled">
+      <text class="t-bx" x="389" y="26">YYNMOS-8 top view (component side) · 93 × 54 mm · 4 × Ø3.0 mounting holes</text>
+      <text class="t-bm" x="389" y="48" text-anchor="middle">Terminal names from a photo of the back-side silkscreen; the 16 signal terminals face the head, toward the XL6009s; the 18 power terminals face the tail, toward the valve rail</text>
+
+      <!-- Board body -->
+      <rect class="brd" x="110" y="90" width="558" height="324" rx="6"/>
+
+      <!-- Upper terminal block (signal side, 16 positions) -->
+      <rect class="blk" x="122" y="90" width="122" height="48" rx="3"/>
+      <rect class="blk" x="254" y="90" width="183" height="48" rx="3"/>
+      <rect class="blk" x="446" y="90" width="183" height="48" rx="3"/>
+      <circle class="scr" cx="137" cy="114" r="9"/><circle class="scr" cx="168" cy="114" r="9"/>
+      <circle class="scr" cx="198" cy="114" r="9"/><circle class="scr" cx="229" cy="114" r="9"/>
+      <circle class="scr" cx="269" cy="114" r="9"/><circle class="scr" cx="300" cy="114" r="9"/>
+      <circle class="scr" cx="330" cy="114" r="9"/><circle class="scr" cx="361" cy="114" r="9"/>
+      <circle class="scr" cx="391" cy="114" r="9"/><circle class="scr" cx="422" cy="114" r="9"/>
+      <circle class="scr" cx="461" cy="114" r="9"/><circle class="scr" cx="492" cy="114" r="9"/>
+      <circle class="scr" cx="522" cy="114" r="9"/><circle class="scr" cx="553" cy="114" r="9"/>
+      <circle class="scr" cx="583" cy="114" r="9"/><circle class="scr" cx="614" cy="114" r="9"/>
+      <text class="t-pin lbl" x="137" y="205" transform="rotate(-90 137 205)">IN8−</text>
+      <text class="t-pin" x="168" y="205" transform="rotate(-90 168 205)">IN8+ pump B</text>
+      <text class="t-pin" x="198" y="205" transform="rotate(-90 198 205)">IN7−</text>
+      <text class="t-pin" x="229" y="205" transform="rotate(-90 229 205)">IN7+ pump A</text>
+      <text class="t-pin" x="269" y="205" transform="rotate(-90 269 205)">IN6−</text>
+      <text class="t-pin" x="300" y="205" transform="rotate(-90 300 205)">IN6+ valve R3</text>
+      <text class="t-pin" x="330" y="205" transform="rotate(-90 330 205)">IN5−</text>
+      <text class="t-pin" x="361" y="205" transform="rotate(-90 361 205)">IN5+ valve R2</text>
+      <text class="t-pin" x="391" y="205" transform="rotate(-90 391 205)">IN4−</text>
+      <text class="t-pin" x="422" y="205" transform="rotate(-90 422 205)">IN4+ valve R1</text>
+      <text class="t-pin" x="461" y="205" transform="rotate(-90 461 205)">IN3−</text>
+      <text class="t-pin" x="492" y="205" transform="rotate(-90 492 205)">IN3+ valve L3</text>
+      <text class="t-pin" x="522" y="205" transform="rotate(-90 522 205)">IN2−</text>
+      <text class="t-pin" x="553" y="205" transform="rotate(-90 553 205)">IN2+ valve L2</text>
+      <text class="t-pin" x="583" y="205" transform="rotate(-90 583 205)">IN1−</text>
+      <text class="t-pin" x="614" y="205" transform="rotate(-90 614 205)">IN1+ valve L1</text>
+
+      <!-- On-board parts: optocouplers ×8, LEDs ×8, MOSFETs ×8 -->
+      <rect class="mos" x="149" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="213" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="278" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="342" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="406" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="471" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="535" y="236" width="22" height="32" rx="2"/>
+      <rect class="mos" x="599" y="236" width="22" height="32" rx="2"/>
+      <text class="t-pin" x="676" y="256">Optocouplers ×8</text>
+      <circle class="nds" cx="160" cy="288" r="4"/><circle class="nds" cx="224" cy="288" r="4"/>
+      <circle class="nds" cx="289" cy="288" r="4"/><circle class="nds" cx="353" cy="288" r="4"/>
+      <circle class="nds" cx="417" cy="288" r="4"/><circle class="nds" cx="482" cy="288" r="4"/>
+      <circle class="nds" cx="546" cy="288" r="4"/><circle class="nds" cx="610" cy="288" r="4"/>
+      <text class="t-pin" x="676" y="292">Status LEDs ×8</text>
+      <rect class="mos" x="144" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="208" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="273" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="337" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="401" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="466" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="530" y="310" width="32" height="46" rx="2"/>
+      <rect class="mos" x="594" y="310" width="32" height="46" rx="2"/>
+      <text class="t-pin" x="676" y="336">MOSFETs ×8 (TO-252)</text>
+      <text class="t-pin" x="676" y="350">Heat tab = drain</text>
+      <text class="t-pin" x="676" y="364">Left = channel 8</text>
+
+      <!-- Lower terminal block (power + output side, 18 positions) -->
+      <rect class="blk" x="113" y="366" width="183" height="48" rx="3"/>
+      <rect class="blk" x="298" y="366" width="183" height="48" rx="3"/>
+      <rect class="blk" x="483" y="366" width="183" height="48" rx="3"/>
+      <circle class="scr" cx="128" cy="390" r="9"/><circle class="scr" cx="159" cy="390" r="9"/>
+      <circle class="scr" cx="189" cy="390" r="9"/><circle class="scr" cx="220" cy="390" r="9"/>
+      <circle class="scr" cx="250" cy="390" r="9"/><circle class="scr" cx="281" cy="390" r="9"/>
+      <circle class="scr" cx="313" cy="390" r="9"/><circle class="scr" cx="344" cy="390" r="9"/>
+      <circle class="scr" cx="374" cy="390" r="9"/><circle class="scr" cx="404" cy="390" r="9"/>
+      <circle class="scr" cx="435" cy="390" r="9"/><circle class="scr" cx="466" cy="390" r="9"/>
+      <circle class="scr" cx="498" cy="390" r="9"/><circle class="scr" cx="528" cy="390" r="9"/>
+      <circle class="scr" cx="559" cy="390" r="9"/><circle class="scr" cx="589" cy="390" r="9"/>
+      <circle class="scr" cx="620" cy="390" r="9"/><circle class="scr" cx="650" cy="390" r="9"/>
+      <text class="t-pin"  x="128" y="424" transform="rotate(90 128 424)">OUT8− pump B</text>
+      <text class="t-pinw" x="159" y="424" transform="rotate(90 159 424)">OUT8+ open</text>
+      <text class="t-pin"  x="189" y="424" transform="rotate(90 189 424)">OUT7− pump A</text>
+      <text class="t-pinw" x="220" y="424" transform="rotate(90 220 424)">OUT7+ open</text>
+      <text class="t-pin"  x="250" y="424" transform="rotate(90 250 424)">OUT6− valve R3</text>
+      <text class="t-pin"  x="281" y="424" transform="rotate(90 281 424)">OUT6+</text>
+      <text class="t-pin"  x="313" y="424" transform="rotate(90 313 424)">OUT5− valve R2</text>
+      <text class="t-pin"  x="344" y="424" transform="rotate(90 344 424)">OUT5+</text>
+      <text class="t-pin"  x="374" y="424" transform="rotate(90 374 424)">OUT4− valve R1</text>
+      <text class="t-pin"  x="404" y="424" transform="rotate(90 404 424)">OUT4+</text>
+      <text class="t-pin"  x="435" y="424" transform="rotate(90 435 424)">OUT3− valve L3</text>
+      <text class="t-pin"  x="466" y="424" transform="rotate(90 466 424)">OUT3+</text>
+      <text class="t-pin"  x="498" y="424" transform="rotate(90 498 424)">OUT2− valve L2</text>
+      <text class="t-pin"  x="528" y="424" transform="rotate(90 528 424)">OUT2+</text>
+      <text class="t-pin"  x="559" y="424" transform="rotate(90 559 424)">OUT1− valve L1</text>
+      <text class="t-pin"  x="589" y="424" transform="rotate(90 589 424)">OUT1+</text>
+      <text class="t-pinw" x="620" y="424" transform="rotate(90 620 424)">DC− power ground</text>
+      <text class="t-pinw" x="650" y="424" transform="rotate(90 650 424)">DC+ 12 V in</text>
+
+      <!-- Mounting holes (measured coordinates, relative to the bottom-left corner) -->
+      <circle class="m3" cx="128" cy="234" r="8"/>
+      <circle class="m3" cx="128" cy="180" r="8"/>
+      <circle class="m3" cx="650" cy="234" r="8"/>
+      <circle class="m3" cx="650" cy="165" r="8"/>
+      <text class="t-pin" x="116" y="238" text-anchor="end">Hole 1 (3, 30)</text>
+      <text class="t-pin" x="116" y="176" text-anchor="end">Hole 3 (3, 39)</text>
+      <text class="t-pin" x="676" y="238">Hole 2 (90, 30)</text>
+      <text class="t-pin" x="676" y="169">Hole 4 (90, 41.5)</text>
+
+      <!-- Side labels -->
+      <text class="t-b" x="100" y="118" text-anchor="end">Signal side</text>
+      <text class="t-b" x="100" y="394" text-anchor="end">Power side</text>
+      <text class="t-bm" x="676" y="118">16 positions</text>
+      <text class="t-bm" x="676" y="394">18 positions</text>
+      <text class="t-bm" x="389" y="70" text-anchor="middle">↑ head (front)</text>
+      <text class="t-bm" x="389" y="486" text-anchor="middle">↓ tail (rear) · toward the valve rail</text>
+
+      <text class="t-foot" x="16" y="500">Terminal names taken verbatim from the back-side silkscreen (images/YYNMOS-8_back.jpg): signal side = 8 optocoupler-isolated INn+ / INn− pairs,</text>
+      <text class="t-foot" x="16" y="516">power side = DC+ / DC− power input + 8 OUTn+ / OUTn− output pairs. Hole coordinates are measured (relative to the bottom-left corner, mm).</text>
+      <text class="t-foot" x="16" y="532"><tspan fill="var(--warn)" font-weight="700">The left/right order is inferred by flipping the back-side photo</tspan> — one continuity check between DC+ and any OUTn+ settles it; if DC is at the other end, mirror this diagram left-right, terminal names unchanged.</text>
+      <text class="t-foot" x="16" y="552"><tspan font-weight="700">V0 fits a single pump</tspan>: channel 8 (IN8± / OUT8±) stays entirely empty, terminals and wire positions kept; the second pump plugs straight in later. Channels 1–7 wired as shown.</text>
+    </svg>
+  </figure>
+
+  <div class="note">
+    <b>Four bench measurements before the board goes on the robot — done (2026-08-11)</b> (continuity / diode mode, unpowered, nothing connected to the board)
+    <table class="vtab">
+      <tr><th>What was measured</th><th>Result</th><th>What it settled</th></tr>
+      <tr><td>DC+ ↔ the 8 OUTn+</td><td><span class="st-ok">continuous</span></td><td>Confirms the low-side structure "each channel switches only the − side". <b>A valve works with its two wires straight across OUTn+ / OUTn−</b> (no separate 12 V needed); <b>the pump must bypass OUTn+</b>, otherwise it is paralleled back onto the valve rail and the rail split is defeated</td></tr>
+      <tr><td>IN1− to IN8− among each other</td><td><span class="st-tbd">not connected</span></td><td>The 8 inputs are individually isolated → <b class="d">must</b> parallel the IN− terminals into one signal-ground bus with <b>7 short jumpers</b> on the terminals, then run one common ground back to the Pi (<b>one wire is enough</b>, see quick-reference row 17). In Fig. 2 the IN− terminals alternate with IN+, so the jumpers skip a screw each time</td></tr>
+      <tr><td>IN− ↔ DC−</td><td><span class="st-ok">not continuous</span></td><td>The optocouplers really isolate → the grey dashed line in Fig. 4 is <b>definitely not connected</b>; each side's ground returns to its own source, naturally meeting at the battery "−"</td></tr>
+      <tr><td>OUTn− → OUTn+<br>(diode mode, red probe on OUTn−)</td><td><span class="st-ok">0.591 V<br>all 8 channels</span></td><td>Each channel <b>has its own flyback diode</b>, anode on OUTn−, cathode on OUTn+ = DC+. 0.591 V means a <b>silicon diode</b> (meter ~1 mA; silicon PN 0.55–0.65 V, Schottky only 0.15–0.35 V). So the valves <b>need no external 1N4007</b>; the pumps are a different story, see Fig. 3</td></tr>
+    </table>
+    <b class="d">Do not run the 8 IN− back to the Pi as 16 separate wires</b>; that is 8 ground loops. Paralleling the IN− into a bus goes together with the 8 pull-down resistors — if IN− is not tied to the Pi ground, the resistors have no reference and the pull-down means nothing.
+    <br><b>The IN1–IN8 ↔ valve/pump allocation follows <code>p4-pi-wiring.html</code></b>: IN1 = valve L1 (GPIO5) and IN7 = pump A (GPIO20) are the two channels fitted in P1; the other five valve channels were jogged and verified one by one on 08-14 with <code>p4_mosfet_check.py</code> (IN8 pump B empty). If the allocation changes, update <code>VALVE_PINS</code> / <code>PUMP_PIN</code> in <code>adhesion.py</code> in step (already back-filled as <code>[5, 6, 13, 16, 19, 21]</code>).
+  </div>
+  <h2>Fig. 3 · Single-load wiring detail (low-side switching · one valve, one pump)</h2>
+  <figure>
+    <svg viewBox="0 0 780 540" role="img" aria-label="Single-load wiring detail: left, a solenoid channel with the coil across OUT1+ and OUT1− through the on-board MOSFET to DC−, flyback diode already on board so drawn dashed; right, a vacuum-pump channel with pump + from the pump rail and − into OUT7−, SS34 and 100 nF across the motor">
+      <defs>
+        <marker id="ms3" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <!-- ============ A · Valve ============ -->
+      <text class="t-bx" x="195" y="26">A · One solenoid valve (inductive load ×6)</text>
+      <line class="w-pwr" x1="40" y1="60" x2="350" y2="60"/>
+      <text class="t-pw" x="44" y="52">On-board DC+ bus (DC+ terminal ← 12V-V valve rail)</text>
+      <line class="w-pwr2" x1="150" y1="60" x2="150" y2="100"/>
+      <circle class="scr" cx="150" cy="72" r="6"/>
+      <text class="t-pin" x="160" y="74">OUT1+ terminal</text>
+      <circle class="nd" cx="150" cy="90" r="3.5"/>
+
+      <!-- Freewheel diode branch: already on the board (dashed = you do not fit it) -->
+      <polyline class="w-off" points="150,90 100,90 100,110"/>
+      <polygon points="94,132 106,132 100,118" fill="var(--muted)" opacity=".85"/>
+      <line class="w-off" x1="93" y1="116" x2="107" y2="116" stroke-width="2.4" stroke-dasharray="none"/>
+      <polyline class="w-off" points="100,132 100,178 150,178"/>
+      <text class="t-bm" x="20" y="118">Flyback diode</text>
+      <text class="t-bm" x="20" y="135">Already on board</text>
+      <text class="t-bm" x="20" y="152">No external one needed</text>
+
+      <!-- Coil -->
+      <rect class="rb" x="132" y="100" width="36" height="64" rx="3"/>
+      <text class="t-b" x="178" y="120">0520B coil</text>
+      <text class="t-bm" x="178" y="137">12V · ≈0.3A</text>
+      <text class="t-bm" x="178" y="154">No polarity, the two wires are interchangeable</text>
+      <line class="sch" x1="150" y1="164" x2="150" y2="200"/>
+      <circle class="nd" cx="150" cy="178" r="3.5"/>
+
+      <!-- On-board channel -->
+      <rect class="sv-boxoff" x="100" y="200" width="180" height="100" rx="8"/>
+      <text class="t-bxm" x="190" y="222">YYNMOS-8 channel 1 (on board)</text>
+      <circle class="scr" cx="150" cy="200" r="6"/>
+      <text class="t-pin" x="160" y="196">OUT1− terminal</text>
+      <line class="sch" x1="150" y1="206" x2="150" y2="236"/>
+      <rect class="mos" x="132" y="236" width="36" height="30" rx="2"/>
+      <text class="t-pin" x="172" y="255">MOSFET (low side)</text>
+      <rect class="blk" x="106" y="236" width="22" height="30" rx="2"/>
+      <line class="sch" x1="128" y1="251" x2="132" y2="251"/>
+      <line class="sch" x1="150" y1="266" x2="150" y2="294"/>
+      <circle class="scr" cx="150" cy="300" r="6"/>
+      <text class="t-pin" x="160" y="304">DC− terminal</text>
+      <line class="w-gnd2" x1="150" y1="306" x2="150" y2="320"/>
+
+      <!-- Control side -->
+      <circle class="scr" cx="100" cy="251" r="6"/>
+      <line class="w-sig" x1="34" y1="251" x2="92" y2="251" marker-end="url(#ms3)"/>
+      <text class="t-acc" x="34" y="242">IN1+ ← GPIO5</text>
+      <circle class="nds" cx="70" cy="251" r="3.5"/>
+      <line class="sch" x1="70" y1="251" x2="70" y2="258"/>
+      <rect class="rb" x="64" y="258" width="12" height="24" rx="2"/>
+      <line class="sch" x1="70" y1="282" x2="70" y2="286"/>
+      <text class="t-pin" x="58" y="276" text-anchor="end">6.2k across IN±</text>
+      <circle class="scr" cx="100" cy="286" r="6"/>
+      <text class="t-pin" x="108" y="290">IN1− terminal</text>
+      <polyline class="w-gnd2" points="94,286 30,286 30,306"/>
+      <circle class="ndg" cx="70" cy="286" r="3.5"/>
+      <line class="sch" x1="20" y1="306" x2="40" y2="306"/>
+      <line class="sch" x1="24" y1="311" x2="36" y2="311"/>
+      <line class="sch" x1="28" y1="316" x2="32" y2="316"/>
+      <text class="t-pin" x="44" y="312">Signal ground</text>
+
+      <line class="w-gnd" x1="60" y1="320" x2="350" y2="320"/>
+      <text class="t-bm" x="66" y="338">Power ground (V−) → junction see Fig. 4</text>
+
+      <!-- ============ B · Pump ============ -->
+      <text class="t-bx" x="585" y="26">B · One vacuum pump (motor load ×2, 1 fitted in V0)</text>
+      <line class="w-pwr" x1="430" y1="60" x2="740" y2="60"/>
+      <text class="t-pw" x="434" y="52">12V-P pump rail (XL6009 #1, not via board DC+)</text>
+      <line class="w-pwr2" x1="540" y1="60" x2="540" y2="104"/>
+      <circle class="nd" cx="540" cy="86" r="3.5"/>
+
+      <!-- Snubber branches: SS34 and 100nF are two parallel branches, each across the motor terminals -->
+      <line class="sch" x1="540" y1="86" x2="452" y2="86"/>
+      <line class="sch" x1="452" y1="178" x2="540" y2="178"/>
+      <circle class="nd" cx="496" cy="86" r="3.5"/>
+      <circle class="nd" cx="496" cy="178" r="3.5"/>
+      <!-- Branch 1: SS34, cathode toward "+" -->
+      <line class="sch" x1="496" y1="86" x2="496" y2="114"/>
+      <line class="sch" x1="489" y1="114" x2="503" y2="114" stroke-width="2.4"/>
+      <polygon points="490,130 502,130 496,116" fill="var(--ink)" opacity=".8"/>
+      <line class="sch" x1="496" y1="130" x2="496" y2="178"/>
+      <text class="t-bm" x="488" y="122" text-anchor="end">SS34</text>
+      <!-- Branch 2: 100nF, non-polarized -->
+      <line class="sch" x1="452" y1="86" x2="452" y2="140"/>
+      <line class="sch" x1="444" y1="140" x2="460" y2="140" stroke-width="2.4"/>
+      <line class="sch" x1="444" y1="148" x2="460" y2="148" stroke-width="2.4"/>
+      <line class="sch" x1="452" y1="148" x2="452" y2="178"/>
+      <text class="t-bm" x="440" y="152" text-anchor="end">100nF</text>
+      <text class="t-bm" x="420" y="196">Both in parallel, each across the motor terminals</text>
+
+      <!-- Motor -->
+      <circle class="rb" cx="540" cy="130" r="26"/>
+      <text class="t-bx" x="540" y="135">M</text>
+      <text class="t-b" x="578" y="120">555 dual-head pump</text>
+      <text class="t-bm" x="578" y="137">12V · 0.5~0.8A</text>
+      <text class="t-bm" x="578" y="154">Red "+" black "−", polarized</text>
+      <text class="t-bm" x="578" y="171">Start-up surge 2–3×</text>
+      <line class="sch" x1="540" y1="156" x2="540" y2="200"/>
+      <circle class="nd" cx="540" cy="178" r="3.5"/>
+
+      <!-- On-board channel -->
+      <rect class="sv-boxoff" x="490" y="200" width="180" height="100" rx="8"/>
+      <text class="t-bxm" x="580" y="222">YYNMOS-8 channel 7 (on board)</text>
+      <circle class="scr" cx="540" cy="200" r="6"/>
+      <text class="t-pin" x="550" y="196">OUT7− terminal</text>
+      <line class="sch" x1="540" y1="206" x2="540" y2="236"/>
+      <rect class="mos" x="522" y="236" width="36" height="30" rx="2"/>
+      <text class="t-pin" x="562" y="255">MOSFET (low side)</text>
+      <rect class="blk" x="496" y="236" width="22" height="30" rx="2"/>
+      <line class="sch" x1="518" y1="251" x2="522" y2="251"/>
+      <line class="sch" x1="540" y1="266" x2="540" y2="294"/>
+      <circle class="scr" cx="540" cy="300" r="6"/>
+      <text class="t-pin" x="550" y="304">DC− terminal</text>
+      <line class="w-gnd2" x1="540" y1="306" x2="540" y2="320"/>
+
+      <circle class="scr" cx="490" cy="251" r="6"/>
+      <line class="w-sig" x1="424" y1="251" x2="482" y2="251" marker-end="url(#ms3)"/>
+      <text class="t-acc" x="424" y="242">IN7+ ← GPIO20</text>
+      <circle class="nds" cx="460" cy="251" r="3.5"/>
+      <line class="sch" x1="460" y1="251" x2="460" y2="258"/>
+      <rect class="rb" x="454" y="258" width="12" height="24" rx="2"/>
+      <line class="sch" x1="460" y1="282" x2="460" y2="286"/>
+      <text class="t-pin" x="448" y="276" text-anchor="end">6.2k across IN±</text>
+      <circle class="scr" cx="490" cy="286" r="6"/>
+      <text class="t-pin" x="498" y="290">IN7− terminal</text>
+      <polyline class="w-gnd2" points="484,286 420,286 420,306"/>
+      <circle class="ndg" cx="460" cy="286" r="3.5"/>
+      <line class="sch" x1="410" y1="306" x2="430" y2="306"/>
+      <line class="sch" x1="414" y1="311" x2="426" y2="311"/>
+      <line class="sch" x1="418" y1="316" x2="422" y2="316"/>
+      <text class="t-pin" x="434" y="312">Signal ground</text>
+
+      <line class="w-gnd" x1="450" y1="320" x2="740" y2="320"/>
+      <text class="t-bm" x="456" y="338">Power ground (V−) → junction see Fig. 4</text>
+
+      <text class="t-foot" x="16" y="358">What low-side switching means: the MOSFET sits only in the load's "−" side. Valves are the easiest — two wires across OUT1+ / OUT1− and done, "+" comes from the on-board DC+ bus;</text>
+      <text class="t-foot" x="16" y="374">pumps are the opposite: <tspan fill="var(--warn)" font-weight="700">OUT7+ / OUT8+ must stay open</tspan> (internally they are paralleled onto DC+ = the valve rail; connecting them parallels the pump back onto the valve rail and the split is wasted), and "+" takes the pump rail alone.</text>
+      <text class="t-foot" x="16" y="392"><tspan font-weight="700">Dashed = already on board, nothing to fit; solid = you wire it.</tspan> Measured: every one of the eight channels has its own flyback diode (OUTn−→OUTn+ reads 0.591 V = silicon).</text>
+      <text class="t-foot" x="16" y="408">For a <tspan font-weight="700">valve</tspan> it sits exactly across the coil → <tspan font-weight="700">the 6 × 1N4007 are not needed</tspan>. For a <tspan font-weight="700">pump</tspan> it spans "pump − → valve rail" rather than the motor terminals:</text>
+      <text class="t-foot" x="16" y="424">enough to protect the MOSFET, but the freewheeling loop detours through the valve rail and most of the harness, a huge loop area. <tspan fill="var(--warn)" font-weight="700">So the pump still gets an external SS34 + 100 nF</tspan>,</text>
+      <text class="t-foot" x="16" y="440">shrinking the loop back to the motor itself; the Schottky's 0.4 V conducts before the on-board silicon's 0.85 V, while a 1N4007 would tie and not win reliably.</text>
+      <text class="t-foot" x="16" y="456">The 100 nF treats something else — broadband brush-commutation noise, which is even worse for the 7 analog channels sampled at 0.25–2.25 V. Solder both right at the pump terminals, leads as short as possible.</text>
+      <text class="t-foot" x="16" y="474">The pull-down resistor goes straight across each channel's INn+ / INn− terminals: the Pi's <tspan font-weight="700">GPIO5 / GPIO6 default to pull-up at reset</tspan> (GPIO0–8 pull-up, 9–27 pull-down),</text>
+      <text class="t-foot" x="16" y="490">and an active-high board meeting that = valves L1/L2 energize and vent at the instant of boot. With the pull-down, IN should rest at &lt;0.8 V; it passes only when measured as <tspan font-weight="700">"Pi powered, program not running, valves do not move"</tspan></text>
+      <text class="t-foot" x="16" y="506">(with the Pi fully off the internal pull-ups are unpowered anyway, so that measurement proves nothing either way).</text>
+      <text class="t-foot" x="16" y="524"><tspan font-weight="700">Any value 4.7k–10k works</tspan>, dividing against the Pi's internal ≈50k pull-up: 6.2k gives 0.36 V, 10k gives 0.55 V, 15k gives 0.76 V on the line and is not recommended. <tspan font-weight="700">This robot uses 6.2k</tspan>.</text>
+    </svg>
+  </figure>
+  <h2>Fig. 4 · Ground topology (single-point ground)</h2>
+  <figure>
+    <svg viewBox="0 0 780 420" role="img" aria-label="Ground topology: battery negative is the system reference ground; the power-ground bus takes both XL6009s and the MOSFET board V−; the 5 V buck carries ground to the Pi, and the Pi's ground feeds the MOSFET board signal ground and the divider board">
+      <text class="t-bx" x="389" y="26">One power-ground bus + one signal ground, the only junction = battery "−"</text>
+
+      <!-- Loads in the power domain -->
+      <rect class="sv-box" x="180" y="70" width="100" height="50" rx="6"/>
+      <text class="t-bx" x="230" y="92">XL6009 #1</text>
+      <text class="t-bs" x="230" y="109">Pump rail GND</text>
+      <rect class="sv-box" x="310" y="70" width="100" height="50" rx="6"/>
+      <text class="t-bx" x="360" y="92">XL6009 #2</text>
+      <text class="t-bs" x="360" y="109">Valve rail GND</text>
+      <rect class="sv-box" x="440" y="70" width="120" height="50" rx="6"/>
+      <text class="t-bx" x="500" y="92">YYNMOS-8</text>
+      <text class="t-bs" x="500" y="109">DC− power ground terminal</text>
+      <rect class="sv-box" x="585" y="70" width="110" height="50" rx="6"/>
+      <text class="t-bx" x="640" y="92">5V/5A buck</text>
+      <text class="t-bs" x="640" y="109">Input GND</text>
+
+      <!-- Battery and power-ground bus -->
+      <rect class="sv-boxa" x="16" y="150" width="130" height="60" rx="6"/>
+      <text class="t-bx" x="81" y="174">2S battery "−"</text>
+      <text class="t-bs" x="81" y="192">XT60 black · 16 AWG</text>
+      <line class="w-gnd" x1="146" y1="180" x2="700" y2="180"/>
+      <text class="t-bm" x="330" y="202">Power-ground bus (16–18 AWG, star to the battery "−", not daisy-chained)</text>
+      <line class="w-gnd2" x1="230" y1="180" x2="230" y2="120"/>
+      <line class="w-gnd2" x1="360" y1="180" x2="360" y2="120"/>
+      <line class="w-gnd2" x1="500" y1="180" x2="500" y2="120"/>
+      <line class="w-gnd2" x1="640" y1="180" x2="640" y2="120"/>
+      <circle class="ndg" cx="230" cy="180" r="4"/>
+      <circle class="ndg" cx="360" cy="180" r="4"/>
+      <circle class="ndg" cx="500" cy="180" r="4"/>
+      <circle class="ndg" cx="640" cy="180" r="4"/>
+
+      <!-- Reference ground symbol -->
+      <line class="w-gnd2" x1="81" y1="210" x2="81" y2="234"/>
+      <line class="sch" x1="63" y1="234" x2="99" y2="234" stroke-width="2.4"/>
+      <line class="sch" x1="69" y1="241" x2="93" y2="241" stroke-width="2.4"/>
+      <line class="sch" x1="75" y1="248" x2="87" y2="248" stroke-width="2.4"/>
+      <text class="t-bm" x="106" y="240">System reference ground</text>
+
+      <!-- 5V buck converter → Pi -->
+      <polyline class="w-pwr" points="695,95 720,95 720,245 695,245"/>
+      <text class="t-dim" x="726" y="170">5V + GND</text>
+
+      <!-- Pi and signal ground -->
+      <rect class="sv-boxa" x="585" y="220" width="110" height="50" rx="6"/>
+      <text class="t-bx" x="640" y="242">Raspberry Pi 5</text>
+      <text class="t-bs" x="640" y="259">Pin 34 / 39 GND</text>
+      <rect class="sv-box" x="430" y="215" width="130" height="50" rx="6"/>
+      <text class="t-bx" x="495" y="237">Board signal ground</text>
+      <text class="t-bs" x="495" y="254">IN1−~IN8− paralleled by hand with 7 jumpers</text>
+      <line class="w-gnd2" x1="585" y1="240" x2="560" y2="240"/>
+      <rect class="sv-box" x="585" y="290" width="110" height="46" rx="6"/>
+      <text class="t-bx" x="640" y="311">Divider board + sensors</text>
+      <text class="t-bs" x="640" y="328">7 grounds meet at Pin 9</text>
+      <line class="w-gnd2" x1="640" y1="270" x2="640" y2="290"/>
+
+      <!-- Whether the board ties them together internally -->
+      <path class="w-off" d="M545,215 L545,192 A12,12 0 0 1 545,168 L545,120"/>
+      <text class="t-bsw" x="620" y="146" text-anchor="start">Measured: IN− and DC− not continuous</text>
+      <text class="t-bs" x="620" y="162" text-anchor="start">True isolation → this wire definitely not connected</text>
+
+      <text class="t-foot" x="16" y="358">The bridging wire (grey dashed) was once the only disputed line in the diagram; it is now settled by measurement: <tspan fill="var(--warn)" font-weight="700">on-board IN− and DC− are not continuous = true isolation, this wire is definitely not connected</tspan>.</text>
+      <text class="t-foot" x="16" y="374">Each side's ground returns to its own source, naturally sharing ground at the battery "−" with minimum loop area. (Had it measured continuous, the board itself would be the single point, and no second ground wire could be run between the Pi and 12 V.)</text>
+      <text class="t-foot" x="16" y="390">The cost of ground-loop current is concrete: the 7 analog channels have a full scale of only 0.25–2.25 V, and tens of mV of loop noise is enough to make the −30 kPa attachment criterion jitter,</text>
+      <text class="t-foot" x="16" y="406">and a jittering criterion = a state-machine misjudgment = lifting the wrong foot on the wall.</text>
+    </svg>
+  </figure>
+  <h2>Fig. 5 · Pressure sampling chain (5 V-domain harness)</h2>
+  <figure>
+    <svg viewBox="0 0 780 424" role="img" aria-label="Pressure sampling chain: seven XGZP6847A pressure sensors, three wires each, into divider-board ports S1 to S7; on the board two ADS1115 convert to I2C for the Pi">
+      <defs>
+        <marker id="ms5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+      <text class="t-bx" x="389" y="26">7× XGZP6847A (5 V domain) → divider board → ADS1115 ×2 (3.3 V domain) → Pi I2C</text>
+
+      <rect class="sv-box" x="20" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="66" y="64">S1</text>
+      <text class="t-bs" x="66" y="81">Tank</text>
+      <text class="t-bs" x="66" y="97">#1 · A0</text>
+      <text class="t-bs" x="66" y="112">Tee at the tank outlet</text>
+      <rect class="sv-box" x="128" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="174" y="64">S2</text>
+      <text class="t-bs" x="174" y="81">Foot L1</text>
+      <text class="t-bs" x="174" y="97">#1 · A1</text>
+      <text class="t-bs" x="174" y="112">pairs with OUT1</text>
+      <rect class="sv-box" x="236" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="282" y="64">S3</text>
+      <text class="t-bs" x="282" y="81">Foot L2</text>
+      <text class="t-bs" x="282" y="97">#1 · A2</text>
+      <text class="t-bs" x="282" y="112">pairs with OUT2</text>
+      <rect class="sv-box" x="344" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="390" y="64">S4</text>
+      <text class="t-bs" x="390" y="81">Foot L3</text>
+      <text class="t-bs" x="390" y="97">#1 · A3</text>
+      <text class="t-bs" x="390" y="112">pairs with OUT3</text>
+      <rect class="sv-box" x="452" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="498" y="64">S5</text>
+      <text class="t-bs" x="498" y="81">Foot R1</text>
+      <text class="t-bs" x="498" y="97">#2 · A0</text>
+      <text class="t-bs" x="498" y="112">pairs with OUT4</text>
+      <rect class="sv-box" x="560" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="606" y="64">S6</text>
+      <text class="t-bs" x="606" y="81">Foot R2</text>
+      <text class="t-bs" x="606" y="97">#2 · A1</text>
+      <text class="t-bs" x="606" y="112">pairs with OUT5</text>
+      <rect class="sv-box" x="668" y="44" width="92" height="72" rx="6"/>
+      <text class="t-bx" x="714" y="64">S7</text>
+      <text class="t-bs" x="714" y="81">Foot R3</text>
+      <text class="t-bs" x="714" y="97">#2 · A2</text>
+      <text class="t-bs" x="714" y="112">pairs with OUT6</text>
+
+      <line class="w-sig" x1="66"  y1="116" x2="180" y2="200"/>
+      <line class="w-sig" x1="174" y1="116" x2="250" y2="200"/>
+      <line class="w-sig" x1="282" y1="116" x2="320" y2="200"/>
+      <line class="w-sig" x1="390" y1="116" x2="390" y2="200"/>
+      <line class="w-sig" x1="498" y1="116" x2="460" y2="200"/>
+      <line class="w-sig" x1="606" y1="116" x2="530" y2="200"/>
+      <line class="w-sig" x1="714" y1="116" x2="600" y2="200"/>
+      <text class="t-acc lbl" x="390" y="160" text-anchor="middle">3 wires per channel: 5V · OUT (0.5–4.5 V) · GND — JST-XH 3P or soldered + heat-shrink</text>
+
+      <rect class="sv-boxa" x="150" y="200" width="480" height="70" rx="6"/>
+      <text class="t-bx" x="390" y="224">Divider board (perfboard 7×9 cm, S1–S7 along the long edge)</text>
+      <text class="t-bs" x="390" y="242">Per channel 10k/10k halving divider + 100 nF ≈300 Hz low-pass → 0.25–2.25 V</text>
+      <text class="t-bs" x="390" y="259">ADS1115 ×2 soldered on board (0x48 / 0x49, PGA=±4.096 V) · drawings in p4-divider-board.html</text>
+
+      <line class="w-sig" x1="390" y1="270" x2="390" y2="292" marker-end="url(#ms5)"/>
+      <rect class="sv-boxa" x="260" y="296" width="260" height="44" rx="6"/>
+      <text class="t-bx" x="390" y="317">Pi 5 · J1: 5V / 3.3V / GND / SDA / SCL</text>
+      <text class="t-bs" x="390" y="333">2×20 IDC on the full 40-pin header, no Dupont</text>
+
+      <text class="t-foot" x="16" y="360">Sensors sit <tspan font-weight="700">between valve and cup (cup side)</tspan>, so foot pressure is readable even with the valve closed — both attachment confirmation and "hiccup" detection depend on this</text>
+      <text class="t-foot" x="16" y="376">(P1 single-sensor lesson + P2 measured hiccup going out of control within 30 s). Pressure taps use 4 mm tees, one per foot + one on the tank = 7.</text>
+      <text class="t-foot" x="16" y="394">Routing: the 7 analog lines go through the <tspan font-weight="700">left-edge signal comb</tspan>, the 12 V pump/valve lines through the <tspan font-weight="700">right-edge power comb</tspan>; different combs, not bundled, no long parallel runs —</text>
+      <text class="t-foot" x="16" y="410">a 0.25–2.25 V range cannot tolerate switching noise coupled from the pump lines.</text>
+    </svg>
+  </figure>
+  <div class="note">
+    <b>Terminal wiring quick reference</b> (tighten screws per this table; control wire colors follow <code>p4-pi-wiring.html</code>, power wires all red/black + heat-shrink label rings)
+    <table class="vtab">
+      <tr><th>#</th><th>From (terminal)</th><th>To (terminal)</th><th>Wire</th><th>Status</th></tr>
+      <tr><td>1</td><td>Battery XT60 red</td><td>Master switch → 5 A fuse → IN+ of XL6009 #1/#2 (both paralleled)</td><td>16 AWG red</td><td>fixed</td></tr>
+      <tr><td>2</td><td>Battery XT60 black</td><td>Power-ground bus → IN− of XL6009 #1/#2</td><td>16 AWG black</td><td>fixed</td></tr>
+      <tr><td>3</td><td>XL6009 #2 OUT+</td><td>YYNMOS-8 <b>DC+</b> (paralleled on board to the 8 OUTn+)</td><td>20 AWG red · labeled "12V-V"</td><td>fixed</td></tr>
+      <tr><td>4</td><td>XL6009 #2 OUT−</td><td>Power-ground bus</td><td>20 AWG black</td><td>fixed</td></tr>
+      <tr><td>5</td><td>YYNMOS-8 <b>DC−</b></td><td>Power-ground bus (all eight return currents go through it, the thickest wire)</td><td>16 AWG black</td><td>fixed</td></tr>
+      <tr><td>6</td><td>XL6009 #1 OUT+</td><td>Pump A "+", pump B "+" (pump rail, <b>not via board DC+</b>). <b>V0 connects pump A only</b></td><td>18 AWG red · labeled "12V-P"</td><td>fixed</td></tr>
+      <tr><td>7</td><td>XL6009 #1 OUT−</td><td>Power-ground bus</td><td>18 AWG black</td><td>fixed</td></tr>
+      <tr><td>8</td><td>Valves L1 / L2 / L3 (two wires, no polarity)</td><td><b>OUT1+ and OUT1−</b> / OUT2± / OUT3±</td><td>22 AWG green</td><td>fixed</td></tr>
+      <tr><td>9</td><td>Valves R1 / R2 / R3 (two wires, no polarity)</td><td>OUT4± / OUT5± / OUT6±</td><td>22 AWG white</td><td>fixed</td></tr>
+      <tr><td>10</td><td>Pump A "−" / pump B "−"</td><td><b>OUT7−</b> / <b>OUT8−</b>. <b>V0 connects pump A only → OUT7−; OUT8− empty</b></td><td>20 AWG black · labeled "pump A/B"</td><td>fixed</td></tr>
+      <tr><td>11</td><td>—</td><td><b class="d">OUT7+ / OUT8+ left open</b> (connecting them = pump paralleled back onto the valve rail)</td><td>—</td><td>Key to the rail split</td></tr>
+      <tr><td>12</td><td>Pi Pin29 GPIO5</td><td>IN1+ (valve L1)</td><td>24 AWG green</td><td><span class="st-ok">fitted in P1</span></td></tr>
+      <tr><td>13</td><td>Pi Pin31/33 · 36/35/40</td><td>IN2+/IN3+ · IN4+/IN5+/IN6+ (valves L2 L3 R1 R2 R3)</td><td>24 AWG green/white</td><td><span class="st-ok">jog-tested 08-14</span></td></tr>
+      <tr><td>14</td><td>Pi Pin38 GPIO20</td><td>IN7+ (pump A)</td><td>24 AWG purple</td><td><span class="st-ok">fitted in P1</span></td></tr>
+      <tr><td>15</td><td>Pi Pin37 GPIO26</td><td>IN8+ (pump B)</td><td>24 AWG purple</td><td><span class="st-tbd">not connected in V0</span>, pin reserved</td></tr>
+      <tr><td>16</td><td>IN1− ~ IN8−</td><td><b>7 short jumpers</b> on the terminals paralleling them into one signal ground (measured not connected on board, <b class="d">mandatory</b>; the IN− terminals alternate with IN+, so the jumpers skip a screw)</td><td>24 AWG black</td><td><span class="st-ok">settled by measurement</span></td></tr>
+      <tr><td>17</td><td>Pi <b>Pin 39</b> (Pin 34 optional)</td><td>The signal ground of the previous row. <b>One wire is enough</b> — it only returns tens of mA of optocoupler current, and a break fails safe (no optocoupler loop = valves unpowered = vacuum held); Pin 34 is in the same ribbon, connect it as redundancy while you are at it</td><td>24 AWG black</td><td>fixed</td></tr>
+      <tr><td>18</td><td>Each INn+</td><td>Pull-down resistor → same channel's INn− (8 pieces, screwed into the terminals). <b>4.7k–10k all fine, this robot uses 6.2k</b></td><td>—</td><td><b>New</b>, see Fig. 3</td></tr>
+      <tr><td>19</td><td>Across each pump motor</td><td><b>SS34 + 100 nF in parallel</b> (diode cathode toward "+"), soldered right at the pump terminals. <b>Valves need none</b> — the on-board flyback diode already spans the coil</td><td>—</td><td><span class="st-ok">settled by measurement</span></td></tr>
+      <tr><td>20</td><td>Pi Pin1 / 2 / 9 / 3 / 5</td><td>Divider board J1 (3.3V / 5V / GND / SDA / SCL)</td><td>orange/red/black/blue/yellow</td><td>fixed</td></tr>
+      <tr><td>21</td><td>XGZP6847A ×7</td><td>Divider board S1–S7 (each port 5V·OUT·GND)</td><td>JST-XH 3P</td><td>fixed</td></tr>
+    </table>
+    Tighten terminals by the silkscreen name, regardless of whether it is at the left or right end; the GPIO allocation in rows 12–15 must be changed in step with <code>VALVE_PINS</code> / <code>PUMP_PIN</code> in <code>adhesion.py</code>.
+  </div>
+
+  <div class="note">
+    <b>12 V current budget and the basis for the rail choice</b> (<code>P4-BAY-DESIGN</code> fixed V0 at one pump with the second position kept, so both cases are listed)
+    <table class="vtab">
+      <tr><th>Load</th><th>Each @12 V</th><th>Simultaneous</th><th>Rail steady state</th><th>Peak</th><th>Supply</th></tr>
+      <tr><td>0520B solenoid valve</td><td>0.25–0.38 A<sup>est.</sup></td><td>≤2 (in the climbing gait only feet "being released" are energized)</td><td>0.5~0.8A</td><td>0.8A</td><td>XL6009 #2 valve rail</td></tr>
+      <tr><td>Board gate drive + 8 LEDs</td><td>—</td><td>always</td><td>&lt;0.1A</td><td>—</td><td>XL6009 #2 valve rail</td></tr>
+      <tr><td>555 dual-head pump</td><td>0.5–0.8 A<sup>est.</sup></td><td>Designed 2 · <b>V0 fits 1</b> (hysteresis control, off most of the time)</td><td>Two pumps 1.0–1.6 A<br><b>one pump 0.5–0.8 A</b></td><td>Each start 1.0–2.4 A<br>(2–3×, lasting tens to hundreds of ms)</td><td>XL6009 #1 pump rail</td></tr>
+      <tr><td colspan="3">12 V total · two pumps</td><td>1.6~2.5A</td><td>~5A</td><td>—</td></tr>
+      <tr><td colspan="3">12 V total · <b>one pump (V0)</b></td><td><b>1.1~1.7A</b></td><td><b>~3.3A</b></td><td>—</td></tr>
+      <tr><td colspan="3">Referred to the 7.4 V battery side · two pumps (η≈0.85)</td><td>3.1~4.8A</td><td>transient ~9.5 A</td><td>2S LiPo</td></tr>
+      <tr><td colspan="3">Referred to the 7.4 V battery side · <b>one pump</b> (η≈0.85)</td><td><b>2.1~3.2A</b></td><td>transient ~6.3 A</td><td>2S LiPo</td></tr>
+    </table>
+
+    <b>Can a single pump share one XL6009? — referring the numbers to the input side makes it clear</b>
+    <table class="vtab">
+      <tr><th>Battery state</th><th>Vin</th><th>η</th><th>Ratio = 12/(Vin·η)</th><th>Single pump, shared rail, steady (input)</th><th>Pump start instant (input)</th></tr>
+      <tr><td>Full</td><td>8.4V</td><td>0.88</td><td>×1.62</td><td>2.8A</td><td>5.3A</td></tr>
+      <tr><td>Nominal</td><td>7.4V</td><td>0.85</td><td>×1.91</td><td>3.2A</td><td>6.3A</td></tr>
+      <tr><td>Second half / pulled down by servos</td><td>6.6V</td><td>0.82</td><td>×2.22</td><td><span class="st-tbd">3.8A</span></td><td><span class="st-tbd">7.3A</span></td></tr>
+    </table>
+    <ul>
+      <li><b class="d">Conclusion: even with only one pump, do not merge onto one module.</b> The XL6009's current limit is on the <b>input side</b> (switch and inductor sit in the input loop); the chip's switch current limit is <b>4 A peak</b>, and the inductor ripple stacks on top of the mean; the SS34 on the module is a 3 A part and the small inductor typically saturates at 3–4 A. Against the table: at nominal voltage the steady 3.2 A is already at the limit, in the second half of the battery it is over, and the pump start-up will hit current limiting and hiccup. <b>The "3 A" in the BOM is the module's nominal input rating, not its 12 V output capability</b> — boosting 7.4 V to 12 V, that corresponds to only about 1.5 A of output. With separate rails the pump rail carries 0.8 A and the valve rail 0.9 A, both easy.</li>
+      <li><b>Failure direction of a shared-rail collapse</b> (the old version had this backwards; corrected here): this project's valves are normally closed, powered = vent (<code>VALVE_ON_LEVEL=0</code> in <code>adhesion.py</code>), so <b>an unpowered valve does not draw from this rail at all</b> — a voltage dip cannot release a foot that is holding vacuum. The real failure chains are two: ① a venting valve drops out → the foot that should be released re-grips halfway while the gait state machine thinks it is free; lifting = tearing; ② while dropping out the valve is half-open and leaks air into the <b>shared vacuum manifold</b>, while the undervolted pump loses output → tank pressure rises → <b class="d">all six feet weaken together</b>. ② is the path to "everyone loses suction". The conclusion that rails must be split stands, but this is the reasoning chain.</li>
+      <li><b>A single pump needs the split more, not less</b>: with two pumps each has a low duty cycle and starts rarely; a single pump must top up 6 feet + tank alone, its duty cycle rises and it starts more often, so <b>the probability of a pump-start window overlapping a valve-action window goes up</b>. "One pump fewer, so the rails can be merged" points the wrong way.</li>
+      <li><b>The battery is shared with the servos</b>: P2 measured 2–4 A sustained and ~12 A transient for the whole robot (servo side). Whenever the servos move the battery terminal voltage dips, and the boost's input-current demand jumps at the same moment — the "second half 6.6 V" row in the table is this case, not something that appears only when the battery is drained.</li>
+      <li><b>The fuse rating changes with pump count</b>: one pump referred to the battery side is 2.1–3.2 A steady, so a 5 A fuse has ~1.6× margin, fine. <b class="d">With the second pump added the steady state rises to 3.1–4.8 A, hugging 5 A and fatiguing the fuse</b>; then switch to a 7.5–10 A time-delay (slow-blow) type and update row 1 of the quick reference.</li>
+      <li><b>Add a 470–1000 µF / 25 V electrolytic across the pump-rail output</b> (right at the XL6009 output terminals) to absorb the start-up surge; 220 µF is enough on the valve rail. <b>Do not reduce it for a single pump</b> — the surge is one pump's own start-up characteristic, independent of how many are fitted. <b class="d">Mind the polarity</b>.</li>
+      <li>Estimates come from the P1 measurement "1 valve + 1 pump ≈ 1 A" (<code>P1-GUIDE.md</code>); the 2–3× pump surge ratio is a rule of thumb, <b>not yet measured in this project</b>. On arrival measure each item with a clamp meter and back-fill this table — it decides wire gauges, fuse rating and whether rails can be merged; it is not decoration. <b>The first thing to measure is the pump start-up current waveform</b> (clamp meter peak-hold, or a 0.1 Ω shunt + oscilloscope).</li>
+      <li>If the floor tripod gait allows 3 feet to release at once, re-check the valve rail at 3 valves ≈1.1 A (still within margin with split rails); a merged single-pump rail would then peak at ~3.6 A on 12 V, 6.9 A on the input side at nominal voltage, 1.7× the 4 A limit, even less possible.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <b>Three deliberate differences from existing documents</b> (this diagram is the terminal-level implementation; in a conflict this diagram wins, and please back-fill P4-BAY-DESIGN)
+    <ol>
+      <li><b>Dual-rail supply</b>: <code>p4-system-diagram.html</code> and P4-BAY-DESIGN §2.2 draw "XL6009 ×2 side by side → MOSFET board power in", which reads like two modules paralleled onto one 12 V. <b class="d">Boost modules cannot be paralleled directly</b> (output voltages can never be exactly equal; the higher one carries the whole load, the other idles or even back-feeds). This diagram changes to #1 dedicated to the pump, #2 dedicated to the board DC+ (valves draw from the on-board OUTn+ bus), each independent, sharing only the power ground. The bay layout does not change — the two still sit side by side, only their outputs go separate ways.</li>
+      <li><b>Pump "+" not via board DC+, OUT7+ / OUT8+ open</b>: the back-side silkscreen shows each channel has its own OUTn+ / OUTn−, with OUTn+ internally paralleled onto DC+. So valves are easiest — two wires across OUTn+ / OUTn− and done; pumps the reverse: OUT7+/OUT8+ must stay open and "+" takes the pump rail alone, otherwise the two rails are shorted together inside the board by the DC+ bus and the split is wasted. <b class="d">This is the premise that makes the split work, and the only easy mistake in the wiring</b>.</li>
+      <li><b>Pull-down resistors across INn± + 5 A fuse</b>: two new items absent from existing documents. The board's inputs are 8 optocoupler-isolated pairs (INn+ / INn−); the resistor goes across those two terminals of the same channel (4.7k–10k, 6.2k fitted), as a backstop for the reset default pull-up of GPIO5/6 (see the Fig. 3 footnote); the fuse is dictated by the short-circuit energy of a 2S LiPo — the segment after the XT60 and before the boosts is the only place in the whole robot without any current limiting.</li>
+    </ol>
+  </div>
+
+  <div class="note">
+    <b>Assembly and inspection checklist</b> (in order; do not proceed until each step passes)
+    <ol>
+      <li><b>Four bench measurements before the board goes on</b>: <span class="st-ok">all done 2026-08-11, results in the table below Fig. 2</span>. Flyback diodes confirmed on all eight channels; this step is closed.</li>
+      <li><b>Set both XL6009 unloaded, and deliberately leave a voltage difference</b>: connect each alone to the battery, <b>unloaded</b>, set <b>#2 valve rail 12.2 V / #1 pump rail 11.8 V</b> (<b class="d">not both 12.0 V</b>), power off, label "#1 pump rail / #2 valve rail", then connect loads. The direction of the difference is deliberate: the on-board flyback diode points "pump − → valve rail", so once the pump rail exceeds the valve rail by one Vf (measured silicon ≈0.59 V) it leaks current through the motor winding into the valve rail, and the pump hums or turns slowly. The 0.1 V error of hand-setting two modules would not reach that threshold by itself; the 0.4 V is a guard against the potentiometer drifting with pump vibration. <b>Acceptance</b>: with the pump off + 3 valves energized (valve rail at its lowest, pump rail at its highest) measure both rails; it passes only if the valve rail is still higher than the pump rail.</li>
+      <li><b>Control first, no loads</b>: Pi ↔ IN1+ to IN8+ + the paralleled IN− signal ground + 8 pull-downs (6.2k fitted). <b>With the Pi powered but the program not running</b>, measure each INn+ against INn−; it passes at &lt;0.8 V — this is the only window in which the GPIO5/6 reset pull-up actually takes effect. With the Pi unpowered the internal pull-ups are off, that measurement always passes and proves nothing.</li>
+      <li><b>Jog unloaded</b>: connect 12 V, no valves or pumps, jog each GPIO channel and watch the LED and the OUTn− to OUTn+ voltage flip (off ≈12 V, on ≈0 V). Connect loads only after all eight pass.</li>
+      <li><b>Loads one channel at a time</b>: the 6 valves first (listen for the click and <b class="d">confirm the air-path direction at the same time</b>: cup to vacuum when unpowered, to air when powered), then the pump (<b>V0 pump A only → channel 7</b>). Re-check the total current after each channel.</li>
+      <li><b>Measured power-loss hold test</b>: with the whole robot attached, pull the master switch directly; all six feet must stay attached for ≥60 s (this is the whole point of the <code>VALVE_ON_LEVEL=0</code> wiring). <b class="d">If this fails, no wall climbing.</b></li>
+      <li><b>Sensor chain last</b>: <code>i2cdetect -y 1</code> shows 0x48/0x49; with 7 sensors open to air the readings should agree at ≈0.25 V. Read again with the pump running; only if the 7 readings jitter by &lt;±1 kPa is the separate-comb routing done right.</li>
+      <li>After everything passes, re-check <code>vcgencmd get_throttled</code> for 0x0, and back-fill the measured currents, terminal positions and GPIO map into this page and <code>adhesion.py</code>.</li>
+    </ol>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,334 @@
+<!doctype html>
+<!-- English translation of html/p4-pi-wiring.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi 5 pin-level wiring diagram</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+      --pwr: #E0A64F; --air: #4BC2A0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+    --pwr: #E0A64F; --air: #4BC2A0;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 17px; margin: 4px 0 -12px; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 10px 6px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  .note ul { margin: 8px 0 2px; padding-left: 20px; }
+  .note li { margin: 3px 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+  table.vtab { border-collapse: collapse; margin: 10px 0 4px; }
+  .vtab th, .vtab td { border: 1px solid var(--line); padding: 4px 10px; font-size: 12.5px; text-align: left; }
+  .vtab th { background: var(--accent-soft); font-weight: 700; }
+  .st-ok { color: var(--accent); font-weight: 700; }
+  .st-tbd { color: var(--warn); font-weight: 700; }
+
+  .hdr { fill: var(--part); fill-opacity: .3; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-box  { fill: var(--part); fill-opacity: .35; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-boxa { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .pp { fill: var(--pwr); }
+  .pg { fill: var(--muted); }
+  .ps { fill: var(--accent); }
+  .pu { fill: var(--part); stroke: var(--part-stroke); stroke-width: 1; }
+  .tkp { stroke: var(--pwr); stroke-width: 2; }
+  .tkg { stroke: var(--muted); stroke-width: 2; }
+  .tks { stroke: var(--accent); stroke-width: 2; }
+  .w-sig { stroke: var(--accent); stroke-width: 1.8; stroke-dasharray: 7 4; fill: none; }
+  .w-pwr { stroke: var(--pwr); stroke-width: 3; fill: none; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-num  { font-size: 8px; font-weight: 700; text-anchor: middle; fill: var(--panel); }
+  .t-numu { font-size: 8px; font-weight: 700; text-anchor: middle; fill: var(--muted); }
+  .t-lb { font-size: 11.5px; }
+  .t-un { font-size: 9.5px; fill: var(--muted); opacity: .8; }
+  .t-bx { font-size: 12.5px; font-weight: 700; text-anchor: middle; }
+  .t-bs { font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+  .t-seg { font-size: 11.5px; fill: var(--muted); }
+  .t-warn{ font-size: 12px; font-weight: 700; fill: var(--warn); }
+  .t-acc { font-size: 11.5px; fill: var(--accent); }
+  .t-b   { font-size: 12px; fill: var(--ink); }
+  .t-bm  { font-size: 11.5px; fill: var(--muted); }
+  .t-foot{ font-size: 10.5px; fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Spider · P4 whole robot · Pi 5 pin-level wiring (companion to the system diagram / divider-board drawings)</p>
+    <h1>Pin-level wiring between the Pi 5 and each component</h1>
+    <p class="sub">The system diagram is topology level; this one goes down to "which wire goes into which pin". The real pump/valve GPIOs come from
+    <code>software/hexapod/adhesion.py</code> (Pi5VacuumIO, fitted in P1): <b>valve L1 = GPIO5, pump A = GPIO20</b>;
+    servo relay = <b>GPIO17</b> (<code>driver.py</code>, settled 08-15, previously Servo2040 A0/GPIO26);
+    the other 6 MOSFET control lines are a suggested allocation (settled at P4 assembly), avoiding the I2C1 / UART / SPI0 / ID-EEPROM / PWM-audio pins.</p>
+  </header>
+
+  <h2>Fig. 1 · Pi 5 40-pin header (physical pin numbers, top view)</h2>
+  <figure>
+    <svg viewBox="0 0 780 668" role="img" aria-label="Pi 5 40-pin header: I2C to ADS1115, 3.3V/5V/GND to divider board J1, 8 GPIOs to the MOSFET board, other pins faded">
+      <text class="t-bx" x="390" y="30">Pi 5 40-pin (Pin 1 = corner nearest the SD card; odd pins left column, even pins right column)</text>
+      <rect class="hdr" x="322" y="58" width="68" height="530" rx="8"/>
+
+      <!-- Row 1: Pin1 3.3V | Pin2 5V -->
+      <line class="tkp" x1="320" y1="78" x2="331" y2="78"/>
+      <rect class="pp" x="331" y="70" width="16" height="16" rx="2"/>
+      <text class="t-num" x="339" y="81">1</text>
+      <text class="t-lb" x="316" y="82" text-anchor="end">3.3V → divider board J1 (ADS1115 ×2 supply)</text>
+      <line class="tkp" x1="381" y1="78" x2="392" y2="78"/>
+      <circle class="pp" cx="373" cy="78" r="8.5"/>
+      <text class="t-num" x="373" y="81">2</text>
+      <text class="t-lb" x="396" y="82">5V → divider board J1 (XGZP6847A ×7, mA level)</text>
+      <!-- Row 2: Pin3 SDA1 | Pin4 5V -->
+      <line class="tks" x1="320" y1="104" x2="331" y2="104"/>
+      <circle class="ps" cx="339" cy="104" r="8.5"/>
+      <text class="t-num" x="339" y="107">3</text>
+      <text class="t-lb" x="316" y="108" text-anchor="end">GPIO2 · SDA1 → ADS1115 0x48 / 0x49</text>
+      <line class="tkp" x1="381" y1="104" x2="392" y2="104"/>
+      <circle class="pp" cx="373" cy="104" r="8.5"/>
+      <text class="t-num" x="373" y="107">4</text>
+      <text class="t-lb" x="396" y="108">5V — supply route b: 5V/5A straight in (<tspan fill="var(--warn)" font-weight="700">to be decided</tspan>)</text>
+      <!-- Row 3: Pin5 SCL1 | Pin6 GND -->
+      <line class="tks" x1="320" y1="130" x2="331" y2="130"/>
+      <circle class="ps" cx="339" cy="130" r="8.5"/>
+      <text class="t-num" x="339" y="133">5</text>
+      <text class="t-lb" x="316" y="134" text-anchor="end">GPIO3 · SCL1 → ADS1115 0x48 / 0x49</text>
+      <line class="tkg" x1="381" y1="130" x2="392" y2="130"/>
+      <circle class="pg" cx="373" cy="130" r="8.5"/>
+      <text class="t-num" x="373" y="133">6</text>
+      <text class="t-lb" x="396" y="134">GND — route b supply return (<tspan fill="var(--warn)" font-weight="700">to be decided</tspan>)</text>
+      <!-- Row 4 -->
+      <circle class="pu" cx="339" cy="156" r="8.5"/><text class="t-numu" x="339" y="159">7</text>
+      <text class="t-un" x="316" y="160" text-anchor="end">GPIO4</text>
+      <circle class="pu" cx="373" cy="156" r="8.5"/><text class="t-numu" x="373" y="159">8</text>
+      <text class="t-un" x="396" y="160">GPIO14 · UART TXD (avoid)</text>
+      <!-- Row 5: Pin9 GND -->
+      <line class="tkg" x1="320" y1="182" x2="331" y2="182"/>
+      <circle class="pg" cx="339" cy="182" r="8.5"/>
+      <text class="t-num" x="339" y="185">9</text>
+      <text class="t-lb" x="316" y="186" text-anchor="end">GND → divider board J1</text>
+      <circle class="pu" cx="373" cy="182" r="8.5"/><text class="t-numu" x="373" y="185">10</text>
+      <text class="t-un" x="396" y="186">GPIO15 · UART RXD (avoid)</text>
+      <!-- Row 6: Pin11 GPIO17 servo relay -->
+      <line class="tks" x1="320" y1="208" x2="331" y2="208"/>
+      <circle class="ps" cx="339" cy="208" r="8.5"/>
+      <text class="t-num" x="339" y="211">11</text>
+      <text class="t-lb" x="316" y="212" text-anchor="end">GPIO17 → servo relay IN1 (active high) · <tspan fill="var(--warn)" font-weight="700">settled, to fit</tspan></text>
+      <circle class="pu" cx="373" cy="208" r="8.5"/><text class="t-numu" x="373" y="211">12</text>
+      <text class="t-un" x="396" y="212">GPIO18 · PWM audio (avoid)</text>
+      <!-- Row 7 -->
+      <circle class="pu" cx="339" cy="234" r="8.5"/><text class="t-numu" x="339" y="237">13</text>
+      <text class="t-un" x="316" y="238" text-anchor="end">GPIO27</text>
+      <circle class="pu" cx="373" cy="234" r="8.5"/><text class="t-numu" x="373" y="237">14</text>
+      <text class="t-un" x="396" y="238">GND</text>
+      <!-- Row 8 -->
+      <circle class="pu" cx="339" cy="260" r="8.5"/><text class="t-numu" x="339" y="263">15</text>
+      <text class="t-un" x="316" y="264" text-anchor="end">GPIO22</text>
+      <circle class="pu" cx="373" cy="260" r="8.5"/><text class="t-numu" x="373" y="263">16</text>
+      <text class="t-un" x="396" y="264">GPIO23</text>
+      <!-- Row 9 -->
+      <circle class="pu" cx="339" cy="286" r="8.5"/><text class="t-numu" x="339" y="289">17</text>
+      <text class="t-un" x="316" y="290" text-anchor="end">3.3V</text>
+      <circle class="pu" cx="373" cy="286" r="8.5"/><text class="t-numu" x="373" y="289">18</text>
+      <text class="t-un" x="396" y="290">GPIO24</text>
+      <!-- Row 10 -->
+      <circle class="pu" cx="339" cy="312" r="8.5"/><text class="t-numu" x="339" y="315">19</text>
+      <text class="t-un" x="316" y="316" text-anchor="end">GPIO10 · SPI0 MOSI (avoid)</text>
+      <circle class="pu" cx="373" cy="312" r="8.5"/><text class="t-numu" x="373" y="315">20</text>
+      <text class="t-un" x="396" y="316">GND</text>
+      <!-- Row 11 -->
+      <circle class="pu" cx="339" cy="338" r="8.5"/><text class="t-numu" x="339" y="341">21</text>
+      <text class="t-un" x="316" y="342" text-anchor="end">GPIO9 · SPI0 MISO (avoid)</text>
+      <circle class="pu" cx="373" cy="338" r="8.5"/><text class="t-numu" x="373" y="341">22</text>
+      <text class="t-un" x="396" y="342">GPIO25</text>
+      <!-- Row 12 -->
+      <circle class="pu" cx="339" cy="364" r="8.5"/><text class="t-numu" x="339" y="367">23</text>
+      <text class="t-un" x="316" y="368" text-anchor="end">GPIO11 · SPI0 SCLK (avoid)</text>
+      <circle class="pu" cx="373" cy="364" r="8.5"/><text class="t-numu" x="373" y="367">24</text>
+      <text class="t-un" x="396" y="368">GPIO8 · SPI0 CE0 (avoid)</text>
+      <!-- Row 13 -->
+      <circle class="pu" cx="339" cy="390" r="8.5"/><text class="t-numu" x="339" y="393">25</text>
+      <text class="t-un" x="316" y="394" text-anchor="end">GND</text>
+      <circle class="pu" cx="373" cy="390" r="8.5"/><text class="t-numu" x="373" y="393">26</text>
+      <text class="t-un" x="396" y="394">GPIO7 · SPI0 CE1 (avoid)</text>
+      <!-- Row 14 -->
+      <circle class="pu" cx="339" cy="416" r="8.5"/><text class="t-numu" x="339" y="419">27</text>
+      <text class="t-un" x="316" y="420" text-anchor="end">GPIO0 · ID_SD (reserved)</text>
+      <circle class="pu" cx="373" cy="416" r="8.5"/><text class="t-numu" x="373" y="419">28</text>
+      <text class="t-un" x="396" y="420">GPIO1 · ID_SC (reserved)</text>
+      <!-- Row 15: Pin29 GPIO5 valve L1 -->
+      <line class="tks" x1="320" y1="442" x2="331" y2="442"/>
+      <circle class="ps" cx="339" cy="442" r="8.5"/>
+      <text class="t-num" x="339" y="445">29</text>
+      <text class="t-lb" x="316" y="446" text-anchor="end">GPIO5 → valve L1 (IN1) · <tspan fill="var(--accent)" font-weight="700">fitted in P1</tspan></text>
+      <circle class="pu" cx="373" cy="442" r="8.5"/><text class="t-numu" x="373" y="445">30</text>
+      <text class="t-un" x="396" y="446">GND</text>
+      <!-- Row 16: Pin31 GPIO6 valve L2 -->
+      <line class="tks" x1="320" y1="468" x2="331" y2="468"/>
+      <circle class="ps" cx="339" cy="468" r="8.5"/>
+      <text class="t-num" x="339" y="471">31</text>
+      <text class="t-lb" x="316" y="472" text-anchor="end">GPIO6 → valve L2 (IN2) · <tspan fill="var(--warn)" font-weight="700">suggested</tspan></text>
+      <circle class="pu" cx="373" cy="468" r="8.5"/><text class="t-numu" x="373" y="471">32</text>
+      <text class="t-un" x="396" y="472">GPIO12</text>
+      <!-- Row 17: Pin33 GPIO13 valve L3 | Pin34 GND -->
+      <line class="tks" x1="320" y1="494" x2="331" y2="494"/>
+      <circle class="ps" cx="339" cy="494" r="8.5"/>
+      <text class="t-num" x="339" y="497">33</text>
+      <text class="t-lb" x="316" y="498" text-anchor="end">GPIO13 → valve L3 (IN3) · <tspan fill="var(--warn)" font-weight="700">suggested</tspan></text>
+      <line class="tkg" x1="381" y1="494" x2="392" y2="494"/>
+      <circle class="pg" cx="373" cy="494" r="8.5"/>
+      <text class="t-num" x="373" y="497">34</text>
+      <text class="t-lb" x="396" y="498">GND → MOSFET board signal ground (single-point ground)</text>
+      <!-- Row 18: Pin35 GPIO19 valve R2 | Pin36 GPIO16 valve R1 -->
+      <line class="tks" x1="320" y1="520" x2="331" y2="520"/>
+      <circle class="ps" cx="339" cy="520" r="8.5"/>
+      <text class="t-num" x="339" y="523">35</text>
+      <text class="t-lb" x="316" y="524" text-anchor="end">GPIO19 → valve R2 (IN5) · <tspan fill="var(--warn)" font-weight="700">suggested</tspan></text>
+      <line class="tks" x1="381" y1="520" x2="392" y2="520"/>
+      <circle class="ps" cx="373" cy="520" r="8.5"/>
+      <text class="t-num" x="373" y="523">36</text>
+      <text class="t-lb" x="396" y="524">GPIO16 → valve R1 (IN4) · <tspan fill="var(--warn)" font-weight="700">suggested</tspan></text>
+      <!-- Row 19: Pin37 GPIO26 pump B | Pin38 GPIO20 pump A -->
+      <line class="tks" x1="320" y1="546" x2="331" y2="546"/>
+      <circle class="ps" cx="339" cy="546" r="8.5"/>
+      <text class="t-num" x="339" y="549">37</text>
+      <text class="t-lb" x="316" y="550" text-anchor="end">GPIO26 → pump B (IN8) · <tspan fill="var(--warn)" font-weight="700">suggested</tspan></text>
+      <line class="tks" x1="381" y1="546" x2="392" y2="546"/>
+      <circle class="ps" cx="373" cy="546" r="8.5"/>
+      <text class="t-num" x="373" y="549">38</text>
+      <text class="t-lb" x="396" y="550">GPIO20 → pump A (IN7) · <tspan fill="var(--accent)" font-weight="700">fitted in P1</tspan></text>
+      <!-- Row 20: Pin39 GND | Pin40 GPIO21 valve R3 -->
+      <line class="tkg" x1="320" y1="572" x2="331" y2="572"/>
+      <circle class="pg" cx="339" cy="572" r="8.5"/>
+      <text class="t-num" x="339" y="575">39</text>
+      <text class="t-lb" x="316" y="576" text-anchor="end">GND → MOSFET board signal ground</text>
+      <line class="tks" x1="381" y1="572" x2="392" y2="572"/>
+      <circle class="ps" cx="373" cy="572" r="8.5"/>
+      <text class="t-num" x="373" y="575">40</text>
+      <text class="t-lb" x="396" y="576">GPIO21 → valve R3 (IN6) · <tspan fill="var(--warn)" font-weight="700">suggested</tspan></text>
+
+      <!-- Legend -->
+      <circle class="pp" cx="30" cy="612" r="7"/><text class="t-bm" x="42" y="616">Power (3.3V / 5V)</text>
+      <circle class="ps" cx="160" cy="612" r="7"/><text class="t-bm" x="172" y="616">Signal (I2C / MOSFET control)</text>
+      <circle class="pg" cx="340" cy="612" r="7"/><text class="t-bm" x="352" y="616">Ground</text>
+      <circle class="pu" cx="400" cy="612" r="7"/><text class="t-bm" x="412" y="616">Unused (faded)</text>
+      <text class="t-bm" x="510" y="616"><tspan fill="var(--accent)" font-weight="700">fitted in P1</tspan> | <tspan fill="var(--warn)" font-weight="700">suggested, settle in P4</tspan></text>
+      <text class="t-foot" x="16" y="644">Real pump/valve pins from software/hexapod/adhesion.py (Pi5VacuumIO: VALVE_PINS=[5], PUMP_PIN=20, lgpio gpiochip4); servo relay GPIO17 from driver.py (RELAY_PIN); the other 6 are a suggested allocation avoiding I2C1 (2/3), UART (14/15), SPI0 (7–11), ID-EEPROM (0/1), PWM audio (12/18).</text>
+      <text class="t-foot" x="16" y="660">⚠ Valve control level per P1 measurement VALVE_ON_LEVEL=0 (GPIO low = cup connected to vacuum) — in P4 measure each channel after fitting before writing the map, do not copy blindly. The 8 control pins are grouped at the Pin 29–40 end so they can be crimped into one ribbon.</text>
+    </svg>
+  </figure>
+
+  <h2>Fig. 2 · USB and Pi power</h2>
+  <figure>
+    <svg viewBox="0 0 780 300" role="img" aria-label="USB link to the Servo2040 and the two Pi power routes: USB-C or straight into the header, both listed, undecided">
+      <defs>
+        <marker id="ap" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
+        </marker>
+        <marker id="as" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+      <rect class="sv-boxa" x="40" y="56" width="180" height="88" rx="6"/>
+      <text class="t-bx" x="130" y="84">Raspberry Pi 5</text>
+      <text class="t-bs" x="130" y="102">USB-A → Servo2040</text>
+      <text class="t-bs" x="130" y="118">Powered via USB-C / header (see below)</text>
+      <line class="w-sig" x1="220" y1="88" x2="326" y2="88" marker-end="url(#as)"/>
+      <text class="t-acc" x="273" y="80" text-anchor="middle">USB cable</text>
+      <text class="t-bm" x="273" y="104" text-anchor="middle">/dev/ttyACM0</text>
+      <rect class="sv-box" x="330" y="56" width="190" height="88" rx="6"/>
+      <text class="t-bx" x="425" y="80">Servo2040 · chica firmware</text>
+      <text class="t-bs" x="425" y="98">Servo rail 7.4 V = battery + relay</text>
+      <text class="t-bs" x="425" y="114">(relay now driven by Pi GPIO17)</text>
+      <text class="t-bm" x="540" y="70">Power rail shares only ground with the Pi; relay coil</text>
+      <text class="t-bm" x="540" y="86">/control side belongs to the Pi (5 V rail + GPIO17)</text>
+      <text class="t-bm" x="540" y="110">Foot switches ×6 → Servo2040 sensor port</text>
+      <text class="t-bm" x="540" y="126">TS1–6 (index 18–23), no Pi pins used</text>
+      <text class="t-bm" x="540" y="142">(route B not fitted for now)</text>
+
+      <rect class="sv-box" x="40" y="196" width="180" height="64" rx="6"/>
+      <text class="t-bx" x="130" y="220">2S battery → 5V/5A DC-DC</text>
+      <text class="t-bs" x="130" y="240">(after the XT60 master switch)</text>
+      <line class="w-pwr" x1="85" y1="196" x2="85" y2="148" marker-end="url(#ap)"/>
+      <text class="t-bm" x="52" y="170">a) USB-C</text>
+      <line class="w-pwr" x1="175" y1="196" x2="175" y2="148" marker-end="url(#ap)"/>
+      <text class="t-bm" x="183" y="170">b) Pin 2/4 + GND(6)</text>
+      <text class="t-b" x="340" y="190">a) USB-C port: simplest wiring; the Pi 5 current-limits non-PD supplies by default,</text>
+      <text class="t-b" x="356" y="206">check <tspan font-weight="700">vcgencmd get_throttled = 0x0</tspan> at every power-up</text>
+      <text class="t-b" x="340" y="230">b) 5V straight into header Pin 2/4 + GND (Pin 6): bypasses PD negotiation;</text>
+      <text class="t-b" x="356" y="246">the buck module must be a real 5 A, wires short and thick (voltage drop = reboot risk)</text>
+      <text class="t-warn" x="340" y="274">Both listed; settle by measurement at P4 assembly (neither code nor BOM locks the entry point)</text>
+    </svg>
+  </figure>
+
+  <div class="note">
+    <b>Wiring quick reference</b> (wire per this table; IN1–IN8 = control pins of the 8-channel MOSFET board)
+    <table class="vtab">
+      <tr><th>Physical pin</th><th>BCM</th><th>Net name</th><th>Goes to</th><th>Status</th><th>Suggested wire color</th></tr>
+      <tr><td>1</td><td>—</td><td>3.3V</td><td>Divider board J1 (ADS1115 ×2 supply)</td><td>fixed</td><td>orange</td></tr>
+      <tr><td>2</td><td>—</td><td>5V</td><td>Divider board J1 (XGZP6847A ×7)</td><td>fixed</td><td>red</td></tr>
+      <tr><td>3</td><td>GPIO2</td><td>SDA1</td><td>ADS1115 ×2 (0x48/0x49)</td><td>fixed</td><td>blue</td></tr>
+      <tr><td>5</td><td>GPIO3</td><td>SCL1</td><td>ADS1115 ×2 (0x48/0x49)</td><td>fixed</td><td>yellow</td></tr>
+      <tr><td>9</td><td>—</td><td>GND</td><td>Divider board J1</td><td>fixed</td><td>black</td></tr>
+      <tr><td>4 + 6</td><td>—</td><td>5V + GND</td><td>Supply route b: 5V/5A straight in (paired thick wires)</td><td><span class="st-tbd">to be decided</span></td><td>red/black (18 AWG+)</td></tr>
+      <tr><td>11</td><td>GPIO17</td><td>—</td><td>Relay IN1 · servo 7.4 V master switch (active high, jumper on H side)</td><td><span class="st-tbd">settled, to fit</span></td><td>brown</td></tr>
+      <tr><td>29</td><td>GPIO5</td><td>—</td><td>MOSFET IN1 · valve L1</td><td><span class="st-ok">fitted in P1</span></td><td>green</td></tr>
+      <tr><td>31</td><td>GPIO6</td><td>—</td><td>MOSFET IN2 · valve L2</td><td><span class="st-tbd">suggested</span></td><td>green</td></tr>
+      <tr><td>33</td><td>GPIO13</td><td>—</td><td>MOSFET IN3 · valve L3</td><td><span class="st-tbd">suggested</span></td><td>green</td></tr>
+      <tr><td>36</td><td>GPIO16</td><td>—</td><td>MOSFET IN4 · valve R1</td><td><span class="st-tbd">suggested</span></td><td>white</td></tr>
+      <tr><td>35</td><td>GPIO19</td><td>—</td><td>MOSFET IN5 · valve R2</td><td><span class="st-tbd">suggested</span></td><td>white</td></tr>
+      <tr><td>40</td><td>GPIO21</td><td>—</td><td>MOSFET IN6 · valve R3</td><td><span class="st-tbd">suggested</span></td><td>white</td></tr>
+      <tr><td>38</td><td>GPIO20</td><td>—</td><td>MOSFET IN7 · pump A</td><td><span class="st-ok">fitted in P1</span></td><td>purple</td></tr>
+      <tr><td>37</td><td>GPIO26</td><td>—</td><td>MOSFET IN8 · pump B</td><td><span class="st-tbd">suggested</span></td><td>purple</td></tr>
+      <tr><td>34</td><td>—</td><td>GND</td><td>MOSFET board signal ground (single-point ground)</td><td>fixed</td><td>black</td></tr>
+      <tr><td>39</td><td>—</td><td>GND</td><td>MOSFET board signal ground (same point, paralleled)</td><td>fixed</td><td>black</td></tr>
+    </table>
+    USB: Pi USB-A → Servo2040 (<code>/dev/ttyACM0</code>, chica firmware); servo power does not pass through the Pi.
+    Relay coil DC+/DC− go to the 5V/5A buck output (same source as the Pi, ~100 mA), no header pins used; control takes only Pin 11.
+  </div>
+
+  <div class="note">
+    <b>Rules</b>
+    <ul>
+      <li><b>Single-point ground</b>: the 12 V / servo power ground and the Pi signal ground meet exactly once, at the MOSFET board, nowhere else — a loop = ground current corrupting ADS readings.</li>
+      <li><b>Power-up order</b>: power only the Pi first → <code>vcgencmd get_throttled</code> must be 0x0 → then close the servo relay and the 12 V rail; re-check after any rewiring.</li>
+      <li><b class="d">No breadboards / Dupont in P4</b>: header wiring with shrouded crimped ribbon or soldered + heat-shrink; MOSFET control lines and 12 V power lines run in separate bundles.</li>
+      <li><b>Valve control level</b>: <code>adhesion.py</code> measured <code>VALVE_ON_LEVEL=0</code> (low = cup connected to vacuum) — in P4 measure all six valve channels before writing the map.</li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,461 @@
+<!-- English translation of html/theta-measure-diagram.html (2026-09-05). The Chinese original is the maintained source. -->
+<title>Single-leg calibration measurement reference</title>
+<style>
+  :root {
+    --bg: #F3F5F7;
+    --panel: #FFFFFF;
+    --ink: #1E2A36;
+    --muted: #5C6C7A;
+    --line: #D5DDE4;
+    --accent: #0E7AC4;
+    --accent-soft: rgba(14, 122, 196, 0.10);
+    --warn: #B5452F;
+    --warn-soft: rgba(181, 69, 47, 0.08);
+    --part: #C7D1DA;
+    --part-stroke: #8FA0AE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C;
+      --panel: #171F27;
+      --ink: #E3EAF1;
+      --muted: #8C9BAA;
+      --line: #2A3541;
+      --accent: #53A8E4;
+      --accent-soft: rgba(83, 168, 228, 0.14);
+      --warn: #E0785C;
+      --warn-soft: rgba(224, 120, 92, 0.10);
+      --part: #2C3844;
+      --part-stroke: #55667A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C;
+    --panel: #171F27;
+    --ink: #E3EAF1;
+    --muted: #8C9BAA;
+    --line: #2A3541;
+    --accent: #53A8E4;
+    --accent-soft: rgba(83, 168, 228, 0.14);
+    --warn: #E0785C;
+    --warn-soft: rgba(224, 120, 92, 0.10);
+    --part: #2C3844;
+    --part-stroke: #55667A;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7;
+    --panel: #FFFFFF;
+    --ink: #1E2A36;
+    --muted: #5C6C7A;
+    --line: #D5DDE4;
+    --accent: #0E7AC4;
+    --accent-soft: rgba(14, 122, 196, 0.10);
+    --warn: #B5452F;
+    --warn-soft: rgba(181, 69, 47, 0.08);
+    --part: #C7D1DA;
+    --part-stroke: #8FA0AE;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+    margin: 0;
+    padding: 32px 20px 56px;
+  }
+  main { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+  .eyebrow {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 6px;
+  }
+  h1 { font-size: 26px; margin: 0 0 6px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0; font-size: 14.5px; }
+
+  h2 { font-size: 16px; margin: 0 0 12px; letter-spacing: 0.02em; }
+  h2 .no { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 6px; }
+
+  figure {
+    margin: 0; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 18px 12px 8px; overflow-x: auto;
+  }
+  figure svg { display: block; width: 100%; max-width: 660px; height: auto; margin: 0 auto; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 560px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-size: 13.5px;
+  }
+  .card b.pt {
+    display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center;
+    background: var(--accent-soft); color: var(--accent); border-radius: 50%;
+    font-size: 14px; margin-bottom: 6px;
+  }
+  .card p { margin: 0; color: var(--muted); }
+  .card p strong { color: var(--ink); font-weight: 600; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px;
+  }
+  ol.steps { margin: 0; padding-left: 22px; font-size: 14px; }
+  ol.steps li { margin-bottom: 8px; }
+  ol.steps li:last-child { margin-bottom: 0; }
+
+  code, .formula {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  code {
+    background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px;
+  }
+  .formula {
+    display: block; text-align: center; font-size: 15px; margin: 14px 0 4px;
+    padding: 12px; background: var(--accent-soft); border-radius: 8px; color: var(--ink);
+  }
+
+  ul.donts { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+  ul.donts li { padding-left: 26px; position: relative; margin-bottom: 8px; }
+  ul.donts li:last-child { margin-bottom: 0; }
+  ul.donts li::before { content: "✗"; position: absolute; left: 4px; color: var(--warn); font-weight: 700; }
+
+  .fix-banner {
+    border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 8px;
+    padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px;
+  }
+  .fix-banner b { color: var(--warn); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12.5px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; }
+  tr:last-child td { border-bottom: none; }
+  td .big { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ok  { color: var(--accent); }
+  .bad { color: var(--warn); }
+
+  .note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+
+  /* SVG roles */
+  .sv-femur   { stroke: var(--part-stroke); stroke-width: 12; stroke-linecap: round; }
+  .sv-part    { fill: var(--part); fill-opacity: 0.55; stroke: var(--part-stroke); stroke-width: 1.6; stroke-linejoin: round; }
+  .sv-horn    { fill: none; stroke: var(--part-stroke); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.75; }
+  .sv-screw   { fill: var(--part-stroke); }
+  .sv-kp      { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 9 6; fill: none; }
+  .sv-fp      { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 4 6; fill: none; }
+  .sv-axis    { stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 11 4 2 4; fill: none; opacity: 0.85; }
+  .sv-theta   { stroke: var(--accent); stroke-width: 3; fill: none; }
+  .sv-delta   { stroke: var(--warn); stroke-width: 2; fill: none; }
+  .sv-dot     { fill: var(--accent); stroke: var(--panel); stroke-width: 2.5; }
+  .sv-fold    { stroke: var(--part-stroke); stroke-width: 1.2; opacity: 0.8; }
+  .sv-lip     { stroke: var(--part-stroke); stroke-width: 5; stroke-linecap: round; }
+  .sv-table    { stroke: var(--ink); stroke-width: 2.5; }
+  .sv-tablebody{ fill: var(--part); fill-opacity: 0.35; stroke: var(--part-stroke); stroke-width: 1; }
+  .sv-coxa     { stroke: var(--part-stroke); stroke-width: 8; stroke-linecap: round; }
+  .sv-dim      { stroke: var(--muted); stroke-width: 1.2; }
+  .sv-ext      { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 5 5; opacity: 0.8; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-dim   { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-pt    { font-size: 15px; font-weight: 700; fill: var(--accent); }
+  .t-theta { font-size: 26px; font-weight: 700; fill: var(--accent); }
+  .t-sub   { font-size: 12px; fill: var(--accent); }
+  .t-dist  { font-size: 12px; fill: var(--muted); }
+  .t-seg   { font-size: 12px; fill: var(--muted); }
+  .t-warn  { font-size: 11px; fill: var(--warn); }
+  .t-foot  { font-size: 10.5px; fill: var(--muted); }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">Spider · single-leg calibration · LEG-GEOMETRY-OPEN §4.5 / §4.6</p>
+    <h1>Single-leg calibration: which angle θ / α / γ is, and how to measure it</h1>
+    <p class="sub">All three joint angles are angles between <strong>virtual lines</strong> and a reference (another line / gravity / the body), not between physical part edges. θ is done (86.4° in config); α of the femur and γ of the coxa remain (§04, §05).</p>
+  </header>
+
+  <figure>
+    <svg viewBox="0 0 620 510" role="img" aria-label="Leg side-view sketch: θ is the angle at K between the two dashed lines K→F and K→P">
+      <!-- tibia body (7-shaped plate + square shaft + cup cavity) -->
+      <polygon class="sv-part" points="207.7,52.4 322.3,105.2 240.7,282.5 407.2,359.0 418.9,333.5 462.4,353.6 419.8,446.3 376.0,426.2 389.5,397.1 108.7,268.0"/>
+      <!-- Bellows + lip -->
+      <polygon class="sv-part" points="460,359.3 539.8,395.9 502,477.5 422.2,440.9"/>
+      <line class="sv-fold" x1="484" y1="377" x2="451.6" y2="447.8"/>
+      <line class="sv-fold" x1="510.4" y1="389" x2="478" y2="459.8"/>
+      <line class="sv-lip" x1="539.8" y1="395.9" x2="502" y2="477.5"/>
+      <!-- Square-shaft axis (extended, it passes exactly through P) -->
+      <line class="sv-axis" x1="231.1" y1="303.5" x2="548.1" y2="449.2"/>
+      <!-- femur link -->
+      <line class="sv-femur" x1="40" y1="290" x2="236.5" y2="152.3"/>
+      <!-- Servo-horn pitch circle and screws -->
+      <circle class="sv-horn" cx="236.5" cy="152.3" r="73.5"/>
+      <circle class="sv-screw" cx="307.5" cy="171.3" r="3.5"/>
+      <circle class="sv-screw" cx="217.5" cy="223.3" r="3.5"/>
+      <circle class="sv-screw" cx="165.5" cy="133.3" r="3.5"/>
+      <circle class="sv-screw" cx="255.5" cy="81.3" r="3.5"/>
+      <circle class="sv-horn" cx="40" cy="290" r="18"/>
+      <!-- Dashed lines to be measured -->
+      <line class="sv-fp" x1="40" y1="290" x2="520.9" y2="436.7"/>
+      <line class="sv-kp" x1="236.5" y1="152.3" x2="520.9" y2="436.7"/>
+      <!-- θ arc (between K→F and K→P) -->
+      <path class="sv-theta" d="M 191.5 183.9 A 55 55 0 0 0 275.4 191.2"/>
+      <!-- δ arc (between the square-shaft direction and K→P, at P) -->
+      <path class="sv-delta" d="M 478.5 394.3 A 60 60 0 0 0 466.4 411.6"/>
+      <!-- Three points -->
+      <circle class="sv-dot" cx="40" cy="290" r="6"/>
+      <circle class="sv-dot" cx="236.5" cy="152.3" r="6"/>
+      <circle class="sv-dot" cx="520.9" cy="436.7" r="6"/>
+      <!-- Text -->
+      <text class="t-pt" x="24" y="276">F</text>
+      <text class="t-pt" x="249" y="141">K</text>
+      <text class="t-pt" x="536" y="453">P</text>
+      <text class="t-theta" x="215" y="238" text-anchor="middle">θ</text>
+      <text class="t-sub" x="215" y="257" text-anchor="middle">Measure this angle</text>
+      <text class="t-warn" x="452" y="392" text-anchor="end">δ ≈ 20° (square shaft ≠ KP)</text>
+      <text class="t-dist" x="130" y="207" text-anchor="middle" transform="rotate(-35 130 207)">femur: FK ≈ 80 ①</text>
+      <text class="t-dist" x="378" y="281" text-anchor="middle" transform="rotate(45 378 281)">KP = tibia_len ②</text>
+      <text class="t-dist" x="255" y="385" text-anchor="middle" transform="rotate(17 255 385)">FP ③</text>
+      <text class="t-seg" x="182" y="103">Segment A (horn mounting plate)</text>
+      <text class="t-seg" x="330" y="345" text-anchor="middle" transform="rotate(25 330 345)">Segment B (square shaft → cup)</text>
+      <text class="t-foot" x="14" y="502">Illustrative pose: θ drawn at about 100°, unrelated to the actual mid position; outline to STL scale, P placed per the §4.1 assumption (square-shaft axis × TIBIA_LEN 134).</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card"><b class="pt">F</b>
+      <p><strong>femur horn center screw</strong> (hip pitch axis). The center of the center screw on the femur servo output shaft.</p>
+    </div>
+    <div class="card"><b class="pt">K</b>
+      <p><strong>tibia horn center screw</strong> (knee axis). §3.4 confirmed horn center = knee axis.</p>
+    </div>
+    <div class="card"><b class="pt">P</b>
+      <p><strong>Center of the cup lip</strong> (free state, no vacuum). The measured KP is at the same time tibia_len under this convention.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">01</span>Measuring θ: three sides fix the angle, no protractor ✅ done</h2>
+    <ol class="steps">
+      <li>Run <code>software/scripts/servo_calib_helper.py</code>, type <code>17 1510</code> (L1 tibia to the calibration center; the script defaults to 1500 at startup and must be changed to 1510 manually).</li>
+      <li>Channels 15/16 (coxa, femur) just need to be swung somewhere convenient for the calipers — F and K are both on the femur rigid body, so θ is set by the knee servo alone. Keep enabled throughout; never bend by hand.</li>
+      <li>Measure three <strong>point-to-point straight distances</strong>: ① FK (should be ≈80 mm, as a self-check) ② KP ③ FP. Screw center to screw center, measure twice more and average.</li>
+    </ol>
+    <span class="formula">θ = arccos( (FK² + KP² − FP²) / (2 · FK · KP) )</span>
+    <p class="note">Error reference: 1 mm of side length ≈ 1° of angle. More than enough to judge the 44° reference question; to fill config (±1–2°) measure carefully with calipers.</p>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">02</span>Do not measure it like this</h2>
+    <ul class="donts">
+      <li>A protractor against any physical edge of segment A or B — θ is the angle of the virtual line K→P relative to K→F, and there is very likely no face on the part parallel to K→P (§4.2).</li>
+      <li>Treating "segment A in line with the femur" as the θ=180° reference — θ in that pose is actually 180°−δ′ (δ′ = the fixed angle between segment A's direction and K→P).</li>
+      <li>Using the square shaft / square box side as a reference face — the square-shaft direction differs from K→P by about 20° (δ in the figure, §4.1).</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">03</span>How to read the result ✅ result: θ=86.4°</h2>
+    <p class="note" style="margin: 0 0 12px">Measured 2026-07-17 FK=80 / KP=120 / FP=140 → θ=86.4°, touching neither end (not at the official position at installation),
+    so the reference question cannot be decided and no longer matters. Landed on the k reference: <code>attach_deg=93.6</code>, <code>tibia_len=120</code>. The reading table below is kept for the record.</p>
+    <div class="fix-banner"><b>⚠️ Correction</b>: the two lines below were reversed in an earlier conversation; this table is authoritative. Basis: <code>joint_deg_to_us</code> outputs the mid position when joint=attach; robot.py passes the tibia k=180−θ, attach=68 ⇒ <strong>the current code believes θ=112° at mid (1510 µs)</strong>.</div>
+    <table>
+      <tr><th>Measured θ (at mid)</th><th>Conclusion</th></tr>
+      <tr>
+        <td><span class="big">≈ 68°</span><br>knee folded sharply</td>
+        <td>The official 68 is a <strong>θ reference</strong> → the current code is off by a constant <span class="bad"><strong>44°</strong></span> (§2.9 holds, must fix)</td>
+      </tr>
+      <tr>
+        <td><span class="big">≈ 112°</span><br>leg fairly extended</td>
+        <td>The official 68 is a k reference → <span class="ok"><strong>the current code is right</strong></span> (§2.9 overturned)</td>
+      </tr>
+    </table>
+    <p class="note">Either way the measured value is directly usable: if robot.py is changed to pass θ itself → <code>attach_deg := measured θ</code>; if it keeps passing k → <code>attach_deg := 180 − measured θ</code>. Pick one, never mix.</p>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">04</span>femur: α_center by height difference ✅ result: 49.7°</h2>
+    <p class="note" style="margin: 0 0 12px">Measured 2026-07-17 Δh = h_K − h_F = 61 mm → α_center = arcsin(61/80) = <strong>49.7°</strong>,
+    landing right on the official 35° + one spline tooth 14.4° = 49.4° (0.3° off); in config. Setup figure and method kept for the record.</p>
+    <p style="font-size: 14px; margin: 0 0 4px">Align the terms first (labeled in the figure):</p>
+    <ul class="donts" style="margin-bottom: 14px">
+      <li style="padding-left: 4px"><span style="color: var(--accent); font-weight: 700">L1</span> = the whole left-front leg (coxa + femur + tibia-suction one-piece part), L=left, 1=front, channels 15/16/17. Not a point.</li>
+      <li style="padding-left: 4px"><span style="color: var(--accent); font-weight: 700">Hip</span> = the two axes at the leg root: <strong>C</strong> (coxa axis, vertical, horizontal swing) + <strong>F</strong> (femur axis, horizontal, lift). The "hip" in "knee above the hip / cup below the hip" means <strong>F</strong>.</li>
+      <li style="padding-left: 4px"><span style="color: var(--accent); font-weight: 700">Knee</span> = <strong>K</strong> (tibia horn center screw); <span style="color: var(--accent); font-weight: 700">cup center</span> = <strong>P</strong>. The same points as in the θ three-side method.</li>
+    </ul>
+    <figure style="border: none; padding: 6px 0 0">
+      <svg viewBox="0 0 710 435" role="img" aria-label="femur measurement setup: body flat on the table, L1 overhanging the edge, measure the height difference from the table to F and K">
+        <!-- Table top and table body -->
+        <rect class="sv-tablebody" x="30" y="280" width="482" height="22"/>
+        <line class="sv-table" x1="30" y1="280" x2="512" y2="280"/>
+        <line class="sv-ext" x1="512" y1="280" x2="690" y2="280"/>
+        <!-- Body -->
+        <rect class="sv-part" x="50" y="187.6" width="264" height="92.4" rx="6"/>
+        <!-- C axis (vertical dash-dot line) and coxa servo-horn center screw (facing up) -->
+        <line class="sv-axis" x1="248" y1="172" x2="248" y2="296"/>
+        <circle class="sv-screw" cx="248" cy="187.6" r="3.5"/>
+        <!-- coxa link C→F -->
+        <line class="sv-coxa" x1="248" y1="214" x2="342.6" y2="214"/>
+        <!-- tibia one-piece part (overhanging the table edge, its lowest point below the table top) -->
+        <polygon class="sv-part" points="480.1,37.1 555.1,91.2 471.3,207.2 580.0,285.7 591.9,269.2 620.5,289.9 576.7,350.4 548.1,329.9 561.9,310.8 378.2,177.9"/>
+        <polygon class="sv-part" points="617.8,293.4 644.0,312.1 605.3,365.8 579.1,347.1"/>
+        <line class="sv-fold" x1="624.0" y1="303.3" x2="590.5" y2="349.5"/>
+        <line class="sv-fold" x1="632.6" y1="309.7" x2="599.1" y2="355.9"/>
+        <line class="sv-lip" x1="644.0" y1="312.1" x2="605.3" y2="365.8"/>
+        <!-- femur link F→K -->
+        <line class="sv-femur" x1="342.6" y1="214" x2="486.7" y2="113"/>
+        <!-- α: horizontal reference line through F + arc -->
+        <line class="sv-ext" x1="342.6" y1="214" x2="672" y2="214"/>
+        <path class="sv-theta" d="M 382.6 214 A 40 40 0 0 0 375.4 191.0"/>
+        <!-- Height dimension lines h_F / h_K -->
+        <line class="sv-dim" x1="360" y1="280" x2="360" y2="214"/>
+        <line class="sv-dim" x1="354" y1="214" x2="366" y2="214"/>
+        <line class="sv-ext" x1="486.7" y1="113" x2="460" y2="113"/>
+        <line class="sv-dim" x1="460" y1="280" x2="460" y2="113"/>
+        <line class="sv-dim" x1="454" y1="113" x2="466" y2="113"/>
+        <!-- Cup sits ≈57mm below F -->
+        <line class="sv-ext" x1="630" y1="339" x2="672" y2="339"/>
+        <line class="sv-dim" x1="665" y1="214" x2="665" y2="339"/>
+        <line class="sv-dim" x1="659" y1="339" x2="671" y2="339"/>
+        <!-- Three points -->
+        <circle class="sv-dot" cx="342.6" cy="214" r="6"/>
+        <circle class="sv-dot" cx="486.7" cy="113" r="6"/>
+        <circle class="sv-dot" cx="624.6" cy="339" r="5"/>
+        <line class="sv-dim" x1="592" y1="380" x2="618" y2="344"/>
+        <!-- Text -->
+        <text class="t-seg" x="70" y="272">Table top</text>
+        <text class="t-seg" x="120" y="240">Leg root laid flat (currently = coxa servo case)</text>
+        <text class="t-seg" x="248" y="166" text-anchor="middle">C (coxa axis)</text>
+        <text class="t-seg" x="295" y="204" text-anchor="middle">coxa</text>
+        <text class="t-pt" x="333" y="205" text-anchor="end">F (hip)</text>
+        <text class="t-pt" x="486.7" y="96" text-anchor="middle">K (knee)</text>
+        <text class="t-pt" x="590" y="396" text-anchor="middle">P (cup lip center)</text>
+        <text class="t-seg" x="414" y="156" text-anchor="middle" transform="rotate(-35 414 156)">femur</text>
+        <text class="t-seg" x="540" y="272" text-anchor="middle" transform="rotate(36 540 272)">tibia-suction</text>
+        <text class="t-theta" x="398" y="207" style="font-size: 18px">α</text>
+        <text class="t-dim" x="368" y="252">h_F</text>
+        <text class="t-dim" x="452" y="262" text-anchor="end">h_K</text>
+        <text class="t-dim" x="678" y="278" text-anchor="middle" transform="rotate(90 678 278)">≈57mm</text>
+        <text class="t-seg" x="520" y="310">Table edge</text>
+        <text class="t-foot" x="16" y="428">femur at center (α drawn at the official 35°): K is 80·sinα ≈ 46 mm above F; the cup center is ≈57 mm below F, already below the table top → L1 overhangs the table edge, but F and K stay above the table so their heights can be measured. F's height above the table depends on the chassis; 30 mm in the figure for illustration.</text>
+      </svg>
+    </figure>
+    <span class="formula">α_center = arcsin( (h_K − h_F) / 80 )   (K higher is positive; 80 = measured FK)</span>
+    <ol class="steps" style="margin-top: 12px">
+      <li>Body flat (phone level ≤0.3°), L1 overhanging the edge but with <strong>F and K both still above the table</strong> (as in the figure, only the cup past the edge). Type <code>16 1510</code>, enabled throughout.</li>
+      <li>Measure table → top of F screw, table → top of K screw. Same screw type, so the head radius cancels in the difference. Precision: ±0.5 mm → ±0.6°.</li>
+      <li>Cross-check: the femur has a long straight edge verified parallel to F→K (§2.5); zero the level on the body first, then read against that edge; should agree with the height method (within 1°).</li>
+      <li>How to fill it in: <code>femur attach_deg := α_center</code>; robot.py passes α directly, <strong>no reference conversion</strong>. Expected 35 ± n·14.4°.</li>
+    </ol>
+  </section>
+
+  <section class="panel">
+    <h2><span class="no">05</span>coxa: γ_center by top-view projection ⏸ deferred to P3</h2>
+    <p class="note" style="margin: 0 0 8px"><strong>Decision 2026-07-17: defer to P3, when the body is assembled.</strong> In P0 there is no body, so the zero of γ (neutral direction 55°) does not physically exist;
+    the P1/P2 single-leg rig does not depend on the absolute γ (pressure closed loop; the error is only a lateral shift of ~2.3 mm/°); in P3 use the "re-check version" baseline method at the end directly (does not rely on the pocket-alignment assumption, more robust).
+    The servo-case reference method below is kept as a fallback — if lateral aiming turns out to be off during P2, it can be used any time for a provisional value.</p>
+    <figure style="border: none; padding: 6px 0 0">
+      <svg viewBox="0 0 700 330" role="img" aria-label="coxa measurement without a body: servo case pressed onto graph paper, reference line traced along the long edge of the case, two projected cup centers define the leg direction line">
+        <defs>
+          <pattern id="gp2" width="22" height="22" patternUnits="userSpaceOnUse">
+            <path d="M 22 0 H 0 V 22" fill="none" style="stroke: var(--line); stroke-width: 1"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="700" height="330" fill="url(#gp2)" opacity="0.55"/>
+        <!-- coxa servo case (top view, output shaft offset toward the right end) -->
+        <rect class="sv-part" x="80" y="150" width="86" height="32" rx="3"/>
+        <circle class="sv-horn" cx="146" cy="166" r="12"/>
+        <!-- Case axis (0° reference) -->
+        <line class="sv-axis" x1="40" y1="166" x2="660" y2="166"/>
+        <!-- Pencil line traced along the long edge of the case -->
+        <line x1="60" y1="182" x2="300" y2="182" style="stroke: var(--ink); stroke-width: 1.5"/>
+        <!-- Leg direction line: through P1, P2 (γ exaggerated to -15°) -->
+        <line class="sv-kp" x1="146" y1="166" x2="648" y2="31.3"/>
+        <!-- γ arc -->
+        <path class="sv-theta" d="M 256 166 A 110 110 0 0 0 252.3 137.5"/>
+        <!-- C and the projected points -->
+        <circle class="sv-dot" cx="146" cy="166" r="5"/>
+        <circle cx="397" cy="98.7" r="5" style="fill: var(--panel); stroke: var(--accent); stroke-width: 2"/>
+        <circle cx="397" cy="98.7" r="1.6" style="fill: var(--accent)"/>
+        <circle cx="561" cy="54.6" r="5" style="fill: var(--panel); stroke: var(--accent); stroke-width: 2"/>
+        <circle cx="561" cy="54.6" r="1.6" style="fill: var(--accent)"/>
+        <!-- Text -->
+        <text class="t-seg" x="123" y="138" text-anchor="middle">coxa servo case (clamped / weighted down)</text>
+        <text class="t-pt" x="146" y="205" text-anchor="middle">C</text>
+        <line class="sv-dim" x1="146" y1="194" x2="146" y2="174"/>
+        <text class="t-seg" x="560" y="156" text-anchor="middle">Case axis (reference 0°, toward the output-shaft end)</text>
+        <text class="t-seg" x="310" y="198">Line traced along the case's long edge (∥ case axis, i.e. the reference line)</text>
+        <text class="t-pt" x="397" y="84" text-anchor="middle">P₁</text>
+        <text class="t-pt" x="561" y="40" text-anchor="middle">P₂</text>
+        <text class="t-theta" x="272" y="150" style="font-size: 18px">γ</text>
+        <text class="t-seg" x="150" y="232">P₁, P₂ = vertical projections of the cup center at two extensions (coxa held at 1510)</text>
+        <text class="t-seg" x="30" y="262">Graph paper (never moves)</text>
+        <text class="t-foot" x="16" y="296">Top-view sketch: γ drawn at about −15° for clarity; expected −8 ± n·14.4° (counter-clockwise positive). Premise: the body pocket aligns the case axis with the leg's neutral direction 55° as designed — re-check with the baseline method below once the body is on.</text>
+        <text class="t-foot" x="16" y="312">The servo case must be clamped or weighted down: the leg is a cantilever and will pull an unfixed case askew; the case bottom must sit flat on the table (keeps the coxa axis vertical; the same applies when measuring the femur height difference).</text>
+      </svg>
+    </figure>
+    <p class="note" style="margin: 14px 0 8px"><strong>Re-check version with the body on (for the record)</strong> — uses the line between the projected L1↔R1 horn screws as the reference, independent of the "pocket aligned to 55°" assumption. Not usable now without a body:</p>
+    <figure style="border: none; padding: 6px 0 0">
+      <svg viewBox="0 0 700 520" role="img" aria-label="coxa top-view measurement (re-check version with the body): body pressed onto graph paper, two projected cup centers define the leg direction line, angle taken against the body reference line">
+        <defs>
+          <pattern id="gp" width="22" height="22" patternUnits="userSpaceOnUse">
+            <path d="M 22 0 H 0 V 22" fill="none" style="stroke: var(--line); stroke-width: 1"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="700" height="520" fill="url(#gp)" opacity="0.55"/>
+        <!-- Body (top-view hexagon) and the six hip positions -->
+        <polygon class="sv-part" points="364,183 476,183 543.2,330 476,477 364,477 296.8,330"/>
+        <circle class="sv-screw" cx="305.9" cy="330" r="3"/>
+        <circle class="sv-screw" cx="534.1" cy="330" r="3"/>
+        <circle class="sv-screw" cx="331.8" cy="446.9" r="3"/>
+        <circle class="sv-screw" cx="508.2" cy="446.9" r="3"/>
+        <!-- Baseline: line joining the projections of C_L1 → C_R1 (body Y direction) -->
+        <line class="sv-fp" x1="310" y1="213.1" x2="585" y2="213.1"/>
+        <!-- Neutral direction 55° (config mount_angle) -->
+        <line class="sv-ext" x1="331.8" y1="213.1" x2="159.8" y2="92.6"/>
+        <!-- Leg direction line: through P1, P2 -->
+        <line class="sv-kp" x1="331.8" y1="213.1" x2="156" y2="25"/>
+        <!-- ∠(baseline → leg line) = 145°+γ -->
+        <path class="sv-delta" d="M 376.8 213.1 A 45 45 0 0 0 301.1 180.2"/>
+        <!-- γ: neutral direction → leg line -->
+        <path class="sv-theta" d="M 233.5 144.3 A 120 120 0 0 1 250.0 125.3"/>
+        <!-- Point C and the projection of P -->
+        <circle class="sv-dot" cx="331.8" cy="213.1" r="6"/>
+        <circle class="sv-dot" cx="508.2" cy="213.1" r="6"/>
+        <circle cx="226.8" cy="100.5" r="5" style="fill: var(--panel); stroke: var(--accent); stroke-width: 2"/>
+        <circle cx="226.8" cy="100.5" r="1.6" style="fill: var(--accent)"/>
+        <circle cx="179.1" cy="49.3" r="5" style="fill: var(--panel); stroke: var(--accent); stroke-width: 2"/>
+        <circle cx="179.1" cy="49.3" r="1.6" style="fill: var(--accent)"/>
+        <!-- Coordinate sketch -->
+        <line class="sv-dim" x1="640" y1="95" x2="640" y2="55"/>
+        <polygon points="640,48 636,58 644,58" style="fill: var(--muted)"/>
+        <line class="sv-dim" x1="665" y1="110" x2="625" y2="110"/>
+        <polygon points="618,110 628,106 628,114" style="fill: var(--muted)"/>
+        <!-- Text -->
+        <text class="t-seg" x="420" y="334" text-anchor="middle">Body (top view)</text>
+        <text class="t-pt" x="331.8" y="238" text-anchor="middle">C_L1</text>
+        <text class="t-pt" x="508.2" y="238" text-anchor="middle">C_R1</text>
+        <text class="t-seg" x="585" y="205" text-anchor="end">Baseline (line through projected points = body Y direction)</text>
+        <text class="t-seg" x="46" y="74">Neutral direction 55°</text>
+        <text class="t-pt" x="240" y="92">P₁</text>
+        <text class="t-pt" x="192" y="40">P₂</text>
+        <text class="t-seg" x="40" y="140">P₁, P₂ = at two extensions,</text>
+        <text class="t-seg" x="40" y="158">vertical projections of the cup center</text>
+        <line class="sv-dim" x1="196" y1="146" x2="221" y2="106"/>
+        <text class="t-seg" x="212" y="205">Leg direction line</text>
+        <line class="sv-dim" x1="288" y1="200" x2="316" y2="185"/>
+        <text class="t-theta" x="243" y="118" style="font-size: 18px">γ</text>
+        <text class="t-warn" x="366" y="152">∠ = 145° + γ</text>
+        <text class="t-dim" x="640" y="45" text-anchor="middle">+X front</text>
+        <text class="t-dim" x="622" y="124" text-anchor="end">+Y left</text>
+        <text class="t-seg" x="30" y="500">Graph paper (under the body, never moves)</text>
+        <text class="t-foot" x="16" y="514">Top-view sketch: γ drawn at about −12° for clarity, actual expectation −8 ± n·14.4°. γ = leg-line bearing − 55°; with the L1→R1 baseline, γ = ∠(baseline→leg line, counter-clockwise) − 145°. Counter-clockwise positive.</text>
+      </svg>
+    </figure>
+    <ol class="steps">
+      <li>coxa servo case bottom flat on the table and <strong>clamped or weighted down</strong> (the leg is a cantilever and will pull an unfixed case askew), graph paper pressed under the case. Type <code>15 1510</code>.</li>
+      <li><strong>Reference line</strong>: trace a straight line on the paper along the long edge of the case — parallel to the case axis, this is the 0° reference for γ; positive direction toward the output-shaft end.</li>
+      <li><strong>Leg direction line</strong>: coxa fixed, swing femur/tibia to two different extensions, at each project the cup lip center vertically onto the paper with a square and mark it; join the two points (same point discipline as θ/femur).</li>
+      <li>Take far points on the paper, read coordinates and compute the angle between the two lines with atan2 (do not use a small protractor): <code>γ_center = angle of the leg line relative to the case axis</code>, counter-clockwise positive in top view. Expected −8 ± n·14.4°. Fill <code>coxa attach_deg := γ_center</code>.</li>
+      <li><strong>Premise and re-check</strong>: this method assumes the body pocket aligns the case axis with the neutral direction 55° (official design intent). Once the body is on, re-check with the "re-check version" baseline method above; if not urgent, the whole measurement can also be deferred to body assembly — the single-leg rig (P1/P2) does not use γ. Once all three attach values are in, do an FK spot check (send joint angles, measure the foot vs. <code>leg_fk</code>, pass at &lt;5 mm).</li>
+    </ol>
+  </section>
+</main>

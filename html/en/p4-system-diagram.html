@@ -1,0 +1,458 @@
+<!doctype html>
+<!-- English translation of html/p4-system-diagram.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whole-robot component connection diagram (electrical + pneumatic)</title>
+<style>
+  :root {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+      --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+      --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+      --part: #2C3844; --part-stroke: #55667A;
+      --pwr: #E0A64F; --air: #4BC2A0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161C; --panel: #171F27; --ink: #E3EAF1; --muted: #8C9BAA;
+    --line: #2A3541; --accent: #53A8E4; --accent-soft: rgba(83,168,228,.14);
+    --warn: #E0785C; --warn-soft: rgba(224,120,92,.10);
+    --part: #2C3844; --part-stroke: #55667A;
+    --pwr: #E0A64F; --air: #4BC2A0;
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F5F7; --panel: #FFFFFF; --ink: #1E2A36; --muted: #5C6C7A;
+    --line: #D5DDE4; --accent: #0E7AC4; --accent-soft: rgba(14,122,196,.10);
+    --warn: #B5452F; --warn-soft: rgba(181,69,47,.08);
+    --part: #C7D1DA; --part-stroke: #8FA0AE;
+    --pwr: #B26A00; --air: #17836A;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0; padding: 32px 20px 56px;
+    font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 17px; margin: 4px 0 -12px; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 10px 6px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .note b.d { color: var(--warn); }
+  .note ul { margin: 8px 0 2px; padding-left: 20px; }
+  .note li { margin: 3px 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+  table.vtab { border-collapse: collapse; margin: 10px 0 12px; }
+  .vtab th, .vtab td { border: 1px solid var(--line); padding: 4px 12px; font-size: 12.5px; text-align: left; }
+  .vtab th { background: var(--accent-soft); font-weight: 700; }
+
+  /* Connection-diagram elements */
+  .sv-box   { fill: var(--part); fill-opacity: .35; stroke: var(--part-stroke); stroke-width: 1.5; }
+  .sv-boxa  { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .sv-boxoff{ fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 5 4; }
+  .sv-warnbox { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.2; }
+  .sv-glass { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .sv-part  { fill: var(--part); fill-opacity: .55; stroke: var(--part-stroke); stroke-width: 1.5; stroke-linejoin: round; }
+  .sv-solid { fill: var(--part); fill-opacity: .85; stroke: var(--part-stroke); stroke-width: 1.2; }
+  .sv-fold  { stroke: var(--part-stroke); stroke-width: 1.1; opacity: .85; fill: none; }
+  .sv-lip   { stroke: var(--part-stroke); stroke-width: 5; stroke-linecap: round; }
+  .w-pwr  { stroke: var(--pwr); stroke-width: 3; fill: none; }
+  .w-sig  { stroke: var(--accent); stroke-width: 1.8; stroke-dasharray: 7 4; fill: none; }
+  .w-off  { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 4 4; fill: none; opacity: .85; }
+  .w-air  { stroke: var(--air); stroke-width: 3; fill: none; }
+  .w-air2 { stroke: var(--air); stroke-width: 1.6; fill: none; opacity: .5; }
+  .w-airt { stroke: var(--air); stroke-width: 1.6; stroke-dasharray: 2 3; fill: none; }
+  .nd  { fill: var(--pwr); }
+  .nda { fill: var(--air); }
+  .cv  { fill: var(--air); fill-opacity: .25; stroke: var(--air); stroke-width: 1.5; }
+  .cvb { stroke: var(--air); stroke-width: 2.5; }
+  text { font-family: inherit; fill: var(--ink); }
+  .t-bx  { font-size: 12.5px; font-weight: 700; text-anchor: middle; }
+  .t-bxm { font-size: 12.5px; font-weight: 700; text-anchor: middle; fill: var(--muted); }
+  .t-bs  { font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+  .t-bsw { font-size: 10.5px; fill: var(--warn); text-anchor: middle; }
+  .t-seg { font-size: 11.5px; fill: var(--muted); }
+  .t-dim { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-warn{ font-size: 12px; font-weight: 700; fill: var(--warn); }
+  .t-acc { font-size: 11.5px; fill: var(--accent); }
+  .t-air { font-size: 11.5px; fill: var(--air); }
+  .t-b   { font-size: 12px; fill: var(--ink); }
+  .t-bm  { font-size: 11.5px; fill: var(--muted); }
+  .t-foot{ font-size: 10.5px; fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Spider · P4 whole robot · electrical + pneumatic connection topology</p>
+    <h1>Whole-robot component connection diagram (electrical + pneumatic)</h1>
+    <p class="sub">This is the connection topology of the <b>P4 whole-robot target state</b>. Fig. 1 electrical: the 2S battery goes through the XT60 master switch into three branches
+    (servos 7.4 V direct / Pi independent 5 V / pneumatics 12 V); control signals run over USB, GPIO and I2C;
+    Fig. 1b relay: terminal-level wiring of the servo power master switch;
+    Fig. 2 pneumatics: two pumps + vacuum tank + 1-in-6-out manifold form the vacuum bus, with 6 identical branches to the foot cups.</p>
+  </header>
+
+  <h2>Fig. 1 · Electrical connections</h2>
+  <figure>
+    <svg viewBox="0 0 780 700" role="img" aria-label="Electrical diagram: battery splits three ways to servos, Pi and 12 V pneumatics; signals over USB, GPIO, I2C; pressure sensors enter ADS1115 through the divider board">
+      <defs>
+        <marker id="mp" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
+        </marker>
+        <marker id="ms" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+        <marker id="mo" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+
+      <!-- Power bus: battery → three branches -->
+      <line class="w-pwr" x1="142" y1="302" x2="170" y2="302"/>
+      <line class="w-pwr" x1="170" y1="96"  x2="170" y2="464"/>
+      <line class="w-pwr" x1="170" y1="96"  x2="206" y2="96"  marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="170" y1="272" x2="206" y2="272" marker-end="url(#mp)"/>
+      <line class="w-pwr" x1="170" y1="464" x2="206" y2="464" marker-end="url(#mp)"/>
+      <circle class="nd" cx="170" cy="96"  r="3.5"/>
+      <circle class="nd" cx="170" cy="272" r="3.5"/>
+      <circle class="nd" cx="170" cy="302" r="3.5"/>
+      <circle class="nd" cx="170" cy="464" r="3.5"/>
+      <text class="t-dim" x="188" y="88"  text-anchor="middle">7.4V</text>
+      <text class="t-dim" x="188" y="264" text-anchor="middle">7.4V</text>
+      <text class="t-dim" x="188" y="456" text-anchor="middle">7.4V</text>
+
+      <!-- Branch a: relay (driven by Pi GPIO17) → Servo2040 power rail → 18 servos -->
+      <line class="w-pwr" x1="306" y1="84"  x2="336" y2="84"  marker-end="url(#mp)"/>
+      <polyline class="w-sig" points="340,250 322,250 322,108 310,108" marker-end="url(#ms)"/>
+      <line class="w-pwr" x1="470" y1="80"  x2="556" y2="80"  marker-end="url(#mp)"/>
+      <line class="w-sig" x1="470" y1="112" x2="556" y2="112" marker-end="url(#ms)"/>
+      <rect class="sv-box" x="210" y="70" width="96" height="52" rx="6"/>
+      <rect class="sv-box" x="340" y="58" width="130" height="74" rx="6"/>
+      <rect class="sv-box" x="560" y="46" width="176" height="96" rx="6"/>
+      <text class="t-bx" x="258" y="92">Relay ×1</text>
+      <text class="t-bs" x="258" y="109">Servo power master switch</text>
+      <text class="t-bx" x="405" y="82">Servo2040 ×1</text>
+      <text class="t-bs" x="405" y="99">chica firmware</text>
+      <text class="t-bs" x="405" y="116">Servo power rail 7.4 V</text>
+      <text class="t-bx" x="648" y="74">DS3235 35 kg servos ×18</text>
+      <text class="t-bs" x="648" y="93">6 legs × coxa / femur / tibia</text>
+      <text class="t-bs" x="648" y="110">7.4 V direct</text>
+      <text class="t-acc" x="318" y="150" text-anchor="end">Pi GPIO17</text>
+      <text class="t-dim" x="513" y="72"  text-anchor="middle">7.4 V direct</text>
+      <text class="t-acc" x="513" y="128" text-anchor="middle">PWM ×18</text>
+
+      <!-- Foot contact switches (route B, not fitted for now) -->
+      <rect class="sv-boxoff" x="185" y="158" width="120" height="48" rx="6"/>
+      <line class="w-off" x1="305" y1="172" x2="368" y2="134" marker-end="url(#mo)"/>
+      <text class="t-bxm" x="245" y="179">Foot switches ×6</text>
+      <text class="t-bs" x="245" y="196">KW10 micro switch · sensor port</text>
+      <text class="t-bm" x="185" y="224">Route B, not fitted for now —</text>
+      <text class="t-bm" x="185" y="239">P4 touchdown detection uses pressure sensors</text>
+
+      <!-- Branch b: 5V buck converter → Pi 5 (separate supply) -->
+      <line class="w-pwr" x1="306" y1="272" x2="336" y2="272" marker-end="url(#mp)"/>
+      <rect class="sv-box" x="210" y="246" width="96" height="52" rx="6"/>
+      <rect class="sv-boxa" x="340" y="236" width="130" height="72" rx="6"/>
+      <text class="t-bx" x="258" y="268">5V/5A DC-DC</text>
+      <text class="t-bs" x="258" y="285">Buck converter ×1</text>
+      <text class="t-bx" x="405" y="260">Raspberry Pi 5 ×1</text>
+      <text class="t-bs" x="405" y="277">4 GB + active cooler</text>
+      <text class="t-bs" x="405" y="294">Gait + adhesion control</text>
+      <text class="t-dim" x="321" y="264" text-anchor="middle">5V</text>
+      <rect class="sv-warnbox" x="176" y="318" width="246" height="26" rx="6"/>
+      <text class="t-warn" x="299" y="335" text-anchor="middle">⚠ Pi powered separately, never shares the servo rail</text>
+
+      <!-- Battery -->
+      <rect class="sv-boxa" x="24" y="270" width="118" height="64" rx="6"/>
+      <text class="t-bx" x="83" y="292">2S 7.4 V LiPo ×1</text>
+      <text class="t-bs" x="83" y="309">5000~6200mAh</text>
+      <text class="t-bs" x="83" y="324">XT60 master switch</text>
+
+      <!-- Signals: USB / I2C / GPIO / analog -->
+      <line class="w-sig" x1="405" y1="236" x2="405" y2="138" marker-end="url(#ms)"/>
+      <text class="t-acc" x="413" y="188">USB</text>
+      <line class="w-sig" x1="470" y1="258" x2="556" y2="258" marker-end="url(#ms)"/>
+      <text class="t-acc" x="513" y="250" text-anchor="middle">I2C</text>
+      <line class="w-sig" x1="430" y1="308" x2="430" y2="426" marker-end="url(#ms)"/>
+      <text class="t-acc" x="438" y="400">GPIO ×8</text>
+      <line class="w-sig" x1="648" y1="312" x2="648" y2="296" marker-end="url(#ms)"/>
+      <text class="t-acc" x="656" y="306">0.25~2.25V</text>
+      <line class="w-sig" x1="648" y1="414" x2="648" y2="396" marker-end="url(#ms)"/>
+      <text class="t-acc" x="656" y="407">Analog 0.5–4.5 V ×7</text>
+
+      <!-- ADC / divider board / pressure sensors -->
+      <rect class="sv-box" x="560" y="192" width="176" height="100" rx="6"/>
+      <text class="t-bx" x="648" y="214">ADS1115 ×2</text>
+      <text class="t-bs" x="648" y="231">3.3 V supply (I2C direct to Pi)</text>
+      <text class="t-bs" x="648" y="247">Addresses 0x48 / 0x49 · 8 channels total</text>
+      <text class="t-bsw" x="648" y="266">PGA=±4.096 V (±2.048 would clip at</text>
+      <text class="t-bsw" x="648" y="281">−10 kPa to 0, breaking vent confirmation)</text>
+      <rect class="sv-box" x="560" y="312" width="176" height="80" rx="6"/>
+      <text class="t-bx" x="648" y="334">Divider board ×1</text>
+      <text class="t-bs" x="648" y="352">Per channel 10k/10k + 100 nF ×7</text>
+      <text class="t-bs" x="648" y="368">0.5–4.5 V → 0.25–2.25 V (halved)</text>
+      <text class="t-bs" x="648" y="384">Fits 3.3 V ADS1115 · ≈300 Hz low-pass</text>
+      <rect class="sv-box" x="560" y="414" width="176" height="80" rx="6"/>
+      <text class="t-bx" x="648" y="436">XGZP6847A ×7</text>
+      <text class="t-bs" x="648" y="453">0 to −100 kPa · output 0.5–4.5 V</text>
+      <text class="t-bs" x="648" y="469">Tank ×1 + one per foot</text>
+      <text class="t-bs" x="648" y="485">5 V supply (Pi 5 V rail · common ground)</text>
+
+      <!-- Branch c: boost converter → MOSFET → valves + pumps -->
+      <line class="w-pwr" x1="306" y1="464" x2="336" y2="464" marker-end="url(#mp)"/>
+      <polyline class="w-pwr" points="470,448 512,448 512,534 556,534" marker-end="url(#mp)"/>
+      <polyline class="w-pwr" points="470,480 496,480 496,602 556,602" marker-end="url(#mp)"/>
+      <rect class="sv-box" x="210" y="436" width="96" height="56" rx="6"/>
+      <rect class="sv-box" x="340" y="430" width="130" height="68" rx="6"/>
+      <rect class="sv-box" x="560" y="508" width="176" height="52" rx="6"/>
+      <rect class="sv-box" x="560" y="576" width="176" height="52" rx="6"/>
+      <text class="t-bx" x="258" y="459">XL6009 ×2</text>
+      <text class="t-bs" x="258" y="477">Boost 7.4→12 V</text>
+      <text class="t-bx" x="405" y="453">8-channel MOSFET board ×1</text>
+      <text class="t-bs" x="405" y="471">12 V low-side switches</text>
+      <text class="t-bs" x="405" y="487">6 valves + 2 pumps = exactly 8 channels</text>
+      <text class="t-bx" x="648" y="530">Solenoid valves ×6</text>
+      <text class="t-bs" x="648" y="548">3/2-way normally closed 0520B 12 V</text>
+      <text class="t-bx" x="648" y="598">Vacuum pumps ×2</text>
+      <text class="t-bs" x="648" y="616">555 dual-head diaphragm pump 12 V</text>
+      <text class="t-dim" x="321" y="456" text-anchor="middle">12V</text>
+
+      <!-- Legend -->
+      <line class="w-pwr" x1="24" y1="660" x2="64" y2="660" marker-end="url(#mp)"/>
+      <text class="t-bm" x="72" y="664">Power lines (solid, voltage labeled)</text>
+      <line class="w-sig" x1="250" y1="660" x2="290" y2="660" marker-end="url(#ms)"/>
+      <text class="t-bm" x="298" y="664">Control / signal lines (dashed)</text>
+      <line class="w-off" x1="490" y1="660" x2="530" y2="660" marker-end="url(#mo)"/>
+      <text class="t-bm" x="538" y="664">Route B not fitted for now (grey dashed)</text>
+      <text class="t-foot" x="16" y="690">Topology sketch, not to scale; arrows = supply / signal direction. ADS1115 3.3 V and XGZP6847A 5 V both come from the Pi (system-wide common ground); supply routing omitted. The relay is driven by Pi GPIO17 (active high, settled 08-15, previously Servo2040 A0); open = the whole servo rail unpowered, Pi and the Servo2040 logic side stay online.</text>
+    </svg>
+  </figure>
+
+  <h2>Fig. 1b · Relay wiring detail (servo power master switch)</h2>
+  <figure>
+    <svg viewBox="0 0 780 460" role="img" aria-label="Relay wiring detail: battery + goes through the XT60 to COM, NO to Servo2040 power +, NC left open; battery − goes straight through, not via the relay; coil 5 V and ground from the 5 V buck output, IN1 triggered high by Pi GPIO17">
+      <defs>
+        <marker id="mp2" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--pwr)"/>
+        </marker>
+        <marker id="ms2" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+          <path d="M0 0 L8 3.5 L0 7 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <!-- Battery negative: routed around the top straight to the Servo2040, not through the relay -->
+      <polyline class="w-pwr" points="89,120 89,46 680,46 680,132" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="385" y="38" text-anchor="middle">Battery − (black) straight to Servo2040 −, not via the relay</text>
+
+      <!-- Battery → COM -->
+      <rect class="sv-boxa" x="24" y="120" width="130" height="78" rx="6"/>
+      <text class="t-bx" x="89" y="144">2S 7.4 V LiPo ×1</text>
+      <text class="t-bs" x="89" y="161">XT60 master switch on the + side</text>
+      <text class="t-bs" x="89" y="177">5000~6200mAh</text>
+      <line class="w-pwr" x1="154" y1="176" x2="292" y2="176" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="223" y="168" text-anchor="middle">+7.4 V positive · ≥16 AWG</text>
+      <rect class="sv-warnbox" x="24" y="222" width="260" height="26" rx="6"/>
+      <text class="t-warn" x="154" y="239" text-anchor="middle">⚠ Switch the high side (+) — a low-side switch would be bypassed by the USB ground</text>
+
+      <!-- Relay module -->
+      <rect class="sv-box" x="300" y="70" width="210" height="185" rx="8"/>
+      <text class="t-bx" x="405" y="94">30 A relay module ×1</text>
+      <text class="t-bs" x="405" y="111">SLA-5VDC-SL-C · optocoupler + on-board flyback diode</text>
+      <!-- H/L trigger jumper -->
+      <rect class="sv-solid" x="384" y="134" width="6" height="6"/>
+      <rect class="sv-solid" x="398" y="134" width="6" height="6"/>
+      <rect class="sv-solid" x="412" y="134" width="6" height="6"/>
+      <rect class="sv-solid" x="395" y="131" width="24" height="12" rx="2"/>
+      <text class="t-dim" x="378" y="142" text-anchor="end">L</text>
+      <text class="t-dim" x="424" y="142">H</text>
+      <text class="t-bsw" x="405" y="162">Jumper must be on the H side = active high</text>
+      <!-- Power terminals: COM in on the left, NO out on the right, NC unused -->
+      <rect class="sv-solid" x="292" y="168" width="16" height="16" rx="2"/>
+      <text class="t-b" x="314" y="181" font-weight="700">COM</text>
+      <rect class="sv-solid" x="502" y="168" width="16" height="16" rx="2"/>
+      <text class="t-b" x="496" y="181" text-anchor="end" font-weight="700">NO</text>
+      <text class="t-bs" x="405" y="181">Contacts 30 A</text>
+      <rect class="sv-boxoff" x="502" y="196" width="16" height="16" rx="2"/>
+      <text class="t-bm" x="496" y="209" text-anchor="end">NC</text>
+      <text class="t-bm" x="526" y="209">Left open</text>
+      <!-- Control terminals: DC+ / DC− / IN1 -->
+      <text class="t-dim" x="330" y="243" text-anchor="middle">DC+</text>
+      <text class="t-dim" x="383" y="243" text-anchor="middle">DC−</text>
+      <text class="t-dim" x="436" y="243" text-anchor="middle">IN1</text>
+      <rect class="sv-solid" x="323" y="248" width="14" height="14" rx="2"/>
+      <rect class="sv-solid" x="376" y="248" width="14" height="14" rx="2"/>
+      <rect class="sv-solid" x="429" y="248" width="14" height="14" rx="2"/>
+
+      <!-- NO → Servo2040 -->
+      <line class="w-pwr" x1="518" y1="176" x2="586" y2="176" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="552" y="168" text-anchor="middle">+7.4V</text>
+      <rect class="sv-box" x="590" y="136" width="166" height="92" rx="6"/>
+      <text class="t-bx" x="673" y="160">Servo2040 ×1</text>
+      <text class="t-bs" x="673" y="178">Power screw terminals + / −</text>
+      <text class="t-bs" x="673" y="194">Servo rail 7.4 V → 18 servos</text>
+      <text class="t-bs" x="673" y="210">Logic side over USB, unaffected by the master switch</text>
+
+      <!-- Control side: 5V rail + Pi GPIO17 -->
+      <rect class="sv-box" x="150" y="340" width="170" height="60" rx="6"/>
+      <text class="t-bx" x="235" y="364">5 V/5 A buck output</text>
+      <text class="t-bs" x="235" y="382">Same 5 V rail as the Pi</text>
+      <polyline class="w-pwr" points="215,340 215,296 330,296 330,262" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="272" y="289" text-anchor="middle">5 V · coil ≈100 mA</text>
+      <polyline class="w-pwr" points="290,340 290,316 383,316 383,262" marker-end="url(#mp2)"/>
+      <text class="t-dim" x="336" y="310" text-anchor="middle">GND</text>
+      <rect class="sv-boxa" x="430" y="340" width="180" height="60" rx="6"/>
+      <text class="t-bx" x="520" y="364">Raspberry Pi 5</text>
+      <text class="t-bs" x="520" y="382">GPIO17 (Pin 11) → IN1</text>
+      <polyline class="w-sig" points="480,340 480,296 436,296 436,262" marker-end="url(#ms2)"/>
+      <text class="t-acc" x="488" y="322">High = closed, floating / low = open</text>
+
+      <text class="t-foot" x="16" y="430">Relay released = whole servo rail unpowered (safe default): once the Pi process exits, GPIO17 returns to input state and power drops automatically; the normally-closed valves keep the vacuum, the robot stays hanging.</text>
+      <text class="t-foot" x="16" y="446">Three checks on arrival: IN1 floating = open, 3.3 V = closed, released = open. Coil DC+ could also be taken from the Pi header 5 V (same rail; settle when supply route a/b is decided).</text>
+    </svg>
+  </figure>
+
+  <h2>Fig. 2 · Pneumatics (vacuum bus topology)</h2>
+  <figure>
+    <svg viewBox="0 0 780 620" role="img" aria-label="Pneumatic diagram: two pumps through check valves to the vacuum tank, tank through the manifold into 6 branches, each with a solenoid valve, foot-pressure tee and silicone tubing to a bellows cup">
+      <defs>
+        <marker id="ma" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0 0 L9 4 L0 8 Z" fill="var(--air)"/>
+        </marker>
+      </defs>
+
+      <!-- Vacuum generation chain (airflow: manifold → tank → pump → atmosphere) -->
+      <line class="w-air" x1="600" y1="110" x2="444" y2="110" marker-end="url(#ma)"/>
+      <line class="w-air" x1="300" y1="110" x2="260" y2="110"/>
+      <polyline class="w-air" points="256,110 224,110 224,77 164,77" marker-end="url(#ma)"/>
+      <polyline class="w-air" points="256,110 224,110 224,143 164,143" marker-end="url(#ma)"/>
+      <circle class="nda" cx="256" cy="110" r="3.5"/>
+      <line class="w-air" x1="40" y1="77"  x2="18" y2="77"  marker-end="url(#ma)"/>
+      <line class="w-air" x1="40" y1="143" x2="18" y2="143" marker-end="url(#ma)"/>
+      <text class="t-bm" x="12" y="110" text-anchor="middle" transform="rotate(-90 12 110)">Exhaust to air</text>
+
+      <!-- Check valve symbol (flow direction = tank → pump, tip points at the pump) -->
+      <polygon class="cv" points="204,69 204,85 190,77"/>
+      <line class="cvb" x1="190" y1="69" x2="190" y2="85"/>
+      <polygon class="cv" points="204,135 204,151 190,143"/>
+      <line class="cvb" x1="190" y1="135" x2="190" y2="151"/>
+      <text class="t-b" x="197" y="190" text-anchor="middle">4 mm check valves ×2</text>
+      <text class="t-bm" x="197" y="206" text-anchor="middle">Only tank→pump direction, prevents back-leak when stopped</text>
+
+      <!-- Pump / tank / manifold -->
+      <text class="t-bm" x="100" y="44" text-anchor="middle">Two pumps in parallel (one main, one spare)</text>
+      <rect class="sv-box" x="40" y="52" width="120" height="50" rx="6"/>
+      <rect class="sv-box" x="40" y="118" width="120" height="50" rx="6"/>
+      <text class="t-bx" x="100" y="73">Vacuum pump 1</text>
+      <text class="t-bs" x="100" y="90">555 dual-head 12 V</text>
+      <text class="t-bx" x="100" y="139">Vacuum pump 2</text>
+      <text class="t-bs" x="100" y="156">555 dual-head 12 V</text>
+      <rect class="sv-box" x="300" y="72" width="140" height="76" rx="14"/>
+      <text class="t-bx" x="370" y="97">Vacuum tank ×1</text>
+      <text class="t-bs" x="370" y="115">Automotive vacuum tank 250–500 mL</text>
+      <text class="t-bs" x="370" y="132">"vacuum battery"</text>
+      <rect class="sv-box" x="600" y="56" width="140" height="108" rx="6"/>
+      <text class="t-bx" x="670" y="92">Vacuum manifold ×1</text>
+      <text class="t-bs" x="670" y="110">1 in, 6 out</text>
+      <text class="t-bs" x="670" y="128">4 mm barbs throughout</text>
+
+      <!-- Tank pressure sensor (tee on the tank outlet line) -->
+      <circle class="nda" cx="510" cy="110" r="3.5"/>
+      <line class="w-airt" x1="510" y1="110" x2="510" y2="152"/>
+      <rect class="sv-box" x="430" y="156" width="160" height="50" rx="6"/>
+      <text class="t-bx" x="510" y="177">Tank pressure XGZP6847A ×1</text>
+      <text class="t-bs" x="510" y="194">On a tee at the tank outlet line</text>
+
+      <!-- Branch 1 (detailed): suction cup → silicone tubing (service loop) → foot-pressure tee → valve → manifold -->
+      <line class="w-air" x1="612" y1="240" x2="612" y2="168" marker-end="url(#ma)"/>
+      <line class="w-air" x1="404" y1="274" x2="466" y2="274" marker-end="url(#ma)"/>
+      <line class="w-air" x1="100" y1="274" x2="396" y2="274"/>
+      <polygon points="206,274 196,269 196,279" style="fill: var(--air)"/>
+      <circle class="w-air" cx="282" cy="274" r="22"/>
+      <text class="t-air" x="282" y="240" text-anchor="middle">coxa service loop (slack)</text>
+      <text class="t-bm" x="180" y="258" text-anchor="middle">4×6 silicone tubing along the leg</text>
+
+      <rect class="sv-box" x="470" y="240" width="150" height="68" rx="6"/>
+      <text class="t-bx" x="545" y="264">Solenoid valve 1 · 0520B</text>
+      <text class="t-bs" x="545" y="282">3/2-way · 12 V normally closed</text>
+      <text class="t-bs" x="545" y="298">Unpowered = cup↔bus</text>
+      <line class="w-airt" x1="580" y1="308" x2="580" y2="336"/>
+      <polygon points="580,344 575,334 585,334" style="fill: var(--air); opacity:.7"/>
+      <text class="t-bm" x="580" y="358" text-anchor="middle">Exhaust port</text>
+      <text class="t-bm" x="580" y="373" text-anchor="middle">Powered = cup vented to air</text>
+
+      <circle class="nda" cx="400" cy="274" r="3.5"/>
+      <line class="w-airt" x1="400" y1="274" x2="400" y2="318"/>
+      <rect class="sv-box" x="320" y="322" width="160" height="52" rx="6"/>
+      <text class="t-bx" x="400" y="343">Foot pressure XGZP6847A ×6</text>
+      <text class="t-bs" x="400" y="361">Between valve and cup (cup side)</text>
+
+      <!-- Wall and suction cups -->
+      <rect class="sv-glass" x="24" y="216" width="10" height="168"/>
+      <text class="t-seg" x="30" y="224" transform="rotate(90 30 224)">Wall / glass</text>
+      <line class="sv-lip" x1="35" y1="250" x2="35" y2="298"/>
+      <polygon class="sv-part" points="36,252 78,260 78,288 36,296"/>
+      <line class="sv-fold" x1="50" y1="254.5" x2="50" y2="293.5"/>
+      <line class="sv-fold" x1="64" y1="257" x2="64" y2="291"/>
+      <rect class="sv-solid" x="78" y="266" width="22" height="16"/>
+      <text class="t-seg" x="40" y="316">30 mm bellows cups ×6</text>
+      <text class="t-bm" x="40" y="332">M5 fitting + barbed elbow</text>
+
+      <!-- Branches 2~6 (simplified repeats) -->
+      <line class="w-air2" x1="632" y1="164" x2="632" y2="420"/>
+      <line class="w-air2" x1="656" y1="164" x2="656" y2="420"/>
+      <line class="w-air2" x1="680" y1="164" x2="680" y2="420"/>
+      <line class="w-air2" x1="704" y1="164" x2="704" y2="420"/>
+      <line class="w-air2" x1="728" y1="164" x2="728" y2="420"/>
+      <rect class="sv-boxoff" x="560" y="420" width="180" height="96" rx="8"/>
+      <text class="t-bxm" x="650" y="446">Branches 2–6 (same as branch 1)</text>
+      <text class="t-bs" x="650" y="466">Valve → foot-pressure tee → silicone tube → cup</text>
+      <text class="t-bs" x="650" y="486">×6 for the whole robot</text>
+
+      <!-- Legend -->
+      <line class="w-air" x1="24" y1="566" x2="64" y2="566" marker-end="url(#ma)"/>
+      <text class="t-bm" x="72" y="570">Pneumatic main line (arrows = pumping airflow direction: cup→tank→pump→air)</text>
+      <line class="w-airt" x1="430" y1="566" x2="462" y2="566"/>
+      <text class="t-bm" x="470" y="570">Pressure tap</text>
+      <rect class="sv-boxoff" x="560" y="558" width="16" height="16" rx="3"/>
+      <text class="t-bm" x="584" y="570">Repeated branches ×5</text>
+      <text class="t-foot" x="16" y="600">Topology sketch, not to scale; all fittings 4 mm barbs + cable ties, sealed with epoxy. Before fitting, pump the tank alone to −70 kPa as a collapse test.</text>
+    </svg>
+  </figure>
+
+  <div class="note">
+    <b>Valve state semantics (the wiring this project requires)</b>
+    <table class="vtab">
+      <tr><th>Valve state</th><th>Air path connected</th><th>Meaning</th></tr>
+      <tr><td>Unpowered (default)</td><td>Cup ↔ vacuum bus</td><td>Pumping / top-up / hold — no drop on power loss</td></tr>
+      <tr><td>Powered</td><td>Cup → air (bus side cut off)</td><td>Release this foot, ready to step</td></tr>
+    </table>
+    <b class="d">⚠ Must test before assembly</b>: the port semantics of off-the-shelf 0520B valves are often the <b class="d">opposite</b> (unpowered = exhaust open).
+    During assembly, measure every valve's unpowered behavior on the bench (which two ports connect when unpowered); if reversed, connect the vacuum to the valve's "exhaust port" instead.
+    Taking an "unpowered = vent" wiring onto the wall means power loss = fall.
+  </div>
+
+  <div class="note">
+    <b>Key rules</b>
+    <ul>
+      <li><b class="d">Pi powered separately</b>: a stalled-servo voltage dip must never reboot the Pi — a reboot mid-climb = a fall. After assembly, confirm no undervoltage with <code>vcgencmd get_throttled</code>.</li>
+      <li><b>Every joint = a leak point</b>: 4 mm barbs + cable ties throughout, sealed with epoxy, not hot glue.</li>
+      <li><b class="d">No breadboards / Dupont plugs in P4</b> — vibration = intermittent disconnects = state-machine misjudgment; divider board soldered on perfboard + JST / soldered wires.</li>
+      <li><b>Check valves</b> go between pump and tank, direction "tank→pump" only — prevents back-leak through the pump diaphragm after the pump stops.</li>
+      <li><b>Tank = vacuum battery</b>: new foot attaches in a second, smooths peaks, buffers a pump failure — network volume 50× larger than bare tubing, leak decay 50× slower.</li>
+      <li><b>Iron rule of the gait</b>: never release the next foot before the new foot's pressure is confirmed ≤ −30 kPa (always five feet supporting).</li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>

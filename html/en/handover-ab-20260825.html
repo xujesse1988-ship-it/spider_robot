@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<!-- English translation of html/handover-ab-20260825.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zero-force handover + weights: three-run A/B/C wall quantification (2026-08-25)</title>
+<style>
+  body { font-family: "Noto Sans CJK SC", "PingFang SC", sans-serif; margin: 2em auto;
+         max-width: 62em; line-height: 1.55; color: #222; background: #fff; padding: 0 1em; }
+  h1 { font-size: 1.5em; border-bottom: 3px solid #2a6; padding-bottom: .3em; }
+  h2 { font-size: 1.2em; margin-top: 1.6em; border-left: 5px solid #2a6; padding-left: .5em; }
+  table { border-collapse: collapse; margin: .8em 0; font-size: .93em; }
+  th, td { border: 1px solid #bbb; padding: .28em .6em; text-align: right; }
+  th { background: #eef5f0; }
+  td:first-child, th:first-child { text-align: left; }
+  .good { color: #1a7a3a; font-weight: 600; }
+  .bad  { color: #b33; font-weight: 600; }
+  .warn { color: #a70; font-weight: 600; }
+  .note { background: #f6f8f6; border: 1px solid #cdd; padding: .7em 1em; margin: .8em 0;
+          border-radius: 6px; font-size: .93em; }
+  .finding { background: #fff8ec; border: 1px solid #e0c080; padding: .7em 1em;
+             margin: .8em 0; border-radius: 6px; }
+  code { background: #f0f0f0; padding: 0 .3em; border-radius: 3px; font-size: .92em; }
+  .small { font-size: .85em; color: #555; }
+</style>
+</head>
+<body>
+<h1>Zero-force handover + rotation weights: three-run A/B/C wall quantification report (2026-08-25)</h1>
+<p class="small">Protocol: docs/en/HANDOVER-AB-PROTOCOL.md (§1 four criteria / §6 correction rules) · Pipeline: software/logs_analysis/ab_quant.py
+· Baseline control: html/en/vent-snap-20260820.html · Formal replicate #1 of the paper dataset</p>
+
+<h2>1. Conditions and material</h2>
+<table>
+<tr><th>Run</th><th>Command-line difference</th><th>Log</th><th>Video</th><th>Battery at start</th></tr>
+<tr><td>A baseline</td><td>--no-tank --stand-height 62 --tilt-trim 6</td>
+    <td>lean_20260825_103942.log</td><td>lean_20260825_103942.MOV</td><td>7.88V</td></tr>
+<tr><td>B zero-force handover</td><td>+ --handover L1:31,R1:33,L3:29,R3:22,R2:22,L2:24 (= 08-24 calibration table, δ*×0.8)</td>
+    <td>lean_20260825_105000.log</td><td>lean_20260825_105000.MOV</td><td>7.69V</td></tr>
+<tr><td>C = B + weights</td><td>+ --handover-weights (single-foot aggressive profile 0.6/0.25/0.1/0.05/0)</td>
+    <td>lean_20260825_105827.log</td><td>lean_20260825_105827.MOV</td><td>7.51V</td></tr>
+</table>
+<p>All three runs are the <code>body_lean</code> one-key experiment sequence (t key, 8319d50): sync marker → automatic rotation 3 rounds × 6 legs
+(ring order R3→L1→R2→L3→R1→L2, pump rest between legs ≥2 s and ≥10 s, 15 s between rounds) → 30 s tail rest.
+All three logs show zero freezes, zero handover truncations, zero threshold waits, all 18 lifts and 18 landings completed; the automation keeps the timing identical from run to run.</p>
+
+<h2>2. Quantification conventions (newly fixed for this report)</h2>
+<ul>
+<li><b>Time sync</b>: ±10 mm lean-marker shape fit, off = 125.82 / 62.58 / 58.40 s, R² = 0.99 / 0.98 / 0.99.</li>
+<li><b>Scale</b>: YYNMOS-8 board long edge, physical 93.0 mm (P4 bay hardware record) ÷ pixel length of that edge in frame 0 of each run
+(315.2/314.5/314.8 px, sub-pixel edge fit) = <b>0.2951 / 0.2957 / 0.2954 mm/px, taken as 0.295 (±0.5%)</b>.
+The short-edge scale (0.322) is foreshortened by the board's ~24° out-of-plane tilt and is discarded. The paper-ruler plane gives 0.326 mm/px, used only as a projection cross-check
+(group A endpoint 641 px: ruler-plane reading difference 20.9 cm ↔ body plane 18.9 cm, ratio = depth ratio of the two planes 0.905, self-consistent).
+<span class="warn">The ±10 mm marker cannot serve as an absolute scale</span> — it measures the actual displacement (see §6 Finding 2).</li>
+<li><b>Tracking health</b>: static ref score min 0.996, camera shake 2.2–4.8 px @4K (≈ baseline convention &lt;1.2 px), good;
+median body_score 0.645/0.761/0.683, <span class="warn">below the baseline convention of 0.8</span>
+(board tilt 4–8° + fine 4K texture is unfriendly to axis-aligned NCC); but the per-leg pattern reproduces 08-20 across days (see §4), so the structure is trustworthy.</li>
+</ul>
+
+<h2>3. Main criterion: slip per round (mm)</h2>
+<table>
+<tr><th></th><th>A baseline</th><th>B δ table</th><th>C δ table + weights</th></tr>
+<tr><td>Round 1</td><td>55.0</td><td>28.8</td><td>20.3</td></tr>
+<tr><td><b>Round 2 (decision round)</b></td><td><b>64.4</b></td><td><b>38.6</b>(−40%)</td><td><b>25.5</b>(−60%)</td></tr>
+<tr><td>Round 3 (check)</td><td>65.7</td><td>39.7</td><td>26.0</td></tr>
+<tr><td><b>Three-round total</b></td><td><b>185.1</b></td><td><b>107.1(−42%)</b></td><td><b>71.8(−61%)</b></td></tr>
+</table>
+<p>Segment accounting (three-round totals, mm; + = downward):</p>
+<table>
+<tr><th>Segment</th><th>A</th><th>B</th><th>C</th><th>Note</th></tr>
+<tr><td>Vent rupture instant</td><td>171.6(92.7%)</td><td>32.4(<b>−81%</b>)</td><td>17.0(<b>−90%</b>)</td>
+    <td style="text-align:left">Main ratchet term, the direct target of the zero-force handover</td></tr>
+<tr><td>Handover apportioning segment</td><td>—</td><td class="warn">60.7(57%)</td><td class="warn">44.3(62%)</td>
+    <td style="text-align:left">New main residual term, concentrated in L1/R1 (§6 Finding 1)</td></tr>
+<tr><td>Swing + landing + rest</td><td>13.5</td><td>14.0</td><td>10.5</td><td style="text-align:left">Same order in all three runs</td></tr>
+</table>
+
+<h2>4. Per-leg vent bounce (round 2, mm)</h2>
+<table>
+<tr><th>Leg</th><th>08-20 baseline</th><th>Today A</th><th>B</th><th>C</th></tr>
+<tr><td>L1</td><td>20.9</td><td>21.4</td><td>2.0</td><td class="good">0.3</td></tr>
+<tr><td>R1</td><td>—</td><td>15.2</td><td>0.6</td><td class="good">0.9</td></tr>
+<tr><td>L3</td><td>—</td><td>8.1</td><td class="warn">2.7</td><td class="good">1.7</td></tr>
+<tr><td>R3</td><td>—</td><td>6.5</td><td class="warn">2.4</td><td class="good">1.7</td></tr>
+<tr><td>R2</td><td>—</td><td>4.4</td><td class="warn">2.4</td><td>2.1</td></tr>
+<tr><td>L2</td><td>5.8</td><td>4.5</td><td>1.6</td><td class="good">0.8</td></tr>
+</table>
+<p>Group A L1 reproduces the 08-20 baseline across days to within 0.5 mm — hard evidence that the phenomenon is stable and the convention reliable.
+Group B L3/R3/R2 sit on the 3 mm correction line (§6 rule); <b>with weights on (C) all return inside the line ⇒ the current δ table is just right for the weighted condition, leave it</b>;
+R1 already bounced upward −0.9 mm in round 3, so δ=33 cannot be increased. Comparing C/B at the same δ: residual bounce on the middle and rear legs roughly halves
+(L3 10.1→5.0 px, R3 11.3→4.5, R2 11.4→7.0) = direct observation of the rotation-weight dilution mechanism.</p>
+
+<h2>5. Protocol §1 four criteria checked (round-2 convention)</h2>
+<table>
+<tr><th>Criterion</th><th>Pass line</th><th>A</th><th>B</th><th>C</th></tr>
+<tr><td>Slip per round</td><td>&lt;10mm</td><td class="bad">64.4</td><td class="bad">38.6</td><td class="bad">25.5</td></tr>
+<tr><td>Vent per leg</td><td>|x|≤2mm</td><td class="bad">max 21.4</td><td class="warn">max 2.7</td><td class="warn">max 2.1 (on the line)</td></tr>
+<tr><td>Current recovery</td><td>≤ pre-first-lift +0.2 A</td><td class="bad">+0.96</td><td class="bad">+2.49</td><td class="bad">+1.91</td></tr>
+<tr><td>Handover-segment displacement</td><td>|x|≤3 mm smooth</td><td>—</td><td class="bad">L1 systematic sag up to 12.6 mm</td><td class="bad">L1 up to 9.6 mm</td></tr>
+</table>
+<p>The "stop on the spot" clause of criterion 4 targets direction/apportioning bugs; this check confirmed that the six-leg command mean really is unchanged, the sag mechanism is clear (§6 Finding 1), and
+the total account improved greatly, so it is judged <b>physics outside the model, not a bug</b>; no stop is triggered, and it is listed as the target of the next-generation scheme.
+The &lt;10 mm line of criterion 1 was written under the assumption "handover segment ≈ 0" and needs revising per Finding 1.</p>
+
+<h2>6. Two paper-grade new findings</h2>
+<div class="finding"><b>Finding 1: the main battlefield of the residual slip moves from the rupture instant to the handover apportioning segment, concentrated in the two stiffest legs.</b><br>
+Group B L1 handover-segment displacement grows round by round 6.8→10.3→12.6 mm (climbing with the steady-state stored energy), R1 6.6→8.2→10.2; the other four legs ≈0–1.5 mm.
+Mechanism: "six-leg command mean unchanged ⇒ body does not move" only holds when all six legs have equal stiffness; the elastic equilibrium is a <b>stiffness-weighted</b> average,
+so moving load from the stiffest L1/R1 (bounce-vs-δ slopes 0.57/0.39, the largest of all) to the five softer legs necessarily sinks the body.
+Weights (C) cut this segment by 27% (60.7→44.3 mm).<br>
+<b>Engineering meaning</b>: a next-generation "stiffness-aware share" — solving Σk·d=0 for each stance leg's received share — could bring the handover-segment displacement to zero,
+corresponding to about 57–62% headroom on the B/C residual slip; it is also the experimental basis for the paper's three-generation story "equal split → rotation weights → stiffness-aware".</div>
+<div class="finding"><b>Finding 2: command→actual compliance transfer ratio ~40–46% (whole robot, measured directly without sensors).</b><br>
+Fitted amplitude of the ±10 mm sync marker 15.45/13.90/13.35 px (R² 0.987/0.982/0.994) × 0.295 mm/px
+= actual body displacement 4.56/4.10/3.94 mm, i.e. only <b>45.6%/41.0%/39.4%</b> of the commanded displacement reaches the body;
+the rest is eaten by leg-chain compliance. Three independent measurements cross-validate; the slight decline with voltage (7.88→7.51 V) suggests a link to servo torque, still to be verified.
+Same storyline as the 08-19 press reaction bending the leg chain and the Appendix A spring model; first whole-robot quantitative number.</div>
+
+<h2>7. Current accounting (the energy cost of the method)</h2>
+<table>
+<tr><th></th><th>A</th><th>B</th><th>C</th></tr>
+<tr><td>Rest before first lift</td><td>0.68A</td><td>0.65A</td><td>0.65A</td></tr>
+<tr><td>Rest after last round</td><td>1.64A</td><td class="bad">3.14A</td><td>2.56A</td></tr>
+<tr><td>Increase</td><td>+0.96</td><td>+2.49</td><td>+1.91 (−23% vs. B)</td></tr>
+</table>
+<p>The zero-force handover swaps "impact slip at the rupture instant" for "servos continuously holding the elastic load" — rest current nearly doubles, a trade-off that must go into the paper;
+the weights push the steady-state load back down by about 20%, in the same direction as the Appendix A model (steady-state internal stress −32%) at about half the magnitude.
+Note that the three runs were at different voltages (7.88/7.69/7.51 V), so absolute values across runs are confounded; slopes and within-run trends are trustworthy.</p>
+
+<h2>8. Deviation log (to be reported honestly in the paper)</h2>
+<ul>
+<li>The camera moved between A→B (static objects shifted right ~128 px as a whole): resolved by independent mm/px calibration per run + in-run ref correction;
+next time "do not touch the tripod between the three runs".</li>
+<li>Battery at start 7.88/7.69/7.51 V, all below the protocol's ≥8.0 V and declining run by run: small effect on slip, but current comparisons across runs are discounted;
+next time recharge between runs.</li>
+<li>Rest before t was shorter than the protocol's 60 s (sync relies on the marker, unaffected).</li>
+<li>Median body_score 0.645–0.761 below the internal 0.8 convention: improvement direction = rotation-tolerant templates / per-round template refresh.</li>
+<li>Today n=1 (replicate #1); n≥3 needs two more days with rotated run order (B→C→A, C→A→B).</li>
+</ul>
+
+<h2>9. Conclusions and next steps</h2>
+<p><b>Main conclusion: three runs on the same day under the same conditions — the zero-force handover reduces three-round total slip from 18.5 cm to 10.7 cm (−42%),
+and adding rotation weights to 7.2 cm (−61%); rupture-instant displacement −81%/−90%, and every per-leg bounce in group C is ≤2.1 mm.
+Yesterday's quick test (estimated δ table, 12→7 cm) and today's calibrated-table results confirm each other. Data precision (sync R²≥0.98, scale ±0.5%,
+cross-day reproduction 0.5 mm) reaches the paper-usable line.</b></p>
+<ol>
+<li>Replicates #2/#3 (rotated run order, battery discipline) → n=3 mean ± SD;</li>
+<li>Stiffness-aware share (Σk·d=0) design + implementation → attack the handover-segment residual (~60% headroom);</li>
+<li>--zoom rupture profile: 30 fps figure of group A L1 (a ready-made drop instant near f00417);</li>
+<li>Close the model loop: per-leg stiffness into Appendix A, predicted handover-segment sag vs. this report's measurements.</li>
+</ol>
+<p class="small">Cache: ~/ab_cache/0825/{A,B,C} (traj.csv kept, seq can be deleted);
+scale/localization check images: session scratchpad locate_*.jpg, board_scale_*.jpg, ruler_A_*.jpg (readings verified manually by the operator).</p>
+</body>
+</html>

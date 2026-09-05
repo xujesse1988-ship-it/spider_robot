@@ -1,0 +1,896 @@
+<!doctype html><!-- English translation of html/gait-to-servo.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>From walking commands to 18 servos</title>
+<style>
+body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+ max-width:1080px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#222;background:#fafafa}
+h1{font-size:1.5rem;border-bottom:2px solid #c00;padding-bottom:.4rem}
+h2{font-size:1.2rem;margin-top:2.4rem;border-left:4px solid #c00;padding-left:.5rem}
+h3{font-size:1.02rem;margin-top:1.6rem}
+table{border-collapse:collapse;margin:.8rem 0}
+td,th{border:1px solid #bbb;padding:.35rem .7rem;font-size:.92rem}
+th{background:#eee}
+.box{background:#fff3f0;border:1px solid #e0b0a0;border-radius:6px;padding:.8rem 1rem;margin:1rem 0}
+.ok{background:#f0f8f0;border-color:#a0c0a0}
+.note{background:#f0f4fa;border-color:#a0b4d0}
+code{background:#eee;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+pre{background:#f4f4f4;border:1px solid #ddd;border-radius:6px;padding:.7rem .9rem;overflow-x:auto;font-size:.88rem;line-height:1.5}
+small{color:#666}
+.fig{background:#fff;border:1px solid #ddd;border-radius:8px;padding:1rem;margin:1rem 0;overflow-x:auto}
+.fig figcaption{font-size:.88rem;color:#666;margin-top:.5rem;line-height:1.5}
+svg{display:block;margin:0 auto}
+/* Pipeline */
+.pipe{display:flex;flex-wrap:wrap;align-items:stretch;gap:.3rem;margin:1rem 0}
+.pipe .st{background:#fff;border:1.5px solid #888;border-radius:8px;padding:.45rem .6rem;
+ font-size:.83rem;text-align:center;flex:1 1 100px;min-width:96px;display:flex;flex-direction:column;justify-content:center}
+.pipe .st b{font-size:.9rem}
+.pipe .st small{display:block;color:#888;font-size:.74rem;line-height:1.3;margin-top:.15rem}
+.pipe .ar{align-self:center;color:#c00;font-weight:bold;font-size:1.1rem}
+.hl{border-color:#c00 !important;background:#fff8f6 !important}
+/* Controls */
+.ctl{display:flex;flex-wrap:wrap;gap:.8rem;align-items:center;margin:.6rem 0;font-size:.9rem}
+.ctl label{display:flex;align-items:center;gap:.4rem}
+.ctl input[type=range]{width:150px}
+button{font:inherit;font-size:.86rem;padding:.25rem .8rem;border:1px solid #999;border-radius:6px;
+ background:#fff;cursor:pointer}
+button.on{background:#c00;color:#fff;border-color:#c00}
+.readout{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.86rem;background:#f4f4f4;
+ border-radius:6px;padding:.5rem .8rem;margin:.5rem 0;line-height:1.7}
+.legend{display:flex;flex-wrap:wrap;gap:.9rem;font-size:.82rem;margin:.5rem 0;color:#444}
+.legend span{display:flex;align-items:center;gap:.3rem}
+.dot{width:13px;height:13px;border-radius:50%;display:inline-block;border:2px solid transparent}
+.toc{font-size:.9rem;background:#fff;border:1px solid #ddd;border-radius:8px;padding:.7rem 1.2rem}
+.toc a{color:#c00;text-decoration:none}
+.phasebar{display:flex;height:34px;border-radius:6px;overflow:hidden;border:1px solid #bbb;margin:.5rem 0;font-size:.74rem}
+.phasebar div{display:flex;align-items:center;justify-content:center;color:#fff;white-space:nowrap;overflow:hidden}
+</style></head><body>
+
+<h1>From a "walk command" to 18 servos — the full climb_walk chain, illustrated</h1>
+<p><small>Based on the real code in this repo: <code>gait.py / climb.py / robot.py / kinematics.py / config.py / driver.py</code>.
+All numbers (link lengths, calibration values, timing parameters) are the values running on your machine, not textbook placeholders.</small></p>
+
+<div class="toc">
+Contents:
+<a href="#s0">0 Overview</a> ·
+<a href="#s1">1 The three joints of one leg (interactive)</a> ·
+<a href="#s2">2 The essence of walking: stance and swing (animation)</a> ·
+<a href="#s3">3 Climbing swing phase: a six-state machine</a> ·
+<a href="#s4">4 The math of stance: 0.3 mm per frame</a> ·
+<a href="#s5">5 Inverse kinematics: from "where the foot is" to three angles</a> ·
+<a href="#s6">6 Calibration table: from angle to pulse width µs</a> ·
+<a href="#s7">7 The last hop: serial packet and PWM</a> ·
+<a href="#s8">8 One-frame checklist and code map</a>
+</div>
+
+<h2 id="s0">0. Overview: a journey replayed every 20 milliseconds</h2>
+
+<p>The first idea to get straight: <b>nowhere in the program does anything say "turn servo X by so many degrees" in order to walk</b>.
+The upper layers only ever answer one question — "<b>right now, where should the six feet be in the body frame</b>".
+Then a fixed pipeline converts 6 positions into 18 angles and then into 18 pulse widths and sends them out.
+This pipeline runs 50 times a second (one frame every 20 ms); walking is this 50-frames-per-second "stream of position snapshots",
+and the servo end has no concept of "taking a step" at all.</p>
+
+<div class="pipe">
+ <div class="st"><b>Key press</b><small>w → vx=15 mm/s<br>velocity command</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>Phase clock</b><small>gait.py / climb.py<br>who supports · who swings</small></div>
+ <div class="ar">→</div>
+ <div class="st hl"><b>Foot targets ×6</b><small>body frame (x,y,z) mm<br>where each foot should be this frame</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>Coordinate transform</b><small>robot.py<br>body frame → each leg frame</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>Inverse kinematics</b><small>kinematics.py<br>position → γ,α,θ</small></div>
+ <div class="ar">→</div>
+ <div class="st hl"><b>Joint angles ×18</b><small>degrees</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>Calibration table</b><small>config.py<br>angle → pulse width</small></div>
+ <div class="ar">→</div>
+ <div class="st hl"><b>Pulse widths ×18</b><small>about 1000–2000 µs</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>Serial packet</b><small>driver.py 0xD3<br>39 bytes ≈3.4 ms</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>Servo2040</b><small>18-channel PWM</small></div>
+ <div class="ar">→</div>
+ <div class="st"><b>Servos ×18</b><small>internal closed loop<br>turn to the angle for that pulse width</small></div>
+</div>
+
+<p>Below, each link is taken apart in the order "physics first, then math, electrical last".</p>
+
+<h2 id="s1">1. Hardware: the three joints of one leg (turn them yourself)</h2>
+
+<p>Each leg has 3 servos and 3 links; from the body outward:</p>
+
+<table>
+<tr><th>Joint</th><th>Common name</th><th>Axis direction</th><th>What it does</th><th>Code symbol</th><th>Link length</th></tr>
+<tr><td>coxa</td><td>Hip</td><td><b>Vertical</b> (perpendicular to the adhesion surface)</td><td><b>Sweeps</b> the whole leg fore and aft in the horizontal plane</td><td>γ (gamma), 0 = the leg's neutral direction</td><td>43&nbsp;mm</td></tr>
+<tr><td>femur</td><td>Thigh</td><td><b>Horizontal</b></td><td><b>Raises/lowers</b> the leg in the vertical plane</td><td>α (alpha), horizontal = 0, positive upward</td><td>81&nbsp;mm</td></tr>
+<tr><td>tibia</td><td>Shin/knee</td><td><b>Horizontal</b></td><td>Knee <b>flexion/extension</b>, sets how far the foot is from the hip</td><td>θ (theta) = angle between thigh and shin, straight = 180°</td><td>123.7&nbsp;mm</td></tr>
+</table>
+
+<p>Intuitively: <b>coxa handles fore/aft, femur handles height, femur+tibia together handle reach</b>.
+While walking the foot must move in a straight line at constant speed, yet all three joints rotate — so the three angles must all change along curves at once,
+cooperating to "rotate out a straight line". That is exactly why it is recomputed every frame (the inverse kinematics of Section 5).</p>
+
+<div class="fig">
+<div class="ctl">
+ <label>γ hip sweep <input type="range" id="sg" min="-45" max="45" value="0" step="0.5"><span id="vg">0°</span></label>
+ <label>α thigh <input type="range" id="sa" min="-70" max="70" value="24" step="0.5"><span id="va">24°</span></label>
+ <label>θ knee <input type="range" id="st" min="45" max="178" value="72" step="0.5"><span id="vt">72°</span></label>
+ <button onclick="preset(0,24.1,72.0)">Stance</button>
+ <button onclick="preset(0,2.8,112.4)">Climbing press pose</button>
+ <button onclick="preset(0,24.3,94.6)">Lifted 15 mm (swinging)</button>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:1rem;justify-content:center">
+ <svg id="sideview" width="430" height="330" viewBox="0 0 430 330"></svg>
+ <svg id="topview" width="300" height="330" viewBox="0 0 300 330"></svg>
+</div>
+<div class="readout" id="fkout"></div>
+<figcaption>Left: <b>side view</b> (the vertical plane of the leg, horizontal axis r = horizontal distance from the hip axis, vertical axis z, dashed line is the adhesion surface).
+Right: <b>top view</b> (γ sweeps the whole leg around the hip axis). Below, live: the foot position (leg frame),
+the three joint angles, and the three pulse widths converted through <b>the real calibration table of leg L2</b> — as you drag the sliders,
+the µs values you see are what the real machine would receive. Try the "Stance" and "Climbing press pose" buttons,
+and note that the press pose is just α flattened and the knee bent more; the foot "sinks" 18 mm below the adhesion surface (= press_delta).</figcaption>
+</div>
+
+<div class="box note"><b>Leg numbering and orientation:</b> left side front to back L1/L2/L3, right side R1/R2/R3.
+Each leg has a "neutral direction" (set by assembly, e.g. L1 points front-outward at 55°, L2 straight left at 90°),
+and γ=0 points along it. In all the "leg frame" calculations below, the x axis runs along each leg's own neutral direction —
+so all six legs can share the same IK formulas.</div>
+
+<h2 id="s2">2. The essence of walking: stance phase and swing phase</h2>
+
+<p>The six legs take turns in two roles: <b>stance phase</b> (attached, acting as "ground", carrying the body across) and
+<b>swing phase</b> (released, going forward to find a new foothold). Understanding walking takes three steps: first agree on a viewpoint (2.1),
+then see how the stance legs carry the body (2.2), and finally how the schedule is laid out (2.3). The details of the foot-change motion itself are left to Chapter 3.</p>
+
+<h3>2.1 Agree on a viewpoint first, or nothing makes sense</h3>
+
+<div class="fig">
+<svg id="framefig" width="920" height="300" viewBox="0 0 920 300"></svg>
+<figcaption>The same event in the same short interval, two ways of keeping the books. Left: what you see standing outside the wall (wall frame).
+Right: the world as the code sees it (body frame) — every calculation in the engine happens in this frame.</figcaption>
+</div>
+
+<ul>
+<li><b>Wall frame (reality)</b>: the attached feet are nailed to the wall and do not move a millimeter; the stance legs' joints turn slowly and the body is translated across.
+<b>The feet do not push the wall; the body climbs over the feet.</b></li>
+<li><b>Body frame (code)</b>: the body is always at the origin. "The body advances at 13 mm/s" becomes, in the books,
+"the <b>target point</b> of every stance foot moves backward at 13 mm/s".</li>
+</ul>
+
+<p>These are the same thing, differing only by a frame. The test of whether you have got it is whether you can accept this sentence:
+<b>"The stance foot's target moves every frame, yet the foot itself has not moved a millimeter on the wall."</b>
+The part the target moved is exactly what became the body's advance.</p>
+
+<div class="box note"><b>Why does the code keep its books in the body frame?</b> Because the next stage, IK, answers exactly
+"where is the foot <b>relative to the body</b>" (Section 5) — body-frame books go straight into IK, whereas the wall frame would need one extra conversion per frame.
+The price is that on first reading "the stance feet are moving backward" is confusing: what moves backward is the books, not the feet on the wall.</div>
+
+<h3>2.2 Stance phase: the body is not "pushed" forward</h3>
+
+<p>When five legs are attached, their 15 servos are not idle — every frame they <b>turn slowly and in coordination</b> to the angles IK recomputes,
+translating the body over the feet at constant speed. No pushing, no moment of force; a purely position-controlled geometric transport.
+Feel the numbers: at full speed, 13.3 mm/s, the body moves only <b>0.27 mm</b> per frame (20 ms) —
+to the eye it is continuous sliding, to the servos a series of tiny position corrections.</p>
+
+<p>Seen alone, the life of one leg is like a slider on a short rail (stride 40 mm as an example):</p>
+
+<pre>Foot-change landing point: <b>ahead</b> of the stance position by +20 mm (half stride)
+   ↓ attached. The body advances; in the body frame the foot "slides" backward at constant speed
+past the stance position 0
+   ↓ keeps sliding
+reaches about −20 mm <b>behind</b> the stance position ← exactly its foot-change window: lift, land again at +20 ahead, repeat</pre>
+
+<p>There is one more hard constraint that explains many seemingly roundabout designs in the engine: <b>an attached foot must never slip on the wall</b>
+(slip = the seal rubbed open = fall risk). So the stance target must be strictly complementary to the body motion and continuously integrated —
+a sudden change of velocity command must not make the target position jump; and every "pause" (clock stop, leak rescue, freeze) is implemented
+by the same action: freezing the stance targets in place.</p>
+
+<h3>2.3 The schedule: a gait = who changes feet when</h3>
+
+<p>Three terms used everywhere below: <b>period</b> T (climbing 3.6 s), <b>duty</b> (the fraction of the period spent in stance, climbing 5/6),
+<b>window</b> (the foot-change slot each leg gets within the period, T×(1−duty)=0.6 s).
+Draw the six legs' windows on one chart and the word "gait" becomes concrete — it is just a schedule:</p>
+
+<div class="fig">
+<svg id="ganttfig" width="920" height="400" viewBox="0 0 920 400"></svg>
+<figcaption>Top: climbing gait — windows back to back, only one open at any time.
+Bottom: floor tripod gait — three legs per group, two groups alternating, each leg in the air half the time.
+Note the horizontal axis is <b>phase-clock time</b>: changing one foot while climbing actually takes ≈4.1 s, far more than the 0.6 s window;
+the clock stops at the end of the window to wait for attachment, so in real time every orange window is "stretched" to 4-plus seconds.</figcaption>
+</div>
+
+<ul>
+<li><b>Why climbing moves only one leg at a time</b>: 5 cups carrying the whole robot is the safety floor. Two more gates at the window start:
+interlock (the other 5 feet must all be ATTACHED) and the lift threshold (all stance cups deeper than −50 kPa —
+a freshly attached neighbor is a "soft shoulder", lifting the next leg immediately would crush it); if not met, wait at the window start.</li>
+<li><b>Why the order is R3→L1→R2→L3→R1→L2</b>: consecutive lifts are always diagonal/crossed, spreading the disturbance across both sides.
+The old order, three left then three right, concentrated half a period of disturbance on one side — the structural root of the whole-robot sag on R2/R3 lifts measured on 08-19.</li>
+<li><b>Clock time vs. real time</b>: the body advances only while the clock runs. Each window = clock runs 0.6 s, then stops ≈3.5 s
+waiting for the changing leg to finish. The real machine's "walk a bit, pause, walk a bit" is the direct result of this schedule plus the clock-stop rules,
+not stuttering.</li>
+</ul>
+
+<p>Parameter comparison of the two schedules:</p>
+
+<table>
+<tr><th></th><th>Tripod gait TRIPOD (floor)</th><th>Climbing gait CLIMB</th></tr>
+<tr><td>Swinging simultaneously</td><td>3 legs per group (L1+R2+L3 / R1+L2+R3 alternating)</td><td><b>Only 1 at a time</b>, the other 5 attached</td></tr>
+<tr><td>Stance fraction duty</td><td>1/2</td><td>5/6</td></tr>
+<tr><td>Leg order</td><td>Two groups alternating</td><td>R3→L1→R2→L3→R1→L2 (diagonal crossing, no consecutive same-side lifts)</td></tr>
+<tr><td>Period</td><td>1.5&nbsp;s</td><td>3.6&nbsp;s (clock time; longer in real time because of clock stops)</td></tr>
+</table>
+
+<h3>2.4 Watch it move</h3>
+
+<div class="fig">
+<div class="ctl">
+ <button id="btnClimb" class="on" onclick="setMode('climb')">Climbing gait (real-machine timing)</button>
+ <button id="btnTripod" onclick="setMode('tripod')">Floor tripod gait</button>
+ <button id="btnPause" onclick="togglePause()">⏸ Pause</button>
+ <label>Speed <input type="range" id="simSpeed" min="0.5" max="4" value="2" step="0.5"><span id="simSpeedV">2×</span></label>
+</div>
+<svg id="gaitview" width="470" height="560" viewBox="0 0 470 560"></svg>
+<div class="phasebar" id="phasebar"></div>
+<div class="readout" id="gaitout"></div>
+<div class="legend">
+ <span><span class="dot" style="background:#1565c0;box-shadow:0 0 0 2px #fff inset"></span>attached, supporting</span>
+ <span><span class="dot" style="background:#e65100"></span>on the surface, not attached (VENT venting / LIFT pulling out / DESCEND touching)</span>
+ <span><span class="dot" style="background:#fff;border-color:#999"></span>in the air (off the surface)</span>
+ <span><span class="dot" style="background:#c62828"></span>PRESS pressing in</span>
+ <span><span class="dot" style="background:#6a1b9a"></span>pumping, waiting for attachment</span>
+</div>
+<figcaption>Viewpoint: <b>looking at the robot's back from outside the wall</b>, up = direction of travel, the camera follows the body. Four things to watch:<br>
+① <b>The blue dots (attached feet) and the background grid flow downward in perfect sync</b> — they have not moved on the wall;
+it is the camera following the body as it climbs (the two viewpoints of 2.1; the body frame is chosen here).<br>
+② At most one non-blue dot at any time, cycling R3→L1→R2→L3→R1→L2 (the schedule of 2.3).<br>
+③ Watch the <b>phase clock</b> in the status line: ▶ running, the blue dots flow down together = the body is climbing; ⏸ stopped, only the changing foot moves.
+Note the clock stops early — while the changing leg is still pulling its cup out from below the surface (early LIFT, foot still below the press position),
+the stance legs are already frozen, matching the real machine.<br>
+④ Switch to the tripod gait for comparison: three legs lift together, continuous rhythm with no pauses — but on a wall that means only
+3 cups carry the whole robot at any time, plus lift/land impacts; not something to risk while climbing.</figcaption>
+</div>
+
+<h2 id="s3">3. Climbing swing phase: the six-state machine of one foot change</h2>
+
+<p>On the floor the swing is just a sine arc "lift, move forward, put down". On the wall that does not work: releasing and sealing a cup
+are physical processes, and slapping down, dragging, or ripping off with vacuum still on all go wrong. So climb.py splits the swing into a state machine,
+each state doing exactly one thing:</p>
+
+<div class="fig">
+<svg id="swingtl" width="960" height="300" viewBox="0 0 960 300"></svg>
+<figcaption>Top: duration of each state (real-machine defaults). Bottom: trajectory of the foot's height z off the wall.
+Note the "below the wall" parts at both ends: during VENT the foot still sits on the wall, translating with the support field; PRESS goes 18 mm
+<b>below</b> the adhesion surface — not crushing the wall, but flattening the bellows cup until the sealing lip sits flush (press_delta).</figcaption>
+</div>
+
+<table>
+<tr><th>State</th><th>What it does</th><th>Why this state must exist (all lessons from real climbs)</th></tr>
+<tr><td><b>VENT</b> 0.3s</td><td>Stay in place, open the vent valve only</td><td>Lifting while venting: exhaust builds slower than lift-off, and the leg gets "yanked up" by residual vacuum (real machine, 08-19)</td></tr>
+<tr><td><b>LIFT</b> ≈0.83s</td><td>Pull out from the press position −18 along the wall normal and retreat to +15 above the surface, 33 mm total (40 mm/s)</td><td>The cup itself rebounds 11–13 mm; retreat too little and the foot still rubs the wall. <b>The phase clock reaches the window end and stops 0.3 s into LIFT (the foot is still 6 mm below the surface then)</b> — the stance legs freeze earlier than the swing foot leaves the surface</td></tr>
+<tr><td><b>TRANSFER</b> 0.6s</td><td>Translate to directly above the landing point (smoothstep)</td><td>Get "directly above" first, then descend, so the landing has no lateral velocity and does not drag the foot</td></tr>
+<tr><td><b>DESCEND</b></td><td>Slow vertical probe (30 mm/s), XY frozen</td><td>Kills "slapping" — the impact velocity at contact would break the seal</td></tr>
+<tr><td><b>PRESS</b></td><td>Keep pressing in 18 mm (15 mm/s)</td><td>The bellows cup must be flattened to seal; 13 mm is mostly eaten by leg-chain give, measured deepened to 18</td></tr>
+<tr><td><b>WAIT</b></td><td>Pump, wait for the cup pressure past −30 kPa to confirm attachment</td><td>If not attached, lift 5 mm and retry <b>5 mm deeper than last time</b> (re-pressing at the same depth fails the same way); after 3 failures the whole robot freezes and alarms</td></tr>
+</table>
+
+<div class="box"><b>The phase clock pauses at these points (the source of all the "waiting" in your logs):</b>
+① at the window end the swing leg is not yet attached — clock stops, whole body frozen waiting for it;
+② interlock at the window start: no lift unless the other 5 feet are all ATTACHED;
+③ threshold at the window start: some stance cup still shallower than −50 kPa (a freshly attached neighbor is a "soft shoulder"), wait for the pump to pull it deeper, alarm after 15 s;
+④ any stance foot leaking — clock paused during the 2 s rescue window, freeze on timeout.
+This "clock that can stop" is the essential difference between the climb engine and the purely open-loop P3 gait.</div>
+
+<h2 id="s4">4. The math of stance: 0.3 millimeters per frame</h2>
+
+<p>How does a velocity command become stance-foot targets? Three steps (gait.py):</p>
+
+<pre>① Stride vector u = velocity × stance duration        (climbing: T_stance = 3.6 s × 5/6 = 3 s)
+   e.g. vx=13 mm/s straight → u ≈ 40 mm (exactly the climbing single-step cap climb_max_step)
+
+② When turning, u differs per leg: u = (v + ω×r) × T_stance
+   — rigid-body velocity field: legs far from the turning axis travel longer arcs; turning in place, the six u directions all differ
+
+③ Within stance, the target slides at constant speed from stance position + u/2 to stance position − u/2:
+   target = stance position + u × (0.5 − phase progress)</pre>
+
+<p>In the 50 Hz loop, a speed of 15 mm/s means <b>the target moves only 0.3 mm per frame</b>.
+The servos receive a series of position commands spaced very closely, which looks like continuous motion.
+To a servo, "walking" is just a stream of tiny pulse-width tweaks: 1500 µs → 1499.7 µs → 1499.4 µs…</p>
+
+<h2 id="s5">5. Inverse kinematics: from "where the foot should be" to three joint angles</h2>
+
+<p>Now every leg has a target point (body frame). Turning it into angles takes two steps (robot.py → kinematics.py):</p>
+
+<h3>Step one: change into the leg's own frame</h3>
+<pre>Body frame (X,Y,Z)
+  → subtract this leg's hip-axis mounting position (mount_x, mount_y)     # e.g. L2 mounted at (0, 81.5)
+  → undo this leg's neutral orientation angle mount_angle                # e.g. L2 rotate −90°
+  → leg frame (x,y,z): x along the leg's neutral direction outward, z up</pre>
+<p>(If the body also has a pose trim while climbing, body_shift / pitch / roll, an inverse transform is applied first, in this same step.)</p>
+
+<h3>Step two: three angles, two geometry problems</h3>
+
+<div class="fig">
+<svg id="ikfig" width="920" height="360" viewBox="0 0 920 360"></svg>
+<figcaption>Left (top view): γ is immediate — the bearing of the target point in the horizontal plane.
+Right (side view in the leg plane): what remains is middle-school geometry: two fixed-length bars, femur (81) and tibia (123.7),
+must reach the planar point (r,z); all three sides are known → solve the triangle with the law of cosines.</figcaption>
+</div>
+
+<pre>γ = atan2(y, x)                       # top-view bearing, coxa points straight at the target
+r = √(x²+y²) − 43                     # subtract the coxa flat segment, leaving a two-link problem
+d = √(r²+z²)                          # straight-line distance from the hip (femur axis) to the foot
+
+θ = acos( (81² + 123.7² − d²) / (2·81·123.7) )      # apex angle of the triangle = knee angle
+α = atan2(z,r) + acos( (81² + d² − 123.7²) / (2·81·d) )  # line-of-sight angle + elevation</pre>
+
+<div class="box"><b>Where WorkspaceError comes from:</b> for the triangle to exist,
+42.7&nbsp;mm &lt; d &lt; 204.7&nbsp;mm (difference and sum of the two bar lengths). Target too far / too near and the
+acos in the law of cosines has no solution — the code raises WorkspaceError, and the climbing script catches it and <b>freezes the whole robot in place</b> (one of the two parachutes).
+All the "3 mm envelope margin" and "compensation tail budget" accounting in climb.py exists to guarantee that stance targets,
+dragged ever further by the body motion, never reach the d=204.7 wall.</div>
+
+<p>The knee has two mirror solutions, "knee in / knee out"; the formula fixes one branch (your assembly direction);
+IK is recomputed independently every frame, and the same target always gives the same angles, so it never "jumps solutions".</p>
+
+<h2 id="s6">6. Calibration table: from joint angle to pulse width µs</h2>
+
+<p>Servos do not know "degrees". They only know <b>pulse width</b>: a 500–2500 µs high pulse every 20 ms;
+the width of the pulse sets the horn angle, and the internal potentiometer closes the loop. So the last step is looking up each servo's calibration
+(18 ServoCal entries in config.py, all measured and fitted on 2026-08-08):</p>
+
+<pre>servo_deg = sign × (joint angle − attach_deg)          # first convert to "the servo's own degrees"
+us = midpoint near 1500 + servo_deg × (us_p45 − us_m45) / 90   # linear map, then clamp to 500–2500</pre>
+
+<div class="fig">
+<svg id="calfig" width="920" height="190" viewBox="0 0 920 190"></svg>
+<figcaption>Example, the measured calibration of the L2 femur servo (channel 10): the endpoints are the measured ±45° pulse widths,
+with linear interpolation between. Note <b>attach_deg=47.81°</b>: when the servo is sent 1500 µs (mechanical center),
+the joint is actually at 47.8° — the mechanical offset from horn mounting plus assembly tolerance, different for every servo, all back-filled from measurement.</figcaption>
+</div>
+
+<p>Three easy points of confusion:</p>
+<ul>
+<li><b>attach_deg (zero offset)</b>: the horn is splined on, and where it lands decides "servo center = how many joint degrees".
+The official design values are coxa −8° / femur 35° / tibia 68°; your table holds individually measured values (e.g. L2 femur 47.81°).</li>
+<li><b>Left/right mirror</b>: the right legs are mirror assemblies of the left, so the femur/tibia servo rotation is opposite to the joint convention —
+the formula does not change, just <b>swap</b> the two ±45° pulse widths (in the table R legs are 1045/1955, L legs 1955/1045).</li>
+<li><b>The knee is not sent θ</b>: the calibration table uses the bend angle <b>k = 180° − θ</b> (straight = 0),
+so the code says <code>tibia.joint_deg_to_us(180 − θ)</code>.</li>
+</ul>
+
+<h3>Full worked example: leg L2 in stance (every number reproducible on the real machine)</h3>
+<table>
+<tr><th></th><th>Target / intermediate</th><th>Result</th></tr>
+<tr><td>Foot target (leg frame)</td><td>x=130, y=0, z=−90 (stand height 90, reach 130)</td><td></td></tr>
+<tr><td>IK</td><td>r=87, d=√(87²+90²)=125.2</td><td>γ=0°, α=24.05°, θ=72.0°(k=108.0°)</td></tr>
+<tr><td>coxa channel 9</td><td>(0 − 1.55°) × slope</td><td><b>1515.7 µs</b></td></tr>
+<tr><td>femur channel 10</td><td>(24.05 − 47.81°) × slope</td><td><b>1738.9 µs</b></td></tr>
+<tr><td>tibia channel 11</td><td>(108.0 − 94.04°) × slope</td><td><b>1360.5 µs</b></td></tr>
+</table>
+<p><small>The "walking working point α≈24° (≈1735 µs)" in the config.py comment is exactly this cell.
+The slider simulator in Section 1 uses this same algorithm and calibration, so you can cross-check.</small></p>
+
+<h2 id="s7">7. The last hop: serial packet and PWM</h2>
+
+<p>With the 18 pulse widths computed, the Raspberry Pi packs them into <b>one</b> serial packet for the Servo2040 driver board:</p>
+
+<div class="fig">
+<svg id="pktfig" width="920" height="150" viewBox="0 0 920 150"></svg>
+<figcaption>SET packet: command byte 0xD3 + start channel + count + each value split into two 7-bit bytes.
+39 bytes @115200 baud ≈ 3.4 ms; must be sent in a single write (the firmware's per-byte timeout is only 100 µs).</figcaption>
+</div>
+
+<p>On receipt the Servo2040 updates the pulse-width registers of its 18 PWM pins, and the hardware keeps outputting.
+Each servo gets its own pulse and its <b>internal</b> potentiometer + motor loop turns it to the target angle.
+The two 50 Hz values are a coincidence and independent: the 50 Hz control loop is the software tick, the 50 Hz PWM is the servo signal standard.</p>
+
+<div class="box"><b>The most important pitfall of the whole chain: open loop.</b>
+Servos have no position read-back — the Pi only knows "the pulse width was sent", <b>not whether the joint actually turned there</b>.
+Under load, backlash + structural compliance let the actual angle drift, and the foot ends up several millimeters off:
+that is the physical root of the 08-19 video, where the press reaction bent the stance leg chains 13–27 mm,
+and of the nominal 13 mm press_delta only pressing in a few millimeters and having to be deepened to 18.
+Every "measure and back-fill" and "criteria on pressure/current, not commanded position" practice in the code is a way around this blind spot.
+(The pneumatic side does have feedback: cup pressure sensor → −30 kPa attachment criterion → only then dare to lift the next leg.
+<b>Motion is open loop, adhesion is closed loop</b>, and the safety of climbing rests entirely on the latter.)</div>
+
+<h2 id="s8">8. Wrapping up: what actually happens in one frame (20 ms)</h2>
+
+<pre>1. Read the keyboard: velocity command (vx, vy, wz)
+2. eng.update(dt, vx, vy, wz)                        # climb.py
+   ├ advance the phase clock (or pause for interlock / threshold / not attached / leak)
+   ├ swing leg: compute this frame's position per the state machine (VENT→…→WAIT), drive the valves
+   └ stance legs: translate targets backward by v·dt (≈0.3 mm), including slip compensation
+   → return 6 foot targets (body frame)
+3. bot.move_feet(targets)                            # robot.py
+   ├ per leg: body frame → leg frame (subtract mount position, rotate by neutral angle)
+   ├ per leg: leg_ik → γ, α, θ                       # kinematics.py
+   ├ per joint: calibration table joint_deg_to_us → pulse width   # config.py
+   └ 18 pulse widths ordered by channel number
+4. driver.set_all_pulses_us(...)                     # driver.py
+   → 0xD3 serial packet → Servo2040 → 18-channel PWM → servos turn
+5. Another thread/tick: pneumatic state machine ctl.update(dt) runs valves and pump, reads cup pressures
+6. sleep until the next 20 ms</pre>
+
+<table>
+<tr><th>To see which link</th><th>Go to which file</th></tr>
+<tr><td>Who supports, who swings, phase offset tables</td><td><code>hexapod/gait.py</code> (the TRIPOD/WAVE/CLIMB tables)</td></tr>
+<tr><td>Climbing state machine, clock-pause rules, slip compensation</td><td><code>hexapod/climb.py</code> (the file-header comment is the design document)</td></tr>
+<tr><td>Coordinate transforms, IK calls, assembling 18 pulse widths</td><td><code>hexapod/robot.py</code></td></tr>
+<tr><td>The IK/FK formulas themselves (52 lines)</td><td><code>hexapod/kinematics.py</code></td></tr>
+<tr><td>Link lengths, 18 servo calibrations, all timing parameters</td><td><code>hexapod/config.py</code></td></tr>
+<tr><td>Serial protocol, relay emergency stop</td><td><code>hexapod/driver.py</code></td></tr>
+</table>
+
+<p><small>Page generated 2026-08-19. Parameter snapshot: stand height 90 / reach 130 (floor), climbing stance radius 176.6 (vertical solution at the press position),
+press_delta 18, period 3.6 s, stride cap 40, 50 Hz. If config changes, the code is authoritative.</small></p>
+
+<script>
+"use strict";
+/* ============ Shared: kinematics and calibration (formula-for-formula with the python) ============ */
+const LC=43, LF=81, LT=123.7, D2R=Math.PI/180;
+function fk(g,a,th){            // angles (deg) → leg-frame coordinates and joint points
+  const gr=g*D2R, ar=a*D2R, at=(a+th-180)*D2R;
+  const elbow={r:LC, z:0};
+  const knee={r:LC+LF*Math.cos(ar), z:LF*Math.sin(ar)};
+  const foot={r:knee.r+LT*Math.cos(at), z:knee.z+LT*Math.sin(at)};
+  return {elbow,knee,foot, x:foot.r*Math.cos(gr), y:foot.r*Math.sin(gr), z:foot.z};
+}
+const CAL_L2={ coxa:{ch:9, attach:1.55, m45:1955.8, p45:1044.2},
+               femur:{ch:10, attach:47.81, m45:1952.5, p45:1047.5},
+               tibia:{ch:11, attach:94.04, m45:1949.5, p45:1050.5} };
+function toUs(cal,deg){
+  const us=(cal.m45+cal.p45)/2 + (deg-cal.attach)*(cal.p45-cal.m45)/90;
+  return Math.min(2500,Math.max(500,us));
+}
+function S(el,attrs){ for(const k in attrs) el.setAttribute(k,attrs[k]); return el; }
+function mk(tag,attrs,parent){ const e=document.createElementNS("http://www.w3.org/2000/svg",tag);
+  if(attrs) S(e,attrs); if(parent) parent.appendChild(e); return e; }
+function txt(parent,x,y,s,attrs){ const e=mk("text",Object.assign({x,y,"font-size":12,fill:"#444"},attrs||{}),parent);
+  e.textContent=s; return e; }
+
+/* ============ 1. Joint simulator ============ */
+const sv=document.getElementById("sideview"), tv=document.getElementById("topview");
+// side-view mapping: r∈[-30,230] z∈[-135,110] → 430x330
+function sx(r){ return 30+(r+45)*1.45; }  function sz(z){ return 175-z*1.28; }
+function drawSide(g,a,th){
+  sv.innerHTML="";
+  // adhesion surface
+  mk("line",{x1:sx(-15),y1:sz(-90),x2:sx(225),y2:sz(-90),stroke:"#888","stroke-dasharray":"6 4"},sv);
+  txt(sv,sx(150),sz(-90)+16,"Adhesion surface z=−90 (stand height)",{fill:"#888"});
+  mk("line",{x1:sx(-15),y1:sz(0),x2:sx(225),y2:sz(0),stroke:"#ddd"},sv);
+  txt(sv,sx(196),sz(0)-6,"Hip-axis plane z=0",{fill:"#bbb","font-size":11});
+  const p=fk(g,a,th), E=p.elbow,K=p.knee,F=p.foot;
+  // body block
+  mk("rect",{x:sx(-18),y:sz(12),width:36,height:30,rx:5,fill:"#e8e8e8",stroke:"#999"},sv);
+  txt(sv,sx(-16),sz(20),"Body",{fill:"#777","font-size":11});
+  // links
+  const seg=(a1,b1,c,w)=>mk("line",{x1:sx(a1.r),y1:sz(a1.z),x2:sx(b1.r),y2:sz(b1.z),
+    stroke:c,"stroke-width":w,"stroke-linecap":"round"},sv);
+  seg({r:0,z:0},E,"#607d8b",9); seg(E,K,"#c62828",7); seg(K,F,"#1565c0",5.5);
+  // joint points
+  [[0,0,"#37474f"],[E.r,E.z,"#607d8b"],[K.r,K.z,"#c62828"]].forEach(([r,z,c])=>
+    mk("circle",{cx:sx(r),cy:sz(z),r:6,fill:"#fff",stroke:c,"stroke-width":3},sv));
+  // suction cup
+  mk("circle",{cx:sx(F.r),cy:sz(F.z),r:7,fill:"#1565c0"},sv);
+  txt(sv,sx(LC/2)-14,sz(0)-12,"coxa 43",{fill:"#607d8b","font-weight":"bold"});
+  txt(sv,sx((E.r+K.r)/2)+8,sz((E.z+K.z)/2),"femur 81",{fill:"#c62828","font-weight":"bold"});
+  txt(sv,sx((K.r+F.r)/2)+8,sz((K.z+F.z)/2),"tibia 123.7",{fill:"#1565c0","font-weight":"bold"});
+  txt(sv,sx(K.r)+10,sz(K.z)-10,"θ knee",{fill:"#333"});
+  txt(sv,sx(E.r)+2,sz(E.z)-12,"α",{fill:"#333"});
+}
+function drawTop(g,a,th){
+  tv.innerHTML="";
+  const cx=90, cy=165, sc=0.9, p=fk(g,a,th), R=p.foot.r*sc;
+  txt(tv,10,20,"Top view",{fill:"#888"});
+  // sweep range
+  const arc=(ang)=>[cx+200*sc*Math.cos(-ang*D2R), cy+200*sc*Math.sin(-ang*D2R)];
+  const [ax1,ay1]=arc(45),[ax2,ay2]=arc(-45);
+  mk("path",{d:`M${cx},${cy} L${ax1},${ay1} A${200*sc},${200*sc} 0 0 1 ${ax2},${ay2} Z`,
+    fill:"#f2f6fb",stroke:"none"},tv);
+  mk("line",{x1:cx,y1:cy,x2:cx+205*sc,y2:cy,stroke:"#bbb","stroke-dasharray":"5 4"},tv);
+  txt(tv,cx+95,cy+16,"γ=0 neutral direction",{fill:"#999","font-size":11});
+  mk("rect",{x:cx-42,y:cy-30,width:34,height:60,rx:6,fill:"#e8e8e8",stroke:"#999"},tv);
+  const fx=cx+R*Math.cos(-g*D2R), fy=cy+R*Math.sin(-g*D2R);
+  mk("line",{x1:cx,y1:cy,x2:fx,y2:fy,stroke:"#455a64","stroke-width":6,"stroke-linecap":"round"},tv);
+  mk("circle",{cx:cx,cy:cy,r:6,fill:"#fff",stroke:"#37474f","stroke-width":3},tv);
+  mk("circle",{cx:fx,cy:fy,r:7,fill:"#1565c0"},tv);
+  txt(tv,cx+30,cy-40,"γ="+g.toFixed(1)+"°",{fill:"#333","font-weight":"bold"});
+}
+function refreshFK(){
+  const g=+document.getElementById("sg").value,
+        a=+document.getElementById("sa").value,
+        t=+document.getElementById("st").value;
+  document.getElementById("vg").textContent=g+"°";
+  document.getElementById("va").textContent=a+"°";
+  document.getElementById("vt").textContent=t+"°";
+  drawSide(g,a,t); drawTop(g,a,t);
+  const p=fk(g,a,t), k=180-t;
+  document.getElementById("fkout").innerHTML=
+    `Foot (leg frame): x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}, z=${p.z.toFixed(1)} mm`+
+    ` &nbsp;|&nbsp; joint angles: γ=${g.toFixed(1)}° α=${a.toFixed(1)}° θ=${t.toFixed(1)}° (k=${k.toFixed(1)}°)<br>`+
+    `→ L2 real pulse widths: coxa(ch9)=<b>${toUs(CAL_L2.coxa,g).toFixed(1)}µs</b>`+
+    ` &nbsp;femur(ch10)=<b>${toUs(CAL_L2.femur,a).toFixed(1)}µs</b>`+
+    ` &nbsp;tibia(ch11)=<b>${toUs(CAL_L2.tibia,k).toFixed(1)}µs</b>`;
+}
+function preset(g,a,t){ document.getElementById("sg").value=g;
+  document.getElementById("sa").value=a; document.getElementById("st").value=t; refreshFK(); }
+["sg","sa","st"].forEach(id=>document.getElementById(id).addEventListener("input",refreshFK));
+refreshFK();
+
+/* ============ 2. Gait animation ============ */
+const LEGS=[{n:"L1",mx:83.5,my:63,ang:55},{n:"L2",mx:0,my:81.5,ang:90},
+            {n:"L3",mx:-83.5,my:63,ang:125},{n:"R1",mx:83.5,my:-63,ang:-55},
+            {n:"R2",mx:0,my:-81.5,ang:-90},{n:"R3",mx:-83.5,my:-63,ang:-125}];
+const ORDER=["R3","L1","R2","L3","R1","L2"];
+// wall-climb swing segments (real-robot defaults): duration s
+// LIFT pulls out from the pressed-in z=-18 to +15 above the surface: travel (press_delta+lift_clearance)=33mm @40mm/s
+const PH=[["VENT",0.3],["LIFT",0.825],["TRANSFER",0.6],["DESCEND",0.5],["PRESS",1.2],["WAIT",0.7]];
+const SLOT=PH.reduce((s,p)=>s+p[1],0);          // 3.675s per leg
+const CLOCK_WIN=0.6;                            // phase-clock duration of each leg window
+const U=40, V=U/3.0;                            // wall-climb stride 40mm, v=13.3mm/s
+const REACH_CLIMB=176.6, REACH_GND=130;
+let mode="climb", paused=false, tSim=0, lastRaf=null;
+const gv=document.getElementById("gaitview");
+const GCX=235, GCY=300, GS=0.82;                // world mm → screen
+function gpos(bx,by){ return [GCX-by*GS, GCY-bx*GS]; }  // body frame (x fwd, y left) → screen (up = forward)
+
+function defFoot(l,reach){ const a=l.ang*D2R;
+  return {x:l.mx+reach*Math.cos(a), y:l.my+reach*Math.sin(a)}; }
+
+function climbState(t){
+  const j=Math.floor(t/SLOT), tau=t-j*SLOT;
+  const clock=j*CLOCK_WIN+Math.min(tau,CLOCK_WIN);
+  const bodyX=V*clock, running=tau<CLOCK_WIN;
+  const feet={};
+  LEGS.forEach(l=>{
+    const s=ORDER.indexOf(l.n), d=defFoot(l,REACH_CLIMB);
+    // the slot this leg completed most recently
+    let jl=-1;
+    if(j>s) jl=s+6*Math.floor((j-1-s)/6);
+    const landW = jl<0 ? d.x : V*(jl+1)*CLOCK_WIN + d.x + U/2;   // world x
+    let st="STANCE", wx=landW, z=-18;    // stance holds at the pressed-in depth
+    if(j%6===s && j>=0 && ORDER[j%6]===l.n && true){
+      // this slot is exactly this leg: split by tau
+      let acc=0, seg="WAIT", f=0;
+      for(const [nm,dur] of PH){ if(tau<acc+dur){ seg=nm; f=(tau-acc)/dur; break;} acc+=dur; }
+      const targetW=V*(j+1)*CLOCK_WIN + d.x + U/2;
+      st=seg;
+      if(seg==="VENT"){ z=-18; wx=landW; }
+      else if(seg==="LIFT"){ z=-18+33*f; wx=landW; }
+      else if(seg==="TRANSFER"){ z=15; const ss=f*f*(3-2*f); wx=landW+(targetW-landW)*ss; }
+      else if(seg==="DESCEND"){ z=15*(1-f); wx=targetW; }
+      else if(seg==="PRESS"){ z=-18*f; wx=targetW; }
+      else { z=-18; wx=targetW; }
+    }
+    feet[l.n]={wx, wy:d.y, z, st};
+  });
+  return {bodyX, running, feet, active:ORDER[j%6],
+          phase: (()=>{ let acc=0; for(const [nm,dur] of PH){ if(tau<acc+dur) return [nm,(tau-acc)/dur]; acc+=dur;} return ["WAIT",1];})()};
+}
+function tripodState(t){
+  const CYC=1.5, DUTY=0.5, v=40, u=v*CYC*DUTY, bodyX=v*t;
+  const OFF={L1:0,R2:0,L3:0,R1:.5,L2:.5,R3:.5};
+  const feet={};
+  LEGS.forEach(l=>{
+    const d=defFoot(l,REACH_GND), p=(t/CYC+OFF[l.n])%1;
+    let bx,z,st;
+    if(p<DUTY){ const s=p/DUTY; bx=d.x+u*(0.5-s); z=0; st="STANCE"; }
+    else { const s=(p-DUTY)/(1-DUTY), ss=s*s*(3-2*s);
+      bx=d.x+u*(ss-0.5); z=40*Math.sin(Math.PI*s); st="SWING"; }
+    feet[l.n]={wx:bx+bodyX, wy:d.y, z, st};
+  });
+  return {bodyX, running:true, feet, active:"—", phase:["",0]};
+}
+const PHCOL={STANCE:"#1565c0",VENT:"#e65100",LIFT:"#fff",TRANSFER:"#fff",DESCEND:"#fff",
+             PRESS:"#c62828",WAIT:"#6a1b9a",SWING:"#fff"};
+const PHNAME={VENT:"VENT venting",LIFT:"LIFT pull-out/lift-off",TRANSFER:"TRANSFER translate",
+              DESCEND:"DESCEND probe down",PRESS:"PRESS press in",WAIT:"WAIT pump and attach"};
+function drawGait(stt){
+  gv.innerHTML="";
+  // wall grid (world frame, scrolls down as the body advances)
+  const sp=40*GS;
+  for(let k=-8;k<10;k++){
+    const wy=GCY-( (k*40 - (stt.bodyX%40)) )*GS;
+    if(wy>0&&wy<560) mk("line",{x1:10,y1:wy,x2:460,y2:wy,stroke:"#eee"},gv);
+  }
+  for(let x=35;x<470;x+=sp) mk("line",{x1:x,y1:0,x2:x,y2:560,stroke:"#f3f3f3"},gv);
+  // direction of travel
+  mk("path",{d:"M440,60 l0,-34 m-8,10 l8,-10 l8,10",stroke:"#c00","stroke-width":2.5,fill:"none"},gv);
+  txt(gv,414,78,"Forward (climbing)",{fill:"#c00","font-size":11});
+  // body (camera follows, fixed at screen center)
+  const bodyPts=[[100,45],[20,90],[-100,73],[-100,-73],[20,-90],[100,-45]]
+    .map(([x,y])=>gpos(x,y).join(",")).join(" ");
+  mk("polygon",{points:bodyPts,fill:"#e3e7ec",stroke:"#78909c","stroke-width":2},gv);
+  txt(gv,GCX-14,GCY+4,"Body",{fill:"#78909c"});
+  // legs and feet
+  LEGS.forEach(l=>{
+    const f=stt.feet[l.n];
+    const bx=f.wx-stt.bodyX, by=f.wy;             // body frame
+    const [hx,hy]=gpos(l.mx,l.my), [fx,fy2]=gpos(bx,by);
+    const air=f.z>0.5;
+    mk("line",{x1:hx,y1:hy,x2:fx,y2:fy2,stroke: air?"#bbb":"#78909c",
+      "stroke-width":3.5, "stroke-dasharray":air?"5 4":"none","stroke-linecap":"round"},gv);
+    mk("circle",{cx:hx,cy:hy,r:4,fill:"#78909c"},gv);
+    let col=PHCOL[f.st]||"#999";
+    // pulling out (LIFT, not yet clear of the surface) / instant of contact (end of DESCEND): touching but not attached, same color as VENT
+    if(!air && (f.st==="LIFT"||f.st==="TRANSFER"||f.st==="DESCEND")) col="#e65100";
+    if(air){ // airborne: hollow circle, radius follows height
+      mk("circle",{cx:fx,cy:fy2,r:7+f.z*0.22,fill:"#fff",stroke:"#888","stroke-width":2.5,
+        "stroke-dasharray":"4 3"},gv);
+    } else {
+      mk("circle",{cx:fx,cy:fy2,r: f.z<-1?10:9, fill:col},gv);
+      if(f.st==="STANCE") mk("circle",{cx:fx,cy:fy2,r:4.5,fill:"none",stroke:"#fff","stroke-width":1.8},gv);
+    }
+    txt(gv,fx+12,fy2+4,l.n,{fill:"#666","font-size":11,"font-weight":"bold"});
+  });
+}
+function drawPhasebar(stt){
+  const bar=document.getElementById("phasebar"); bar.innerHTML="";
+  if(mode!=="climb"){ bar.style.display="none"; return; }
+  bar.style.display="flex";
+  const colors={VENT:"#e65100",LIFT:"#90a4ae",TRANSFER:"#78909c",DESCEND:"#607d8b",
+                PRESS:"#c62828",WAIT:"#6a1b9a"};
+  PH.forEach(([nm,dur])=>{
+    const d=document.createElement("div");
+    d.style.flex=dur; d.style.background=colors[nm];
+    d.style.opacity=(stt.phase[0]===nm)?1:0.32;
+    d.textContent=nm+" "+dur+"s";
+    bar.appendChild(d);
+  });
+}
+function stepAnim(ts){
+  if(lastRaf===null) lastRaf=ts;
+  const dt=Math.min(0.05,(ts-lastRaf)/1000); lastRaf=ts;
+  if(!paused) tSim+=dt*(+document.getElementById("simSpeed").value);
+  const stt=(mode==="climb")?climbState(tSim):tripodState(tSim);
+  drawGait(stt); drawPhasebar(stt);
+  const out=document.getElementById("gaitout");
+  if(mode==="climb"){
+    const az=stt.feet[stt.active].z;
+    const sub=(stt.phase[0]==="LIFT"&&az<0)?`(foot still ${az.toFixed(0)} mm below the surface)`:"";
+    out.innerHTML=`Leg order R3→L1→R2→L3→R1→L2 | swinging now: <b>${stt.active}</b> —`+
+      `<b>${PHNAME[stt.phase[0]]||stt.phase[0]}${sub}</b> | phase clock:`+
+      (stt.running?`<b style="color:#2e7d32">▶ running (body advancing)</b>`
+                  :`<b style="color:#c62828">⏸ stopped (waiting for ${stt.active} to attach, stance legs frozen)</b>`)+
+      ` | climbed ${(stt.bodyX).toFixed(0)} mm`;
+  } else {
+    out.innerHTML=`Tripod gait: L1+R2+L3 and R1+L2+R3 alternate, duty=1/2, the body advances continuously at constant speed`+
+      `| walked ${(stt.bodyX).toFixed(0)} mm <small>(demo speed 40 mm/s for visibility)</small>`;
+  }
+  requestAnimationFrame(stepAnim);
+}
+function setMode(m){ mode=m; tSim=0;
+  document.getElementById("btnClimb").classList.toggle("on",m==="climb");
+  document.getElementById("btnTripod").classList.toggle("on",m==="tripod"); }
+function togglePause(){ paused=!paused;
+  document.getElementById("btnPause").textContent=paused?"▶ Play":"⏸ Pause"; }
+document.getElementById("simSpeed").addEventListener("input",e=>{
+  document.getElementById("simSpeedV").textContent=e.target.value+"×"; });
+requestAnimationFrame(stepAnim);
+
+/* ============ 3. Static swing-phase timeline ============ */
+(function(){
+  const svg=document.getElementById("swingtl");
+  const X0=70, W=830, H_BAR=44, Y_BAR=30;
+  const colors={VENT:"#e65100",LIFT:"#90a4ae",TRANSFER:"#78909c",DESCEND:"#607d8b",
+                PRESS:"#c62828",WAIT:"#6a1b9a"};
+  let acc=0;
+  PH.forEach(([nm,dur])=>{
+    const x=X0+acc/SLOT*W, w=dur/SLOT*W;
+    mk("rect",{x,y:Y_BAR,width:w-2,height:H_BAR,rx:5,fill:colors[nm]},svg);
+    txt(svg,x+w/2,Y_BAR+19,nm,{fill:"#fff","text-anchor":"middle","font-weight":"bold","font-size":12});
+    txt(svg,x+w/2,Y_BAR+35,dur+"s",{fill:"#fff","text-anchor":"middle","font-size":11});
+    acc+=dur;
+  });
+  txt(svg,X0,20,"One full foot change ≈"+SLOT.toFixed(2)+"s; the schedule window is only 0.6 s → the phase clock stops early in LIFT, everything else happens while the clock is stopped",{fill:"#333","font-weight":"bold"});
+  // z trajectory (foot height off the wall; stance/VENT hold at the pressed-in −18, not 0)
+  const Y0=192, ZS=2.9;
+  const zy=z=>Y0-z*ZS;
+  const t2x=t=>X0+t/SLOT*W;
+  mk("line",{x1:X0-10,y1:zy(0),x2:X0+W,y2:zy(0),stroke:"#888","stroke-dasharray":"6 4"},svg);
+  txt(svg,X0+W-118,zy(0)-6,"Adhesion surface z=0",{fill:"#888"});
+  mk("line",{x1:X0-10,y1:zy(-18),x2:X0+W,y2:zy(-18),stroke:"#cc99aa","stroke-dasharray":"2 4"},svg);
+  txt(svg,X0+W-230,zy(-18)+14,"Press position −18 (stance stays at this depth)",{fill:"#a66","font-size":11});
+  txt(svg,8,zy(15)+4,"z lift-off",{fill:"#666"});
+  // segmented polyline: VENT −18 | LIFT −18→15 | TRANSFER 15 | DESCEND 15→0 | PRESS 0→−18 | WAIT −18
+  let d=`M${t2x(0)},${zy(-18)} L${t2x(0.3)},${zy(-18)} L${t2x(1.125)},${zy(15)} `+
+        `L${t2x(1.725)},${zy(15)} L${t2x(2.225)},${zy(0)} L${t2x(3.425)},${zy(-18)} L${t2x(SLOT)},${zy(-18)}`;
+  mk("path",{d,stroke:"#1565c0","stroke-width":3,fill:"none","stroke-linejoin":"round"},svg);
+  // phase-clock stop point: 0.6s (VENT 0.3 + first 0.3 of LIFT, foot at −6, not yet clear of the surface)
+  mk("line",{x1:t2x(0.6),y1:zy(22),x2:t2x(0.6),y2:zy(-23),stroke:"#c00","stroke-width":2,
+     "stroke-dasharray":"5 3"},svg);
+  mk("circle",{cx:t2x(0.6),cy:zy(-6),r:5,fill:"#c00"},svg);
+  txt(svg,t2x(0.6)+8,zy(20),"0.6 s: clock reaches the window end and stops — foot still 6 below the surface, stance legs already frozen",
+     {fill:"#c00","font-size":11,"font-weight":"bold"});
+  // labels
+  txt(svg,t2x(0.72),zy(-13),"LIFT: pull out from the press position + lift off, 33 mm total (cup rebound 11–13)",{fill:"#555","font-size":11});
+  txt(svg,t2x(1.15),zy(15)-8,"Translate to directly above the landing point",{fill:"#555","font-size":11});
+  txt(svg,t2x(2.38),zy(-7),"Press in 18 mm = press_delta",{fill:"#c62828","font-size":11});
+  txt(svg,t2x(3.45),zy(-18)-8,"Pump to −30 kPa to count as attached",{fill:"#6a1b9a","font-size":11});
+  mk("rect",{x:t2x(0),y:zy(-18)+6,width:t2x(0.3)-t2x(0),height:5,fill:"#e65100",opacity:.6},svg);
+  txt(svg,t2x(0)-2,zy(-18)+30,"VENT: at the press position, translating with the support field (no scraping)",{fill:"#e65100","font-size":11});
+})();
+
+/* ============ 2.1 Two-viewpoint comparison ============ */
+(function(){
+  const svg=document.getElementById("framefig");
+  txt(svg,30,26,"Wall frame (reality): feet nailed down, the body is carried across",{"font-weight":"bold","font-size":14});
+  txt(svg,30,44,"What you see from outside the wall",{fill:"#666","font-size":11});
+  txt(svg,490,26,"Body frame (code): body fixed, foot targets move backward",{"font-weight":"bold","font-size":14});
+  txt(svg,490,44,"The frame the engine keeps its books in; results go straight into IK",{fill:"#666","font-size":11});
+  mk("line",{x1:460,y1:15,x2:460,y2:290,stroke:"#ddd"},svg);
+  const gy=240;
+  // ---- left: wall frame ----
+  mk("line",{x1:40,y1:gy,x2:440,y2:gy,stroke:"#666","stroke-width":2},svg);
+  txt(svg,398,gy+18,"Adhesion surface",{fill:"#888","font-size":11});
+  const fx=300;   // foot: fixed in the world frame
+  function bodyLeg(cx,dash,op){
+    const hy=126, hx=cx+40;
+    mk("rect",{x:cx-60,y:82,width:120,height:44,rx:8,fill:dash?"none":"#e3e7ec",
+      stroke:"#78909c","stroke-width":2,"stroke-dasharray":dash?"6 4":"none",opacity:op},svg);
+    const kx=(hx+fx)/2+12, ky=(hy+gy)/2+6;
+    mk("path",{d:`M${hx},${hy} L${kx},${ky} L${fx},${gy}`,fill:"none",stroke:"#78909c",
+      "stroke-width":4,"stroke-dasharray":dash?"6 4":"none","stroke-linecap":"round",opacity:op},svg);
+    mk("circle",{cx:hx,cy:hy,r:5,fill:"#78909c",opacity:op},svg);
+  }
+  bodyLeg(140,true,0.5);   // previous instant (dashed)
+  bodyLeg(215,false,1);    // current (solid)
+  mk("circle",{cx:fx,cy:gy,r:9,fill:"#1565c0"},svg);
+  txt(svg,fx-30,gy+22,"Feet: nailed down, not moving",{fill:"#1565c0","font-size":11,"font-weight":"bold"});
+  mk("path",{d:"M140,64 L205,64 m-10,-6 l10,6 l-10,6",stroke:"#c00","stroke-width":2.5,fill:"none"},svg);
+  txt(svg,120,54,"Body moves forward (stance joints turn slowly)",{fill:"#c00","font-size":12,"font-weight":"bold"});
+  // ---- right: body frame ----
+  mk("line",{x1:500,y1:gy,x2:900,y2:gy,stroke:"#666","stroke-width":2},svg);
+  const bcx=640, hx2=bcx+40, hy2=126;
+  mk("rect",{x:bcx-60,y:82,width:120,height:44,rx:8,fill:"#e3e7ec",stroke:"#78909c","stroke-width":2},svg);
+  txt(svg,bcx-26,108,"Body fixed",{fill:"#78909c","font-size":11});
+  mk("circle",{cx:hx2,cy:hy2,r:5,fill:"#78909c"},svg);
+  function leg2(footx,dash,op,col){
+    const kx=(hx2+footx)/2+12, ky=(hy2+gy)/2+6;
+    mk("path",{d:`M${hx2},${hy2} L${kx},${ky} L${footx},${gy}`,fill:"none",stroke:"#78909c",
+      "stroke-width":4,"stroke-dasharray":dash?"6 4":"none","stroke-linecap":"round",opacity:op},svg);
+    mk("circle",{cx:footx,cy:gy,r:9,fill:col,opacity:op},svg);
+  }
+  leg2(810,true,0.5,"#90caf9");   // target at the previous instant (dashed)
+  leg2(745,false,1,"#1565c0");    // current target (solid)
+  mk("path",{d:"M810,266 L750,266 m10,-6 l-10,6 l10,6",stroke:"#c00","stroke-width":2.5,fill:"none"},svg);
+  txt(svg,590,286,"Foot targets move backward at −v (what moves is the books, not the feet on the wall)",{fill:"#c00","font-size":12,"font-weight":"bold"});
+})();
+
+/* ============ 2.3 Scheduling Gantt chart ============ */
+(function(){
+  const svg=document.getElementById("ganttfig");
+  const X0=110, W=620, RH=24, GAP=9, Y0=58;
+  txt(svg,30,24,"Climbing CLIMB: duty=5/6, 0.6 s window per leg, back to back, only one open at a time",{"font-weight":"bold","font-size":13});
+  const T=3.6, rows=[["R3",0],["L1",0.6],["R2",1.2],["L3",1.8],["R1",2.4],["L2",3.0]];
+  rows.forEach(([n,st],i)=>{
+    const y=Y0+i*(RH+GAP);
+    mk("rect",{x:X0,y,width:W,height:RH,rx:4,fill:"#dbe7f5"},svg);
+    mk("rect",{x:X0+st/T*W,y,width:0.6/T*W,height:RH,rx:4,fill:"#e65100"},svg);
+    txt(svg,X0-64,y+16,n,{"font-weight":"bold"});
+    if(i===0) txt(svg,X0+st/T*W+6,y+16,"Foot-change window",{fill:"#fff","font-size":10});
+  });
+  const yax=Y0+6*(RH+GAP)+2;
+  for(let k=0;k<=6;k++){ const x=X0+k*0.6/T*W;
+    mk("line",{x1:x,y1:Y0-4,x2:x,y2:yax-6,stroke:"#00000014"},svg);
+    txt(svg,x-11,yax+10,(k*0.6).toFixed(1)+"s",{fill:"#888","font-size":10});
+  }
+  txt(svg,X0+W+14,Y0+34,"Blue = stance (attached, target moves backward with the field)",{fill:"#4a6fa5","font-size":11});
+  txt(svg,X0+W+14,Y0+54,"Orange = foot-change window (the Chapter 3 state machine)",{fill:"#e65100","font-size":11});
+  txt(svg,X0+W+14,Y0+80,"The horizontal axis is phase-clock time:",{fill:"#888","font-size":11});
+  txt(svg,X0+W+14,Y0+96,"in real time every orange window",{fill:"#888","font-size":11});
+  txt(svg,X0+W+14,Y0+112,"is stretched by clock stops to ≈4.1 s",{fill:"#888","font-size":11});
+  // floor tripod gait
+  const Y2=yax+52;
+  txt(svg,30,Y2-12,"Floor TRIPOD: duty=1/2, three legs per group, two groups alternating, period 1.5 s",{"font-weight":"bold","font-size":13});
+  const T2=1.5, rows2=[["L1+R2+L3",0.75],["R1+L2+R3",0]];
+  rows2.forEach(([n,st],i)=>{
+    const y=Y2+i*(RH+GAP);
+    mk("rect",{x:X0,y,width:W,height:RH,rx:4,fill:"#dbe7f5"},svg);
+    mk("rect",{x:X0+st/T2*W,y,width:0.75/T2*W,height:RH,rx:4,fill:"#e65100"},svg);
+    txt(svg,X0-92,y+16,n,{"font-size":11,"font-weight":"bold"});
+  });
+  txt(svg,X0+W+14,Y2+16,"3 legs in the air at any time",{fill:"#888","font-size":11});
+  txt(svg,X0+W+14,Y2+32,"— not for the wall",{fill:"#888","font-size":11});
+})();
+
+/* ============ 5. IK figure ============ */
+(function(){
+  const svg=document.getElementById("ikfig");
+  // left: top view, γ
+  txt(svg,30,24,"① Top view: γ = atan2(y, x)",{"font-weight":"bold","font-size":14});
+  const cx=150,cy=210;
+  mk("line",{x1:cx,y1:cy,x2:cx+180,y2:cy,stroke:"#bbb"},svg);
+  txt(svg,cx+150,cy+18,"x (neutral direction)",{fill:"#999","font-size":11});
+  mk("line",{x1:cx,y1:cy,x2:cx,y2:cy-150,stroke:"#bbb"},svg);
+  txt(svg,cx-24,cy-135,"y",{fill:"#999","font-size":11});
+  const gx=cx+150*Math.cos(-35*D2R), gy=cy+150*Math.sin(-35*D2R);
+  mk("line",{x1:cx,y1:cy,x2:gx,y2:gy,stroke:"#455a64","stroke-width":5,"stroke-linecap":"round"},svg);
+  mk("circle",{cx:gx,cy:gy,r:7,fill:"#1565c0"},svg);
+  txt(svg,gx+10,gy,"Target (x,y)",{fill:"#1565c0"});
+  mk("path",{d:`M${cx+55},${cy} A55,55 0 0 0 ${cx+55*Math.cos(-35*D2R)},${cy+55*Math.sin(-35*D2R)}`,
+    stroke:"#c00",fill:"none","stroke-width":2},svg);
+  txt(svg,cx+62,cy-16,"γ",{fill:"#c00","font-weight":"bold","font-size":15});
+  mk("circle",{cx,cy,r:5,fill:"#37474f"},svg);
+  txt(svg,cx-40,cy+20,"Hip axis",{fill:"#37474f"});
+  txt(svg,40,300,"Once the coxa points at the target, only",{fill:"#555","font-size":12});
+  txt(svg,40,318,"the 2-D (r, z) in the vertical plane remains",{fill:"#555","font-size":12});
+  // right: side-view triangle
+  txt(svg,480,24,"② Side view: femur+tibia solve the triangle (law of cosines)",{"font-weight":"bold","font-size":14});
+  const hx=560,hy=120;                      // femur axis
+  // actual shape: r=87, z=-90 stance → α24°, θ72°
+  const p=fk(0,24.05,72.0);
+  const kx=hx+(p.knee.r-LC)*1.35, ky=hy-(p.knee.z)*1.35;
+  const fx2=hx+(p.foot.r-LC)*1.35, fy2=hy-(p.foot.z)*1.35;
+  mk("line",{x1:hx-70,y1:hy,x2:hx+330,y2:hy,stroke:"#ddd"},svg);
+  txt(svg,hx+270,hy-6,"Horizontal",{fill:"#bbb","font-size":11});
+  mk("line",{x1:hx,y1:hy,x2:kx,y2:ky,stroke:"#c62828","stroke-width":6,"stroke-linecap":"round"},svg);
+  mk("line",{x1:kx,y1:ky,x2:fx2,y2:fy2,stroke:"#1565c0","stroke-width":5,"stroke-linecap":"round"},svg);
+  mk("line",{x1:hx,y1:hy,x2:fx2,y2:fy2,stroke:"#888","stroke-width":2,"stroke-dasharray":"6 4"},svg);
+  mk("circle",{cx:hx,cy:hy,r:6,fill:"#fff",stroke:"#c62828","stroke-width":3},svg);
+  mk("circle",{cx:kx,cy:ky,r:6,fill:"#fff",stroke:"#c62828","stroke-width":3},svg);
+  mk("circle",{cx:fx2,cy:fy2,r:7,fill:"#1565c0"},svg);
+  txt(svg,(hx+kx)/2-10,(hy+ky)/2-12,"femur 81",{fill:"#c62828","font-weight":"bold"});
+  txt(svg,(kx+fx2)/2+12,(ky+fy2)/2,"tibia 123.7",{fill:"#1565c0","font-weight":"bold"});
+  txt(svg,(hx+fx2)/2-70,(hy+fy2)/2+30,"d=√(r²+z²)",{fill:"#666"});
+  txt(svg,kx+4,ky-14,"θ",{fill:"#333","font-weight":"bold","font-size":15});
+  txt(svg,hx-20,hy+22,"α measured from here",{fill:"#333","font-size":11});
+  txt(svg,fx2-56,fy2+24,"Target (r,z)",{fill:"#1565c0"});
+  txt(svg,480,320,"All three sides known (81, 123.7, d) → all three angles solvable; θ is the knee angle, α = line-of-sight angle + upper interior angle",
+     {fill:"#555","font-size":12});
+})();
+
+/* ============ 6. Calibration mapping figure ============ */
+(function(){
+  const svg=document.getElementById("calfig");
+  const X0=90, W=740, Y=95;
+  // µs axis (L2 femur: -45°→1952.5, +45°→1047.5, attach 47.81)
+  const us2x=us=>X0+ (2100-us)/1200*W;    // 2100µs on the left → 900µs on the right, so that "+angle to the right" holds
+  mk("line",{x1:us2x(2050),y1:Y,x2:us2x(980),y2:Y,stroke:"#666","stroke-width":2},svg);
+  [[1952.5,"−45°"],[1500,"Center"],[1047.5,"+45°"]].forEach(([us,lab])=>{
+    const x=us2x(us);
+    mk("line",{x1:x,y1:Y-8,x2:x,y2:Y+8,stroke:"#666","stroke-width":2},svg);
+    txt(svg,x-18,Y+26,us.toFixed(1)+"µs",{fill:"#333","font-size":12});
+    txt(svg,x-14,Y-14,lab,{fill:"#c00","font-weight":"bold"});
+  });
+  txt(svg,X0-60,Y+4,"Pulse width",{fill:"#666"});
+  txt(svg,X0,30,"L2 femur (channel 10) measured calibration: joint angle → pulse width, linear map",{"font-weight":"bold","font-size":14});
+  // stance operating point
+  const usw=1738.9, xw=us2x(usw);
+  mk("line",{x1:xw,y1:Y-30,x2:xw,y2:Y+8,stroke:"#1565c0","stroke-width":2.5},svg);
+  mk("circle",{cx:xw,cy:Y,r:6,fill:"#1565c0"},svg);
+  txt(svg,xw-88,Y-38,"Stance α=24.05° → 1738.9 µs",{fill:"#1565c0","font-weight":"bold","font-size":12});
+  // attach label
+  const x15=us2x(1500);
+  txt(svg,x15-140,Y+50,"⚠ Center 1500 µs ≠ joint 0°: at center this servo's joint is actually 47.81° (attach_deg, assembly offset, measured individually)",
+     {fill:"#a33","font-size":12});
+  txt(svg,X0,Y+80,"Slope ≈ −10.06 µs/° (negative: this servo is mounted reversed, larger angle = smaller pulse width; right legs are mirrored as a whole, the two ±45 ends swapped)",
+     {fill:"#555","font-size":12});
+})();
+
+/* ============ 7. Serial packet figure ============ */
+(function(){
+  const svg=document.getElementById("pktfig");
+  const cells=[["0xD3","Command: SET",70,"#c62828"],["0","Start channel",60,"#607d8b"],
+    ["18","Count",55,"#607d8b"],
+    ["low 7 bits","value 1",60,"#1565c0"],["high 7 bits","value 1",60,"#1565c0"],
+    ["low 7 bits","value 2",60,"#5e92f3"],["high 7 bits","value 2",60,"#5e92f3"],
+    ["…","",50,"#9e9e9e"],
+    ["low 7 bits","value 18",62,"#1565c0"],["high 7 bits","value 18",62,"#1565c0"]];
+  let x=30;
+  cells.forEach(([t,sub,w,c])=>{
+    mk("rect",{x,y:40,width:w-4,height:46,rx:5,fill:c},svg);
+    txt(svg,x+(w-4)/2,60,t,{fill:"#fff","text-anchor":"middle","font-weight":"bold","font-size":12});
+    if(sub) txt(svg,x+(w-4)/2,77,sub,{fill:"#fff","text-anchor":"middle","font-size":10});
+    x+=w;
+  });
+  txt(svg,30,26,"One frame's SET packet = 3+18×2 = 39 bytes, value = pulse width µs (14 bits split into two 7-bit bytes)",{"font-weight":"bold","font-size":13});
+  txt(svg,30,115,"115200 baud ≈ 3.4 ms to send → Servo2040 updates 18 PWM registers → each channel outputs 50 Hz pulses continuously, servos turn into place",
+     {fill:"#555","font-size":12});
+  txt(svg,640,26,"(driver.py encode_set, must be a single write)",{fill:"#888","font-size":11});
+})();
+</script>
+</body></html>

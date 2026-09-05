@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<!-- English translation of html/handover-ab-n3-20260826.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zero-force handover + weights, n=3 Latin-square main results (2026-08-26)</title>
+<style>
+  body { font-family: "Noto Sans CJK SC", "PingFang SC", sans-serif; margin: 2em auto;
+         max-width: 64em; line-height: 1.55; color: #222; background: #fff; padding: 0 1em; }
+  h1 { font-size: 1.5em; border-bottom: 3px solid #2a6; padding-bottom: .3em; }
+  h2 { font-size: 1.2em; margin-top: 1.6em; border-left: 5px solid #2a6; padding-left: .5em; }
+  table { border-collapse: collapse; margin: .8em 0; font-size: .92em; }
+  th, td { border: 1px solid #bbb; padding: .26em .55em; text-align: right; }
+  th { background: #eef5f0; }
+  td:first-child, th:first-child { text-align: left; }
+  .good { color: #1a7a3a; font-weight: 600; }
+  .warn { color: #a70; font-weight: 600; }
+  .big { font-size: 1.05em; font-weight: 700; }
+  .finding { background: #fff8ec; border: 1px solid #e0c080; padding: .7em 1em;
+             margin: .8em 0; border-radius: 6px; }
+  code { background: #f0f0f0; padding: 0 .3em; border-radius: 3px; font-size: .92em; }
+  .small { font-size: .85em; color: #555; }
+</style>
+</head>
+<body>
+<h1>Zero-force handover + rotation weights: n=3 Latin-square wall experiment, main results (2026-08-25/26)</h1>
+<p class="small">Three replicates × three conditions (A baseline / B δ calibration table / C = B + weights), run order rotated as a Latin square
+(#1 A→B→C, #2 B→C→A, #3 C→A→B — each condition appears exactly once in each slot, so order/voltage effects are decoupled).
+Single-replicate details: html/en/handover-ab-20260825.html. Protocol: docs/en/HANDOVER-AB-PROTOCOL.md.
+Each run = one body_lean key press t (marker + automatic 3 rounds × 6 legs + tail rest); the automation keeps the timing identical from run to run;
+all nine logs show zero freezes / zero truncations / zero threshold waits.</p>
+
+<h2>1. Main results (mm, mean ± sample SD, n=3)</h2>
+<table>
+<tr><th></th><th>A baseline</th><th>B zero-force handover</th><th>C = B + weights</th></tr>
+<tr><td>Round-2 slip (decision round)</td><td>63.9 ± 0.9</td><td>38.1 ± 1.0(−40%)</td>
+    <td class="big">26.5 ± 1.7(−59%)</td></tr>
+<tr><td>Three-round total slip</td><td>185.5 ± 3.0</td><td>105.6 ± 2.2(−43%)</td>
+    <td class="big">72.9 ± 3.0(−61%)</td></tr>
+<tr><td>Vent rupture-instant segment (ratchet)</td><td>172.9 ± 3.4</td><td>31.6 ± 1.0(−82%)</td>
+    <td class="big">20.1 ± 3.3(−88%)</td></tr>
+<tr><td>Handover apportioning segment</td><td>—</td><td>60.2 ± 2.2</td><td>39.7 ± 4.3(−34%)</td></tr>
+<tr><td>Current increase (after last round − before first lift)</td><td>+0.97 ± 0.02A</td><td>+2.40 ± 0.08A</td><td>+1.85 ± 0.08A</td></tr>
+</table>
+<p><b>Paired tests (paired per replicate, same day, df=2)</b>: B−A = −79.9 ± 5.0 mm, t=27.9, <b>p=0.0013</b>;
+C−A = −112.6 ± 5.9 mm, t=32.9, <b>p=0.00092</b>; C−B = −32.7 ± 2.7 mm, t=21.4, <b>p=0.0022</b>.
+All three comparisons are significant; the relative effect per replicate is almost constant (B/A: −42/−45/−42%; C/A: −61/−63/−58%;
+C/B: −33/−32/−28%). With slot and condition decoupled, no order effect is visible (within each condition the spread across the three slots is of the same order as the overall spread).</p>
+
+<h2>2. The nine runs line by line (total slip in mm; scale per run from the measured 93.0 mm long edge of the YYNMOS-8 board)</h2>
+<table>
+<tr><th>Replicate</th><th>Slot 1</th><th>Slot 2</th><th>Slot 3</th><th>mm/px range</th><th>Time sync</th></tr>
+<tr><td>#1 (08-25 morning)</td><td>A 185.2</td><td>B 107.3</td><td>C 71.9</td>
+    <td>0.2951~0.2957</td><td>Marker R² 0.98–0.99</td></tr>
+<tr><td>#2 (08-25 afternoon)</td><td>B 103.1</td><td>C 70.5</td><td>A 188.7</td>
+    <td>0.2917~0.2949</td><td>Marker R² 0.97–0.99; C2 clipped-window marker R² 0.99 (deviation ①)</td></tr>
+<tr><td>#3 (08-26 morning)</td><td>C 76.3</td><td>A 182.7</td><td>B 106.4</td>
+    <td>0.2883~0.2912</td><td>Marker R² 0.95–0.98</td></tr>
+</table>
+
+<h2>3. Round-2 per-leg vent bounce (mm, n=3)</h2>
+<table>
+<tr><th>Condition</th><th>L1</th><th>R1</th><th>L3</th><th>R3</th><th>R2</th><th>L2</th></tr>
+<tr><td>A</td><td>20.1±1.3</td><td>16.2±1.2</td><td>7.5±0.5</td><td>6.3±0.3</td><td>6.7±2.0</td><td>3.5±0.9</td></tr>
+<tr><td>B</td><td>2.4±0.8</td><td>1.2±1.4</td><td>2.6±0.5</td><td>2.9±0.5</td><td>2.4±0.5</td><td>1.3±0.4</td></tr>
+<tr><td>C</td><td class="good">0.9±0.5</td><td class="good">0.9±0.3</td><td class="good">1.8±0.2</td>
+    <td class="good">1.9±0.2</td><td>2.4±0.7</td><td class="good">0.7±0.1</td></tr>
+</table>
+<p>Group A L1 20.1±1.3 is on the same scale as the single 08-20 baseline of 21 (20.9 that day) — the phenomenon reproduces stably across 5 days, a moved camera and a different scale convention.
+Group C all legs ≤2.4 mm, close to the protocol's "per-leg ≤2 mm" line; at the same δ, C roughly halves B's residual on the middle and rear legs = the weight-dilution mechanism, confirmed at n=3.
+The δ table (δ*×0.8 for the weighted condition) needed no correction in any of the three replicates; R1 repeatedly showed a slight upward bounce (−0.9 to −3.0 px), so do not add δ there.</p>
+
+<h2>4. Two new findings (confirmed by n=3 reproduction)</h2>
+<div class="finding"><b>Finding 1: the main battlefield of the residual slip is the handover apportioning segment, concentrated in the stiffest legs L1/R1 and growing round by round — reproduced in all three replicates.</b><br>
+Group B L1 handover segment per round: #1 6.8→10.3→12.6, #2 6.9→8.6→10.6, #3 6.7→8.8→11.9 mm (R1 similar, 6.6–11.4);
+the other four legs ≈0–1.5 mm. Mechanism: "six-leg command mean unchanged ⇒ body does not move" only holds for equal stiffness; the elastic equilibrium is a stiffness-weighted average,
+so unloading from the stiffest legs (slopes 0.57/0.39) necessarily lets the body sink. About 50–60% of the B/C residual is in this segment (B 56–58%, C 47–62%) —
+<b>a next-generation "stiffness-aware share" (solving Σk·d=0) has ~60% headroom, and the three replicates give it an n=3 experimental basis.</b></div>
+<div class="finding"><b>Finding 2: command→actual compliance transfer ratio 42.2 ± 3.0% (9 independent markers, 3 days, 3 camera positions).</b><br>
+The ±10 mm sync markers measured a body displacement of 3.78–4.73 mm (A 4.15±0.36 / B 4.28±0.39 / C 4.22±0.27;
+the C2 marker was included after the deviation-① sync correction, and its fitted amplitude of 4.23 mm independently confirmed the new sync).
+Along the shear direction on the wall, about 60% of the commanded displacement is absorbed by leg-chain compliance; no systematic difference across conditions (handover/weights do not change the transfer ratio, which is reasonable —
+the marker is applied in the all-supported rest state).</div>
+
+<h2>5. Current accounting (cost of the method, n=3)</h2>
+<p>The handover trades impact slip for sustained servo load: current increase A +0.97 → B +2.40 (×2.5) → C +1.85 A (−23% vs. B).
+Spread across the three replicates ±0.08 A, extremely stable. Weights lowering the sustained load agrees in direction with the model (Appendix A steady-state internal stress −32%), at about 2/3 of the magnitude.
+Note: the nine runs started at 7.51–8.07 V; the Latin square decouples voltage from condition, so within-run trends are trustworthy.</p>
+
+<h2>6. Deviation log (to be reported honestly in the paper)</h2>
+<ul>
+<li><b>① C2 (08-25 afternoon) sync correction (08-26): the original step-rescue locked onto the wrong comb tooth by one slot; re-anchored by the marker method</b>.
+Recording started late, so the head of the marker window fell 2.3 s before the start of the video; the marker method's search bound "whole window inside the frame" (off≤57.7) excluded the true value
+and found a false peak (R²=0.60); the subsequent step-basis regression looked reliable (R²=0.9992), but in this run the intra-round spacing of the vent comb was highly
+periodic (17.5–18.5 s), teeth offset by one slot differ in R² by &lt;0.001, and the B2 sub-second calibration could not tell the teeth apart — off=77.25 landed on the
++1 tooth and the per-leg attribution shifted by one slot as a whole (a spurious "big R2/L2 drop"). Noticed on 08-26 because the per-leg handover pattern disagreed with C1/C3/B entirely;
+two independent anchors fix the true tooth: ① the marker was in fact captured in the head of the video (the y swing of ~14 px at the mapped 0.7/3.7 s matches); ② under the +1 tooth the
+closing 6 vents of the shutdown map onto a completely flat segment (physically impossible). A marker-shape fit allowing window clipping gives <b>off=59.34 s
+(R²=0.99)</b>, fitted amplitude 4.23 mm = transfer ratio 42.3%, independently cross-checked by the other 8 markers at 42.2±3.3%; C2 is thereby upgraded to
+a marker sync on the same footing as the other eight runs, and the report was regenerated with the new off (old table kept as report_off77.25_mistooth.txt). Total is conserved
+(70.2→70.5 mm) and per-round values unchanged; the correction only affects the handover/vent split and the per-leg attribution (C handover segment 38.7±5.0→39.7±4.3,
+vent 21.3±5.2→20.1±3.3, SD tightened). Lesson: check comb periodicity before a step rescue; "marker not captured" must distinguish
+a fully missing segment from edge clipping — the latter can be fitted with a clipped window (tool marker_off_clip.py).</li>
+<li>The camera moved between #1 A→B and #2 C→A (tens of px); #3 was stable within ≤0.4 px in-session: scale per run from the measured board long edge
+(0.2883–0.2957, ±0.2–0.5%), in-run drift corrected by the static ref object — resolved, does not affect the conclusions.</li>
+<li>Battery: first run of each session ≥7.88 V (#2/#3 first runs ≥8.06 V), declining within a session to ~7.5–7.7 V, not recharged between runs;
+after Latin-square decoupling no visible voltage confounding.</li>
+<li>Median body_score 0.39–0.76, below the internal 0.8 convention (board tilted 4–31° + fine 4K texture pulls the axis-aligned NCC score down);
+ref 0.988–0.999, cross-validation of the nine runs CV 1.6–4%, so the structure of the results is trustworthy. Improvement item: rotation-tolerant templates.</li>
+<li>#3 video stabilization shows 3–5 px of slight distortion in the upper part of the frame (~1.5–2 px at board height); the ref was chosen as a static object in the lower part of the frame to avoid it.</li>
+</ul>
+
+<h2>7. Conclusions</h2>
+<p class="big">n=3 Latin-square main result: the zero-force handover reduces three-round total slip 185.5→105.6 mm (−43%, p=0.0013),
+and adding rotation weights → 72.9 mm (−61%, p=0.00092; −32.7 mm vs. B, p=0.0022); ratchet displacement at the rupture instant −82%/−88%.
+Per-replicate relative effects vary by ≤3 percentage points; the paper's main table is complete.</p>
+<p>Next: ① stiffness-aware share (attack the ~60% residual in the handover segment); ② close the model loop (per-leg stiffness into Appendix A, predict the
+per-leg handover-segment sag of Finding 1); ③ --zoom rupture-profile figure; ④ (optional) hanging-weight stiffness experiment for absolute k, climb_walk net-advance demo.</p>
+<p class="small">Material: nine report.txt files under ~/ab_cache/{0825,0825pm,0826}/{A,B,C}/;
+aggregation script ~/ab_cache/aggregate.py; step sync ~/ab_cache/step_off.py;
+188 localization/scale check images: images/ab-verify-202608/ (the 4 tape-measure frame readings on day 1 were verified manually by the operator).</p>
+</body>
+</html>

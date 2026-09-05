@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<!-- English translation of html/stiffness-fit-20260826.html (2026-09-05). The Chinese original is the maintained source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T1 stiffness fit and handover-segment decomposition (2026-08-26)</title>
+<style>
+  body { font-family: "Noto Sans CJK SC", "PingFang SC", sans-serif; margin: 2em auto;
+         max-width: 64em; line-height: 1.55; color: #222; background: #fff; padding: 0 1em; }
+  h1 { font-size: 1.5em; border-bottom: 3px solid #26a; padding-bottom: .3em; }
+  h2 { font-size: 1.2em; margin-top: 1.6em; border-left: 5px solid #26a; padding-left: .5em; }
+  table { border-collapse: collapse; margin: .8em 0; font-size: .92em; }
+  th, td { border: 1px solid #bbb; padding: .26em .55em; text-align: right; }
+  th { background: #eef1f7; }
+  td:first-child, th:first-child { text-align: left; }
+  .good { color: #1a7a3a; font-weight: 600; }
+  .bad { color: #a33; font-weight: 600; }
+  .big { font-size: 1.05em; font-weight: 700; }
+  .finding { background: #fff8ec; border: 1px solid #e0c080; padding: .7em 1em;
+             margin: .8em 0; border-radius: 6px; }
+  code { background: #f0f0f0; padding: 0 .3em; border-radius: 3px; font-size: .92em; }
+  .small { font-size: .85em; color: #555; }
+</style>
+</head>
+<body>
+<h1>T1 step 1: parallel-spring model fit of the handover segment — closing the model loop, gate decision and a new lever</h1>
+<p class="small">2026-08-26. Data = per-leg handover segments of the six B/C reports of the n=3 Latin square (54+54 points,
+C2 after the sync correction, see deviation ① in the n=3 report); tool <code>software/logs_analysis/fit_stiffness.py</code>.
+Model: Δb<sub>j,r</sub> = c0·δ<sub>j</sub>·(k<sub>j</sub> − Σk<sub>i</sub>s<sub>i</sub>)·(1+γ(r−1)) + common-mode term, Σk̂=1.</p>
+
+<h2>0. Conclusions at a glance</h2>
+<ul>
+<li><b>Model loop closed</b>: within group B, 18 cells (×3 replicates) fit with RMSE 0.85 mm (signal 6.8–12.6 mm),
+  leave-one-replicate-out CV-RMSE 0.99 mm; k̂ vs. the k̂ converted from the 08-24 slopes, Pearson r=0.938.</li>
+<li><b>k̂ (B+C joint, M8)</b>: L1 0.235 / R1 0.217 / L3 0.143 / R3 0.138 / R2 0.138 /
+  L2 0.129 — L1 is still the stiffest but <b>the L1−R1 gap is far smaller than in the slope table</b> (0.018–0.028 vs. 0.07);
+  the ranking is stable across models.</li>
+<li><b>The decomposition that overturns the story</b>: B handover segment 60.2 mm = stiffness-redistribution term <b>~6.7</b> + common-mode term <b>~55.5</b>;
+  C 39.7 = 7.7 + 30.0. <b>About 90% of the loss is "common-mode sinking at every handover", not stiffness inequality</b>;
+  the weights (C) cut the common-mode rate by ~46% (ρ 0.80→0.43 mm/s).</li>
+<li class="bad"><b>Gate decision: the original design D (stiffness-aware share) does not go on the wall</b> — the share only moves the redistribution term,
+  gaining ~3 mm for B and ~4.4 mm for C; the expected "handover segment 60→10" does not hold. The planned worries about L1 having no solution / everything pushed onto R1
+  largely disappear with the corrected k̂ (residual coefficient only 0.019), but the lever itself is too small.</li>
+<li class="good"><b>New lever D′ (software only)</b>: the common-mode term ∝ handover-window duration (3.2±0.4 s, mostly the apportioning at
+  δ/10 mm·s⁻¹). Raising the apportioning rate 10→20 mm/s predicts the C handover segment 39.7→<b>~25 mm</b> (C total 72.9→~58).
+  ⚠ Window duration is perfectly collinear with δ, so "time creep" vs. "per-mm loss" cannot be told apart offline — <b>D′ is at the same time a mechanism-discrimination
+  experiment</b>: if faster apportioning lowers the loss it is time creep (12 mm for free); if not, it is per-mm loss (rewrite the model); both outcomes are valuable.</li>
+</ul>
+
+<h2>1. Prerequisite: C2 sync correction</h2>
+<p>While checking the nine decomposition tables before fitting, the per-leg pattern of C2 (0825pm/C) was found shifted by one slot as a whole (a spurious "big R2/L2 drop"),
+traced to the step rescue locking onto the wrong tooth of a periodic comb (intra-round spacing 17.5–18.5 s highly periodic; teeth one slot apart differ in R² by &lt;0.001).
+Two independent anchors fix the true tooth + a clipped-window marker fit gives off=59.34 (R²=0.99, amplitude 4.23 mm = transfer ratio 42.3%, independently cross-checked);
+the report was regenerated and the C column of the n=3 main table refreshed (total conserved 70.2→70.5, split and per-leg attribution corrected, SD tightened;
+transfer-ratio samples 8→9). Full story and lessons: n=3 report deviation ①; new tool
+<code>marker_off_clip.py</code> (general clipped-window marker sync).</p>
+
+<h2>2. Within-group-B fit: model family and k̂ cross-validation</h2>
+<table>
+<tr><th>Model (common-mode term)</th><th>SSE</th><th>RMSE</th><th>AICc</th><th>Leave-one-replicate-out CV</th><th>Parameters</th></tr>
+<tr><td>M1 none</td><td>474.9</td><td>2.97</td><td>131.2</td><td>2.98</td><td>c0=1.71</td></tr>
+<tr><td>M2 none (+γ)</td><td>460.9</td><td>2.92</td><td>132.2</td><td>2.96</td><td>c0=1.55 γ=0.16</td></tr>
+<tr><td class="big">M3 α+β(r−1)</td><td>39.1</td><td class="big">0.85</td><td class="big">4.7</td><td>0.99</td><td>c0=1.69 γ=0.16 α=2.27 β=0.53</td></tr>
+<tr><td>M4 α+β (no γ)</td><td>50.1</td><td>0.96</td><td>15.2</td><td>1.02</td><td>c0=2.63 α=2.20 β=0.60</td></tr>
+</table>
+<p><b>k̂ cross-validation (M3 vs. 08-24 slope conversion)</b>: L1 0.257/0.290, R1 0.246/0.220,
+L3 0.139/0.140, R3 0.128/0.160, R2 0.112/0.090, L2 0.119/0.100, r=0.938 — two completely independent
+calibration paths (handover-segment sag vs. bounce-vs-δ slope) give a consistent stiffness ranking, so the displacement-domain convention of the Appendix A model holds.
+Main disagreement: <b>R1 is closer to L1 than the slope table says</b> (stable across models); the slope table's R1 0.22 is low.</p>
+<p><b>Predicted vs. measured (B, mean of three replicates, mm; M3)</b>:</p>
+<table>
+<tr><th>Leg</th><th>Round 1 meas/pred</th><th>Round 2 meas/pred</th><th>Round 3 meas/pred</th></tr>
+<tr><td>L1</td><td>+6.8/+7.9</td><td>+9.2/+9.3</td><td>+11.7/+10.7</td></tr>
+<tr><td>R1</td><td>+9.2/+7.6</td><td>+8.2/+8.9</td><td>+9.7/+10.3</td></tr>
+<tr><td>L3</td><td>+0.3/+0.6</td><td>+1.4/+0.9</td><td>+1.0/+1.2</td></tr>
+<tr><td>R3</td><td>+0.4/+0.5</td><td>+1.0/+0.8</td><td>+0.9/+1.0</td></tr>
+<tr><td>R2</td><td>−0.3/−0.2</td><td>+0.0/−0.0</td><td>+0.1/+0.1</td></tr>
+<tr><td>L2</td><td>+0.0/−0.0</td><td>+0.1/+0.1</td><td>+0.2/+0.3</td></tr>
+</table>
+
+<h2>3. Out-of-sample falsification on C and joint fit</h2>
+<p>Predicting C from the B-fitted parameters + rotation-weight shares: predicted total 61.8 vs. measured 39.5 mm —
+<b>"the common-mode term is independent of share/condition" is falsified on the spot by C</b>: the weights not only dilute the vent residual, they also cut the handover-segment common-mode term
+by ~20 mm. Joint B+C fit (108 points), four common-mode mechanisms raced:</p>
+<table>
+<tr><th>Mechanism</th><th>SSE</th><th>RMSE</th><th>AICc</th><th>Parameters</th></tr>
+<tr><td>M5 α,β per condition</td><td>150.6</td><td>1.18</td><td>60.7</td><td>c0=1.02 γ=0.12;α_B 2.37/α_C 1.48</td></tr>
+<tr><td>M7 kI·ΔI (current)</td><td>192.4</td><td>1.33</td><td>79.8</td><td>kI=1.29mm/A</td></tr>
+<tr><td class="big">M8 ρ·(1+β′(r−1))·T_window</td><td class="big">135.2</td><td class="big">1.12</td><td class="big">46.5</td><td>c0=1.78 γ=0.12;ρ_B 0.801/ρ_C 0.434mm/s,β′=0.21</td></tr>
+<tr><td>M9 kI·ΔI·T_window</td><td>188.2</td><td>1.32</td><td>77.4</td><td>kIT=0.414</td></tr>
+</table>
+<p>M8 wins: common-mode term = creep rate × handover-window duration; the window duration varies per leg with δ (2.7–3.6 s), providing a
+within-condition criterion. Current (M7/M9) has the right direction but is only a coarse proxy — ΔI B 2.00 vs. C 1.58 A (−21%) does not match
+the −46% common-mode rate; the weights suppress the common mode beyond what current can see (candidate mechanisms: nonlinear effects of internal stress /
+shares landing on fresh cups creep less, to be discriminated).</p>
+
+<h2>4. Unified ledger and reinterpretation of "Finding 1"</h2>
+<table>
+<tr><th>Condition</th><th>Redistribution term</th><th>Common-mode term</th><th>Total (model)</th><th>Measured</th></tr>
+<tr><td>B (equal split)</td><td>+6.7</td><td>+55.5</td><td>+62.1</td><td>60.2</td></tr>
+<tr><td>C (weights)</td><td>+7.7</td><td>+30.0</td><td>+37.8</td><td>39.7</td></tr>
+</table>
+<div class="finding"><b>What "the sag concentrates in the stiffest L1/R1" really consists of</b>: the creep base is common-mode
+(from ~2.4 mm per window), but when a soft leg is unloaded the redistribution term is <b>negative</b> (body rises slightly) and just cancels the base —
+soft-leg windows look ≈0; stiff-leg windows = positive redistribution + base stacked. Stiffness inequality determines the <b>shape of the distribution</b>
+(±2–5 mm); the <b>magnitude</b> (~55 mm) is set by creep. The mechanism statement of Finding 1 must be rewritten accordingly;
+the round-by-round growth = γ (redistribution) and β′ (creep rate) both climbing, from the same source as the current climb, with no saturation seen within 3 rounds
+(an 8–10-round long run is still needed).</div>
+
+<h2>5. Gate decision and next steps</h2>
+<p class="bad"><b>The original design D (stiffness-aware share), judged by "the model gives the number first; below expectation, it does not go on the wall": does not go on the wall.</b>
+Only the redistribution term is movable by the share: B 6.7→3.5, C 7.7→3.3 mm (L1 still has no solution but the residual coefficient is only 0.019;
+the planned worry "everything on R1 hits torque saturation" disappears with the k̂ correction — R1 no longer needs the full share).
+A gain of ~3–4 mm is not worth a wall condition; the share solution is kept as a merged micro-optimization after D′.</p>
+<p class="good"><b>New experiment D′: handover apportioning rate 10→20 mm/s (condition C, one variable at a time).</b>
+Prediction (time-creep hypothesis): C handover segment 39.7→~25 mm, C total 72.9→~58 mm; if it does not fall, the verdict is
+"per-mm loss" and the model is rewritten — mechanism discrimination and performance gain in one. Risk and guards: faster = less
+quasi-static; protocol §1 criterion 4 (smooth handover segment) and the leak-rescue pause stay as usual; pty/floor smoke test first.
+Companion: <b>the T4a hanging-weight stiffness experiment can measure the creep rate directly</b> (hang a load, rest, watch the y(t) slope vs. load,
+turning ρ from a fitted parameter into an independent measurement and giving absolute k).</p>
+
+<h2>6. Limitations (honestly)</h2>
+<ul>
+<li><b>T_window and δ are perfectly collinear</b> (T≈0.5+δ/10): M8's "× duration" and "× apportioned amount" are equivalent offline;
+  D′ is the only means of discrimination; until then the "creep rate" is a phenomenological parameter.</li>
+<li>c0 (1.0–2.6 depending on model) absorbs unknown gains (transfer ratio / unit accounting); k̂ drifts ±0.03 between models,
+  but the ranking and the L1−R1 gap are stable; absolute stiffness awaits T4a.</li>
+<li>The mechanism behind ρ_C&lt;ρ_B (stress nonlinearity vs. cup freshness) is undetermined — a share-perturbation experiment would be needed
+  to separate them; not blocking for now.</li>
+<li>No γ/β′ saturation visible within 3 rounds; long-distance extrapolation is invalid, to be filled by a long-run experiment.</li>
+<li>Data after the C2 correction (see §1); group B unaffected.</li>
+</ul>
+<p class="small">Material: fit script software/logs_analysis/fit_stiffness.py (includes the C out-of-sample test and
+the joint race, re-runnable); sync tool marker_off_clip.py; old C2 decomposition table
+~/ab_cache/0825pm/C/report_off77.25_mistooth.txt; the n=3 main table has been refreshed in step
+(html/en/handover-ab-n3-20260826.html).</p>
+</body>
+</html>

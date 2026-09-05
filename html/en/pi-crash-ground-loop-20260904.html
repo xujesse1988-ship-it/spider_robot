@@ -1,0 +1,403 @@
+<!-- English translation of html/pi-crash-ground-loop-20260904.html (2026-09-05). The Chinese original is the maintained source. -->
+<title>The ground loop at the instant of relay closure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --bg: #F2F4F6;
+    --paper: #FFFFFF;
+    --ink: #1A222C;
+    --ink-2: #4A5563;
+    --ink-3: #7B8794;
+    --rule: #D6DCE3;
+    --accent: #1E5AA8;
+    --accent-soft: #E3ECF8;
+    --bad: #C0392B;
+    --bad-soft: #FBE9E6;
+    --ok: #237A57;
+    --ok-soft: #E1F2EA;
+    --warn: #B7791F;
+    --warn-soft: #FBF1DC;
+    --mono-bg: #1B222B;
+    --mono-ink: #D9E0E8;
+    --mono-dim: #7F8B99;
+    --mono-hi: #FFD166;
+    --mono-bad: #FF7B6B;
+    --mono-ok: #7BD88F;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11161C;
+      --paper: #181F27;
+      --ink: #E4E9EF;
+      --ink-2: #AEB8C4;
+      --ink-3: #7C8794;
+      --rule: #2C3541;
+      --accent: #7FAEF0;
+      --accent-soft: #1C2A3D;
+      --bad: #F07A6C;
+      --bad-soft: #3A1F1C;
+      --ok: #6CC79A;
+      --ok-soft: #173126;
+      --warn: #E0B25C;
+      --warn-soft: #3A2F16;
+      --mono-bg: #0C1015;
+      --mono-ink: #D2DAE3;
+      --mono-dim: #6C7684;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11161C;
+    --paper: #181F27;
+    --ink: #E4E9EF;
+    --ink-2: #AEB8C4;
+    --ink-3: #7C8794;
+    --rule: #2C3541;
+    --accent: #7FAEF0;
+    --accent-soft: #1C2A3D;
+    --bad: #F07A6C;
+    --bad-soft: #3A1F1C;
+    --ok: #6CC79A;
+    --ok-soft: #173126;
+    --warn: #E0B25C;
+    --warn-soft: #3A2F16;
+    --mono-bg: #0C1015;
+    --mono-ink: #D2DAE3;
+    --mono-dim: #6C7684;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 980px; margin: 0 auto; padding: 40px 24px 96px; }
+  .doc { max-width: 72ch; }
+  h1, h2, h3 { font-family: "Noto Serif SC", "Songti SC", "SimSun", serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: 2.35rem; line-height: 1.2; font-weight: 700; letter-spacing: 0.01em; }
+  h2 { font-size: 1.45rem; font-weight: 700; margin-top: 8px; }
+  h3 { font-size: 1.1rem; font-weight: 600; margin-top: 20px; }
+  p { margin: 12px 0; }
+  a { color: var(--accent); }
+  code, pre, .mono { font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Noto Sans Mono CJK SC", monospace; }
+  code { font-size: 0.88em; background: var(--accent-soft); padding: 1px 5px; border-radius: 3px; }
+  .eyebrow { font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+
+  header { padding-bottom: 28px; border-bottom: 2px solid var(--ink); margin-bottom: 36px; }
+  header .meta { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 18px; color: var(--ink-2); font-size: 0.92rem; }
+  header .meta b { color: var(--ink); font-weight: 500; }
+  .lede { font-size: 1.12rem; color: var(--ink-2); margin-top: 16px; max-width: 64ch; }
+
+  .verdict {
+    display: grid; grid-template-columns: 1fr; gap: 0;
+    border: 1px solid var(--rule); background: var(--paper); margin: 28px 0 40px;
+  }
+  .verdict > div { padding: 18px 22px; }
+  .verdict > div + div { border-top: 1px solid var(--rule); }
+  .verdict .k { font-size: 0.78rem; letter-spacing: 0.12em; color: var(--ink-3); text-transform: uppercase; }
+  .verdict .v { font-size: 1.05rem; margin-top: 4px; }
+  .verdict .v.bad { color: var(--bad); font-weight: 700; }
+  @media (min-width: 720px) {
+    .verdict { grid-template-columns: 1fr 1fr 1fr; }
+    .verdict > div + div { border-top: 0; border-left: 1px solid var(--rule); }
+  }
+
+  section { margin: 48px 0; }
+  .sec-head { display: grid; grid-template-columns: 56px 1fr; gap: 14px; align-items: baseline; margin-bottom: 14px; }
+  .sec-head .num { font-family: "JetBrains Mono", monospace; color: var(--accent); font-size: 0.95rem; font-weight: 600; letter-spacing: 0.06em; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.93rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 500; color: var(--ink-3); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid var(--ink); }
+  .wide { overflow-x: auto; background: var(--paper); border: 1px solid var(--rule); padding: 4px 4px; margin: 16px 0; }
+  .wide table { min-width: 640px; }
+  td.num { font-family: "JetBrains Mono", monospace; font-size: 0.86rem; white-space: nowrap; }
+  .flag { display: inline-block; padding: 1px 8px; border-radius: 3px; font-family: "JetBrains Mono", monospace; font-size: 0.82rem; font-weight: 600; white-space: nowrap; }
+  .flag.bad { background: var(--bad-soft); color: var(--bad); }
+  .flag.ok { background: var(--ok-soft); color: var(--ok); }
+  .flag.warn { background: var(--warn-soft); color: var(--warn); }
+
+  pre.log {
+    margin: 16px 0; padding: 18px 20px; background: var(--mono-bg); color: var(--mono-ink);
+    font-size: 0.8rem; line-height: 1.6; overflow-x: auto; border-radius: 4px;
+  }
+  pre.log .t { color: var(--mono-dim); }
+  pre.log .hi { color: var(--mono-hi); font-weight: 600; }
+  pre.log .bad { color: var(--mono-bad); font-weight: 600; }
+  pre.log .ok { color: var(--mono-ok); }
+  pre.log .note { color: var(--mono-dim); font-style: italic; }
+  pre.cmd { margin: 12px 0; padding: 14px 16px; background: var(--mono-bg); color: var(--mono-ink); font-size: 0.82rem; line-height: 1.55; overflow-x: auto; border-radius: 4px; }
+
+  .steps { list-style: none; padding: 0; margin: 16px 0; border-top: 1px solid var(--rule); }
+  .steps li { display: grid; grid-template-columns: 96px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .steps .when { font-family: "JetBrains Mono", monospace; font-size: 0.82rem; color: var(--ink-3); padding-top: 4px; white-space: nowrap; }
+  .steps .what b { font-weight: 700; }
+  .steps .what .so { color: var(--ink-2); display: block; margin-top: 2px; }
+
+  .fig { background: var(--paper); border: 1px solid var(--rule); padding: 18px 18px 10px; margin: 18px 0; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 640px; }
+  .fig figcaption { font-size: 0.86rem; color: var(--ink-2); margin-top: 8px; line-height: 1.6; }
+
+  .two { display: grid; grid-template-columns: 1fr; gap: 14px; margin: 16px 0; }
+  @media (min-width: 720px) { .two { grid-template-columns: 1fr 1fr; } }
+  .panel { background: var(--paper); border: 1px solid var(--rule); padding: 16px 18px; }
+  .panel h3 { margin-top: 0; }
+  .panel.bad { border-left: 4px solid var(--bad); }
+  .panel.ok { border-left: 4px solid var(--ok); }
+  .panel .big { font-family: "JetBrains Mono", monospace; font-size: 1.5rem; font-weight: 600; margin: 4px 0; }
+  .panel.bad .big { color: var(--bad); }
+  .panel.ok .big { color: var(--ok); }
+
+  ul.plain { padding-left: 1.2em; margin: 10px 0; }
+  ul.plain li { margin: 6px 0; }
+  ol.fix { padding-left: 1.4em; margin: 10px 0; }
+  ol.fix li { margin: 10px 0; }
+  ol.fix b { font-weight: 700; }
+
+  .lesson { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
+  @media (min-width: 720px) { .lesson { grid-template-columns: 1fr 1fr; } }
+  .lesson .card { background: var(--paper); border: 1px solid var(--rule); padding: 16px 18px; }
+  .lesson .card h3 { margin: 0 0 6px; font-size: 1rem; }
+  .lesson .card p { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+
+  dl.refs { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size: 0.92rem; margin: 12px 0; }
+  dl.refs dt { font-family: "JetBrains Mono", monospace; font-size: 0.82rem; color: var(--ink-2); white-space: nowrap; }
+  dl.refs dd { margin: 0; }
+  footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--ink-3); font-size: 0.85rem; }
+  @media (max-width: 560px) {
+    h1 { font-size: 1.8rem; }
+    .sec-head { grid-template-columns: 44px 1fr; }
+    .steps li { grid-template-columns: 1fr; gap: 2px; }
+    dl.refs { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="page">
+<header>
+  <div class="eyebrow">Hexapod wall-climbing robot · troubleshooting case file · 2026-09-02 to 09-04</div>
+  <h1 style="margin-top:10px">The ground loop at the instant of relay closure</h1>
+  <p class="lede">The Raspberry Pi 5 would randomly lose power and die at the instant the servo relay closed. Over three days the suspicion moved from "valve coils" to "5 V margin" to "18 servos drawing a big current", and was finally settled by a log line 14 milliseconds long and one USB cable. This case file records the detours, the tools that actually worked, and the lessons worth carrying to the next project.</p>
+  <div class="meta">
+    <span>Machine: <b>Pi 5 + Servo2040 + 18 servos + six valves</b></span>
+    <span>Power: <b>2S LiPo → 5 V buck for the Pi; relay switches the servo positive</b></span>
+    <span>Symptom: <b>status LED green → solid red, SSH drops, needs a power cycle</b></span>
+  </div>
+</header>
+
+<div class="verdict">
+  <div><div class="k">Root cause</div><div class="v bad">The charging pulse at relay closure floods into the Pi through the USB ground, and the PMIC calls it undervoltage and cuts power</div></div>
+  <div><div class="k">Decisive evidence</div><div class="v">Same boot, only one USB cable changed: unplugged, ten closures all 0x0; plugged back in, the first closure gives 0x50000</div></div>
+  <div><div class="k">Remedies</div><div class="v">USB isolator; pre-charge soft start of the servo rail; star grounding</div></div>
+</div>
+
+<div class="doc">
+
+<section>
+  <div class="sec-head"><span class="num">01</span><h2>Symptoms and constraints</h2></div>
+  <p>The startup script first energizes the six solenoid valve coils one by one into the exhaust position, then closes the servo relay. With some probability the Raspberry Pi dies right in this window: solid red LED, green LED off, SSH unreachable, only a power cycle helps. On the Pi 5 this LED state is the halted state after the PMIC has cut power to the processor, the same as after <code>sudo halt</code>.</p>
+  <p>No oscilloscope at hand. The only tools were a multimeter, the Pi's own PMIC readout (<code>vcgencmd pmic_read_adc</code>, which in practice runs at 10 Hz) and the kernel log. The death is a power cut; at the instant of death no process can write to disk any more, so everything must "leave a trace before dying".</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">02</span><h2>Tools built for this</h2></div>
+  <h3>Black box</h3>
+  <p>Before every high-current step (each valve coil energized, relay closure, firmware enable) write one line and <code>fsync</code>; whichever line the log stops at, the culprit is the next step. A background thread records the Pi's 5 V input voltage and undervoltage flag every 0.1 s, each line flushed to disk. After closure, the servo bus voltage and current are sampled again at 0.05 / 0.15 / 0.30 s. The four startup scripts share the same convention, with logs in <code>software/logs/&lt;tag&gt;_time.log</code>.</p>
+  <h3>Forensics script</h3>
+  <p><code>scripts/pi_forensics.sh setup</code> switches the kernel log to persistent storage synced every second; it must be run once before a crash. After the power cycle, <code>check</code> brings out in one go: the kernel tail of the previous boot, the real boot time (the Pi 5 has no RTC battery, so the time in the boot list is a fake clock saved at the last shutdown), the current undervoltage flags and PMIC voltages, the firmware power node, and the tail of the latest black box.</p>
+  <h3>Reading two read-only interfaces</h3>
+  <div class="wide"><table>
+    <thead><tr><th>Interface</th><th>Value</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td class="num">get_throttled</td><td class="num">bit 0 / bit 2</td><td>Undervoltage now / throttled now. Clears once the transient passes</td></tr>
+      <tr><td class="num">get_throttled</td><td class="num">bit 16 / bit 18</td><td>Undervoltage occurred / throttling occurred this boot. Sticky bits, cleared only by reboot. Latched by the PMIC's fast comparator, far faster than ADC sampling</td></tr>
+      <tr><td class="num">chosen/power/power_reset</td><td class="num">2</td><td>Raspberry Pi engineer timg236, verbatim on the forum: non-zero (usually 2) means the previous boot was cut by the PMIC because the input voltage was too low. Read 2 after both crashes</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">03</span><h2>Course of the investigation</h2></div>
+  <ul class="steps">
+    <li><span class="when">09-02</span><span class="what"><b>Report: crash after the valve coils light up one by one.</b><span class="so">First suspect: the valves. Added per-step flushing to startup and <code>--startup-gap</code>, preparing to separate valves from servos.</span></span></li>
+    <li><span class="when">09-03</span><span class="what"><b>First autopsy: 5 V steady at 4.88 V throughout the six coil energizations; "relay closed" is the last line, dead within 50 ms.</b><span class="so">The valves are innocent; the trigger is the closure. At the time the root cause was pinned on "5 V only 4.89 V unloaded, too thin a margin", and the closure was split into "close relay → 0.4 s → firmware enable" so the black box could tell the energize surge from the torque surge.</span></span></li>
+    <li><span class="when">09-04 afternoon</span><span class="what"><b>Swapped in an adjustable buck module set to 5.19 V, PMIC reads 5.105 V. Running walk_teleop still crashes.</b><span class="so">Static voltage is not the root cause. walk_teleop had no black box that time, so the autopsy was empty-handed; the journal stops abruptly 301 s after boot with no undervoltage message at all. Added the black box to the walk / voice scripts.</span></span></li>
+    <li><span class="when">09-04 evening</span><span class="what"><b>User finding: 0x0 at boot; one walk_teleop run without a crash still turns the flag into 0x50000.</b><span class="so">Every closure causes undervoltage; sometimes it just does not dip deep enough. The sporadic fatal event now has a deterministic, non-fatal stand-in.</span></span></li>
+    <li><span class="when">21:54</span><span class="what"><b>Key log: flag set 14 ms after closure, with the servo bus at 0.00 A.</b><span class="so">It is not "18 servos dragging the battery down". At the later enable instant, 6.67 A and a 0.4 V battery drop, the Pi's 5 V does not budge.</span></span></li>
+    <li><span class="when">22:xx</span><span class="what"><b>A/B: with the USB cable between Pi and Servo2040 unplugged, closure only, ten times 0x0; plugged back in, first time 0x50000.</b><span class="so">Path settled. The buck module's LED flashes green at the instant of closure: the module itself sees the same pulse.</span></span></li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">04</span><h2>The log that settled it</h2></div>
+  <p>walk_20260904_215456.log, a run that did not die. Look at the timestamps: GPIO17 goes high at 1.708 s; at the next tick, 1.722 s, the flag is already 0x50005, while the servos are not drawing a single ampere.</p>
+  <pre class="log"><span class="t">[    1.590]</span> TLM power 5V=5.112V core=0.752V/0.64A thr=0x0
+<span class="t">[    1.705]</span> EVT before servo relay closure bus=<span class="hi">0.05V 0.00A</span>  Pi[5V=5.112V thr=0x0]
+<span class="t">[    1.708]</span> EVT <span class="hi">servo relay closed</span> (18 servos energized, firmware not enabled, no torque)
+<span class="t">[    1.722]</span> TLM power 5V=5.105V core=0.747V/0.64A <span class="bad">thr=0x50005[undervoltage now,throttled now,undervoltage occurred,throttling occurred]</span>   <span class="note">← 14 ms after closure</span>
+<span class="t">[    1.722]</span> EVT <span class="bad">⚠ Pi undervoltage now (get_throttled bit0)</span>
+<span class="t">[    1.766]</span> EVT 0.05s after closure bus=<span class="hi">7.70V 0.00A</span>   <span class="note">← no servo current</span>
+<span class="t">[    1.852]</span> EVT <span class="ok">Pi undervoltage cleared</span>
+<span class="t">[    2.120]</span> EVT firmware enabled
+<span class="t">[    2.277]</span> EVT 0.15s after enable bus=<span class="hi">7.31V 6.67A</span>  Pi[5V=5.134V thr=0x50000]   <span class="note">← the real big current, Pi unaffected</span>
+<span class="t">[   44.025]</span> EVT Pi power watch ended: 118 samples <span class="hi">5V minimum 5.072V</span> thr=0x50000</pre>
+  <div class="wide"><table>
+    <thead><tr><th>Time (s)</th><th>Event</th><th>Servo bus</th><th>Pi 5V (ADC)</th><th>Firmware flags</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1.708</td><td>GPIO17 high, relay closes</td><td class="num">0.05 V / 0 A</td><td class="num">5.112 V</td><td><span class="flag ok">0x0</span></td></tr>
+      <tr><td class="num">1.722</td><td>14 ms after closure</td><td class="num">—</td><td class="num">5.105 V</td><td><span class="flag bad">0x50005 undervoltage now</span></td></tr>
+      <tr><td class="num">1.766</td><td>58 ms after closure</td><td class="num">7.70 V / 0.00 A</td><td class="num">5.105 V</td><td><span class="flag warn">0x50005</span></td></tr>
+      <tr><td class="num">2.120</td><td>Firmware enabled, 18 servos start producing torque</td><td class="num">7.71 V / 0 A</td><td class="num">5.146 V</td><td><span class="flag warn">no new event</span></td></tr>
+      <tr><td class="num">2.277</td><td>0.15 s after enable</td><td class="num">7.31 V / 6.67 A</td><td class="num">5.134 V</td><td><span class="flag warn">no new event</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>The ADC minimum over the whole run was 5.072 V; it never once read below the threshold, yet the flag was set. So the dip is far shorter than 100 ms; point sampling cannot touch it, and only the sticky bit latched by the PMIC's internal fast comparator can see it.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">05</span><h2>A/B experiment</h2></div>
+  <p>Same boot, same program, touching only GPIO17: close, read the flag after 0.2 s, wait 2 s, open, wait 2 s, repeat ten times. No serial port opened, no valves touched; the servos are energized but produce no torque without PWM. The only variable is the USB cable between the Pi and the Servo2040.</p>
+  <div class="two">
+    <div class="panel ok"><h3>USB cable unplugged</h3><div class="big">10 / 10 → 0x0</div><p>Ten closures, the sticky bit never set.</p></div>
+    <div class="panel bad"><h3>USB cable plugged back in</h3><div class="big">1st time → 0x50000</div><p>Set on the very first closure, and stays set for the next nine.</p></div>
+  </div>
+  <p>There is no second explanation: the pulse's path into the Pi is the ground of this USB cable.</p>
+  <pre class="cmd">import subprocess, time, lgpio
+h = lgpio.gpiochip_open(4)          # Pi 5 main gpiochip (0 on newer kernels)
+lgpio.gpio_claim_output(h, 17, 0)   # GPIO17 = relay IN1
+def thr(): return subprocess.run(["vcgencmd","get_throttled"], capture_output=True, text=True).stdout.strip()
+print("before closure", thr())
+for i in range(10):
+    lgpio.gpio_write(h, 17, 1); time.sleep(0.2); print(f"after closure {i+1}: {thr()}", flush=True)
+    time.sleep(2); lgpio.gpio_write(h, 17, 0); time.sleep(2)</pre>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">06</span><h2>The path the pulse takes</h2></div>
+  <figure class="fig">
+    <svg viewBox="0 0 900 400" role="img" aria-label="Current path of the closure pulse entering the Raspberry Pi through the USB ground">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#C0392B"/>
+        </marker>
+      </defs>
+      <!-- battery -->
+      <rect x="30" y="150" width="110" height="110" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="85" y="192" font-size="15" text-anchor="middle" fill="#1A222C" font-weight="600">2S LiPo</text>
+      <text x="85" y="214" font-size="12" text-anchor="middle" fill="#4A5563">7.7 V</text>
+      <text x="48" y="166" font-size="13" fill="#4A5563">+</text>
+      <text x="48" y="254" font-size="13" fill="#4A5563">−</text>
+      <!-- relay -->
+      <rect x="240" y="70" width="120" height="54" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="300" y="93" font-size="14" text-anchor="middle" fill="#1A222C" font-weight="600">Relay</text>
+      <text x="300" y="111" font-size="11" text-anchor="middle" fill="#4A5563">GPIO17 closes</text>
+      <!-- servo2040 -->
+      <rect x="470" y="60" width="150" height="90" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="545" y="90" font-size="14" text-anchor="middle" fill="#1A222C" font-weight="600">Servo2040</text>
+      <text x="545" y="110" font-size="12" text-anchor="middle" fill="#4A5563">+ 18 servos</text>
+      <text x="545" y="130" font-size="11" text-anchor="middle" fill="#4A5563">Internal capacitance ≈ millifarads</text>
+      <!-- buck -->
+      <rect x="240" y="230" width="150" height="110" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="315" y="257" font-size="14" text-anchor="middle" fill="#1A222C" font-weight="600">XL4015 buck</text>
+      <text x="315" y="276" font-size="12" text-anchor="middle" fill="#4A5563">IN− → OUT−</text>
+      <rect x="290" y="290" width="50" height="16" rx="2" fill="#FBF1DC" stroke="#B7791F"/>
+      <text x="315" y="302" font-size="10" text-anchor="middle" fill="#7A4F0C">R050</text>
+      <text x="315" y="328" font-size="11" text-anchor="middle" fill="#4A5563">Low-side sense 50 mΩ</text>
+      <!-- pi -->
+      <rect x="470" y="230" width="150" height="110" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="545" y="262" font-size="14" text-anchor="middle" fill="#1A222C" font-weight="600">Raspberry Pi 5</text>
+      <text x="545" y="284" font-size="12" text-anchor="middle" fill="#4A5563">PMIC sees 5V − GND</text>
+      <text x="545" y="306" font-size="11" text-anchor="middle" fill="#4A5563">GND Dupont wire ≈ 0.1 Ω</text>
+      <!-- power wires (normal) -->
+      <line x1="140" y1="170" x2="240" y2="97" stroke="#4A5563" stroke-width="2"/>
+      <line x1="360" y1="97" x2="470" y2="97" stroke="#4A5563" stroke-width="2"/>
+      <line x1="140" y1="250" x2="240" y2="250" stroke="#4A5563" stroke-width="2"/>
+      <line x1="390" y1="260" x2="470" y2="260" stroke="#4A5563" stroke-width="2"/>
+      <text x="430" y="252" font-size="11" text-anchor="middle" fill="#4A5563">5V</text>
+      <!-- servo return (main path, big current) -->
+      <path d="M545,150 L545,190 L110,190 L110,260" fill="none" stroke="#4A5563" stroke-width="3"/>
+      <text x="330" y="182" font-size="11" text-anchor="middle" fill="#4A5563">Servo return ground · tens of amps · hundreds of µs</text>
+      <!-- USB cable -->
+      <line x1="620" y1="120" x2="700" y2="120" stroke="#4A5563" stroke-width="2"/>
+      <line x1="700" y1="120" x2="700" y2="300" stroke="#4A5563" stroke-width="2"/>
+      <line x1="700" y1="300" x2="620" y2="300" stroke="#4A5563" stroke-width="2"/>
+      <text x="720" y="215" font-size="12" fill="#1A222C" font-weight="600">USB cable</text>
+      <text x="720" y="233" font-size="11" fill="#4A5563">Ground wire ties the two boards together</text>
+      <!-- pulse path (red) -->
+      <path d="M560,150 L560,175 L640,175 L640,130 L660,130 L685,130 L685,290 L640,290 L640,300" fill="none" stroke="#C0392B" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.95"/>
+      <path d="M600,300 L600,320 L470,320" fill="none" stroke="#C0392B" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.95"/>
+      <path d="M470,320 L410,320 L410,298 L340,298" fill="none" stroke="#C0392B" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.95"/>
+      <path d="M290,298 L200,298 L200,250 L140,250" fill="none" stroke="#C0392B" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.95" marker-end="url(#arr)"/>
+      <text x="560" y="345" font-size="11" text-anchor="middle" fill="#C0392B">Part of the pulse detours: USB ground → Pi ground plane → GND Dupont wire → R050 → battery negative</text>
+      <text x="450" y="375" font-size="12" text-anchor="middle" fill="#1A222C">The drop across the Dupont wire and R050 looks like a 5 V dip to the PMIC. A shallow dip leaves a sticky bit; a deep one gives the red LED.</text>
+    </svg>
+    <figcaption>At the instant the contacts close, the battery charges the capacitance of 18 servos and the Servo2040: peaks of tens of amps lasting hundreds of microseconds, with a few extra hits from contact bounce. This current creates a momentary voltage difference along the servo return ground, lifting the Servo2040's ground. The USB cable ties the Servo2040 ground to the Pi ground, so part of the pulse detours through the Pi. The diagram colors are fixed and independent of the page theme.</figcaption>
+  </figure>
+  <h3>The buck module's green LED is corroborating evidence</h3>
+  <p>The new module is an XL4015 5 A constant-current/constant-voltage board; the silkscreen on the back says red = constant current, blue = charging, green = full. The sense resistor R10 is 50 mΩ, in series between OUT− and IN−, i.e. between the Pi's ground and the battery negative; the output voltage is regulated against IN−, so any current through it is subtracted directly from the 5 V the Pi sees. The blue LED flashing green at closure means the current comparator saw the output current drop to near zero or even reverse, which can only be an external pulse passing through it. The old fixed 5 V module had no such resistor and the crash happened anyway, so it is not the root cause, just an amplifier of the dip.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">07</span><h2>Leads that once looked like the root cause</h2></div>
+  <div class="wide"><table>
+    <thead><tr><th>Lead</th><th>Why it looked plausible</th><th>How it was ruled out</th></tr></thead>
+    <tbody>
+      <tr><td>Six valve coils energized one by one</td><td>The crash always came "after the valves lit up"</td><td>Black box: 5 V steady throughout coil energization; the log stops at the closure line</td></tr>
+      <tr><td>Pi 5 V only 4.89 V unloaded</td><td>0.2 V below the official supply, the margin really was thin</td><td>Swapped module set to 5.19 V, still dies; the ADC never read below the threshold</td></tr>
+      <tr><td>18 servos powering up at once drag the battery down</td><td>Closure is exactly powering up 18 servos</td><td>Servos at 0 A when the undervoltage happened; when the real 6.67 A came, the Pi's 5 V did not budge</td></tr>
+      <tr><td>Battery sag or protection-board trip</td><td>One shared battery</td><td>2S hobby LiPo with no protection board, low internal resistance; bus steady at 7.70 V after closure</td></tr>
+      <tr><td>Software or kernel crash</td><td>SSH drops</td><td>Journal stops abruptly with no Oops; power_reset=2 is a PMIC power cut; the hardware watchdog could not save it either</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">08</span><h2>Conclusion and remedies</h2></div>
+  <p>The root cause is the pulse that charges the servo-side capacitance at the instant the relay closes; it floods into the Raspberry Pi through the USB ground between the Pi and the Servo2040, and the drop it produces across the GND Dupont wire and the sense resistor is judged by the PMIC as input undervoltage. A shallow dip leaves only a sticky bit; a deep one makes the PMIC cut power, shown as the solid red LED.</p>
+  <ol class="fix">
+    <li><b>USB isolator.</b> A full-speed isolator such as the ADuM3160; 12 Mbps is enough for the Servo2040 serial link. Inserted between the Pi and the Servo2040, it physically breaks the ground loop. The cleanest cut.</li>
+    <li><b>Pre-charge soft start of the servo rail.</b> A second small relay in series with a 4.7 Ω 5 W resistor closes first for 100 ms to charge the capacitance, then the main relay closes; or swap in a P-MOS soft-start module. It can be verified first by manually pre-charging through a 10 Ω resistor across the contacts for a second before closing and watching the sticky bit.</li>
+    <li><b>Star grounding.</b> The Servo2040 GND and the buck module's IN− each run in short thick wire straight to the same point on the battery negative; no Dupont wire for the Pi's 5V/GND. This only mitigates; it does not break the path.</li>
+  </ol>
+  <p>A capacitor across the Pi's 5 V pins only treats the symptom: at the Pi 5's ~0.7 A, 2200 µF holds a 0.4 V dip for about 1 ms. The XL4015's R050 can be bridged with solder so that OUT− equals IN− directly; the module degrades into a plain regulator and the LEDs stop working, which is fine. Once the path is broken it is harmless by itself and can be left alone.</p>
+  <p>The software side is already in place: two-step closure, a black box with the same convention in the four startup scripts, real timeline and power_reset interpretation in the forensics script. <code>--startup-gap</code> is no longer needed.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">09</span><h2>Lessons to take away</h2></div>
+  <div class="lesson">
+    <div class="card"><h3>A power-cut death can only leave traces before dying</h3><p>Write one line and fsync before every high-current step; whichever line the log stops at, the culprit is the next step. Without that line, three days of investigation would not have moved one step.</p></div>
+    <div class="card"><h3>Find a deterministic stand-in for a sporadic fatal event</h3><p>The sticky bit is set on every closure; no need to wait for a crash. The experimental criterion changed from "dies or not" to "sets or not"; one reboot gives an answer, and "did not die" is no longer non-information.</p></div>
+    <div class="card"><h3>Point sampling cannot see transients</h3><p>In the same tick the ADC read 5.105 V, the fast comparator had already latched undervoltage. A multimeter and 10 Hz sampling are blind to a hundred-microsecond event; do not let their "normal" reading rule out a fault.</p></div>
+    <div class="card"><h3>Big current is not the problem; the switching instant is</h3><p>A sustained 6.67 A surge left the Pi unmoved; closure at 0 A caused undervoltage every time. What matters is di/dt and which path the current takes, not the amperes.</p></div>
+    <div class="card"><h3>Ground is not a point</h3><p>The USB cable, the sense resistor and the Dupont wire are each a resistance in the ground return. When two boards share ground and each returns to the battery separately, the pulse will pick a path you did not think of.</p></div>
+    <div class="card"><h3>Change one variable at a time, within one boot</h3><p>Unplug one cable, close ten times, plug back in, close again; the contrast between 0x0 and 0x50000 leaves no room for interpretation. Faster than swapping modules, and cheaper too.</p></div>
+    <div class="card"><h3>Find the manufacturer's one sentence first</h3><p>The meaning of power_reset=2 is one verbatim sentence on the forum; reading it after both crashes is the PMIC's own testimony. One lookup saves half a day of guessing.</p></div>
+    <div class="card"><h3>Measure the evidence before swapping parts</h3><p>Swapping the buck module only proved "static voltage is not the root cause"; that conclusion is worth something, but had the sticky bit been checked first, that step could have been skipped.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">10</span><h2>Index</h2></div>
+  <dl class="refs">
+    <dt>hexapod/powerlog.py</dt><dd>PowerWatch sampling thread, startup step markers, two-stage closure sampling</dd>
+    <dt>hexapod/runlog.py</dt><dd>Black box RunLog, mark() = write one line and fsync</dd>
+    <dt>hexapod/driver.py</dt><dd>enable(True) = power_on → 0.4 s → arm</dd>
+    <dt>scripts/pi_forensics.sh</dt><dd>setup once before a crash; check after the power cycle</dd>
+    <dt>logs/lean_20260903_135325.log</dt><dd>First autopsy, dead within 50 ms of closure</dd>
+    <dt>logs/walk_20260904_215456.log</dt><dd>Decisive log, undervoltage 14 ms after closure with servos at 0 A</dd>
+    <dt>docs/P4-GUIDE.md</dt><dd>The case notes in the common-problems section</dd>
+    <dt>forums.raspberrypi.com t=361231</dt><dd>timg236 on power_reset and PMIC undervoltage shutdown</dd>
+  </dl>
+  <pre class="cmd">vcgencmd get_throttled                    # 0x50000 = undervoltage occurred + throttling occurred (cleared only by reboot)
+hexdump -C /proc/device-tree/chosen/power  # power_reset non-zero = previous boot cut by PMIC undervoltage
+bash scripts/pi_forensics.sh check         # after the power cycle, brings out all clues at once</pre>
+</section>
+
+</div>
+<footer>Case file compiled 2026-09-04. The machine is still in stage P4; the three remedies await fitting and verification, and the verification criterion remains the sticky bit.</footer>
+</div>

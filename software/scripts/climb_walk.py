@@ -15,9 +15,12 @@ CLIMB 步态。
   f   解除冻结（人工处理完报警后按）        ESC 安全退出（停走->停泵->逐足
       串行放气->断电，终态停在爬墙站位；要地面站姿另跑 --release）
   o×2 放开全部吸盘但六足保持站立（取机用：停泵后逐足串行排气约 1.5s，
-      舵机撑住原地，整机可直接拿起）。仅站立非走动时允许；墙上取机必须
-      先扶稳机身再按（放开即坠，安全绳兜底）；I2C 失联冻结下照常可用
-      （盲态纯计时排气，阀由取机序列直驱）
+      舵机撑住原地，整机可直接拿起）。任何状态都受理：走动中/单步在途/
+      启动序列未完成/冻结中一律可按——确认后先清零速度、取消未开始的单
+      步，再把足端目标冻在当前姿态（腿在空中就停在空中），然后逐足排气；
+      此后走动/单步/解冻键全部屏蔽，只认 ESC×2。墙上取机必须先扶稳机身
+      再按（放开即坠，安全绳兜底）；I2C 失联冻结下照常可用（盲态纯计时
+      排气，阀由取机序列直驱）
 
 用法:
   python climb_walk.py --mock                # 无硬件干跑（Mock 吸盘必吸上）
@@ -109,7 +112,7 @@ sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
-from hexapod.climb import (ClimbEngine, LegPhase, max_straight_step,
+from hexapod.climb import (ClimbEngine, max_straight_step,
                            parse_handover, parse_handover_weights,
                            parse_leg_order, gait_with_slot_order)
 from hexapod.gait import CLIMB, CLIMB_DUAL
@@ -575,19 +578,6 @@ def main():
     at_pause = True      # 就位暂停中（尚未开始任何吸附动作）
     aborted = False      # 在暂停处确认退出（finally 不再做善后）
 
-    def hold_release_deny():
-        """'oo' 放开吸盘的前置检查：返回拒绝原因，None = 允许。
-        站立非走动 = 启动序列已完成 + 速度指令为零 + 六足全在支撑相。"""
-        if not eng.started:
-            return "启动序列未完成"
-        if vx or vy or wz:
-            return "尚在走动（先按空格停）"
-        if eng.step_pending or eng.step_active:
-            return "单步在途（等它走完，或未开始的按空格取消）"
-        if any(p != LegPhase.STANCE for p in eng.phase_of.values()):
-            return "有腿未回支撑相（等本步收尾再按）"
-        return None
-
     def io_freeze(e):
         """IO 持续失败的第二把降落伞（审核发现）：气路 I2C 持续超时
         （Pi5VacuumIO 陈旧 >0.5s 上抛 IOError）或舵机串口读写失败同为
@@ -732,6 +722,9 @@ def main():
                 print("开始全吸附启动序列……")
                 log.event("按 p：开始全吸附启动序列")
                 break
+            if k == "o":
+                print("\n尚未吸附（六阀已在排气位），没有要放开的吸盘；"
+                      "ESC×2 断电退出")
             if k == "\x1b":
                 if time.monotonic() - last_esc < 2.0:
                     aborted = True
@@ -762,8 +755,9 @@ def main():
                 last_esc = time.monotonic()
                 print("\n再按一次 ESC 确认退出（会放气、停在爬墙站位——墙上禁用！"
                       "墙上悬停 = 保持进程运行什么都不按）")
-            elif k in ("w", "s", "a", "d", "q", "e", "i") and released_hold:
-                print("\n吸盘已放开（取机窗口），不可再走动——取下后 ESC×2 退出")
+            elif k in ("w", "s", "a", "d", "q", "e", "i", "f") and released_hold:
+                # f 也挡：取机冻结是故意的，解冻=带着放开的吸盘恢复步态
+                print("\n吸盘已放开（取机窗口），不可再走动/解冻——取下后 ESC×2 退出")
             elif k in ("w", "s", "a", "d", "q", "e") \
                     and (eng.step_pending or eng.step_active):
                 print("\n单步在途，收口后再操作（悬停中按 i 落地；"
@@ -830,16 +824,26 @@ def main():
                 last_frozen = None
             elif k == "o":
                 # 取机窗口：放开全部吸盘但六足保持站立，便于整机从玻璃上拿起。
-                # 双击确认口径同 ESC；每次按键都重查前置（两击间状态可能变）
+                # 双击确认口径同 ESC。不设前置条件（09-05 改）：原先要求
+                # "启动完成 + 速度为零 + 六足全在支撑相"，但冻结时相位钟不走、
+                # 启动期冻结 started 永远为假——地面一只脚吸不上就永远拒放，
+                # 只剩 ESC×2 断电一条路，与 io_freeze 横幅"oo 可盲态运行"
+                # 也对不上。现在任何状态一律受理：确认后先清零速度、取消未
+                # 开始的单步，再把引擎冻在当前姿态（足端目标保持、相位钟停，
+                # 腿在空中就停在空中；吸附状态机照跑供排气确认），此后走动/
+                # 单步/解冻键全挡，只认 ESC×2——放开的吸盘绝不能带着恢复步态
                 if released_hold:
                     print("\n已是放开状态——取下后 ESC×2 退出")
                 else:
-                    deny = hold_release_deny()
-                    if deny:
-                        last_o = float("-inf")
-                        print(f"\n不允许放开：{deny}")
-                    elif time.monotonic() - last_o < 2.0:
+                    if time.monotonic() - last_o < 2.0:
                         released_hold = True
+                        vx = vy = wz = 0.0
+                        if eng.step_pending:
+                            eng.cancel_step()   # 在途的撤不了，冻结后原地悬停
+                        if not eng.frozen:
+                            eng.frozen = ("取机窗口：吸盘已放开，姿态保持"
+                                          "——取下后 ESC×2 退出")
+                            last_frozen = eng.frozen   # 不走"按 f 继续"横幅
                         # 逐足串行通电（审核发现）：六足同帧 request_release 会
                         # 让下一次 ctl.update 把六个阀线圈同刻通电——~25W 阶跃
                         # 正是 08-18 掉电疑似扳机，claim/ESC 退出/--release 全
@@ -897,7 +901,11 @@ def main():
                         for _ in range(int(0.3 / dt)):   # 停泵垫场
                             _pickup_tick()
                         for i in range(6):
-                            ctl.request_release(i)
+                            # 任意状态一律转入放气（与 ESC 退出同口径）：
+                            # request_release 只认 ATTACHED——冻结中的 FAULT
+                            # 脚、抽气中途的 SUCKING 脚、刚落地的 PRESSING 脚
+                            # 都会被跳过，SUCKING 脚还会被状态机反手通罐
+                            ctl.force_release(i)
                             # 直驱阀到排气位（与 VENTING 分支写同一值，幂等
                             # 不抢）：盲态下 ctl.update 会在首只 ATTACHED 脚
                             # 的读压处抛出、后面脚的 VENTING 分支轮不到——
@@ -905,14 +913,14 @@ def main():
                             io.set_valve(i, False)
                             for _ in range(int(0.2 / dt)):   # 足间错峰
                                 _pickup_tick()
-                        print("已放开：全阀排气、泵停，六足仅舵机撑住原地。"
-                              "可整机拿起；取下后 ESC×2 退出"
+                        print("已放开：全阀排气、泵停，六足仅舵机撑住原地"
+                              "（姿态已冻结）。可整机拿起；取下后 ESC×2 退出"
                               "（排气是维持态，阀线圈通电中，勿久放）")
                     else:
                         last_o = time.monotonic()
-                        print("\n再按一次 o 确认放开全部吸盘（六足保持站立，"
-                              "仅舵机撑住）——墙上=放开即坠，先扶稳机身"
-                              "（安全绳兜底）再确认")
+                        print("\n再按一次 o 确认放开全部吸盘（先停走并冻结当前"
+                              "姿态，六足仅舵机撑住）——墙上=放开即坠，先扶稳"
+                              "机身（安全绳兜底）再确认")
 
             if k is not None:
                 log.event(f"键 {k!r} → 速 {vx:g},{vy:g},{wz:g}"

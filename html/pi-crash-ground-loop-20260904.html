@@ -1,0 +1,402 @@
+<title>合闸瞬间的地环路</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --bg: #F2F4F6;
+    --paper: #FFFFFF;
+    --ink: #1A222C;
+    --ink-2: #4A5563;
+    --ink-3: #7B8794;
+    --rule: #D6DCE3;
+    --accent: #1E5AA8;
+    --accent-soft: #E3ECF8;
+    --bad: #C0392B;
+    --bad-soft: #FBE9E6;
+    --ok: #237A57;
+    --ok-soft: #E1F2EA;
+    --warn: #B7791F;
+    --warn-soft: #FBF1DC;
+    --mono-bg: #1B222B;
+    --mono-ink: #D9E0E8;
+    --mono-dim: #7F8B99;
+    --mono-hi: #FFD166;
+    --mono-bad: #FF7B6B;
+    --mono-ok: #7BD88F;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11161C;
+      --paper: #181F27;
+      --ink: #E4E9EF;
+      --ink-2: #AEB8C4;
+      --ink-3: #7C8794;
+      --rule: #2C3541;
+      --accent: #7FAEF0;
+      --accent-soft: #1C2A3D;
+      --bad: #F07A6C;
+      --bad-soft: #3A1F1C;
+      --ok: #6CC79A;
+      --ok-soft: #173126;
+      --warn: #E0B25C;
+      --warn-soft: #3A2F16;
+      --mono-bg: #0C1015;
+      --mono-ink: #D2DAE3;
+      --mono-dim: #6C7684;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11161C;
+    --paper: #181F27;
+    --ink: #E4E9EF;
+    --ink-2: #AEB8C4;
+    --ink-3: #7C8794;
+    --rule: #2C3541;
+    --accent: #7FAEF0;
+    --accent-soft: #1C2A3D;
+    --bad: #F07A6C;
+    --bad-soft: #3A1F1C;
+    --ok: #6CC79A;
+    --ok-soft: #173126;
+    --warn: #E0B25C;
+    --warn-soft: #3A2F16;
+    --mono-bg: #0C1015;
+    --mono-ink: #D2DAE3;
+    --mono-dim: #6C7684;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 980px; margin: 0 auto; padding: 40px 24px 96px; }
+  .doc { max-width: 72ch; }
+  h1, h2, h3 { font-family: "Noto Serif SC", "Songti SC", "SimSun", serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: 2.35rem; line-height: 1.2; font-weight: 700; letter-spacing: 0.01em; }
+  h2 { font-size: 1.45rem; font-weight: 700; margin-top: 8px; }
+  h3 { font-size: 1.1rem; font-weight: 600; margin-top: 20px; }
+  p { margin: 12px 0; }
+  a { color: var(--accent); }
+  code, pre, .mono { font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Noto Sans Mono CJK SC", monospace; }
+  code { font-size: 0.88em; background: var(--accent-soft); padding: 1px 5px; border-radius: 3px; }
+  .eyebrow { font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+
+  header { padding-bottom: 28px; border-bottom: 2px solid var(--ink); margin-bottom: 36px; }
+  header .meta { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 18px; color: var(--ink-2); font-size: 0.92rem; }
+  header .meta b { color: var(--ink); font-weight: 500; }
+  .lede { font-size: 1.12rem; color: var(--ink-2); margin-top: 16px; max-width: 64ch; }
+
+  .verdict {
+    display: grid; grid-template-columns: 1fr; gap: 0;
+    border: 1px solid var(--rule); background: var(--paper); margin: 28px 0 40px;
+  }
+  .verdict > div { padding: 18px 22px; }
+  .verdict > div + div { border-top: 1px solid var(--rule); }
+  .verdict .k { font-size: 0.78rem; letter-spacing: 0.12em; color: var(--ink-3); text-transform: uppercase; }
+  .verdict .v { font-size: 1.05rem; margin-top: 4px; }
+  .verdict .v.bad { color: var(--bad); font-weight: 700; }
+  @media (min-width: 720px) {
+    .verdict { grid-template-columns: 1fr 1fr 1fr; }
+    .verdict > div + div { border-top: 0; border-left: 1px solid var(--rule); }
+  }
+
+  section { margin: 48px 0; }
+  .sec-head { display: grid; grid-template-columns: 56px 1fr; gap: 14px; align-items: baseline; margin-bottom: 14px; }
+  .sec-head .num { font-family: "JetBrains Mono", monospace; color: var(--accent); font-size: 0.95rem; font-weight: 600; letter-spacing: 0.06em; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.93rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 500; color: var(--ink-3); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid var(--ink); }
+  .wide { overflow-x: auto; background: var(--paper); border: 1px solid var(--rule); padding: 4px 4px; margin: 16px 0; }
+  .wide table { min-width: 640px; }
+  td.num { font-family: "JetBrains Mono", monospace; font-size: 0.86rem; white-space: nowrap; }
+  .flag { display: inline-block; padding: 1px 8px; border-radius: 3px; font-family: "JetBrains Mono", monospace; font-size: 0.82rem; font-weight: 600; white-space: nowrap; }
+  .flag.bad { background: var(--bad-soft); color: var(--bad); }
+  .flag.ok { background: var(--ok-soft); color: var(--ok); }
+  .flag.warn { background: var(--warn-soft); color: var(--warn); }
+
+  pre.log {
+    margin: 16px 0; padding: 18px 20px; background: var(--mono-bg); color: var(--mono-ink);
+    font-size: 0.8rem; line-height: 1.6; overflow-x: auto; border-radius: 4px;
+  }
+  pre.log .t { color: var(--mono-dim); }
+  pre.log .hi { color: var(--mono-hi); font-weight: 600; }
+  pre.log .bad { color: var(--mono-bad); font-weight: 600; }
+  pre.log .ok { color: var(--mono-ok); }
+  pre.log .note { color: var(--mono-dim); font-style: italic; }
+  pre.cmd { margin: 12px 0; padding: 14px 16px; background: var(--mono-bg); color: var(--mono-ink); font-size: 0.82rem; line-height: 1.55; overflow-x: auto; border-radius: 4px; }
+
+  .steps { list-style: none; padding: 0; margin: 16px 0; border-top: 1px solid var(--rule); }
+  .steps li { display: grid; grid-template-columns: 96px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .steps .when { font-family: "JetBrains Mono", monospace; font-size: 0.82rem; color: var(--ink-3); padding-top: 4px; white-space: nowrap; }
+  .steps .what b { font-weight: 700; }
+  .steps .what .so { color: var(--ink-2); display: block; margin-top: 2px; }
+
+  .fig { background: var(--paper); border: 1px solid var(--rule); padding: 18px 18px 10px; margin: 18px 0; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 640px; }
+  .fig figcaption { font-size: 0.86rem; color: var(--ink-2); margin-top: 8px; line-height: 1.6; }
+
+  .two { display: grid; grid-template-columns: 1fr; gap: 14px; margin: 16px 0; }
+  @media (min-width: 720px) { .two { grid-template-columns: 1fr 1fr; } }
+  .panel { background: var(--paper); border: 1px solid var(--rule); padding: 16px 18px; }
+  .panel h3 { margin-top: 0; }
+  .panel.bad { border-left: 4px solid var(--bad); }
+  .panel.ok { border-left: 4px solid var(--ok); }
+  .panel .big { font-family: "JetBrains Mono", monospace; font-size: 1.5rem; font-weight: 600; margin: 4px 0; }
+  .panel.bad .big { color: var(--bad); }
+  .panel.ok .big { color: var(--ok); }
+
+  ul.plain { padding-left: 1.2em; margin: 10px 0; }
+  ul.plain li { margin: 6px 0; }
+  ol.fix { padding-left: 1.4em; margin: 10px 0; }
+  ol.fix li { margin: 10px 0; }
+  ol.fix b { font-weight: 700; }
+
+  .lesson { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
+  @media (min-width: 720px) { .lesson { grid-template-columns: 1fr 1fr; } }
+  .lesson .card { background: var(--paper); border: 1px solid var(--rule); padding: 16px 18px; }
+  .lesson .card h3 { margin: 0 0 6px; font-size: 1rem; }
+  .lesson .card p { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+
+  dl.refs { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size: 0.92rem; margin: 12px 0; }
+  dl.refs dt { font-family: "JetBrains Mono", monospace; font-size: 0.82rem; color: var(--ink-2); white-space: nowrap; }
+  dl.refs dd { margin: 0; }
+  footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--ink-3); font-size: 0.85rem; }
+  @media (max-width: 560px) {
+    h1 { font-size: 1.8rem; }
+    .sec-head { grid-template-columns: 44px 1fr; }
+    .steps li { grid-template-columns: 1fr; gap: 2px; }
+    dl.refs { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="page">
+<header>
+  <div class="eyebrow">六足爬壁机器人 · 排查案卷 · 2026-09-02 至 09-04</div>
+  <h1 style="margin-top:10px">合闸瞬间的地环路</h1>
+  <p class="lede">树莓派 5 在舵机继电器合闸的一瞬间概率性断电死机。三天里从"阀线圈"查到"5V 余量"，再查到"18 舵机大电流"，最后被一张 14 毫秒的日志和一根 USB 线定案。这份案卷记下走过的弯路、真正起作用的工具，和可以带到下一个项目的经验。</p>
+  <div class="meta">
+    <span>机器：<b>Pi 5 + Servo2040 + 18 舵机 + 六阀</b></span>
+    <span>供电：<b>2S 锂电 → 5V 降压给 Pi；继电器切舵机正极</b></span>
+    <span>症状：<b>状态灯绿 → 红常亮，SSH 失联，需重新上电</b></span>
+  </div>
+</header>
+
+<div class="verdict">
+  <div><div class="k">根因</div><div class="v bad">继电器合闸时的充电脉冲经 USB 地线灌进 Pi，PMIC 判欠压断电</div></div>
+  <div><div class="k">定案证据</div><div class="v">同一次开机只拔一根 USB 线：拔掉合闸十次 0x0，插回第一次 0x50000</div></div>
+  <div><div class="k">治法</div><div class="v">USB 隔离器；舵机轨预充软启动；星形接地</div></div>
+</div>
+
+<div class="doc">
+
+<section>
+  <div class="sec-head"><span class="num">01</span><h2>症状与约束</h2></div>
+  <p>启动脚本先把六个电磁阀线圈逐一通电到排气位，然后合舵机继电器。有一定概率就在这段时间里树莓派整机死掉：红灯常亮、绿灯熄灭、SSH 连不上，只能断电重来。Pi 5 的这个灯态是 PMIC 把处理器断电后的停机态，和 <code>sudo halt</code> 之后一样。</p>
+  <p>手上没有示波器。能用的只有万用表、Pi 自己的 PMIC 读数接口（<code>vcgencmd pmic_read_adc</code>，实际能跑到 10 Hz）和内核日志。死机是断电式的，死的瞬间没有任何进程能再写盘，所以一切都要"死前留痕"。</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">02</span><h2>为此做的工具</h2></div>
+  <h3>黑匣子</h3>
+  <p>每个大电流步骤（每路阀线圈通电、继电器合闸、固件使能）之前先写一行并 <code>fsync</code>，日志停在哪一行，凶手就是它的下一步。后台线程每 0.1 s 记一行 Pi 的 5V 输入电压和欠压标志，每行落盘。合闸后 0.05 / 0.15 / 0.30 s 再补采舵机母线电压电流。四个启动脚本同口径，日志落在 <code>software/logs/&lt;tag&gt;_时间.log</code>。</p>
+  <h3>验尸脚本</h3>
+  <p><code>scripts/pi_forensics.sh setup</code> 把内核日志改成持久化、每秒同步，必须在死机之前跑一次。重新上电后 <code>check</code> 一次带出：上次开机的内核尾巴、真实开机时刻（Pi 5 没有 RTC 电池，开机列表里的时间是上次存盘的假时钟）、当前欠压标志与 PMIC 电压、固件电源节点、最新一份黑匣子尾巴。</p>
+  <h3>看懂两个只读接口</h3>
+  <div class="wide"><table>
+    <thead><tr><th>接口</th><th>值</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td class="num">get_throttled</td><td class="num">bit 0 / bit 2</td><td>此刻欠压 / 此刻限频。瞬态过去就清零</td></tr>
+      <tr><td class="num">get_throttled</td><td class="num">bit 16 / bit 18</td><td>本次开机曾欠压 / 曾限频。粘滞位，重启才清。PMIC 快速比较器锁存，比 ADC 采样快得多</td></tr>
+      <tr><td class="num">chosen/power/power_reset</td><td class="num">2</td><td>树莓派工程师 timg236 论坛原话：非零（通常 2）表示上次开机是 PMIC 因输入电压过低断电。两次死机后读到的都是 2</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">03</span><h2>排查经过</h2></div>
+  <ul class="steps">
+    <li><span class="when">09-02</span><span class="what"><b>报告：阀线圈逐一亮起之后死机。</b><span class="so">第一嫌疑是阀。给启动加逐步落盘和 <code>--startup-gap</code>，准备把阀和舵机隔开定位。</span></span></li>
+    <li><span class="when">09-03</span><span class="what"><b>第一次验尸：六路线圈通电全程 5V 平稳 4.88 V，"继电器已合闸"是最后一行，50 ms 内死。</b><span class="so">阀无辜，扳机是合闸。当时把根因押在"5V 空载只有 4.89 V 余量太薄"上，同时把合闸拆成"合继电器 → 0.4 s → 固件使能"两步，让黑匣子能分清带电冲击和出力冲击。</span></span></li>
+    <li><span class="when">09-04 下午</span><span class="what"><b>换成可调降压模块，调到 5.19 V，PMIC 读 5.105 V。跑 walk_teleop 仍然死机。</b><span class="so">静态电压不是根因。这次 walk_teleop 没接黑匣子，只能空手验尸；journal 在开机 301 s 后戛然而止、没有任何欠压字样。补齐 walk / voice 两个脚本的黑匣子。</span></span></li>
+    <li><span class="when">09-04 晚</span><span class="what"><b>用户发现：开机 0x0，跑一次 walk_teleop 没死，标志却变成 0x50000。</b><span class="so">每次合闸都欠压，只是有时跌得不够深。偶发的致命事件有了一个确定的、非致命的替身。</span></span></li>
+    <li><span class="when">21:54</span><span class="what"><b>关键日志：合闸后 14 ms 标志置位，此时舵机母线 0.00 A。</b><span class="so">不是"18 舵机抽垮电池"。之后使能瞬间 6.67 A、电池掉 0.4 V，Pi 的 5V 纹丝不动。</span></span></li>
+    <li><span class="when">22:xx</span><span class="what"><b>A/B：拔掉 Pi 到 Servo2040 的 USB 线只合闸，十次 0x0；插回，第一次 0x50000。</b><span class="so">路径定案。降压模块的指示灯在合闸瞬间闪绿，是模块自己看见了同一股脉冲。</span></span></li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">04</span><h2>定案的那份日志</h2></div>
+  <p>walk_20260904_215456.log，这一次没死。看时间戳：GPIO17 拉高在 1.708 s，下一拍 1.722 s 标志已经是 0x50005，此时舵机一个安培都没抽。</p>
+  <pre class="log"><span class="t">[    1.590]</span> TLM 电源 5V=5.112V 核心=0.752V/0.64A thr=0x0
+<span class="t">[    1.705]</span> EVT 舵机继电器合闸前 母线=<span class="hi">0.05V 0.00A</span>  Pi[5V=5.112V thr=0x0]
+<span class="t">[    1.708]</span> EVT <span class="hi">舵机继电器已合闸</span>（18 舵机带电，固件未使能不出力）
+<span class="t">[    1.722]</span> TLM 电源 5V=5.105V 核心=0.747V/0.64A <span class="bad">thr=0x50005[欠压中,限频中,曾欠压,曾限频]</span>   <span class="note">← 合闸后 14 ms</span>
+<span class="t">[    1.722]</span> EVT <span class="bad">⚠ Pi 欠压中（get_throttled bit0）</span>
+<span class="t">[    1.766]</span> EVT 合闸后 0.05s 母线=<span class="hi">7.70V 0.00A</span>   <span class="note">← 舵机没有电流</span>
+<span class="t">[    1.852]</span> EVT <span class="ok">Pi 欠压解除</span>
+<span class="t">[    2.120]</span> EVT 固件已使能
+<span class="t">[    2.277]</span> EVT 使能后 0.15s 母线=<span class="hi">7.31V 6.67A</span>  Pi[5V=5.134V thr=0x50000]   <span class="note">← 真正的大电流，Pi 无事</span>
+<span class="t">[   44.025]</span> EVT Pi 电源监视结束：采样 118 次 <span class="hi">5V 最低 5.072V</span> thr=0x50000</pre>
+  <div class="wide"><table>
+    <thead><tr><th>时刻 (s)</th><th>事件</th><th>舵机母线</th><th>Pi 5V (ADC)</th><th>固件标志</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1.708</td><td>GPIO17 拉高，继电器合闸</td><td class="num">0.05 V / 0 A</td><td class="num">5.112 V</td><td><span class="flag ok">0x0</span></td></tr>
+      <tr><td class="num">1.722</td><td>合闸后 14 ms</td><td class="num">—</td><td class="num">5.105 V</td><td><span class="flag bad">0x50005 欠压中</span></td></tr>
+      <tr><td class="num">1.766</td><td>合闸后 58 ms</td><td class="num">7.70 V / 0.00 A</td><td class="num">5.105 V</td><td><span class="flag warn">0x50005</span></td></tr>
+      <tr><td class="num">2.120</td><td>固件使能，18 舵机开始出力</td><td class="num">7.71 V / 0 A</td><td class="num">5.146 V</td><td><span class="flag warn">无新事件</span></td></tr>
+      <tr><td class="num">2.277</td><td>使能后 0.15 s</td><td class="num">7.31 V / 6.67 A</td><td class="num">5.134 V</td><td><span class="flag warn">无新事件</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>ADC 全程最低 5.072 V，从来没读到过线以下，标志却置了。说明跌落远短于 100 ms，点采样根本碰不到它，只有 PMIC 内部的快速比较器锁存下来的粘滞位能看见。</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">05</span><h2>A/B 实验</h2></div>
+  <p>同一次开机，同一段程序，只碰 GPIO17：合闸 0.2 s 后读标志，停 2 s，断开，停 2 s，重复十次。不开串口，不碰阀，舵机带电但没有 PWM 不出力。唯一变量是 Pi 与 Servo2040 之间的 USB 线。</p>
+  <div class="two">
+    <div class="panel ok"><h3>拔掉 USB 线</h3><div class="big">10 / 10 → 0x0</div><p>合闸十次，粘滞位一次都没置。</p></div>
+    <div class="panel bad"><h3>插回 USB 线</h3><div class="big">第 1 次 → 0x50000</div><p>第一次合闸就置位，之后九次一直是。</p></div>
+  </div>
+  <p>没有第二种解释：脉冲进 Pi 的路径就是这根 USB 线的地。</p>
+  <pre class="cmd">import subprocess, time, lgpio
+h = lgpio.gpiochip_open(4)          # Pi 5 主 gpiochip（新内核为 0）
+lgpio.gpio_claim_output(h, 17, 0)   # GPIO17 = 继电器 IN1
+def thr(): return subprocess.run(["vcgencmd","get_throttled"], capture_output=True, text=True).stdout.strip()
+print("合闸前", thr())
+for i in range(10):
+    lgpio.gpio_write(h, 17, 1); time.sleep(0.2); print(f"第 {i+1} 次合闸后 {thr()}", flush=True)
+    time.sleep(2); lgpio.gpio_write(h, 17, 0); time.sleep(2)</pre>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">06</span><h2>脉冲走的路</h2></div>
+  <figure class="fig">
+    <svg viewBox="0 0 900 400" role="img" aria-label="合闸脉冲经 USB 地线进入树莓派的电流路径">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#C0392B"/>
+        </marker>
+      </defs>
+      <!-- battery -->
+      <rect x="30" y="150" width="110" height="110" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="85" y="192" font-size="15" text-anchor="middle" fill="#1A222C" font-weight="600">2S 锂电</text>
+      <text x="85" y="214" font-size="12" text-anchor="middle" fill="#4A5563">7.7 V</text>
+      <text x="48" y="166" font-size="13" fill="#4A5563">+</text>
+      <text x="48" y="254" font-size="13" fill="#4A5563">−</text>
+      <!-- relay -->
+      <rect x="240" y="70" width="120" height="54" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="300" y="93" font-size="14" text-anchor="middle" fill="#1A222C" font-weight="600">继电器</text>
+      <text x="300" y="111" font-size="11" text-anchor="middle" fill="#4A5563">GPIO17 合闸</text>
+      <!-- servo2040 -->
+      <rect x="470" y="60" width="150" height="90" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="545" y="90" font-size="14" text-anchor="middle" fill="#1A222C" font-weight="600">Servo2040</text>
+      <text x="545" y="110" font-size="12" text-anchor="middle" fill="#4A5563">+ 18 舵机</text>
+      <text x="545" y="130" font-size="11" text-anchor="middle" fill="#4A5563">内部电容 ≈ 毫法级</text>
+      <!-- buck -->
+      <rect x="240" y="230" width="150" height="110" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="315" y="257" font-size="14" text-anchor="middle" fill="#1A222C" font-weight="600">XL4015 降压</text>
+      <text x="315" y="276" font-size="12" text-anchor="middle" fill="#4A5563">IN− → OUT−</text>
+      <rect x="290" y="290" width="50" height="16" rx="2" fill="#FBF1DC" stroke="#B7791F"/>
+      <text x="315" y="302" font-size="10" text-anchor="middle" fill="#7A4F0C">R050</text>
+      <text x="315" y="328" font-size="11" text-anchor="middle" fill="#4A5563">低边检流 50 mΩ</text>
+      <!-- pi -->
+      <rect x="470" y="230" width="150" height="110" rx="6" fill="#EEF2F6" stroke="#4A5563" stroke-width="1.5"/>
+      <text x="545" y="262" font-size="14" text-anchor="middle" fill="#1A222C" font-weight="600">树莓派 5</text>
+      <text x="545" y="284" font-size="12" text-anchor="middle" fill="#4A5563">PMIC 看 5V − GND</text>
+      <text x="545" y="306" font-size="11" text-anchor="middle" fill="#4A5563">GND 杜邦线 ≈ 0.1 Ω</text>
+      <!-- power wires (normal) -->
+      <line x1="140" y1="170" x2="240" y2="97" stroke="#4A5563" stroke-width="2"/>
+      <line x1="360" y1="97" x2="470" y2="97" stroke="#4A5563" stroke-width="2"/>
+      <line x1="140" y1="250" x2="240" y2="250" stroke="#4A5563" stroke-width="2"/>
+      <line x1="390" y1="260" x2="470" y2="260" stroke="#4A5563" stroke-width="2"/>
+      <text x="430" y="252" font-size="11" text-anchor="middle" fill="#4A5563">5V</text>
+      <!-- servo return (main path, big current) -->
+      <path d="M545,150 L545,190 L110,190 L110,260" fill="none" stroke="#4A5563" stroke-width="3"/>
+      <text x="330" y="182" font-size="11" text-anchor="middle" fill="#4A5563">舵机回流地 · 几十安 · 百微秒</text>
+      <!-- USB cable -->
+      <line x1="620" y1="120" x2="700" y2="120" stroke="#4A5563" stroke-width="2"/>
+      <line x1="700" y1="120" x2="700" y2="300" stroke="#4A5563" stroke-width="2"/>
+      <line x1="700" y1="300" x2="620" y2="300" stroke="#4A5563" stroke-width="2"/>
+      <text x="720" y="215" font-size="12" fill="#1A222C" font-weight="600">USB 线</text>
+      <text x="720" y="233" font-size="11" fill="#4A5563">地线把两块板连通</text>
+      <!-- pulse path (red) -->
+      <path d="M560,150 L560,175 L640,175 L640,130 L660,130 L685,130 L685,290 L640,290 L640,300" fill="none" stroke="#C0392B" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.95"/>
+      <path d="M600,300 L600,320 L470,320" fill="none" stroke="#C0392B" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.95"/>
+      <path d="M470,320 L410,320 L410,298 L340,298" fill="none" stroke="#C0392B" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.95"/>
+      <path d="M290,298 L200,298 L200,250 L140,250" fill="none" stroke="#C0392B" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.95" marker-end="url(#arr)"/>
+      <text x="560" y="345" font-size="11" text-anchor="middle" fill="#C0392B">一部分脉冲改走 USB 地 → Pi 地平面 → GND 杜邦线 → R050 → 电池负极</text>
+      <text x="450" y="375" font-size="12" text-anchor="middle" fill="#1A222C">杜邦线和 R050 上的压降，在 PMIC 眼里就是 5V 跌落。跌浅留粘滞位，跌深红灯。</text>
+    </svg>
+    <figcaption>触点闭合的一瞬间，电池对 18 个舵机和 Servo2040 的电容充电，峰值几十安、持续百微秒，触点抖动还会来几下。这股电流在舵机回流地线上造成瞬时压差，把 Servo2040 的地抬高。USB 线把 Servo2040 的地和 Pi 的地连在一起，于是一部分脉冲改道从 Pi 身上过。示意图颜色固定，与页面主题无关。</figcaption>
+  </figure>
+  <h3>降压模块的绿灯是旁证</h3>
+  <p>新换的模块是 XL4015 5A 恒流恒压板，背面丝印写着红灯恒流、蓝灯充电、绿灯充满。检流电阻 R10 是 50 mΩ，串在 OUT− 和 IN− 之间，也就是 Pi 的地和电池负极之间；输出电压按 IN− 调节，任何流过它的电流都直接从 Pi 看到的 5V 里扣掉。合闸瞬间蓝灯闪绿，是电流比较器看见输出电流一下子掉到近零甚至反向，只可能是外来脉冲穿过了它。旧的固定 5V 模块没有这只电阻也死机，所以它不是根因，只是把跌落再放大了一截。</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">07</span><h2>曾经看起来像根因的线索</h2></div>
+  <div class="wide"><table>
+    <thead><tr><th>线索</th><th>为什么像</th><th>怎么排除的</th></tr></thead>
+    <tbody>
+      <tr><td>六阀线圈逐一通电</td><td>死机总在"阀亮完之后"</td><td>黑匣子：线圈通电全程 5V 平稳，日志停在合闸那一行</td></tr>
+      <tr><td>Pi 5V 空载只有 4.89 V</td><td>比官方电源低 0.2 V，余量确实薄</td><td>换模块调到 5.19 V 照样死；ADC 从没读到过线以下</td></tr>
+      <tr><td>18 舵机同时上电抽垮电池</td><td>合闸就是给 18 舵机上电</td><td>欠压发生时舵机 0 A；真正的 6.67 A 来时 Pi 5V 纹丝不动</td></tr>
+      <tr><td>电池塌陷或保护板跳闸</td><td>共用一块电池</td><td>2S 航模锂电无保护板，内阻低；合闸后母线稳在 7.70 V</td></tr>
+      <tr><td>软件或内核崩溃</td><td>SSH 失联</td><td>journal 戛然而止无 Oops；power_reset=2 是 PMIC 断电；硬件看门狗也救不回来</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">08</span><h2>结论与治法</h2></div>
+  <p>根因是继电器合闸瞬间对舵机侧电容充电的脉冲，经 Pi 与 Servo2040 之间的 USB 地线灌进树莓派，在 GND 杜邦线和检流电阻上产生的压降被 PMIC 判为输入欠压。跌得浅时只留一个粘滞位，跌得深时 PMIC 直接断电，表现为红灯常亮。</p>
+  <ol class="fix">
+    <li><b>USB 隔离器。</b>ADuM3160 一类的全速隔离器，12 Mbps 够 Servo2040 的串口，插在 Pi 和 Servo2040 之间，地环路物理断开。最干净的一刀。</li>
+    <li><b>舵机轨预充软启动。</b>第二只小继电器串 4.7 Ω 5 W 电阻先合 100 ms 把电容充到位，再合主继电器；或换 P-MOS 软启动模块。先用 10 Ω 电阻跨触点手动预充一秒再合闸、看粘滞位，即可验证。</li>
+    <li><b>星形接地。</b>Servo2040 的 GND 和降压模块的 IN− 各自短粗线直接压到电池负极同一点；Pi 的 5V/GND 不用杜邦线。只能减轻，不能断路径。</li>
+  </ol>
+  <p>Pi 5V 针脚上并电容只治标：按 Pi 5 约 0.7 A 算，2200 µF 只能把 0.4 V 的跌落撑约 1 ms。XL4015 的 R050 可以用焊锡短接让 OUT− 直接等于 IN−，模块退化成纯稳压，指示灯失效无妨；路径断掉之后它本身无害，可以不动。</p>
+  <p>软件层已经到位：合闸拆两步、四个启动脚本同口径的黑匣子、验尸脚本的真实时间线和 power_reset 释义。<code>--startup-gap</code> 已无必要。</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">09</span><h2>可以带走的经验</h2></div>
+  <div class="lesson">
+    <div class="card"><h3>断电式死亡只能死前留痕</h3><p>每个大电流步骤之前写一行并 fsync，日志停在哪一行，凶手就是它的下一步。没有这一行，三天的排查一步都走不动。</p></div>
+    <div class="card"><h3>给偶发的致命事件找一个确定的替身</h3><p>粘滞位每次合闸必置，不需要等死机。实验判据从"死不死"换成"置不置"，一次重启就有结论，"没死"也不再是无信息。</p></div>
+    <div class="card"><h3>点采样看不见瞬态</h3><p>ADC 读 5.105 V 的同一拍，快速比较器已经锁存了欠压。万用表和 10 Hz 采样对百微秒的事件是盲的，别用它们的"正常"否定故障。</p></div>
+    <div class="card"><h3>大电流不等于问题，开关瞬间才是</h3><p>6.67 A 的持续冲击 Pi 毫无反应；0 A 时的合闸却每次欠压。看的是 di/dt 和电流走哪条路，不是安培数。</p></div>
+    <div class="card"><h3>地不是一个点</h3><p>USB 线、检流电阻、杜邦线各自都是地回路里的电阻。两块板共地又各自回电池，脉冲就会挑一条你没想到的路。</p></div>
+    <div class="card"><h3>一次只变一个变量，同一次开机</h3><p>拔一根线、十次合闸、插回、再合，结果 0x0 与 0x50000 对照，不留任何解释空间。比换模块快，也比换模块便宜。</p></div>
+    <div class="card"><h3>先找厂家的一句话</h3><p>power_reset=2 的含义在论坛上是一句原话，两次都读到它就等于 PMIC 的口供。查一次，省半天猜。</p></div>
+    <div class="card"><h3>换零件之前先量证据</h3><p>换降压模块只证明了"静态电压不是根因"，这个结论值，但如果先看粘滞位，本可以不花这一步。</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">10</span><h2>索引</h2></div>
+  <dl class="refs">
+    <dt>hexapod/powerlog.py</dt><dd>PowerWatch 采样线程、启动步骤标记、合闸两段采样</dd>
+    <dt>hexapod/runlog.py</dt><dd>黑匣子 RunLog，mark() = 写一行并 fsync</dd>
+    <dt>hexapod/driver.py</dt><dd>enable(True) = power_on → 0.4 s → arm</dd>
+    <dt>scripts/pi_forensics.sh</dt><dd>setup 死机前一次；check 重新上电后</dd>
+    <dt>logs/lean_20260903_135325.log</dt><dd>第一次验尸，合闸后 50 ms 内死</dd>
+    <dt>logs/walk_20260904_215456.log</dt><dd>定案日志，合闸后 14 ms 欠压、舵机 0 A</dd>
+    <dt>docs/P4-GUIDE.md</dt><dd>常见问题里的案情记录</dd>
+    <dt>forums.raspberrypi.com t=361231</dt><dd>timg236 关于 power_reset 与 PMIC 欠压停机的说明</dd>
+  </dl>
+  <pre class="cmd">vcgencmd get_throttled                    # 0x50000 = 曾欠压 + 曾限频（重启才清）
+hexdump -C /proc/device-tree/chosen/power  # power_reset 非零 = 上次开机 PMIC 欠压断电
+bash scripts/pi_forensics.sh check         # 重新上电后一次带出所有线索</pre>
+</section>
+
+</div>
+<footer>案卷整理于 2026-09-04。机器仍在 P4 阶段；三条治法待装机验证，验证判据仍是粘滞位。</footer>
+</div>

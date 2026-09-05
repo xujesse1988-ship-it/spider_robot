@@ -19,6 +19,8 @@
 #     → 5V 降压输入被电池塌陷拖垮（PMIC 欠压停机=红灯），治供电；
 #     5V 一直 5.0x 平稳、内核也没有 voltage 字样却直接死 → 偏向干扰/地弹
 #     （续流二极管、地线拓扑、I2C/USB 线离 12V 束）或 SoC/PCIe 侧问题
+#     ——09-04 定案就是这一种：合闸充电脉冲经 Pi↔Servo2040 USB 地环路进 Pi，
+#     拔 USB 合闸十次 0x0、插回第一次 0x50000；案卷 html/pi-crash-ground-loop-20260904.html
 #   * journalctl -b -1 末尾有 "Undervoltage detected" / hwmon 字样 = 内核自己
 #     也看见了欠压；有 Oops/panic = 软件崩溃（看 pstore 全文）；什么都没有、
 #     日志戛然而止 = 断电式死亡（PMIC 停机）最典型的样子

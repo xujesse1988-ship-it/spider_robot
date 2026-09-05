@@ -94,7 +94,7 @@
 | [`hardware/climbing-parts/`](hardware/climbing-parts/) | 自制吸盘小腿、门盖、气动舱固定件（[打印说明](hardware/climbing-parts/README.md)） |
 | [`tools/`](tools/) | 打印件参数化生成器 |
 | [`paper/`](paper/) | 论文 LaTeX 源码（中英）、图、参考文献 |
-| [`html/`](html/) | 22 份实验分析与设计图解报告，直接用浏览器打开 |
+| [`html/`](html/) | 23 份实验分析与设计图解报告，直接用浏览器打开 |
 | [`images/`](images/) | 零件照片、实验视频与 188 张量化核对图 |
 
 ### 文档

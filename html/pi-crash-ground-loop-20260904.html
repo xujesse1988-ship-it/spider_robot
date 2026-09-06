@@ -214,7 +214,7 @@
     <tbody>
       <tr><td class="num">get_throttled</td><td class="num">bit 0 / bit 2</td><td>此刻欠压 / 此刻限频。瞬态过去就清零</td></tr>
       <tr><td class="num">get_throttled</td><td class="num">bit 16 / bit 18</td><td>本次开机曾欠压 / 曾限频。粘滞位，重启才清。PMIC 快速比较器锁存，比 ADC 采样快得多</td></tr>
-      <tr><td class="num">chosen/power/power_reset</td><td class="num">2</td><td>树莓派工程师 timg236 论坛原话：非零（通常 2）表示上次开机是 PMIC 因输入电压过低断电。两次死机后读到的都是 2</td></tr>
+      <tr><td class="num">chosen/power/power_reset</td><td class="num">2</td><td>树莓派工程师 timg236 论坛原话：非零（通常 2）表示上次开机是 PMIC 因输入电压过低断电。两次死机后读到的都是 2。<strong>09-06 更正：</strong>正常 poweroff/reboot 几次之后仍读 2，本机上它没有区分力，已从证据里撤下（见 07 节）</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -349,7 +349,8 @@ for i in range(10):
       <tr><td>Pi 5V 空载只有 4.89 V</td><td>比官方电源低 0.2 V，余量确实薄</td><td>换模块调到 5.19 V 照样死；ADC 从没读到过线以下</td></tr>
       <tr><td>18 舵机同时上电抽垮电池</td><td>合闸就是给 18 舵机上电</td><td>欠压发生时舵机 0 A；真正的 6.67 A 来时 Pi 5V 纹丝不动</td></tr>
       <tr><td>电池塌陷或保护板跳闸</td><td>共用一块电池</td><td>2S 航模锂电无保护板，内阻低；合闸后母线稳在 7.70 V</td></tr>
-      <tr><td>软件或内核崩溃</td><td>SSH 失联</td><td>journal 戛然而止无 Oops；power_reset=2 是 PMIC 断电；硬件看门狗也救不回来</td></tr>
+      <tr><td>软件或内核崩溃</td><td>SSH 失联</td><td>journal 戛然而止无 Oops；死后红灯常亮 = SoC 已被 PMIC 断电，内核崩溃不会让灯变红；硬件看门狗也救不回来</td></tr>
+      <tr><td>power_reset=2</td><td>PMIC 的口供</td><td>09-06 对照：正常 poweroff/reboot 几次之后仍读 2，本机上无区分力，从证据里撤下。定案不靠它，靠 A/B 的粘滞位</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -375,7 +376,7 @@ for i in range(10):
     <div class="card"><h3>大电流不等于问题，开关瞬间才是</h3><p>6.67 A 的持续冲击 Pi 毫无反应；0 A 时的合闸却每次欠压。看的是 di/dt 和电流走哪条路，不是安培数。</p></div>
     <div class="card"><h3>地不是一个点</h3><p>USB 线、检流电阻、杜邦线各自都是地回路里的电阻。两块板共地又各自回电池，脉冲就会挑一条你没想到的路。</p></div>
     <div class="card"><h3>一次只变一个变量，同一次开机</h3><p>拔一根线、十次合闸、插回、再合，结果 0x0 与 0x50000 对照，不留任何解释空间。比换模块快，也比换模块便宜。</p></div>
-    <div class="card"><h3>先找厂家的一句话</h3><p>power_reset=2 的含义在论坛上是一句原话，两次都读到它就等于 PMIC 的口供。查一次，省半天猜。</p></div>
+    <div class="card"><h3>厂家的一句话也要做对照</h3><p>power_reset=2 在论坛上有原话背书，两次死机后都读到，当时当成 PMIC 的口供。09-06 正常关机后再读，还是 2。没有对照组的读数不是证据。</p></div>
     <div class="card"><h3>换零件之前先量证据</h3><p>换降压模块只证明了"静态电压不是根因"，这个结论值，但如果先看粘滞位，本可以不花这一步。</p></div>
   </div>
 </section>
@@ -390,10 +391,10 @@ for i in range(10):
     <dt>logs/lean_20260903_135325.log</dt><dd>第一次验尸，合闸后 50 ms 内死</dd>
     <dt>logs/walk_20260904_215456.log</dt><dd>定案日志，合闸后 14 ms 欠压、舵机 0 A</dd>
     <dt>docs/P4-GUIDE.md</dt><dd>常见问题里的案情记录</dd>
-    <dt>forums.raspberrypi.com t=361231</dt><dd>timg236 关于 power_reset 与 PMIC 欠压停机的说明</dd>
+    <dt>forums.raspberrypi.com t=361231</dt><dd>timg236 关于 power_reset 与 PMIC 欠压停机的说明（09-06 对照后，此字段在本机无区分力）</dd>
   </dl>
   <pre class="cmd">vcgencmd get_throttled                    # 0x50000 = 曾欠压 + 曾限频（重启才清）
-hexdump -C /proc/device-tree/chosen/power  # power_reset 非零 = 上次开机 PMIC 欠压断电
+hexdump -C /proc/device-tree/chosen/power  # power_reset 本机正常关机后也读 2，无区分力，看看就好
 bash scripts/pi_forensics.sh check         # 重新上电后一次带出所有线索</pre>
 </section>
 

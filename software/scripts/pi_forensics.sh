@@ -24,12 +24,12 @@
 #   * journalctl -b -1 末尾有 "Undervoltage detected" / hwmon 字样 = 内核自己
 #     也看见了欠压；有 Oops/panic = 软件崩溃（看 pstore 全文）；什么都没有、
 #     日志戛然而止 = 断电式死亡（PMIC 停机）最典型的样子
-#   * /proc/device-tree/chosen/power/power_reset 非零（通常 2）= **上一次开机是
-#     PMIC 因输入电压过低把板子断电的**（树莓派工程师 timg236 论坛原话：
-#     "hexdump -C /proc/device-tree/chosen/power will be non-zero (probably 2)
-#     if this occurred on the previous boot"，forums.raspberrypi.com t=361231）。
-#     09-03/09-04 两次死机后读到的都是 2，正常 sudo reboot 后应回 0——对照一次
-#     就能把"是不是 PMIC 欠压停机"钉死
+#   * /proc/device-tree/chosen/power/power_reset：树莓派工程师 timg236 论坛原话
+#     说非零（通常 2）= 上次开机被 PMIC 因低压断电（forums.raspberrypi.com
+#     t=361231，前提是用电源键重启且没断过电）。09-03/09-04 两次死机后读到 2，
+#     **但 09-06 对照：正常 poweroff/reboot 几次之后仍读 2**——本机上此字段没有
+#     区分力，不能当证据，check 只是照抄一份。死后红灯常亮本身已说明 SoC 被
+#     PMIC 断电（内核崩溃灯不会变红），不需要它
 #   * 黑匣子标签：climb_（climb_walk）/lean_（body_lean）/walk_（walk_teleop）/
 #     voice_（voice_teleop），check 只看最新一份
 set -u
@@ -127,8 +127,8 @@ do_check() {
             echo "hwmon rpi_volt in0_lcrit_alarm=$(cat "$n/in0_lcrit_alarm" 2>/dev/null)"
     done
     echo
-    echo "===== 固件电源节点 /proc/device-tree/chosen/power（大端 u32；power_reset 非零(通常 2)="
-    echo "      上次开机被 PMIC 因低压断电，正常 reboot 后应为 0；max_current 单位 mA）"
+    echo "===== 固件电源节点 /proc/device-tree/chosen/power（大端 u32；power_reset 09-06 对照发现"
+    echo "      正常关机后也读 2，本机无区分力、仅记录；max_current 单位 mA）"
     for f in /proc/device-tree/chosen/power/*; do
         [ -f "$f" ] && printf '%s = ' "$(basename "$f")" && od -An -tx1 "$f" | tr -s ' \n' ' ' && echo
     done 2>/dev/null

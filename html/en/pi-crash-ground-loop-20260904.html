@@ -215,7 +215,7 @@
     <tbody>
       <tr><td class="num">get_throttled</td><td class="num">bit 0 / bit 2</td><td>Undervoltage now / throttled now. Clears once the transient passes</td></tr>
       <tr><td class="num">get_throttled</td><td class="num">bit 16 / bit 18</td><td>Undervoltage occurred / throttling occurred this boot. Sticky bits, cleared only by reboot. Latched by the PMIC's fast comparator, far faster than ADC sampling</td></tr>
-      <tr><td class="num">chosen/power/power_reset</td><td class="num">2</td><td>Raspberry Pi engineer timg236, verbatim on the forum: non-zero (usually 2) means the previous boot was cut by the PMIC because the input voltage was too low. Read 2 after both crashes</td></tr>
+      <tr><td class="num">chosen/power/power_reset</td><td class="num">2</td><td>Raspberry Pi engineer timg236, verbatim on the forum: non-zero (usually 2) means the previous boot was cut by the PMIC because the input voltage was too low. Read 2 after both crashes. <strong>Correction 09-06:</strong> it still reads 2 after several normal poweroffs/reboots, so on this machine it has no discriminating power and is withdrawn as evidence (see section 07)</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -350,7 +350,8 @@ for i in range(10):
       <tr><td>Pi 5 V only 4.89 V unloaded</td><td>0.2 V below the official supply, the margin really was thin</td><td>Swapped module set to 5.19 V, still dies; the ADC never read below the threshold</td></tr>
       <tr><td>18 servos powering up at once drag the battery down</td><td>Closure is exactly powering up 18 servos</td><td>Servos at 0 A when the undervoltage happened; when the real 6.67 A came, the Pi's 5 V did not budge</td></tr>
       <tr><td>Battery sag or protection-board trip</td><td>One shared battery</td><td>2S hobby LiPo with no protection board, low internal resistance; bus steady at 7.70 V after closure</td></tr>
-      <tr><td>Software or kernel crash</td><td>SSH drops</td><td>Journal stops abruptly with no Oops; power_reset=2 is a PMIC power cut; the hardware watchdog could not save it either</td></tr>
+      <tr><td>Software or kernel crash</td><td>SSH drops</td><td>Journal stops abruptly with no Oops; the solid red LED after death means the PMIC has already cut the SoC, and a kernel crash does not turn the LED red; the hardware watchdog could not save it either</td></tr>
+      <tr><td>power_reset=2</td><td>The PMIC's own testimony</td><td>Control on 09-06: it still reads 2 after several normal poweroffs/reboots, so on this machine it has no discriminating power and is withdrawn as evidence. The verdict does not rest on it but on the sticky bit in the A/B test</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -376,7 +377,7 @@ for i in range(10):
     <div class="card"><h3>Big current is not the problem; the switching instant is</h3><p>A sustained 6.67 A surge left the Pi unmoved; closure at 0 A caused undervoltage every time. What matters is di/dt and which path the current takes, not the amperes.</p></div>
     <div class="card"><h3>Ground is not a point</h3><p>The USB cable, the sense resistor and the Dupont wire are each a resistance in the ground return. When two boards share ground and each returns to the battery separately, the pulse will pick a path you did not think of.</p></div>
     <div class="card"><h3>Change one variable at a time, within one boot</h3><p>Unplug one cable, close ten times, plug back in, close again; the contrast between 0x0 and 0x50000 leaves no room for interpretation. Faster than swapping modules, and cheaper too.</p></div>
-    <div class="card"><h3>Find the manufacturer's one sentence first</h3><p>The meaning of power_reset=2 is one verbatim sentence on the forum; reading it after both crashes is the PMIC's own testimony. One lookup saves half a day of guessing.</p></div>
+    <div class="card"><h3>The manufacturer's one sentence needs a control too</h3><p>power_reset=2 is backed by a verbatim forum sentence and was read after both crashes, so at the time it passed as the PMIC's own testimony. Read again on 09-06 after a normal shutdown: still 2. A reading without a control group is not evidence.</p></div>
     <div class="card"><h3>Measure the evidence before swapping parts</h3><p>Swapping the buck module only proved "static voltage is not the root cause"; that conclusion is worth something, but had the sticky bit been checked first, that step could have been skipped.</p></div>
   </div>
 </section>
@@ -391,10 +392,10 @@ for i in range(10):
     <dt>logs/lean_20260903_135325.log</dt><dd>First autopsy, dead within 50 ms of closure</dd>
     <dt>logs/walk_20260904_215456.log</dt><dd>Decisive log, undervoltage 14 ms after closure with servos at 0 A</dd>
     <dt>docs/P4-GUIDE.md</dt><dd>The case notes in the common-problems section</dd>
-    <dt>forums.raspberrypi.com t=361231</dt><dd>timg236 on power_reset and PMIC undervoltage shutdown</dd>
+    <dt>forums.raspberrypi.com t=361231</dt><dd>timg236 on power_reset and PMIC undervoltage shutdown (after the 09-06 control, the field has no discriminating power on this machine)</dd>
   </dl>
   <pre class="cmd">vcgencmd get_throttled                    # 0x50000 = undervoltage occurred + throttling occurred (cleared only by reboot)
-hexdump -C /proc/device-tree/chosen/power  # power_reset non-zero = previous boot cut by PMIC undervoltage
+hexdump -C /proc/device-tree/chosen/power  # power_reset also reads 2 after a normal shutdown on this machine; no discriminating power, for the record only
 bash scripts/pi_forensics.sh check         # after the power cycle, brings out all clues at once</pre>
 </section>
 

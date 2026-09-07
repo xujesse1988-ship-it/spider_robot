@@ -16,7 +16,12 @@
     也留下证据；
   - servo_power_on 在舵机继电器合闸后多点采样 Servo2040 读到的母线电压/电流：
     18 舵机同刻上电的冲击把电池拽到多少——5V 降压模块与舵机共电池
-    （CLIMBING-DESIGN §5），母线塌陷是 5V 塌陷的上游。
+    （CLIMBING-DESIGN §5），母线塌陷是 5V 塌陷的上游；
+  - servo_relay_close（09-07，脚本 --relay-first）：把"只合继电器"提到六阀线圈
+    通电之前。装 USB 隔离器后三次死机全落在阀通电后的合闸瞬间，而阀不通电的
+    只合闸脚本十次干净——合闸时电池负载越轻，降压板输入余量越大。这是换降压板
+    之前的软件缓解，也是一组 A/B：前置后仍死，"阀负载吃掉余量"就站不住。固件
+    使能仍在原位：servo_power_on(relay_closed=True) 只做使能那一段。
 
 非树莓派（无 vcgencmd）自动降级为只留步骤标记，开发机 --mock 不受影响。
 死机后重新上电，跑 scripts/pi_forensics.sh check 看上次开机的内核线索 +
@@ -323,10 +328,44 @@ def _sample_after(drv, log, sfx, label, samples, total_s):
         time.sleep(rem)
 
 
+def _staged(drv):
+    """有 power_on/arm 两步的驱动（Servo2040Driver / MockDriver）。"""
+    return hasattr(drv, "power_on") and hasattr(drv, "arm")
+
+
+def servo_relay_close(drv, log, pwr=None, arm_delay_s=None,
+                      pre_samples=SERVO_ON_SAMPLE_S):
+    """合闸前置（脚本 --relay-first，09-07）：只合物理继电器并落盘，固件使能
+    留给之后的 servo_power_on(relay_closed=True)。
+
+    起因：装 USB 隔离器后的死机（09-06 body_lean、09-07 climb_walk）全落在
+    "六阀线圈通电→合闸"的合闸瞬间，而阀不通电的只合闸脚本十次干净。合闸时
+    电池带的负载越轻，降压板输入余量越大——把合闸挪到阀线圈通电之前是换降压
+    板之前的软件缓解，也是一组 A/B：前置后仍死，"阀负载吃掉余量"就站不住。
+    合闸后照旧按 pre_samples 采母线、等满 arm_delay_s，黑匣子签名与原顺序可比
+    （死在合闸的话最后一行同样是"已合闸"）。没有 power_on/arm 的驱动做不了
+    前置：留一行标记、返回 False，合闸留给使能那一步；Mock 驱动只留标记不等待。"""
+    sfx = (lambda: pwr.text()) if pwr is not None else (lambda: "")
+    if not _staged(drv):
+        log.mark(f"合闸前置跳过（该驱动不分步，合闸留待使能）{sfx()}")
+        return False
+    if arm_delay_s is None:
+        arm_delay_s = getattr(drv, "ARM_DELAY_S", 0.4)
+    log.mark(f"舵机继电器合闸前（前置，阀线圈未通电）{_bus_text(drv)}{sfx()}")
+    drv.power_on()
+    log.mark(f"舵机继电器已合闸（18 舵机带电，固件未使能不出力）{sfx()}")
+    if not getattr(drv, "is_mock", False):
+        _sample_after(drv, log, sfx, "合闸后", pre_samples, arm_delay_s)
+    return True
+
+
 def servo_power_on(drv, log, pwr=None, settle_s=1.0, arm_delay_s=None,
-                   samples=SERVO_ARM_SAMPLE_S, pre_samples=SERVO_ON_SAMPLE_S):
+                   samples=SERVO_ARM_SAMPLE_S, pre_samples=SERVO_ON_SAMPLE_S,
+                   relay_closed=False):
     """舵机上电拆两步并逐步落盘：合物理继电器（带电不出力）→ 等 arm_delay_s
     （默认取驱动 ARM_DELAY_S）→ 固件使能（18 舵机同刻出力）→ 等 settle_s。
+    relay_closed=True（--relay-first）：继电器已由 servo_relay_close 前置合上，
+    这里只做固件使能一段（不分步的驱动忽略此参数，仍 enable(True) 一步）。
 
     09-03 实机定案：六阀线圈全程 5V 平稳，"继电器已合闸"是黑匣子最后一行，
     <50ms 后 Pi 5 死机——当时固件使能在前、合闸在后，带电冲击与出力冲击叠在
@@ -335,21 +374,27 @@ def servo_power_on(drv, log, pwr=None, settle_s=1.0, arm_delay_s=None,
     Mock 驱动只留标记不等待。"""
     sfx = (lambda: pwr.text()) if pwr is not None else (lambda: "")
     mock = getattr(drv, "is_mock", False)
-    staged = hasattr(drv, "power_on") and hasattr(drv, "arm")
+    staged = _staged(drv)
     if arm_delay_s is None:
         arm_delay_s = getattr(drv, "ARM_DELAY_S", 0.4)
-    log.mark(f"舵机继电器合闸前 {_bus_text(drv)}{sfx()}")
-    if not staged:
-        drv.enable(True)
-        log.mark(f"舵机已使能（该驱动不分步）{sfx()}")
-    else:
-        drv.power_on()
-        log.mark(f"舵机继电器已合闸（18 舵机带电，固件未使能不出力）{sfx()}")
-        if not mock:
-            _sample_after(drv, log, sfx, "合闸后", pre_samples, arm_delay_s)
-        log.mark(f"固件使能前（18 舵机同刻开始出力）{_bus_text(drv)}{sfx()}")
+    if staged and relay_closed:
+        log.mark(f"固件使能前（继电器已前置合闸，18 舵机同刻开始出力）"
+                 f"{_bus_text(drv)}{sfx()}")
         drv.arm()
         log.mark(f"固件已使能{sfx()}")
+    else:
+        log.mark(f"舵机继电器合闸前 {_bus_text(drv)}{sfx()}")
+        if not staged:
+            drv.enable(True)
+            log.mark(f"舵机已使能（该驱动不分步）{sfx()}")
+        else:
+            drv.power_on()
+            log.mark(f"舵机继电器已合闸（18 舵机带电，固件未使能不出力）{sfx()}")
+            if not mock:
+                _sample_after(drv, log, sfx, "合闸后", pre_samples, arm_delay_s)
+            log.mark(f"固件使能前（18 舵机同刻开始出力）{_bus_text(drv)}{sfx()}")
+            drv.arm()
+            log.mark(f"固件已使能{sfx()}")
     if mock:
         return
     _sample_after(drv, log, sfx, "使能后", samples, settle_s)

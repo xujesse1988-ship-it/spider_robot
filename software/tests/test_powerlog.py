@@ -4,7 +4,7 @@ import time
 
 from hexapod.driver import MockDriver
 from hexapod.powerlog import (PowerWatch, UV_NOW, UV_EVER, fmt_snapshot,
-                              parse_pmic_adc, parse_throttled, servo_power_on,
+                              parse_pmic_adc, parse_throttled, servo_power_on, servo_relay_close,
                               startup_marker, throttled_text)
 from hexapod.runlog import RunLog
 
@@ -200,3 +200,67 @@ def test_servo_power_on_driver_without_stages_falls_back(tmp_path):
     assert "合闸前 母线=7.90V 2.50A" in txt and "舵机已使能（该驱动不分步）" in txt
     assert "使能后 0.00s 母线=6.90V" in txt and "使能后 0.01s 母线=7.30V" in txt
     assert "使能后 0.50s" not in txt and "合闸后" not in txt
+
+
+def test_servo_relay_close_then_arm_matches_combined_signature(tmp_path):
+    """--relay-first：先 servo_relay_close 只合闸+采样，之后 servo_power_on(
+    relay_closed=True) 只做使能——继电器只合一次，黑匣子行序与一步到位的
+    servo_power_on 完全一致（验尸脚本按"已合闸"/"合闸后 0.05s"找扳机不受影响）。"""
+    log = RunLog(str(tmp_path), tag="t")
+    drv = _StagedDrv()
+    t0 = time.monotonic()
+    assert servo_relay_close(drv, log, None, arm_delay_s=0.02,
+                             pre_samples=(0.0, 0.01, 0.5)) is True
+    assert [c for c in drv.calls if c != "v"] == ["power_on"]
+    assert 0.02 <= time.monotonic() - t0 < 0.4     # 合闸段等满 arm_delay_s
+    servo_power_on(drv, log, None, settle_s=0.03, samples=(0.0, 0.01, 0.5),
+                   relay_closed=True)
+    assert [c for c in drv.calls if c != "v"] == ["power_on", "arm"]
+    txt = read(log.path)
+    lines = [ln for ln in txt.splitlines() if "EVT" in ln]
+    order = [k for ln in lines for k in ("合闸前", "已合闸", "合闸后 0.00s", "合闸后 0.01s",
+                                         "固件使能前", "固件已使能", "使能后 0.00s",
+                                         "使能后 0.01s") if k in ln]
+    assert order == ["合闸前", "已合闸", "合闸后 0.00s", "合闸后 0.01s", "固件使能前",
+                     "固件已使能", "使能后 0.00s", "使能后 0.01s"]
+    assert "舵机继电器合闸前（前置，阀线圈未通电）母线=7.90V 2.50A" in txt
+    assert "合闸后 0.00s 母线=7.50V" in txt
+    assert "固件使能前（继电器已前置合闸，18 舵机同刻开始出力）母线=7.70V" in txt
+    assert "使能后 0.00s 母线=6.90V" in txt
+    assert txt.count("舵机继电器已合闸") == 1
+
+
+def test_servo_relay_close_mock_and_non_staged_driver(tmp_path):
+    # Mock：只合闸不使能、不等待；之后 relay_closed=True 只补使能
+    log = RunLog(str(tmp_path), tag="t")
+    drv = MockDriver()
+    t0 = time.monotonic()
+    assert servo_relay_close(drv, log, None) is True
+    assert drv.powered and not drv.enabled
+    servo_power_on(drv, log, None, relay_closed=True)
+    assert drv.enabled and time.monotonic() - t0 < 0.5
+    txt = read(log.path)
+    assert txt.count("舵机继电器已合闸") == 1 and "合闸后" not in txt
+    assert "固件使能前（继电器已前置合闸" in txt and "固件已使能" in txt
+
+    class Drv:                                 # 不分步：前置做不了，留标记
+        def __init__(self):
+            self.enabled = False
+
+        def enable(self, on):
+            self.enabled = on
+
+        def read_voltage_v(self):
+            return 7.9
+
+        def read_current_a(self):
+            return 2.5
+    log2 = RunLog(str(tmp_path), tag="u")
+    d = Drv()
+    assert servo_relay_close(d, log2, None) is False
+    assert not d.enabled
+    servo_power_on(d, log2, None, settle_s=0.0, samples=(), relay_closed=True)
+    assert d.enabled
+    t2 = read(log2.path)
+    assert "合闸前置跳过（该驱动不分步，合闸留待使能）" in t2
+    assert "舵机已使能（该驱动不分步）" in t2

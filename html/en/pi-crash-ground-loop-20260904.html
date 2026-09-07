@@ -403,7 +403,7 @@ for i in range(10):
   </ol>
   <p>A large capacitor plus a Schottky diode at the buck input buys only a few milliseconds and costs an extra diode drop; not recommended. A capacitor across the Pi's 5 V pins likewise only treats the symptom. Whether R050 is bridged no longer matters.</p>
   <p>Verification: after the swap, run the real scripts (the ones that energize the valves) several times; the criterion is no sticky bit and no death. Two supporting experiments are optional: measure the battery with a multimeter after the valves are energized, below 7.5 V means out of spec; run <code>walk_teleop --vent off</code> three times, and if that stays clean while body_lean dies, the valve load is the trigger.</p>
-  <p>The software side is already in place: two-step closure, a black box with the same convention in the four startup scripts, the real timeline in the forensics script. <code>--startup-gap</code> is no longer needed.</p>
+  <p>The software side is already in place: two-step closure, a black box with the same convention in the four startup scripts, the real timeline in the forensics script. <code>--startup-gap</code> is no longer needed. On 09-07 the scripts gained <code>--relay-first</code>: the relay closes as soon as the serial port is open, and firmware enable follows the six valve coils, so closure lands at the lightest battery load, with only the Pi drawing. It is a stopgap before the swap and doubles as an A/B: if it still dies with the relay first, "the valve load eats the margin" does not hold.</p>
 </section>
 
 <section>

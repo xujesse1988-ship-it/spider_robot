@@ -87,7 +87,8 @@ from hexapod.gait import CLIMB, CLIMB_DUAL
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
-from hexapod.powerlog import PowerWatch, startup_marker, servo_power_on
+from hexapod.powerlog import (PowerWatch, startup_marker, servo_power_on,
+                              servo_relay_close)
 
 from climb_walk import status_line, coils_off   # 显示/收尾与 climb_walk 同源
 
@@ -226,6 +227,13 @@ def main():
                     help="六阀线圈通电完毕到舵机继电器合闸之间静置秒数（默认 0="
                          "紧接着合闸）。排查启动死机时设 3：把两次电流阶跃隔开，"
                          "黑匣子最后一行就能分清扳机是阀线圈还是舵机合闸")
+    ap.add_argument("--relay-first", action="store_true",
+                    help="舵机继电器合闸前置：串口一开就合 GPIO17（舵机带电不出力），"
+                         "六阀线圈通电之后才固件使能。合闸落在电池只带 Pi 的最轻载"
+                         "时刻（09-07：阀通电后合闸的真实脚本三次必死，阀不通电的"
+                         "只合闸脚本十次干净）——换降压板前的止血，也是 A/B：前置后"
+                         "仍死则'阀负载吃掉余量'不成立。默认关=原顺序（阀线圈→合闸→"
+                         "使能）")
     ap.add_argument("--dual", action="store_true",
                     help="双足对抬（双摆动窗，docs/DUAL-SWING-DESIGN.md）：i 一次"
                          "抬一对（数字键选对首腿，搭档=窗序继任，窗头差 0.6s "
@@ -323,6 +331,7 @@ def main():
              f" stand={cfg.stand_height:g} tilt_trim={cfg.cup_tilt_trim_deg:g}°"
              f" handover={ho_txt} handover_rate={cfg.handover_rate_mms:g}"
              f" mark_settle={args.mark_settle:g} dual={int(args.dual)}"
+             f" relay_first={int(args.relay_first)}"
              + (f" leg_order={'_'.join(leg_order)}" if leg_order else ""))
     # Pi 5 电源监视线程：5V 输入轨 + 欠压标志每 0.1s 落盘、每行 fsync（启动
     # 死机验尸，hexapod/powerlog.py）；非树莓派自动降级为只留步骤标记
@@ -342,6 +351,10 @@ def main():
 
     step("打开舵机串口 + 继电器 GPIO17（保持断开）")
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
+    if args.relay_first:
+        # 合闸前置（--relay-first）：串口一开就合 GPIO17，六阀线圈还没通电、
+        # 电池只带 Pi 一个负载；固件使能仍在原位（蹲姿脉宽预置之后）
+        servo_relay_close(drv, log, pwr)
     if args.mock or args.dry:
         io = MockVacuumIO(6)
     else:
@@ -405,9 +418,11 @@ def main():
     try:
         bot.move_feet(bot.crouch_feet(feet=eng.default_feet))
         if args.startup_gap > 0 and not args.mock:
-            step(f"阀线圈已全通电→舵机合闸前静置 {args.startup_gap:g}s（--startup-gap）")
+            nxt = "固件使能" if args.relay_first else "舵机合闸"
+            step(f"阀线圈已全通电→{nxt}前静置 {args.startup_gap:g}s（--startup-gap）")
             time.sleep(args.startup_gap)
-        servo_power_on(drv, log, pwr)   # 合闸 + 合闸后 1s 内多点采母线电压
+        # 合闸 + 合闸后 1s 内多点采母线电压；--relay-first 时继电器已前置合上，只做使能
+        servo_power_on(drv, log, pwr, relay_closed=args.relay_first)
         print("缓慢站起（竖直升至爬墙站位，吸盘轴⊥面）……")
         log.event("缓慢站起（竖直升至爬墙站位）")
         bot.glide_to(dict(eng.default_feet), 4.0)

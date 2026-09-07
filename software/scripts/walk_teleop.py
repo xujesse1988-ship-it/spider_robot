@@ -6,7 +6,7 @@
   1/2  三角/波浪步态   v    切阀策略 auto→on→off（对照用）
   m    进/出原地踏步   ESC  退出
 
-用法: python walk_teleop.py [--port /dev/ttyACM0] [--mock] [--vent auto|on|off]
+用法: python walk_teleop.py [--port /dev/ttyACM0] [--mock] [--vent auto|on|off] [--relay-first]
                             [--march-lift 70]
 
 原地踏步 m（手动逐脚）：按 m 进入，机器人保持站位不动，六只脚各是一个开关——
@@ -55,7 +55,8 @@ sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver, TRIPOD, WAVE
 from hexapod.adhesion import GroundVent, MockVacuumIO, Pi5VacuumIO
 from hexapod.gait import GaitEngine, MarchEngine
-from hexapod.powerlog import PowerWatch, startup_marker, servo_power_on
+from hexapod.powerlog import (PowerWatch, startup_marker, servo_power_on,
+                              servo_relay_close)
 from hexapod.runlog import RunLog
 
 SPEED = 40.0    # mm/s
@@ -75,6 +76,9 @@ def main():
     ap.add_argument("--vent", choices=GroundVent.MODES, default="auto",
                     help="六阀策略：auto=站起/走动通电排气、静止断电（默认）；"
                          "on=常通；off=不碰阀（脚会被被动真空吸住，对照用）。运行中 v 轮换")
+    ap.add_argument("--relay-first", action="store_true",
+                    help="舵机继电器合闸前置：串口一开就合 GPIO17，六阀线圈通电之后才固件"
+                         "使能（合闸落在电池只带 Pi 的最轻载时刻；09-07 启动死机止血兼 A/B）")
     ap.add_argument("--march-lift", type=float, default=MarchEngine.LIFT_MM,
                     help=f"原地踏步（m 键）单脚抬起高度 mm，默认 {MarchEngine.LIFT_MM:.0f}"
                          "（步行抬脚 40）")
@@ -103,7 +107,14 @@ def main():
         _prev_hook(tp, val, tb)
     sys.excepthook = _crash_hook
 
-    # 阀先于舵机：站起时吸盘就已通大气，压下去不攒被动真空
+    step("打开舵机串口 + 继电器 GPIO17（保持断开）")
+    drv = MockDriver() if args.mock else Servo2040Driver(args.port)
+    if args.relay_first:
+        # 合闸前置（--relay-first）：串口一开就合 GPIO17，六阀线圈还没通电、
+        # 电池只带 Pi 一个负载；固件使能仍在阀之后（蹲姿脉宽预置之后）
+        servo_relay_close(drv, log, pwr)
+
+    # 阀先于舵机出力：站起时吸盘就已通大气，压下去不攒被动真空
     vent = GroundVent(io_factory=((lambda: MockVacuumIO(6)) if args.mock
                                   else (lambda: Pi5VacuumIO(6, on_step=step))),
                       stagger_s=0.0 if args.mock else 0.2)
@@ -115,12 +126,11 @@ def main():
     else:
         print("阀策略 off：不碰阀（通罐位），吸盘可能被被动真空吸在地上，按 v 切策略对照")
 
-    step("打开舵机串口 + 继电器 GPIO17（保持断开）")
-    drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
     # 缓慢站起：使能前先发蹲姿（离断电趴姿最近，使能跳变小），再慢滑到站姿
     bot.move_feet(bot.crouch_feet())
-    servo_power_on(drv, log, pwr)   # 合闸→0.4s→固件使能，两段各采母线电压，替代原 sleep(1)
+    # 合闸→0.4s→固件使能，两段各采母线电压，替代原 sleep(1)；--relay-first 时只做使能
+    servo_power_on(drv, log, pwr, relay_closed=args.relay_first)
     log.event("缓慢站起（4s）")
     bot.stand(duration=4.0)
     log.event("站姿就位，遥控就绪")

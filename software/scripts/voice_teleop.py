@@ -34,6 +34,8 @@
                                                      # 通电排气让吸盘通大气、站着不动断电；
                                                      # on 常通；off 不碰阀=被动真空锁脚抬不
                                                      # 起，对照用。详见 walk_teleop 模块头）
+  python voice_teleop.py --relay-first               # 舵机继电器合闸前置（阀线圈通电前先合闸，
+                                                     # 09-07 启动死机止血兼 A/B）
 """
 import argparse
 import math
@@ -47,7 +49,8 @@ sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver, TRIPOD, WAVE
 from hexapod.adhesion import GroundVent, MockVacuumIO, Pi5VacuumIO
 from hexapod.gait import GaitEngine
-from hexapod.powerlog import PowerWatch, startup_marker, servo_power_on
+from hexapod.powerlog import (PowerWatch, startup_marker, servo_power_on,
+                              servo_relay_close)
 from hexapod.runlog import RunLog
 from hexapod.voice.audio import (ArecordSource, WavSource, AplayPlayer, NullPlayer,
                                  find_card, alsa_device, list_cards)
@@ -96,6 +99,9 @@ def main():
                     help="不开声纹锁（有注册档案时默认开：指令只听主人，急停不拦）")
     ap.add_argument("--voiceprint", help="声纹档案路径（默认 <模型根>/voiceprint_owner.npz）")
     ap.add_argument("--spk-threshold", type=float, help="声纹阈值，覆盖档案里的建议值")
+    ap.add_argument("--relay-first", action="store_true",
+                    help="舵机继电器合闸前置：串口一开就合 GPIO17，六阀线圈通电之后才固件"
+                         "使能（合闸落在电池只带 Pi 的最轻载时刻；09-07 启动死机止血兼 A/B）")
     ap.add_argument("--stand-secs", type=float, default=4.0)
     ap.add_argument("--vent", choices=GroundVent.MODES, default="auto",
                     help="六阀策略：auto=站起/走动通电排气、静止断电（默认）；"
@@ -168,7 +174,13 @@ def main():
             speaker.say(text)
 
     # ---- 机器人侧（与 walk_teleop 一致）----
-    # 阀先于舵机：站起时吸盘就已通大气，压下去不攒被动真空
+    step("打开舵机串口 + 继电器 GPIO17（保持断开）")
+    drv = MockDriver() if args.mock else Servo2040Driver(args.port)
+    if args.relay_first:
+        # 合闸前置（--relay-first）：串口一开就合 GPIO17，六阀线圈还没通电、
+        # 电池只带 Pi 一个负载；固件使能仍在阀之后（蹲姿脉宽预置之后）
+        servo_relay_close(drv, bb, pwr)
+    # 阀先于舵机出力：站起时吸盘就已通大气，压下去不攒被动真空
     vent = GroundVent(io_factory=((lambda: MockVacuumIO(6)) if args.mock
                                   else (lambda: Pi5VacuumIO(6, on_step=step))),
                       stagger_s=0.0 if args.mock else 0.2)
@@ -180,11 +192,10 @@ def main():
         log(f"阀策略 {vent_mode}：站起前六阀已拉到排气位（吸盘通大气）")
     else:
         log("阀策略 off：不碰阀（通罐位），吸盘可能被被动真空吸在地上，按 v 切策略对照")
-    step("打开舵机串口 + 继电器 GPIO17（保持断开）")
-    drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     bot = Hexapod(drv)
     bot.move_feet(bot.crouch_feet())
-    servo_power_on(drv, bb, pwr)   # 合闸→0.4s→固件使能，两段各采母线电压，替代原 sleep(1)
+    # 合闸→0.4s→固件使能，两段各采母线电压，替代原 sleep(1)；--relay-first 时只做使能
+    servo_power_on(drv, bb, pwr, relay_closed=args.relay_first)
     bb.event(f"缓慢站起（{args.stand_secs:g}s）")
     bot.stand(duration=args.stand_secs)
     bb.event("站姿就位，语音/键盘遥控就绪")

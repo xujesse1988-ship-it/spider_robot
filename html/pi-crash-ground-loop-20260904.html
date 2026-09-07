@@ -178,9 +178,9 @@
 
 <div class="page">
 <header>
-  <div class="eyebrow">六足爬壁机器人 · 排查案卷 · 2026-09-02 至 09-04</div>
+  <div class="eyebrow">六足爬壁机器人 · 排查案卷 · 2026-09-02 至 09-06</div>
   <h1 style="margin-top:10px">合闸瞬间的地环路</h1>
-  <p class="lede">树莓派 5 在舵机继电器合闸的一瞬间概率性断电死机。三天里从"阀线圈"查到"5V 余量"，再查到"18 舵机大电流"，最后被一张 14 毫秒的日志和一根 USB 线定案。这份案卷记下走过的弯路、真正起作用的工具，和可以带到下一个项目的经验。</p>
+  <p class="lede">树莓派 5 在舵机继电器合闸的一瞬间概率性断电死机。三天里从"阀线圈"查到"5V 余量"，再查到"18 舵机大电流"，最后被一张 14 毫秒的日志和一根 USB 线定案。这份案卷记下走过的弯路、真正起作用的工具，和可以带到下一个项目的经验。09-06 续篇：装上 USB 隔离器之后仍然死在合闸，一次孤岛测试把入口收窄到降压板本身，结论从"一条路径"改成"两条入口"。</p>
   <div class="meta">
     <span>机器：<b>Pi 5 + Servo2040 + 18 舵机 + 六阀</b></span>
     <span>供电：<b>2S 锂电 → 5V 降压给 Pi；继电器切舵机正极</b></span>
@@ -189,9 +189,9 @@
 </header>
 
 <div class="verdict">
-  <div><div class="k">根因</div><div class="v bad">继电器合闸时的充电脉冲经 USB 地线灌进 Pi，PMIC 判欠压断电</div></div>
-  <div><div class="k">定案证据</div><div class="v">同一次开机只拔一根 USB 线：拔掉合闸十次 0x0，插回第一次 0x50000</div></div>
-  <div><div class="k">治法</div><div class="v">USB 隔离器；舵机轨预充软启动；星形接地</div></div>
+  <div><div class="k">根因</div><div class="v bad">合闸充电脉冲有两条入口：USB 地环路（09-04 坐实，隔离器已切断）；降压板对 2S 电池余量不到 1 V，脉冲一拽就塌（09-06）</div></div>
+  <div><div class="k">定案证据</div><div class="v">拔 USB 合闸十次 0x0、插回第一次 0x50000；装隔离器后仍死在合闸后几十 ms；拔掉降压 IN− 后 Pi 地与电池负极不通</div></div>
+  <div><div class="k">治法</div><div class="v">USB 隔离器（已装）；换适合 2S 的低压差同步降压或升降压；预充退为次要</div></div>
 </div>
 
 <div class="doc">
@@ -356,19 +356,57 @@ for i in range(10):
 </section>
 
 <section>
-  <div class="sec-head"><span class="num">08</span><h2>结论与治法</h2></div>
-  <p>根因是继电器合闸瞬间对舵机侧电容充电的脉冲，经 Pi 与 Servo2040 之间的 USB 地线灌进树莓派，在 GND 杜邦线和检流电阻上产生的压降被 PMIC 判为输入欠压。跌得浅时只留一个粘滞位，跌得深时 PMIC 直接断电，表现为红灯常亮。</p>
-  <ol class="fix">
-    <li><b>USB 隔离器。</b>ADuM3160 一类的全速隔离器，12 Mbps 够 Servo2040 的串口，插在 Pi 和 Servo2040 之间，地环路物理断开。最干净的一刀。</li>
-    <li><b>舵机轨预充软启动。</b>第二只小继电器串 4.7 Ω 5 W 电阻先合 100 ms 把电容充到位，再合主继电器；或换 P-MOS 软启动模块。先用 10 Ω 电阻跨触点手动预充一秒再合闸、看粘滞位，即可验证。</li>
-    <li><b>星形接地。</b>Servo2040 的 GND 和降压模块的 IN− 各自短粗线直接压到电池负极同一点；Pi 的 5V/GND 不用杜邦线。只能减轻，不能断路径。</li>
-  </ol>
-  <p>Pi 5V 针脚上并电容只治标：按 Pi 5 约 0.7 A 算，2200 µF 只能把 0.4 V 的跌落撑约 1 ms。XL4015 的 R050 可以用焊锡短接让 OUT− 直接等于 IN−，模块退化成纯稳压，指示灯失效无妨；路径断掉之后它本身无害，可以不动。</p>
-  <p>软件层已经到位：合闸拆两步、四个启动脚本同口径的黑匣子、验尸脚本的真实时间线和 power_reset 释义。<code>--startup-gap</code> 已无必要。</p>
+  <div class="sec-head"><span class="num">08</span><h2>续篇：隔离器装上之后（09-06）</h2></div>
+  <p>USB 隔离器是三条治法里最干净的一刀，装上之后 A/B 的第三条腿也补齐了：线插着、中间隔一块 ADuM3160，只合闸十次全 0x0。但同一天里它前后死了两次，第二次带着黑匣子。这一节记的是怎么从"路径已断"走到"入口不止一个"，再走到"剩下的入口是降压板本身"。</p>
+  <ul class="steps">
+    <li><span class="when">09-06 上午</span><span class="what"><b>装 ADuM3160。GPIO17 脚本第一次跑直接死机；第二次合闸前 0x0，十次合闸全 0x0。</b><span class="so">USB 这条路确实断了，粘滞位不再置位。但那次死机是红灯常亮，和以前同一类，没有任何记录。</span></span></li>
+    <li><span class="when">09-06</span><span class="what"><b>power_reset 对照：正常 poweroff / reboot 几次之后仍读 2。</b><span class="so">此字段在本机分不清 PMIC 断电和正常关机，从证据里撤下（02、07 节）。区分死法靠灯色：红常亮就是 PMIC 断电。</span></span></li>
+    <li><span class="when">23:45</span><span class="what"><b>body_lean 死机。黑匣子最后一行 1.350 s "舵机继电器已合闸"，合闸后 0.05 s 的母线采样和电源监视约 10 ms 后的下一行都没来。</b><span class="so">死在合闸后几十毫秒，与 09-03 同签名。隔离器没有挡住它。</span></span></li>
+    <li><span class="when">深夜</span><span class="what"><b>孤岛测试：整机断电，松开降压板 IN−，量 Pi 任意 GND 针到电池负极，不通。</b><span class="so">Pi 侧整个地网（Pi、继电器模块线圈侧、YYNMOS-8 的 IN− 母线、传感器、降压输出）只靠降压板一根线连到电池侧。一根线没有回路，地环路这条机理到此作废。YYNMOS-8 的 IN− 与 DC− 早在气电页实测过是光耦真隔离。</span></span></li>
+  </ul>
+  <pre class="log"><span class="t">[    1.232]</span> TLM 电源 5V=5.100V 核心=0.830V/0.67A thr=0x0
+<span class="t">[    1.328]</span> EVT 启动 阀 6/6 线圈通电前（GPIO21）
+<span class="t">[    1.333]</span> EVT 启动 六阀线圈已全部通电（排气位）   <span class="note">← 电池侧已多流约 3.5 A</span>
+<span class="t">[    1.347]</span> EVT 舵机继电器合闸前 母线=<span class="hi">0.15V 0.00A</span>  Pi[5V=5.100V thr=0x0]
+<span class="t">[    1.350]</span> EVT <span class="bad">舵机继电器已合闸</span>（18 舵机带电，固件未使能不出力）
+<span class="note">（没有下一行。合闸后 0.05 s 的采样、电源监视本该在 1.36 s 左右落盘的那行，都没有来。）</span></pre>
+  <h3>只合闸干净，真实脚本必死：差别在合闸之前</h3>
+  <div class="two">
+    <div class="panel ok"><h3>只合闸（GPIO17 脚本）</h3><div class="big">10 / 10 → 0x0</div><p>阀不通电，串口不开。电池只带 Pi 和 Servo2040 的静态电流。</p></div>
+    <div class="panel bad"><h3>真实脚本（body_lean / walk_teleop）</h3><div class="big">合闸即死</div><p>六阀已通电约 25 W，电池侧多流约 3.5 A；串口开着。串口数据穿不过隔离器，能带脉冲的只剩阀负载这一项。</p></div>
+  </div>
+  <p>阀负载不会造出新的地路径，它做的事只有一件：把电池电压先压低一截。于是剩下的唯一入口就是 Pi 唯一那根连线，降压板本身。</p>
+  <h3>降压板的余量</h3>
+  <div class="wide"><table>
+    <thead><tr><th>项</th><th>数值</th><th>出处</th></tr></thead>
+    <tbody>
+      <tr><td>Pi 5V 输出设定</td><td class="num">5.19 V</td><td>09-04 调定</td></tr>
+      <tr><td>XL4015 模块要求</td><td class="num">输入 ≥ 输出 + 1.5 V = 6.7 V</td><td>模块标称输入 4～38 V，但压差 1.5 V 才是管用的那条</td></tr>
+      <tr><td>电池，六阀通电后</td><td class="num">7.70 V</td><td>walk_20260904_215456.log 合闸后 0.05 s</td></tr>
+      <tr><td>电池，舵机使能后</td><td class="num">7.31 V</td><td>同一份日志，使能后 0.15 s</td></tr>
+      <tr><td>静态余量</td><td class="num">1.0 V / 0.6 V</td><td>上两行减 6.7 V</td></tr>
+      <tr><td>合闸脉冲拽掉</td><td class="num">≈ 0.9 V 起</td><td>30 A × 30 mΩ 电池内阻；引线电感的尖峰另计</td></tr>
+    </tbody>
+  </table></div>
+  <p>余量不到 1 V，一个脉冲就吃光。XL4015 是 180 kHz 的老式非同步件，环路慢，输入上亚毫秒的一个坑它来不及补，输出跟着塌零点几毫秒，PMIC 就断电。这也能解释 06 节那盏绿灯：输出电流瞬间归零，恒流恒压板就当成"充满"。06 节把闪绿归于脉冲穿过检流电阻，降压板自己失稳同样会闪，两种都说得通，这盏灯不再是区分证据。旧的固定 5 V 模块空载只出 4.89 V，是同一种高压差芯片吃 2S 电压不够用，同一个病。</p>
+  <p>这个解释留一个口子：隔离器装上后第一次死机是 GPIO17 脚本，当时阀没通电。它说明系统本来就在边缘，电池当时的状态或者一次差一点的触点弹跳都能推过线，也说明"只合闸十次干净"不是安全证明，只是那十次没赶上。</p>
 </section>
 
 <section>
-  <div class="sec-head"><span class="num">09</span><h2>可以带走的经验</h2></div>
+  <div class="sec-head"><span class="num">09</span><h2>结论与治法</h2></div>
+  <p>合闸瞬间对舵机侧电容充电的脉冲有两条入口。第一条是 09-04 定案的 USB 地环路：脉冲经 Pi 与 Servo2040 之间的 USB 地线灌进树莓派，在 GND 杜邦线和检流电阻上的压降被 PMIC 判为欠压。这条路真实存在，粘滞位坐实，隔离器已经切断。第二条是 09-06 收窄出来的降压板本身：XL4015 对 5.19 V 输出要求输入至少 6.7 V，2S 电池在阀负载下只剩 1 V 余量，合闸脉冲把电池一拽，降压失稳，输出塌，PMIC 断电。第一条以前把第二条盖住了。</p>
+  <ol class="fix">
+    <li><b>换降压模块。</b>不看"输入范围"那个宽泛数字，看压差：输入掉到 6 V 出头仍能稳住 5.1 V。同步整流、5 A 以上、压差 0.5 V 以内；或者直接用升降压，5～8.4 V 全程不慌。XL4015、LM2596 这类老式非同步件对 2S 电池本来就是选错了件。</li>
+    <li><b>USB 隔离器保留。</b>它切掉的路径是真的，拆了粘滞位就回来。</li>
+    <li><b>舵机轨预充退为次要。</b>换了合适的降压它就不再必要；要装也行，只是压低脉冲，不解决余量。</li>
+  </ol>
+  <p>输入端并大电容加肖特基只买几毫秒，还多吃一个二极管压差，不推荐。Pi 5V 针脚上并电容同样只治标。R050 短接与否已无关紧要。</p>
+  <p>验证口径：换件之后用真实脚本（阀通电的那种）多跑几次，判据是粘滞位不置、不死机。两条支持性实验可做可不做：阀通电后用万用表量电池电压，低于 7.5 V 即规格外；<code>walk_teleop --vent off</code> 跑三次，干净而 body_lean 死，阀负载就是扳机。</p>
+  <p>软件层已经到位：合闸拆两步、四个启动脚本同口径的黑匣子、验尸脚本的真实时间线。<code>--startup-gap</code> 已无必要。</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">10</span><h2>可以带走的经验</h2></div>
   <div class="lesson">
     <div class="card"><h3>断电式死亡只能死前留痕</h3><p>每个大电流步骤之前写一行并 fsync，日志停在哪一行，凶手就是它的下一步。没有这一行，三天的排查一步都走不动。</p></div>
     <div class="card"><h3>给偶发的致命事件找一个确定的替身</h3><p>粘滞位每次合闸必置，不需要等死机。实验判据从"死不死"换成"置不置"，一次重启就有结论，"没死"也不再是无信息。</p></div>
@@ -378,11 +416,13 @@ for i in range(10):
     <div class="card"><h3>一次只变一个变量，同一次开机</h3><p>拔一根线、十次合闸、插回、再合，结果 0x0 与 0x50000 对照，不留任何解释空间。比换模块快，也比换模块便宜。</p></div>
     <div class="card"><h3>厂家的一句话也要做对照</h3><p>power_reset=2 在论坛上有原话背书，两次死机后都读到，当时当成 PMIC 的口供。09-06 正常关机后再读，还是 2。没有对照组的读数不是证据。</p></div>
     <div class="card"><h3>换零件之前先量证据</h3><p>换降压模块只证明了"静态电压不是根因"，这个结论值，但如果先看粘滞位，本可以不花这一步。</p></div>
+    <div class="card"><h3>一条路径坐实，不等于只有一条</h3><p>A/B 把 USB 地环路钉得毫无争议，但它只证明这条路存在，没证明别的路不存在。治了它，死机换了个更少见的样子继续来。</p></div>
+    <div class="card"><h3>孤岛测试：断掉已知的那根线再量</h3><p>Pi 的地本来就该和电池负极通，量到通说明不了什么。把设计上那根线拔掉再量，不通就是孤岛，剩下的入口只能在那根线自己身上。</p></div>
   </div>
 </section>
 
 <section>
-  <div class="sec-head"><span class="num">10</span><h2>索引</h2></div>
+  <div class="sec-head"><span class="num">11</span><h2>索引</h2></div>
   <dl class="refs">
     <dt>hexapod/powerlog.py</dt><dd>PowerWatch 采样线程、启动步骤标记、合闸两段采样</dd>
     <dt>hexapod/runlog.py</dt><dd>黑匣子 RunLog，mark() = 写一行并 fsync</dd>
@@ -390,7 +430,9 @@ for i in range(10):
     <dt>scripts/pi_forensics.sh</dt><dd>setup 死机前一次；check 重新上电后</dd>
     <dt>logs/lean_20260903_135325.log</dt><dd>第一次验尸，合闸后 50 ms 内死</dd>
     <dt>logs/walk_20260904_215456.log</dt><dd>定案日志，合闸后 14 ms 欠压、舵机 0 A</dd>
+    <dt>logs/lean_20260906_234509.log</dt><dd>隔离器装上后的死机，合闸后几十 ms 内死，最后一行"已合闸"</dd>
     <dt>docs/P4-GUIDE.md</dt><dd>常见问题里的案情记录</dd>
+    <dt>html/p4-pneumatic-electrical.html</dt><dd>气电页：YYNMOS-8 IN− 与 DC− 实测不导通、单点共地拓扑</dd>
     <dt>forums.raspberrypi.com t=361231</dt><dd>timg236 关于 power_reset 与 PMIC 欠压停机的说明（09-06 对照后，此字段在本机无区分力）</dd>
   </dl>
   <pre class="cmd">vcgencmd get_throttled                    # 0x50000 = 曾欠压 + 曾限频（重启才清）
@@ -399,5 +441,5 @@ bash scripts/pi_forensics.sh check         # 重新上电后一次带出所有�
 </section>
 
 </div>
-<footer>案卷整理于 2026-09-04。机器仍在 P4 阶段；三条治法待装机验证，验证判据仍是粘滞位。</footer>
+<footer>案卷整理于 2026-09-04，09-06 补入续篇（08 节）。机器仍在 P4 阶段；隔离器已装，降压板待换，验证判据是粘滞位不置加不死机。</footer>
 </div>

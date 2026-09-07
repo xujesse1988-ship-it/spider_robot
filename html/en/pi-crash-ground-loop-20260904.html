@@ -179,9 +179,9 @@
 
 <div class="page">
 <header>
-  <div class="eyebrow">Hexapod wall-climbing robot · troubleshooting case file · 2026-09-02 to 09-04</div>
+  <div class="eyebrow">Hexapod wall-climbing robot · troubleshooting case file · 2026-09-02 to 09-06</div>
   <h1 style="margin-top:10px">The ground loop at the instant of relay closure</h1>
-  <p class="lede">The Raspberry Pi 5 would randomly lose power and die at the instant the servo relay closed. Over three days the suspicion moved from "valve coils" to "5 V margin" to "18 servos drawing a big current", and was finally settled by a log line 14 milliseconds long and one USB cable. This case file records the detours, the tools that actually worked, and the lessons worth carrying to the next project.</p>
+  <p class="lede">The Raspberry Pi 5 would randomly lose power and die at the instant the servo relay closed. Over three days the suspicion moved from "valve coils" to "5 V margin" to "18 servos drawing a big current", and was finally settled by a log line 14 milliseconds long and one USB cable. This case file records the detours, the tools that actually worked, and the lessons worth carrying to the next project. Sequel 09-06: with the USB isolator fitted it still died at closure, and one island test narrowed the entry to the buck module itself; the conclusion changed from "one path" to "two entries".</p>
   <div class="meta">
     <span>Machine: <b>Pi 5 + Servo2040 + 18 servos + six valves</b></span>
     <span>Power: <b>2S LiPo → 5 V buck for the Pi; relay switches the servo positive</b></span>
@@ -190,9 +190,9 @@
 </header>
 
 <div class="verdict">
-  <div><div class="k">Root cause</div><div class="v bad">The charging pulse at relay closure floods into the Pi through the USB ground, and the PMIC calls it undervoltage and cuts power</div></div>
-  <div><div class="k">Decisive evidence</div><div class="v">Same boot, only one USB cable changed: unplugged, ten closures all 0x0; plugged back in, the first closure gives 0x50000</div></div>
-  <div><div class="k">Remedies</div><div class="v">USB isolator; pre-charge soft start of the servo rail; star grounding</div></div>
+  <div><div class="k">Root cause</div><div class="v bad">The closure pulse has two entries: the USB ground loop (settled 09-04, cut by the isolator); and a buck module with under 1 V of margin on the 2S pack, pulled down by the pulse (09-06)</div></div>
+  <div><div class="k">Decisive evidence</div><div class="v">USB unplugged, ten closures 0x0; plugged back in, first closure 0x50000; with the isolator fitted it still died tens of ms after closure; with the buck IN− removed, Pi ground and battery negative are open</div></div>
+  <div><div class="k">Remedies</div><div class="v">USB isolator (fitted); replace the buck with a low-dropout synchronous buck or buck-boost suited to 2S; pre-charge demoted to secondary</div></div>
 </div>
 
 <div class="doc">
@@ -357,19 +357,57 @@ for i in range(10):
 </section>
 
 <section>
-  <div class="sec-head"><span class="num">08</span><h2>Conclusion and remedies</h2></div>
-  <p>The root cause is the pulse that charges the servo-side capacitance at the instant the relay closes; it floods into the Raspberry Pi through the USB ground between the Pi and the Servo2040, and the drop it produces across the GND Dupont wire and the sense resistor is judged by the PMIC as input undervoltage. A shallow dip leaves only a sticky bit; a deep one makes the PMIC cut power, shown as the solid red LED.</p>
-  <ol class="fix">
-    <li><b>USB isolator.</b> A full-speed isolator such as the ADuM3160; 12 Mbps is enough for the Servo2040 serial link. Inserted between the Pi and the Servo2040, it physically breaks the ground loop. The cleanest cut.</li>
-    <li><b>Pre-charge soft start of the servo rail.</b> A second small relay in series with a 4.7 Ω 5 W resistor closes first for 100 ms to charge the capacitance, then the main relay closes; or swap in a P-MOS soft-start module. It can be verified first by manually pre-charging through a 10 Ω resistor across the contacts for a second before closing and watching the sticky bit.</li>
-    <li><b>Star grounding.</b> The Servo2040 GND and the buck module's IN− each run in short thick wire straight to the same point on the battery negative; no Dupont wire for the Pi's 5V/GND. This only mitigates; it does not break the path.</li>
-  </ol>
-  <p>A capacitor across the Pi's 5 V pins only treats the symptom: at the Pi 5's ~0.7 A, 2200 µF holds a 0.4 V dip for about 1 ms. The XL4015's R050 can be bridged with solder so that OUT− equals IN− directly; the module degrades into a plain regulator and the LEDs stop working, which is fine. Once the path is broken it is harmless by itself and can be left alone.</p>
-  <p>The software side is already in place: two-step closure, a black box with the same convention in the four startup scripts, real timeline and power_reset interpretation in the forensics script. <code>--startup-gap</code> is no longer needed.</p>
+  <div class="sec-head"><span class="num">08</span><h2>Sequel: after the isolator (09-06)</h2></div>
+  <p>The USB isolator was the cleanest of the three remedies, and once fitted it completed the third leg of the A/B: cable plugged in, an ADuM3160 in the middle, ten closures alone all 0x0. But on the same day the Pi died twice around it, the second time with a black box running. This section records the way from "path broken" to "more than one entry" to "the remaining entry is the buck module itself".</p>
+  <ul class="steps">
+    <li><span class="when">09-06 morning</span><span class="what"><b>ADuM3160 fitted. The first run of the GPIO17 script died outright; the second run read 0x0 before closure and 0x0 after all ten closures.</b><span class="so">The USB path really is cut; the sticky bit no longer sets. But that death was a solid red LED, the same class as before, and left no record.</span></span></li>
+    <li><span class="when">09-06</span><span class="what"><b>power_reset control: still reads 2 after several normal poweroffs / reboots.</b><span class="so">On this machine the field cannot tell a PMIC cut from a normal shutdown; withdrawn as evidence (sections 02, 07). The LED color is what tells the kind of death: solid red is a PMIC cut.</span></span></li>
+    <li><span class="when">23:45</span><span class="what"><b>body_lean died. Last black box line at 1.350 s: "servo relay closed"; neither the bus sample 0.05 s after closure nor the power watch's next line, due about 10 ms later, ever came.</b><span class="so">Dead within tens of milliseconds of closure, the same signature as 09-03. The isolator did not stop it.</span></span></li>
+    <li><span class="when">late night</span><span class="what"><b>Island test: whole machine powered off, the buck module's IN− lead disconnected, continuity from any Pi GND pin to the battery negative: open.</b><span class="so">The entire Pi-side ground net (Pi, relay module coil side, the YYNMOS-8 IN− bus, sensors, buck output) reaches the battery side through one wire only, the buck module. One wire cannot form a loop; the ground-loop mechanism ends here. The YYNMOS-8 IN− to DC− optocoupler isolation had already been measured on the pneumatic-electrical page.</span></span></li>
+  </ul>
+  <pre class="log"><span class="t">[    1.232]</span> TLM power 5V=5.100V core=0.830V/0.67A thr=0x0
+<span class="t">[    1.328]</span> EVT startup: before valve 6/6 coil energize (GPIO21)
+<span class="t">[    1.333]</span> EVT startup: all six valve coils energized (exhaust position)   <span class="note">← about 3.5 A more on the battery side</span>
+<span class="t">[    1.347]</span> EVT before servo relay closure bus=<span class="hi">0.15V 0.00A</span>  Pi[5V=5.100V thr=0x0]
+<span class="t">[    1.350]</span> EVT <span class="bad">servo relay closed</span> (18 servos energized, firmware not enabled, no torque)
+<span class="note">(No next line. Neither the sample 0.05 s after closure nor the power watch line due around 1.36 s ever arrived.)</span></pre>
+  <h3>Closure alone is clean, the real scripts die: the difference is before closure</h3>
+  <div class="two">
+    <div class="panel ok"><h3>Closure only (GPIO17 script)</h3><div class="big">10 / 10 → 0x0</div><p>Valves not energized, serial port closed. The battery carries only the quiescent current of the Pi and the Servo2040.</p></div>
+    <div class="panel bad"><h3>Real scripts (body_lean / walk_teleop)</h3><div class="big">dies at closure</div><p>Six valves already energized, about 25 W, roughly 3.5 A more on the battery side; serial port open. Serial data cannot carry a pulse across the isolator, so the valve load is the only item left.</p></div>
+  </div>
+  <p>The valve load creates no new ground path. It does one thing only: it pulls the battery voltage down a notch beforehand. So the only entry left is the Pi's one remaining wire, the buck module itself.</p>
+  <h3>The buck module's margin</h3>
+  <div class="wide"><table>
+    <thead><tr><th>Item</th><th>Value</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Pi 5 V output setting</td><td class="num">5.19 V</td><td>Set on 09-04</td></tr>
+      <tr><td>XL4015 module requirement</td><td class="num">input ≥ output + 1.5 V = 6.7 V</td><td>The module is rated 4 to 38 V input, but the 1.5 V headroom is the line that matters</td></tr>
+      <tr><td>Battery, six valves energized</td><td class="num">7.70 V</td><td>walk_20260904_215456.log, 0.05 s after closure</td></tr>
+      <tr><td>Battery, servos enabled</td><td class="num">7.31 V</td><td>Same log, 0.15 s after enable</td></tr>
+      <tr><td>Static margin</td><td class="num">1.0 V / 0.6 V</td><td>The two rows above minus 6.7 V</td></tr>
+      <tr><td>Taken by the closure pulse</td><td class="num">≈ 0.9 V and up</td><td>30 A × 30 mΩ battery internal resistance; lead-inductance spikes on top</td></tr>
+    </tbody>
+  </table></div>
+  <p>Under 1 V of margin, and one pulse eats it all. The XL4015 is an old non-synchronous 180 kHz part with a slow loop; it cannot fill a sub-millisecond hole in its input, so the output sags for a fraction of a millisecond and the PMIC cuts power. This also accounts for the green LED in section 06: when the output current momentarily drops to zero, the CC/CV board reads it as "full". Section 06 attributed the flash to the pulse crossing the sense resistor; the module losing regulation flashes it just the same, so the LED no longer separates the two. The old fixed 5 V module put out only 4.89 V unloaded, the same high-dropout kind of part starved on a 2S pack, the same disease.</p>
+  <p>The explanation leaves one gap: the first death after the isolator was fitted happened in the GPIO17 script, with the valves off. It says the system was already at the edge, where the battery's state at the time or one slightly worse contact bounce is enough to push it over; and it says "ten clean closures" is not a proof of safety, only ten closures that did not catch it.</p>
 </section>
 
 <section>
-  <div class="sec-head"><span class="num">09</span><h2>Lessons to take away</h2></div>
+  <div class="sec-head"><span class="num">09</span><h2>Conclusion and remedies</h2></div>
+  <p>The pulse that charges the servo-side capacitance at closure has two entries into the Pi. The first is the USB ground loop settled on 09-04: the pulse floods in through the USB ground between the Pi and the Servo2040, and the drop across the GND Dupont wire and the sense resistor is judged by the PMIC as undervoltage. That path is real, the sticky bit proved it, and the isolator has cut it. The second is the buck module itself, narrowed down on 09-06: the XL4015 needs at least 6.7 V in for 5.19 V out, the 2S pack has only 1 V of margin left under the valve load, the closure pulse pulls the battery down, the buck loses regulation, the output sags, the PMIC cuts. The first entry had been masking the second.</p>
+  <ol class="fix">
+    <li><b>Replace the buck module.</b> Ignore the broad "input range" figure and look at the dropout: it must hold 5.1 V with the input down to a little over 6 V. Synchronous rectification, 5 A or more, dropout under 0.5 V; or go straight to a buck-boost, untroubled anywhere from 5 to 8.4 V. Old non-synchronous parts like the XL4015 and LM2596 were the wrong choice for a 2S pack from the start.</li>
+    <li><b>Keep the USB isolator.</b> The path it cut is real; remove it and the sticky bit comes back.</li>
+    <li><b>Pre-charge of the servo rail demoted to secondary.</b> With a suitable buck it is no longer necessary; it can still be fitted, but it only softens the pulse and does nothing for the margin.</li>
+  </ol>
+  <p>A large capacitor plus a Schottky diode at the buck input buys only a few milliseconds and costs an extra diode drop; not recommended. A capacitor across the Pi's 5 V pins likewise only treats the symptom. Whether R050 is bridged no longer matters.</p>
+  <p>Verification: after the swap, run the real scripts (the ones that energize the valves) several times; the criterion is no sticky bit and no death. Two supporting experiments are optional: measure the battery with a multimeter after the valves are energized, below 7.5 V means out of spec; run <code>walk_teleop --vent off</code> three times, and if that stays clean while body_lean dies, the valve load is the trigger.</p>
+  <p>The software side is already in place: two-step closure, a black box with the same convention in the four startup scripts, the real timeline in the forensics script. <code>--startup-gap</code> is no longer needed.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">10</span><h2>Lessons to take away</h2></div>
   <div class="lesson">
     <div class="card"><h3>A power-cut death can only leave traces before dying</h3><p>Write one line and fsync before every high-current step; whichever line the log stops at, the culprit is the next step. Without that line, three days of investigation would not have moved one step.</p></div>
     <div class="card"><h3>Find a deterministic stand-in for a sporadic fatal event</h3><p>The sticky bit is set on every closure; no need to wait for a crash. The experimental criterion changed from "dies or not" to "sets or not"; one reboot gives an answer, and "did not die" is no longer non-information.</p></div>
@@ -379,11 +417,13 @@ for i in range(10):
     <div class="card"><h3>Change one variable at a time, within one boot</h3><p>Unplug one cable, close ten times, plug back in, close again; the contrast between 0x0 and 0x50000 leaves no room for interpretation. Faster than swapping modules, and cheaper too.</p></div>
     <div class="card"><h3>The manufacturer's one sentence needs a control too</h3><p>power_reset=2 is backed by a verbatim forum sentence and was read after both crashes, so at the time it passed as the PMIC's own testimony. Read again on 09-06 after a normal shutdown: still 2. A reading without a control group is not evidence.</p></div>
     <div class="card"><h3>Measure the evidence before swapping parts</h3><p>Swapping the buck module only proved "static voltage is not the root cause"; that conclusion is worth something, but had the sticky bit been checked first, that step could have been skipped.</p></div>
+    <div class="card"><h3>One path proven is not the only path</h3><p>The A/B nailed the USB ground loop beyond dispute, but it only proved that this path exists, not that no other does. Fix it and the crash comes back in a rarer form.</p></div>
+    <div class="card"><h3>Island test: disconnect the wire you know about, then measure</h3><p>The Pi's ground is supposed to be connected to the battery negative, so continuity proves nothing. Pull the wire the design put there and measure again; open means an island, and the remaining entry can only be on that wire itself.</p></div>
   </div>
 </section>
 
 <section>
-  <div class="sec-head"><span class="num">10</span><h2>Index</h2></div>
+  <div class="sec-head"><span class="num">11</span><h2>Index</h2></div>
   <dl class="refs">
     <dt>hexapod/powerlog.py</dt><dd>PowerWatch sampling thread, startup step markers, two-stage closure sampling</dd>
     <dt>hexapod/runlog.py</dt><dd>Black box RunLog, mark() = write one line and fsync</dd>
@@ -391,7 +431,9 @@ for i in range(10):
     <dt>scripts/pi_forensics.sh</dt><dd>setup once before a crash; check after the power cycle</dd>
     <dt>logs/lean_20260903_135325.log</dt><dd>First autopsy, dead within 50 ms of closure</dd>
     <dt>logs/walk_20260904_215456.log</dt><dd>Decisive log, undervoltage 14 ms after closure with servos at 0 A</dd>
+    <dt>logs/lean_20260906_234509.log</dt><dd>The death after the isolator was fitted, within tens of ms of closure, last line "relay closed"</dd>
     <dt>docs/P4-GUIDE.md</dt><dd>The case notes in the common-problems section</dd>
+    <dt>html/en/p4-pneumatic-electrical.html</dt><dd>Pneumatic-electrical page: YYNMOS-8 IN− to DC− measured open, single-point ground topology</dd>
     <dt>forums.raspberrypi.com t=361231</dt><dd>timg236 on power_reset and PMIC undervoltage shutdown (after the 09-06 control, the field has no discriminating power on this machine)</dd>
   </dl>
   <pre class="cmd">vcgencmd get_throttled                    # 0x50000 = undervoltage occurred + throttling occurred (cleared only by reboot)
@@ -400,5 +442,5 @@ bash scripts/pi_forensics.sh check         # after the power cycle, brings out a
 </section>
 
 </div>
-<footer>Case file compiled 2026-09-04. The machine is still in stage P4; the three remedies await fitting and verification, and the verification criterion remains the sticky bit.</footer>
+<footer>Case file compiled 2026-09-04, sequel added 09-06 (section 08). The machine is still in stage P4; the isolator is fitted, the buck module awaits replacement, and the verification criterion is no sticky bit and no death.</footer>
 </div>

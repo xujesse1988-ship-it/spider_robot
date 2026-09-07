@@ -9,7 +9,7 @@ from hexapod.climb import (ClimbEngine, LegPhase, PRESS_DEPTH_MAX,
                            TILT_BAND_DEG, _press_tilt, max_straight_step,
                            parse_handover, parse_leg_order,
                            gait_with_slot_order, HANDOVER_SPEED_MMS,
-                           VENT_STAGGER_S, LAND_STAGGER_S)
+                           VENT_STAGGER_S, LAND_STAGGER_S, VENT_STALL_S)
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
 from hexapod.gait import CLIMB, CLIMB_DUAL
 from hexapod.driver import MockDriver
@@ -338,7 +338,8 @@ def test_leak_blocks_new_swing_while_moving():
 
 
 def test_vent_stall_freezes_instead_of_silent_wait():
-    """LIFT 抬到位但放气确认不了（排气堵/传感器漂移）：必须冻结报警。"""
+    """LIFT 抬到位但放气确认不了（排气堵/传感器漂移）：必须冻结报警。VENT
+    门槛放宽到 -30 让 -20 的盘过 VENT，专测 LIFT 顶端那道 RELEASED 关。"""
     class StuckVentIO(MockVacuumIO):
         def __init__(self):
             super().__init__(6)
@@ -351,11 +352,70 @@ def test_vent_stall_freezes_instead_of_silent_wait():
 
     io = StuckVentIO()
     ctl = AdhesionController(io)
-    eng = ClimbEngine(CFG, ctl)
+    eng = ClimbEngine(replace(CFG, lift_release_kpa=-30.0), ctl)
     start(eng)
     io.stuck = {0}                             # L1 第一个摆动
     run(eng, 8.0, vx=30.0)
-    assert eng.frozen is not None and "放气" in eng.frozen
+    assert eng.frozen is not None and "放气确认超时" in eng.frozen
+
+
+def _run_to_phase(eng, leg, phase, vx=30.0, budget=5.0):
+    for _ in range(int(budget / DT)):
+        eng.update(DT, vx, 0.0, 0.0)
+        if eng.phase_of[leg] == phase:
+            return
+    raise AssertionError(f"{leg} {budget}s 内未进 {phase}: frozen={eng.frozen}")
+
+
+class _StuckVentIO(MockVacuumIO):
+    """排气阀卡住：stuck 里的足放气后盘压钉在 hold（不回升）。"""
+    def __init__(self, hold=-40.0):
+        super().__init__(6)
+        self.stuck, self.hold = set(), hold
+
+    def step(self, dt):
+        super().step(dt)
+        for i in self.stuck:
+            self.foot_kpa[i] = self.hold
+
+
+def test_vent_gate_holds_lift_until_cup_pressure_rises():
+    """VENT→LIFT 盘压门槛（09-07）：计时满但本足盘压没回升过 lift_release_kpa
+    就不抬——状态留在 VENT、z 不动、不冻结；排气一恢复立刻进 LIFT。"""
+    io = _StuckVentIO()
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(CFG, ctl)
+    start(eng)
+    leg = eng.slot_order[0]
+    fi = LEG_NAMES.index(leg)
+    io.stuck = {fi}
+    _run_to_phase(eng, leg, LegPhase.VENT)
+    z0 = eng.foot[leg][2]
+    run(eng, CFG.lift_vent_s + 1.0, vx=30.0)          # 计时早满、盘压未回升
+    assert eng.phase_of[leg] == LegPhase.VENT and eng.frozen is None
+    assert math.isclose(eng.foot[leg][2], z0)         # 没抬
+    assert ctl.last_kpa[fi] is not None and ctl.last_kpa[fi] < CFG.lift_release_kpa
+    io.stuck = set()                                   # 排气恢复
+    _run_to_phase(eng, leg, LegPhase.LIFT, budget=1.0)
+    assert eng.frozen is None
+
+
+def test_vent_gate_timeout_freezes_naming_pressure():
+    """盘压一直不回升（阀没动作/气路堵）：超 lift_vent_s+VENT_STALL_S 冻结报警，
+    报文带盘压与阈值；脚始终没离开压入位。"""
+    io = _StuckVentIO(hold=-40.0)
+    ctl = AdhesionController(io)
+    eng = ClimbEngine(CFG, ctl)
+    start(eng)
+    leg = eng.slot_order[0]
+    io.stuck = {LEG_NAMES.index(leg)}
+    _run_to_phase(eng, leg, LegPhase.VENT)
+    z0 = eng.foot[leg][2]
+    run(eng, CFG.lift_vent_s + VENT_STALL_S + 0.5, vx=30.0)
+    assert eng.frozen is not None and "放气未建立" in eng.frozen
+    assert "-40kPa" in eng.frozen and f"{CFG.lift_release_kpa:g}kPa" in eng.frozen
+    assert eng.phase_of[leg] == LegPhase.VENT
+    assert math.isclose(eng.foot[leg][2], z0)
 
 
 def test_startup_waits_for_tank_and_times_out():

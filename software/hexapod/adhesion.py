@@ -546,7 +546,12 @@ class AdhesionController:
                     self.io.set_valve(i, True)  # 保持抽气尝试挽救
             elif st == FootState.VENTING:
                 self.io.set_valve(i, False)
-                if el >= VENT_TIME_S and self._foot_kpa(i) >= RELEASE_KPA:
+                # 先断真空再读压：异常只丢确认不丢排气（退出序列 _exit_tick
+                # 依赖此顺序）。每周期都读、留 last_kpa 镜像——步态层 VENT→LIFT
+                # 盘压门槛（config.lift_release_kpa）靠镜像判本足是否真放开；
+                # 原来满 VENT_TIME_S 才读，镜像会停在 ATTACHED 时的深值
+                kpa = self._foot_kpa(i)
+                if el >= VENT_TIME_S and kpa >= RELEASE_KPA:
                     self._set(i, FootState.RELEASED)
 
         if hasattr(self.io, "step"):

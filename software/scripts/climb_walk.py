@@ -250,6 +250,13 @@ def main():
                          "密封判据，刚吸上的邻腿还软，立刻抬下一腿整机被拽下坠"
                          "（08-19 实测 R2/R3）。等待超时冻结报警点名软腿。"
                          "范围 -65~-35")
+    ap.add_argument("--lift-release", type=float,
+                    default=DEFAULT_CONFIG.lift_release_kpa,
+                    help="抬腿放气门槛 kPa（默认 %(default)g）：VENT 计时满后本足"
+                         "盘压须回升到此值以上才进 LIFT，否则不抬、原地等，超时"
+                         "冻结报警点名盘压——排气阀没动作/气路堵时不再硬拔还吸着"
+                         "的盘。默认=放开判据 RELEASE_KPA；放宽到 -20 可更早起抬"
+                         "（残余真空仍会拽）；-100 等于关。范围 -100~0")
     ap.add_argument("--press-delta", type=float, default=None,
                     help="预压行程 mm，覆盖全部腿（默认用 config 值 "
                          f"{DEFAULT_CONFIG.legs[0].press_delta_mm:g}）。08-19："
@@ -392,10 +399,14 @@ def main():
         # 处崩溃断电瘫倒（审核发现 #5）。--release 无需键盘，放行。
         sys.exit("需要交互终端（ssh 加 -t；勿用 nohup/管道跑本脚本）")
 
+    if not -100.0 <= args.lift_release <= 0.0:
+        ap.error(f"--lift-release {args.lift_release:g} 非法：范围 -100~0kPa"
+                 "（默认 -5=放开判据；-100 等于关）")
     cfg = replace(DEFAULT_CONFIG, climb_cycle_time=args.cycle,
                   climb_sag_comp_mm=args.sag_comp, lift_gate_kpa=args.lift_gate,
                   climb_max_step=args.max_step, stand_height=args.stand_height,
-                  cup_tilt_trim_deg=args.tilt_trim)
+                  cup_tilt_trim_deg=args.tilt_trim,
+                  lift_release_kpa=args.lift_release)
     if args.press_delta is not None:
         if not 8.0 <= args.press_delta <= 20.0:
             ap.error(f"--press-delta {args.press_delta} 非法：范围 8~20mm。"

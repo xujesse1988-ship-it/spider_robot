@@ -267,8 +267,8 @@ Note the "below the wall" parts at both ends: during VENT the foot still sits on
 
 <table>
 <tr><th>State</th><th>What it does</th><th>Why this state must exist (all lessons from real climbs)</th></tr>
-<tr><td><b>VENT</b> 0.3s</td><td>Stay in place, open the vent valve only</td><td>Lifting while venting: exhaust builds slower than lift-off, and the leg gets "yanked up" by residual vacuum (real machine, 08-19)</td></tr>
-<tr><td><b>LIFT</b> ≈0.83s</td><td>Pull out from the press position −18 along the wall normal and retreat to +15 above the surface, 33 mm total (40 mm/s)</td><td>The cup itself rebounds 11–13 mm; retreat too little and the foot still rubs the wall. <b>The phase clock reaches the window end and stops 0.3 s into LIFT (the foot is still 6 mm below the surface then)</b> — the stance legs freeze earlier than the swing foot leaves the surface</td></tr>
+<tr><td><b>VENT</b> ≥0.3s</td><td>Stay on the surface, open the vent valve only; switch to LIFT only after 0.3 s <b>and once this foot's cup pressure has risen above lift_release_kpa (default −5 kPa)</b>, otherwise no lift, wait in place, and after 2.3 s the whole robot freezes with "vent not established"</td><td>Lifting while venting: exhaust builds slower than lift-off, and the leg gets "yanked up" by residual vacuum (real machine, 08-19). The pressure gate was added 09-07: before it the lift was timer-only, so with a stuck vent valve the servos would tear at a cup still under vacuum and only find out at the top of LIFT</td></tr>
+<tr><td><b>LIFT</b> ≈0.83s</td><td>Pull out from the press position −18 along the wall normal and retreat to +15 above the surface, 33 mm total (40 mm/s)</td><td>The cup itself rebounds 11–13 mm; retreat too little and the foot still rubs the wall. <b>With venting normal, the phase clock reaches the window end and stops 0.3 s into LIFT (the foot is still 6 mm below the surface then)</b> — the stance legs freeze earlier than the swing foot leaves the surface</td></tr>
 <tr><td><b>TRANSFER</b> 0.6s</td><td>XY smoothstep to directly above the landing point; meanwhile z rides a sine arc another 25 mm up, peaking at +40 off the surface (= step_height), and is back at +15 on arrival</td><td>Get "directly above" first, then descend, so the landing has no lateral velocity and does not drag the foot; the mid-way arc is the floor gait's swing shape reused (step_height − lift_clearance)</td></tr>
 <tr><td><b>DESCEND</b></td><td>Slow vertical probe (30 mm/s), XY frozen</td><td>Kills "slapping" — the impact velocity at contact would break the seal</td></tr>
 <tr><td><b>PRESS</b></td><td>Keep pressing in 18 mm (15 mm/s)</td><td>The bellows cup must be flattened to seal; 13 mm is mostly eaten by leg-chain give, measured deepened to 18</td></tr>
@@ -279,7 +279,8 @@ Note the "below the wall" parts at both ends: during VENT the foot still sits on
 ① at the window end the swing leg is not yet attached — clock stops, whole body frozen waiting for it;
 ② interlock at the window start: no lift unless the other 5 feet are all ATTACHED;
 ③ threshold at the window start: some stance cup still shallower than −50 kPa (a freshly attached neighbor is a "soft shoulder"), wait for the pump to pull it deeper, alarm after 15 s;
-④ any stance foot leaking — clock paused during the 2 s rescue window, freeze on timeout.
+④ any stance foot leaking — clock paused during the 2 s rescue window, freeze on timeout;
+⑤ in VENT this foot's cup pressure has not risen past the threshold — no lift, wait in place (the clock stops at the window end as in ①), freeze on timeout.
 This "clock that can stop" is the essential difference between the climb engine and the purely open-loop P3 gait.</div>
 
 <h2 id="s4">4. The math of stance: 0.3 millimeters per frame</h2>
@@ -431,7 +432,7 @@ Every "measure and back-fill" and "criteria on pressure/current, not commanded p
 
 <p><small>Page generated 2026-08-19. Parameter snapshot: stand height 90 / reach 130 (floor), climbing stance radius 176.6 (vertical solution at the press position),
 press_delta 18, period 3.6 s, stride cap 40, 50 Hz. If config changes, the code is authoritative.
-Checked against the current climb_walk code on 2026-09-07; three corrections: the sine arc in TRANSFER (peak +40), the pneumatic state machine called synchronously inside eng.update, and stance targets integrated per tick rather than by the phase formula.</small></p>
+Checked against the current climb_walk code on 2026-09-07; three corrections: the sine arc in TRANSFER (peak +40), the pneumatic state machine called synchronously inside eng.update, and stance targets integrated per tick rather than by the phase formula. The same day the code gained a VENT→LIFT cup-pressure gate (lift_release_kpa, default −5 kPa, tunable with --lift-release); this page follows the new behaviour.</small></p>
 
 <script>
 "use strict";
@@ -719,7 +720,7 @@ requestAnimationFrame(stepAnim);
   txt(svg,t2x(2.38),zy(-7),"Press in 18 mm = press_delta",{fill:"#c62828","font-size":11});
   txt(svg,t2x(3.45),zy(-18)-8,"Pump to −30 kPa to count as attached",{fill:"#6a1b9a","font-size":11});
   mk("rect",{x:t2x(0),y:zy(-18)+6,width:t2x(0.3)-t2x(0),height:5,fill:"#e65100",opacity:.6},svg);
-  txt(svg,t2x(0)-2,zy(-18)+30,"VENT: at the press position, translating with the support field (no scraping)",{fill:"#e65100","font-size":11});
+  txt(svg,t2x(0)-2,zy(-18)+30,"VENT: at the press position, translating with the support field (no scraping); lift only once cup pressure is above −5 kPa",{fill:"#e65100","font-size":11});
 })();
 
 /* ============ 2.1 Two-viewpoint comparison ============ */

@@ -206,8 +206,17 @@ class RobotConfig:
                                     # 理许可；越快越不准静态，判据 4/漏气挽救/
                                     # 越界截断照常兜底）
     lift_vent_s: float = 0.3        # 抬腿前先通气时长 s：原地保持、只开排气阀，
-                                    # 到时才进 LIFT。08-19 实机：边放气边抬时排气
-                                    # 建立慢于抬离，腿是被残余真空"拽起"的
+                                    # 计时满且本足盘压回升过 lift_release_kpa 才进
+                                    # LIFT。08-19 实机：边放气边抬时排气建立慢于
+                                    # 抬离，腿是被残余真空"拽起"的
+    lift_release_kpa: float = -5.0  # VENT→LIFT 盘压门槛 kPa（09-07 加）：本足盘压
+                                    # 须回升到此值以上才抬，否则不抬、原地等，超
+                                    # lift_vent_s+climb.VENT_STALL_S 冻结报警。此前
+                                    # 只按计时抬：排气阀没动作/气路堵时舵机会硬拔
+                                    # 还吸着的盘，到 LIFT 顶端等 RELEASED 才发现。
+                                    # 默认=adhesion.RELEASE_KPA（放开判据）；放宽到
+                                    # -20 可更早起抬（残余真空仍会拽）；-100 等于
+                                    # 关。climb_walk --lift-release 可调
     lift_clearance: float = 15.0    # LIFT 沿面法向退开距离 mm（≥15，吸盘回弹 11~13）
     lift_speed: float = 40.0        # LIFT 抬离速度 mm/s（放气已先行 lift_vent_s）
     transfer_time: float = 0.6      # TRANSFER 平移段时长 s（沿用 smoothstep+正弦形状）

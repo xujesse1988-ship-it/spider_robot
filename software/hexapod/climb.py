@@ -18,7 +18,10 @@ P3 的 GaitEngine 是纯开环相位表——假定触地精确发生在相位�
            铺完放气前复检抬腿门槛/互锁（窗头判定已陈旧 δ/速率 秒）
   VENT     先通气再抬（08-19 实机：边放气边抬时排气建立慢于抬离，腿被残余
            真空"拽起"）：原地保持 lift_vent_s 只开排气；本足仍贴面，须随
-           支撑场平移（不随场 = 在墙面系被拖着划）
+           支撑场平移（不随场 = 在墙面系被拖着划）。计时满还须本足盘压
+           回升过 lift_release_kpa 才进 LIFT（09-07 加：此前纯计时，排气
+           阀没动作时照抬=硬拔还吸着的盘），不过线原地等，超 VENT_STALL_S
+           冻结报警点名盘压
   LIFT     沿面法向退开 lift_clearance（吸盘回弹 11~13mm 会把脚顶回面上，
            放气已先行 lift_vent_s）；放气未确认（RELEASED）不进 TRANSFER
   TRANSFER 平移到落点上方：沿用 smoothstep + 正弦抬腿形状
@@ -99,8 +102,10 @@ TANK_READY_KPA = -40.0      # 启动序列首次抽气前罐压须建立到此�
 TANKLESS_PRECHARGE_S = 3.0  # 无罐模式首次抽气前的盲抽时长：阀全关、歧管容积
                             # 小，抽几秒即空——省得首足 SUCK 独扛整段大气歧管
 PRECHARGE_TIMEOUT_S = 30.0  # 罐压建立超时 -> 冻结报警（泵坏/大漏不能静默干等）
-VENT_STALL_S = 2.0          # LIFT 抬到位后等放气确认（RELEASED）的额外上限，
-                            # 超时冻结报警——排气堵/传感器漂移不能静默停摆
+VENT_STALL_S = 2.0          # 放气等待的额外上限 s，两处共用：VENT 计时满后等本足
+                            # 盘压过 lift_release_kpa（不抬）、LIFT 抬到位后等
+                            # RELEASED（不平移）。超时冻结报警——排气堵/阀没
+                            # 动作/传感器漂移不能静默停摆
 D_SAFE_MARGIN = 3.0         # 支撑目标离 IK 包络的最小预留 mm。原硬编码
                             # COMP_TAIL_MAX=40 即 press 13 口径下按本预留反解的
                             # 平面尾预算（tail 40 时后腿最紧 d≈201.7=204.7−3）；
@@ -1207,6 +1212,15 @@ class ClimbEngine:
                 out.append((n, k))
         return out
 
+    def _vent_released(self, i):
+        """VENT→LIFT 盘压门槛：本足盘压已回升到 lift_release_kpa 以上。读
+        last_kpa 镜像（VENTING 控制环每周期都在读，零额外 IO）；镜像缺失按
+        未放开计（保守）。air 模式吸盘悬空本无真空，旁路。"""
+        if self.air_mode:
+            return True
+        k = self.ctl.last_kpa[i]
+        return k is not None and k >= self.cfg.lift_release_kpa
+
     def _weights_ok(self, cur):
         """本次交接是否套权重（放行瞬间定夺，_ho_weighted 入册；份额由
         _share_now 每 tick 现算）。
@@ -1336,9 +1350,19 @@ class ClimbEngine:
         elif ph == LegPhase.VENT:
             # 先通气：原地保持等排气建立（阀通电在下周期 ctl.update 生效，
             # 时长里已含），到时才抬——边放气边抬会被残余真空拽起（08-19）。
+            # 计时满还要本足盘压真回升过 lift_release_kpa（09-07：此前纯计时，
+            # 排气阀没动作/气路堵时照抬=舵机硬拔还吸着的盘，到 LIFT 顶端等
+            # RELEASED 才发现）；不过线就不抬、原地等，超时冻结点名盘压。
             # XY 由支撑场分支代管（本足贴面随场），这里只管计时切段
             if self._seg_t[name] >= cfg.lift_vent_s:
-                self.phase_of[name] = LegPhase.LIFT
+                if self._vent_released(i):
+                    self.phase_of[name] = LegPhase.LIFT
+                elif self._seg_t[name] > cfg.lift_vent_s + VENT_STALL_S:
+                    k = self.ctl.last_kpa[i]
+                    ks = "无读数" if k is None else f"{k:.0f}kPa"
+                    self.frozen = (f"{name} 放气未建立：盘压 {ks} 未回升到 "
+                                   f"{cfg.lift_release_kpa:g}kPa，不抬"
+                                   "（排气阀没动作/气路堵/传感器漂移？）")
         elif ph == LegPhase.LIFT:
             f[2] = min(z_lift, f[2] + cfg.lift_speed * dt)
             if f[2] >= z_lift - _EPS:

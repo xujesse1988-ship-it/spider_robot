@@ -266,8 +266,8 @@ button.on{background:#c00;color:#fff;border-color:#c00}
 
 <table>
 <tr><th>段</th><th>干什么</th><th>为什么必须有这段(都是实爬教训)</th></tr>
-<tr><td><b>VENT</b> 0.3s</td><td>原地不动,只开排气阀</td><td>边放气边抬,排气建立比抬离慢,腿会被残余真空"拽起"(08-19 实机)</td></tr>
-<tr><td><b>LIFT</b> ≈0.83s</td><td>从压入位 −18 沿墙法向拔出、退到面上 +15,总行程 33mm(40mm/s)</td><td>吸盘自身回弹 11~13mm,退少了脚还蹭在墙上。<b>相位钟在 LIFT 进行 0.3s 时到窗尾停住(此刻脚还在面下 −6mm)</b>——支撑腿比摆动脚离面更早冻结</td></tr>
+<tr><td><b>VENT</b> ≥0.3s</td><td>原地贴面,只开排气阀;计时满 0.3s <b>且本足盘压回升到 lift_release_kpa(默认 −5kPa)以上</b>才切 LIFT,否则不抬、原地等,超 2.3s 全机冻结报"放气未建立"</td><td>边放气边抬,排气建立比抬离慢,腿会被残余真空"拽起"(08-19 实机)。盘压门槛是 09-07 加的:此前只按计时抬,排气阀没动作时舵机会硬拔还吸着的盘,到 LIFT 顶端才发现</td></tr>
+<tr><td><b>LIFT</b> ≈0.83s</td><td>从压入位 −18 沿墙法向拔出、退到面上 +15,总行程 33mm(40mm/s)</td><td>吸盘自身回弹 11~13mm,退少了脚还蹭在墙上。<b>放气正常时相位钟在 LIFT 进行 0.3s 时到窗尾停住(此刻脚还在面下 −6mm)</b>——支撑腿比摆动脚离面更早冻结</td></tr>
 <tr><td><b>TRANSFER</b> 0.6s</td><td>XY 按 smoothstep 平移到落点正上方;z 同时沿正弦弧再抬 25mm,顶点离面 +40(= step_height),到落点时回到 +15</td><td>先到"正上方"再下,落地才没有横向速度,不拖脚;中途的抬弧是沿用地面步态的摆腿形状(step_height − lift_clearance)</td></tr>
 <tr><td><b>DESCEND</b></td><td>竖直慢速下探(30mm/s),XY 冻结</td><td>消灭"拍地"——撞上去的瞬间速度会破坏密封</td></tr>
 <tr><td><b>PRESS</b></td><td>继续压入 18mm(15mm/s)</td><td>波纹盘要压扁才密封;13mm 被腿链让位吃掉大半,实测加深到 18</td></tr>
@@ -278,7 +278,8 @@ button.on{background:#c00;color:#fff;border-color:#c00}
 ① 窗尾摆动腿还没吸牢——钟停,全身冻结等它;
 ② 窗头互锁:其余 5 脚没全部 ATTACHED 不准抬;
 ③ 窗头门槛:有支撑盘压还浅于 -50kPa(刚吸上的邻腿是"软肩膀"),等泵拽深,超 15s 报警;
-④ 任一支撑脚漏气——2s 挽救窗内钟暂停,超时冻结。
+④ 任一支撑脚漏气——2s 挽救窗内钟暂停,超时冻结;
+⑤ VENT 段本足盘压没回升到阈值——不抬,原地等(钟到窗尾照 ① 停),超时冻结。
 这套"能停的钟"就是 climb 引擎和 P3 纯开环步态的本质区别。</div>
 
 <h2 id="s4">4. 支撑相的数学:每帧挪 0.3 毫米</h2>
@@ -429,7 +430,7 @@ press_delta 名义 13mm 实际只压进几毫米要加深到 18 的物理根源�
 
 <p><small>页面生成:2026-08-19。参数快照:站高 90 / 伸距 130(地面)、爬墙站位半径 176.6(压入位垂直解)、
 press_delta 18、周期 3.6s、步幅上限 40、50Hz。若 config 改动,以代码为准。
-2026-09-07 按当前 climb_walk 代码校对,更正三处:TRANSFER 段的正弦抬弧(顶点 +40)、气路状态机在 eng.update 内同步调用、支撑相按每拍积分而非相位公式。</small></p>
+2026-09-07 按当前 climb_walk 代码校对,更正三处:TRANSFER 段的正弦抬弧(顶点 +40)、气路状态机在 eng.update 内同步调用、支撑相按每拍积分而非相位公式。同日代码加 VENT→LIFT 盘压门槛(lift_release_kpa,默认 −5kPa,--lift-release 可调),本页已按新口径。</small></p>
 
 <script>
 "use strict";
@@ -717,7 +718,7 @@ requestAnimationFrame(stepAnim);
   txt(svg,t2x(2.38),zy(-7),"压入18mm=press_delta",{fill:"#c62828","font-size":11});
   txt(svg,t2x(3.45),zy(-18)-8,"抽气到 −30kPa 才算吸牢",{fill:"#6a1b9a","font-size":11});
   mk("rect",{x:t2x(0),y:zy(-18)+6,width:t2x(0.3)-t2x(0),height:5,fill:"#e65100",opacity:.6},svg);
-  txt(svg,t2x(0)-2,zy(-18)+30,"VENT:贴压入位随支撑场平移(不划墙)",{fill:"#e65100","font-size":11});
+  txt(svg,t2x(0)-2,zy(-18)+30,"VENT:贴压入位随支撑场平移(不划墙);盘压回升过 −5kPa 才准抬",{fill:"#e65100","font-size":11});
 })();
 
 /* ============ 2.1 两个视角对照图 ============ */

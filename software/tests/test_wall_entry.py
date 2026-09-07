@@ -669,3 +669,70 @@ def test_pitch_probe_cli_preflights_whole_envelope_before_live_io(tmp_path, monk
     with pytest.raises(SystemExit) as e:
         script['main'](flags+['--live', '--demo-pitch', '0'])
     assert e.value.code == 2
+
+
+@pytest.mark.parametrize('self_stand', [False, True])
+@pytest.mark.parametrize('name', ['L1', 'R1'])
+def test_front_transfer_lifts_away_from_wall_and_retracts_before_lowering(self_stand, name):
+    b = Bench(MockDriver(), MockVacuumIO(),
+              Settings(self_stand=self_stand, dual_front=self_stand, max_press=2))
+    run(b, 'start')
+    other = 'R1' if name == 'L1' else 'L1'
+    front_attached(b, other)
+    anchors = dict(b.pose.feet)
+    ground = b.geom.ground[name]
+    min_gap = min(b.geom.wall_x-ground[0], b.geom.s.approach_gap)
+
+    b.command(f'prepare {name}')
+    while b.busy:
+        b.tick()
+        assert not b.frozen
+        x, y, z = b.pose.feet[name]
+        # All lateral/forward swing occurs only after reaching target height.
+        if z < b.geom.s.height-1e-6:
+            assert (x, y) == pytest.approx(ground[:2])
+        assert b.geom.wall_x-x >= min_gap-1e-6
+        for n in LEG_NAMES:
+            if n != name:
+                assert b.pose.feet[n] == anchors[n]
+        assert b.attached == {other}
+    assert b.geom.wall_x-b.pose.feet[name][0] == pytest.approx(60)
+    run(b, f'touch {name}')
+    assert b.pose.feet[name][0] == b.geom.wall_x
+    run(b, f'press {name} 2')
+    run(b, f'attach {name}')
+    run(b, f'release {name}')
+    b.command(f'return {name}')
+    while b.busy:
+        b.tick()
+        assert not b.frozen
+        x, y, z = b.pose.feet[name]
+        if z < b.geom.s.height-1e-6:
+            assert (x, y) == pytest.approx(ground[:2])
+        for n in LEG_NAMES:
+            if n != name:
+                assert b.pose.feet[n] == anchors[n]
+        assert b.attached == {other}
+    assert b.pose.feet[name] == ground
+
+
+@pytest.mark.parametrize('name', ['L1', 'R1'])
+def test_new_hover_moves_knee_back_and_adds_cup_clearance(name):
+    from hexapod.kinematics import leg_ik, leg_joint_points
+    g = Geometry(Settings(self_stand=True))
+    leg = g.cfg.leg(name)
+    a = math.radians(leg.mount_angle_deg)
+    def knee_x(gap):
+        dx, dy, z = g.wall_x-gap-leg.mount_x, 0, g.s.height-g.s.body_height
+        angles = leg_ik(g.cfg, math.cos(a)*dx+math.sin(a)*dy,
+                        -math.sin(a)*dx+math.cos(a)*dy, z)
+        x, y, _ = leg_joint_points(g.cfg, *angles)[2]
+        return leg.mount_x+math.cos(a)*x-math.sin(a)*y
+    assert knee_x(20)-knee_x(g.s.approach_gap) == pytest.approx(32.3, abs=0.1)
+    assert g.s.approach_gap-20 == 40
+
+
+@pytest.mark.parametrize('gap', [float('nan'), float('inf'), 0, 19, 81])
+def test_invalid_approach_gap_is_rejected_before_hardware(gap):
+    with pytest.raises(EntryError, match='approach_gap'):
+        Geometry(Settings(approach_gap=gap))

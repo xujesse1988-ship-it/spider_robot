@@ -21,6 +21,7 @@ class EntryError(ValueError):
 class Settings:
     distance: float = 160.0       # front hip to wall with body level
     height: float = 224.0        # wall lip centre above floor
+    approach_gap: float = 60.0   # lip-centre distance from wall at prepared hover
     body_height: float = 90.0
     speed: float = 10.0          # virtual foot mm/s
     tilt_limit: float = 15.0
@@ -38,6 +39,7 @@ class Settings:
         if not isinstance(self.pitch_probe, bool) or (self.pitch_probe and not self.dual_front):
             raise EntryError('pitch_probe requires self_stand and dual_front')
         bounds = dict(distance=(120, 200), height=(150, 280),
+                      approach_gap=(20, 80),
                       body_height=(70, 100), speed=(1, 15),
                       tilt_limit=(1, 15), max_press=(2, 18), pitch_limit=(1, 10))
         for name, (lo, hi) in bounds.items():
@@ -71,6 +73,16 @@ class Geometry:
 
     def hip_height(self, pose):
         return self.s.body_height if pose.body_z is None else pose.body_z
+
+    def front_waypoints(self, name):
+        """Raise away from wall before approaching; reverse before lowering.
+
+        These are free-cup centre targets, not sensed lip/mesh clearances.
+        Keeping the lift above the floor anchor also avoids the tight IK
+        configurations encountered by folding inward while still low.
+        """
+        return ((*self.ground[name][:2], self.s.height),
+                (self.wall_x-self.s.approach_gap, self.cfg.leg(name).mount_y, self.s.height))
 
     @property
     def pitch_limit(self):
@@ -372,8 +384,9 @@ class Bench:
             if (self.stage[name] != 'floor' or name in self.attached or self.depth[name] != 0
                     or self.pressures[idx] < -5 or self.ctl.state[idx] != FootState.RELEASED):
                 raise EntryError('Prepare requires unpressed, released floor foot')
-            lift = self.target(name, (*geo.ground[name][:2], 50.0))
-            hover = self.target(name, (geo.wall_x-20, geo.cfg.leg(name).mount_y, s.height))
+            lift_xyz, hover_xyz = geo.front_waypoints(name)
+            lift = self.target(name, lift_xyz)
+            hover = self.target(name, hover_xyz)
             surfaces = dict(self.surfaces, **{name: None})
             self.schedule([lift, hover], surfaces, lambda: self.stage.update({name:'hover'}))
         elif cmd == 'touch' and len(words) == 2:
@@ -418,8 +431,9 @@ class Bench:
                 raise EntryError('Release cup before returning')
             if self.ctl.state[idx] != FootState.RELEASED or self.pressures[idx] < -5:
                 raise EntryError('Release not confirmed')
-            hover = self.target(name, (geo.wall_x-20, geo.cfg.leg(name).mount_y, s.height))
-            lift = self.target(name, (*geo.ground[name][:2], 50.0))
+            lift_xyz, hover_xyz = geo.front_waypoints(name)
+            hover = self.target(name, hover_xyz)
+            lift = self.target(name, lift_xyz)
             floor = self.target(name, geo.ground[name])
             def returned():
                 self.stage[name], self.surfaces[name], self.depth[name] = 'floor','floor',0.0

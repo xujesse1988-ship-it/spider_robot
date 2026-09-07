@@ -26,8 +26,10 @@ from hexapod.config import LEG_NAMES
 HELP = """
 Every command needs Enter; wait for SEGMENT complete before the next command.
   start             supported: extend legs; --self-stand: crouch -> stand at target height
-  prepare L1/R1     lift chosen front foot, move to 20 mm before wall
-  touch L1/R1       advance to nominal wall plane (check actual gap visually)
+  prepare L1/R1     lift above floor anchor to wall-target height, then approach
+                    to --approach-gap before wall (default 60 mm)
+  touch L1/R1       advance from hover to nominal wall plane (default 60 mm);
+                    check actual gap visually; no contact sensor
   press LEG 2       add <=2 mm normal overtravel; total <= --max-press
   attach LEG        after >=2 mm press; require <=-50 kPa continuously for 0.5 s
   release LEG       vent selected foot; independently support/unload it first
@@ -68,6 +70,9 @@ def snapshot(b):
                 commanded_hip_heights_mm={leg.name: round(b.geom.hip_height(b.pose)
                     + math.sin(math.radians(b.pose.pitch))*leg.mount_x, 3)
                     for leg in b.geom.cfg.legs},
+                approach_gap_mm=b.geom.s.approach_gap,
+                commanded_front_wall_gap_mm={n: round(b.geom.wall_x-b.pose.feet[n][0], 3)
+                                             for n in ('L1', 'R1')},
                 waiting=b.waiting,
                 hold_good_s=round(b.good_elapsed, 3) if b.waiting == ('hold', None) else None,
                 seated=b.seated, stage=dict(b.stage),
@@ -176,6 +181,8 @@ def main(argv=None):
     ap.add_argument('--scenario', choices=['front','mixed'], default='front')
     ap.add_argument('--distance', type=float, default=160, help='level front hip to wall, mm')
     ap.add_argument('--height', type=float, default=224, help='wall lip centre above floor, mm')
+    ap.add_argument('--approach-gap', type=float, default=60,
+                    help='prepared cup-centre gap before wall, mm (20..80, default 60); touch traverses this gap')
     ap.add_argument('--body-height', type=float, default=90)
     ap.add_argument('--speed', type=float, default=10)
     ap.add_argument('--max-press', type=float,
@@ -190,6 +197,7 @@ def main(argv=None):
     if args.max_press is None:
         args.max_press = 2 if args.dual_front else 18
     settings = Settings(distance=args.distance, height=args.height, body_height=args.body_height,
+                        approach_gap=args.approach_gap,
                         speed=args.speed, max_press=args.max_press, pitch_limit=args.pitch_limit,
                         self_stand=args.self_stand, dual_front=args.dual_front, pitch_probe=args.pitch_probe)
     try:

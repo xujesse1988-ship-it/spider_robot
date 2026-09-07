@@ -498,3 +498,174 @@ def test_hold_does_not_enable_dual_front_in_default_single_mode():
     run(b, 'start')
     with pytest.raises(EntryError, match='requires --self-stand --dual-front'):
         b.command('hold')
+
+
+def pitch_bench():
+    b = Bench(MockDriver(), MockVacuumIO(),
+              Settings(self_stand=True, dual_front=True, pitch_probe=True, max_press=2))
+    run(b, 'start')
+    front_attached(b, 'L1')
+    front_attached(b, 'R1')
+    return b
+
+
+@pytest.mark.parametrize('settings', [Settings(pitch_probe=True),
+                                    Settings(self_stand=True, pitch_probe=True)])
+def test_pitch_probe_requires_dual_front_opt_in(settings):
+    with pytest.raises(EntryError, match='pitch_probe requires'):
+        Geometry(settings)
+
+
+def test_pitch_probe_full_sweep_keeps_world_anchors_and_returns_original_pulses():
+    b = pitch_bench()
+    feet, initial_pulses = dict(b.pose.feet), list(b.drv.pulses)
+    run(b, 'hold')
+    for angle in (0.5, 1, 1.5, 2, 1.5, 1, 0.5, 0):
+        b.command(f'pitch {angle}')
+        start = b.pose.pitch
+        samples = []
+        while b.busy:
+            b.tick()
+            assert not b.frozen
+            assert b.pose.feet == feet and b.pose.body_z == 90
+            assert b.attached == {'L1', 'R1'}
+            samples.append(b.pose.pitch)
+        assert samples == sorted(samples, reverse=angle < start)
+        assert samples[-1] == angle
+        # 0.25 deg/s peak limit, including smoothstep ramp.
+        assert max(abs(y-x) for x, y in zip([start]+samples, samples)) <= 0.25*b.DT+1e-9
+        if angle:
+            assert b.drv.pulses != initial_pulses
+        run(b, 'hold')
+    assert b.drv.pulses == pytest.approx(initial_pulses)
+    for n in ('R1', 'L1'):
+        run(b, f'release {n}')
+        run(b, f'return {n}')
+    run(b, 'sit')
+    assert b.seated
+
+
+def test_pitch_probe_requires_fresh_hold_for_every_increase_but_allows_return():
+    b = pitch_bench()
+    with pytest.raises(EntryError, match='Use hold'):
+        b.command('pitch 0.5')
+    run(b, 'hold')
+    run(b, 'pitch 0.5')
+    with pytest.raises(EntryError, match='Use hold'):
+        b.command('pitch 1')
+    # Geometrically valid retreat never waits for a new 10 s hold.
+    run(b, 'pitch 0')
+    with pytest.raises(EntryError, match='Use hold'):
+        b.command('pitch 0.5')
+
+
+@pytest.mark.parametrize('angle', ['nan', 'inf', '-0.5', '0', '1', '2.5'])
+def test_pitch_probe_rejects_bad_angle_and_oversized_steps_without_output(angle):
+    b = pitch_bench()
+    run(b, 'hold')
+    pose, count = b.pose.copy(), len(b.drv.history)
+    with pytest.raises(EntryError, match='Pitch probe:'):
+        b.command('pitch '+angle)
+    assert b.pose == pose and len(b.drv.history) == count and not b.busy
+
+
+@pytest.mark.parametrize('cmd', ['release L1', 'release R1', 'return L1', 'prepare R1', 'sit'])
+def test_pitch_probe_blocks_release_and_sit_until_level(cmd):
+    b = pitch_bench()
+    run(b, 'hold')
+    run(b, 'pitch 0.5')
+    count, valves = len(b.drv.history), list(b.io.valve)
+    with pytest.raises(EntryError):
+        b.command(cmd)
+    assert len(b.drv.history) == count and b.io.valve == valves
+
+
+def test_pitch_probe_hold_invalidated_by_pressure_dip_even_after_recovery():
+    b = pitch_bench()
+    run(b, 'hold')
+    b.io.step = lambda dt: None
+    b.io.foot_kpa[0] = -40
+    b.tick()
+    assert b.hold_pose is None and not b.frozen
+    b.io.foot_kpa[0] = -70
+    b.tick()
+    with pytest.raises(EntryError, match='Use hold'):
+        b.command('pitch 0.5')
+    run(b, 'hold')
+    run(b, 'pitch 0.5')
+
+
+def test_pitch_probe_pressure_loss_stops_before_next_motion_frame():
+    b = pitch_bench()
+    run(b, 'hold')
+    b.command('pitch 0.5')
+    b.tick()
+    b.io.step = lambda dt: None
+    b.io.foot_kpa[3] = -40
+    pose, count = b.pose.copy(), len(b.drv.history)
+    b.tick()
+    assert not b.frozen and b.busy and b.pose == pose and len(b.drv.history) == count
+    b.io.foot_kpa[3] = -20
+    b.tick()
+    assert b.frozen and not b.busy and b.pose == pose and len(b.drv.history) == count
+    assert b.io.valve[0] and b.io.valve[3] and not b.io.pump
+
+
+def test_pitch_probe_return_preflight_failure_does_not_change_command_state():
+    b = pitch_bench()
+    run(b, 'hold')
+    pose, count = b.pose.copy(), len(b.drv.history)
+    original_path = b.geom.path
+    def path(start, goals, surfaces, dt=0.05):
+        if start.pitch > 0 and goals[-1].pitch == 0:
+            raise EntryError('return route unavailable')
+        return original_path(start, goals, surfaces, dt)
+    b.geom.path = path
+    with pytest.raises(EntryError, match='return route unavailable'):
+        b.command('pitch 0.5')
+    assert not b.busy and b.pose == pose and len(b.drv.history) == count
+    assert b.hold_pose == pose
+
+
+@pytest.mark.parametrize('fault', ['over_cap', 'floor_target', 'body_height', 'wall_surface'])
+def test_pitch_probe_geometry_guards_apply_without_command_layer(fault):
+    b = pitch_bench()
+    pose, surfaces = b.pose.copy(), dict(b.surfaces)
+    pose.pitch = 0.5
+    if fault == 'over_cap':
+        pose.pitch = 2.01
+    elif fault == 'floor_target':
+        pose.feet['L2'] = (*pose.feet['L2'][:2], 1)
+    elif fault == 'body_height':
+        pose.body_z = 89
+    else:
+        surfaces['L1'] = None
+    with pytest.raises(EntryError):
+        b.geom.solve(pose, surfaces)
+
+
+def test_pitch_probe_cli_preflights_whole_envelope_before_live_io(tmp_path, monkeypatch):
+    import json
+    import runpy
+    from pathlib import Path
+    script = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/ground_wall_probe.py'))
+    report = tmp_path / 'pitch.json'
+    flags = ['--self-stand', '--dual-front', '--pitch-probe']
+    assert script['main'](flags+['--mock', '--demo', '--report', str(report)]) == 0
+    data = json.loads(report.read_text())
+    angles = [s['state']['commanded_pitch_deg'] for s in data['segments'] if s['command'].startswith('pitch ')]
+    assert angles == [0.5, 1, 1.5, 2, 1.5, 1, 0.5, 0]
+    assert data['segments'][-1]['state']['seated']
+    # Reject deliberately at preflight and ensure no driver can open. Passing
+    # --demo-pitch 0 must not shrink the live preflight to a static-only run.
+    def rejected(settings, scenario, pitch):
+        assert settings.pitch_probe and pitch == 2
+        return {'passed': False, 'reason': 'test full-envelope preflight rejected'}
+    monkeypatch.setitem(script['main'].__globals__, 'simulate', rejected)
+    monkeypatch.setattr(script['sys'].stdin, 'isatty', lambda: True)
+    def forbidden(*args, **kwargs):
+        pytest.fail('Live driver opened before successful preflight')
+    monkeypatch.setitem(script['main'].__globals__, 'Servo2040Driver', forbidden)
+    with pytest.raises(SystemExit) as e:
+        script['main'](flags+['--live', '--demo-pitch', '0'])
+    assert e.value.code == 2

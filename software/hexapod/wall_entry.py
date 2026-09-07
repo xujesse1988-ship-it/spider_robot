@@ -28,12 +28,15 @@ class Settings:
     pitch_limit: float = 5.0      # experimental envelope, not a validated limit
     self_stand: bool = False     # stand_up geometry, one front foot off floor at a time
     dual_front: bool = False     # opt-in static two-wall/four-floor test; no pitch
+    pitch_probe: bool = False    # opt-in <=2 deg probe after dual-front hold
 
     def validate(self):
         if not isinstance(self.self_stand, bool):
             raise EntryError('self_stand must be boolean')
         if not isinstance(self.dual_front, bool) or (self.dual_front and not self.self_stand):
             raise EntryError('dual_front requires self_stand')
+        if not isinstance(self.pitch_probe, bool) or (self.pitch_probe and not self.dual_front):
+            raise EntryError('pitch_probe requires self_stand and dual_front')
         bounds = dict(distance=(120, 200), height=(150, 280),
                       body_height=(70, 100), speed=(1, 15),
                       tilt_limit=(1, 15), max_press=(2, 18), pitch_limit=(1, 10))
@@ -69,17 +72,34 @@ class Geometry:
     def hip_height(self, pose):
         return self.s.body_height if pose.body_z is None else pose.body_z
 
+    @property
+    def pitch_limit(self):
+        return min(2.0, self.s.pitch_limit) if self.s.pitch_probe else self.s.pitch_limit
+
     def solve(self, pose, surfaces):
         """Check RAW pulses before clamp, cup normals and joint-centre clearance."""
         body_z = self.hip_height(pose)
         if not math.isfinite(body_z) or not 20 <= body_z <= self.s.body_height:
             raise EntryError('Body height outside crouch/stand envelope')
-        if self.s.self_stand and pose.pitch != 0:
+        if self.s.self_stand and not self.s.pitch_probe and pose.pitch != 0:
             raise EntryError('Self-standing mode has no pitch motion')
         if set(pose.feet) != set(LEG_NAMES):
             raise EntryError('Six feet required')
-        if not math.isfinite(pose.pitch) or not 0 <= pose.pitch <= self.s.pitch_limit:
+        if not math.isfinite(pose.pitch) or not 0 <= pose.pitch <= self.pitch_limit:
             raise EntryError('Pitch outside experiment envelope')
+        if self.s.pitch_probe and pose.pitch != 0:
+            if body_z != self.s.body_height:
+                raise EntryError('Pitch probe requires standing body-origin height')
+            # Four unsealed floor targets and both wall targets stay fixed.
+            for n in LEG_NAMES:
+                p = pose.feet[n]
+                if n in ('L1', 'R1'):
+                    if (surfaces.get(n) != 'wall' or len(p) != 3
+                            or not self.wall_x <= p[0] <= self.wall_x+self.s.max_press
+                            or p[1:] != (self.cfg.leg(n).mount_y, self.s.height)):
+                        raise EntryError('Pitch probe requires both front targets on wall')
+                elif surfaces.get(n) != 'floor' or p != self.ground[n]:
+                    raise EntryError('Pitch probe requires fixed middle/rear floor targets')
         c, s = math.cos(math.radians(pose.pitch)), math.sin(math.radians(pose.pitch))
         pulses = [None] * 18
         tilts = {}
@@ -134,7 +154,8 @@ class Geometry:
         self.solve(start, surfaces)
         for goal in waypoints:
             distance = max(math.dist(prev.feet[n], goal.feet[n]) for n in LEG_NAMES)
-            duration = max(distance/self.s.speed, abs(goal.pitch-prev.pitch)/0.5,
+            pitch_speed = 0.25 if self.s.pitch_probe else 0.5
+            duration = max(distance/self.s.speed, abs(goal.pitch-prev.pitch)/pitch_speed,
                            abs(self.hip_height(goal)-self.hip_height(prev))/self.s.speed, dt)
             # smoothstep peak speed is 1.5 times mean
             steps = max(1, math.ceil(1.5*duration/dt))
@@ -183,12 +204,14 @@ class Bench:
         self.seated = False
         self.gate_wait = 0.0
         self.motion_elapsed = 0.0
+        self.hold_pose = None
 
     @property
     def busy(self):
         return bool(self.frames) or self.waiting is not None
 
     def freeze(self, reason):
+        self.hold_pose = None
         self.frames.clear()
         self.finish = None
         self.waiting = None
@@ -205,6 +228,7 @@ class Bench:
         surfaces = dict(self.surfaces if surfaces is None else surfaces)
         # Entire route validated before changing command state or sending pulses.
         frames = self.geom.path(self.pose, goals, surfaces, self.DT)
+        self.hold_pose = None
         self.frames = frames[::-1]
         self.motion_elapsed = 0.0
         self.surfaces = surfaces
@@ -232,6 +256,12 @@ class Bench:
                 and (self.floor_ready(other)
                      or (self.stage[other] == 'wall' and self.surfaces[other] == 'wall'
                          and other in self.attached and self.strong([other]))))
+
+    def two_wall_four_floor(self):
+        return (self.attached == {'L1', 'R1'} and self.strong(('L1', 'R1'))
+                and all(self.stage[n] == 'wall' and self.surfaces[n] == 'wall'
+                        for n in ('L1', 'R1'))
+                and all(self.floor_ready(n) for n in ('L2', 'L3', 'R2', 'R3')))
 
     def command(self, text):
         words = text.strip().split()
@@ -273,11 +303,9 @@ class Bench:
         if cmd == 'hold' and len(words) == 1:
             if not s.dual_front:
                 raise EntryError('hold requires --self-stand --dual-front')
-            if (self.attached != {'L1', 'R1'} or not self.strong(('L1', 'R1'))
-                    or any(self.stage[n] != 'wall' or self.surfaces[n] != 'wall'
-                           for n in ('L1', 'R1'))
-                    or not all(self.floor_ready(n) for n in ('L2', 'L3', 'R2', 'R3'))):
+            if not self.two_wall_four_floor():
                 raise EntryError('hold requires two confirmed wall cups and four floor feet')
+            self.hold_pose = None
             self.waiting = ('hold', None)
             self.wait_elapsed = self.good_elapsed = 0.0
             self.event('HOLD begin: both wall cups <= -50 kPa for 10 s; observe body/floor feet')
@@ -285,7 +313,7 @@ class Bench:
         if cmd == 'sit' and len(words) == 1:
             if not s.self_stand:
                 raise EntryError('sit is for self-standing mode')
-            if (self.attached or any(self.stage[n] != 'floor' for n in LEG_NAMES)
+            if (self.pose.pitch != 0 or self.attached or any(self.stage[n] != 'floor' for n in LEG_NAMES)
                     or any(self.depth.values()) or any(p < -5 for p in self.pressures)):
                 raise EntryError('Return both front feet; all six feet must be released on floor')
             goal = self.pose.copy()
@@ -294,6 +322,23 @@ class Bench:
             self.event('COMMAND sit; body descends with fixed floor targets')
             return
         if cmd == 'pitch' and len(words) == 2:
+            if s.pitch_probe:
+                pitch = float(words[1])
+                if (not math.isfinite(pitch) or not 0 <= pitch <= geo.pitch_limit
+                        or not 0 < abs(pitch-self.pose.pitch) <= 0.500001):
+                    raise EntryError('Pitch probe: 0..2 deg (or lower configured limit), step >0 and <=0.5 deg')
+                if not self.two_wall_four_floor():
+                    raise EntryError('Pitch probe requires two confirmed wall cups and four floor feet')
+                if pitch > self.pose.pitch and self.hold_pose != self.pose:
+                    raise EntryError('Use hold at current pose before increasing pitch')
+                goal, level = self.pose.copy(), self.pose.copy()
+                goal.pitch, level.pitch = pitch, 0.0
+                # Validate a geometrical route back to level before committing
+                # the next segment. Return is still operator-commanded.
+                geo.path(goal, [level], self.surfaces, self.DT)
+                self.schedule([goal])
+                self.event('COMMAND '+text+'; fixed world targets, body-origin height unchanged')
+                return
             if s.self_stand:
                 raise EntryError('Self-standing modes have no pitch; pitch needs supported mode')
             pitch = float(words[1])
@@ -354,12 +399,14 @@ class Bench:
                 raise EntryError('Self-standing mode does not attach floor feet')
             if self.stage[name] not in ('wall','floor') or self.depth[name] < 2 or name in self.attached:
                 raise EntryError('Touch surface and press at least 2 mm before attach')
+            self.hold_pose = None
             self.ctl.request_attach(idx)
             self.waiting = ('attach', name)
             self.wait_elapsed = self.good_elapsed = 0.0
         elif cmd == 'release' and len(words) == 2:
             if self.stage[name] not in ('wall','floor'):
                 raise EntryError('Foot is not on a contact surface')
+            self.hold_pose = None
             self.attached.discard(name)
             self.ctl.force_release(idx)
             # RELEASED state may still have residual vacuum; explicitly vent.
@@ -407,6 +454,8 @@ class Bench:
                 raise EntryError('Current above configured warning for 0.3 s; servo power disabled')
             if any(self.pressures[LEG_NAMES.index(n)] > -30 for n in self.attached):
                 raise EntryError('Attached cup lost vacuum (> -30 kPa)')
+            if not self.strong(self.attached):
+                self.hold_pose = None
         except Exception as e:
             self.freeze(e)
             # Sensors unavailable: no blind pumping or motion. Mechanical support required.
@@ -419,7 +468,9 @@ class Bench:
                 self.wait_elapsed += dt
                 self.good_elapsed = self.good_elapsed+dt if self.strong(('L1', 'R1')) else 0.0
                 if self.good_elapsed + 1e-9 >= self.DUAL_HOLD_S:
-                    self.event('HOLD confirmed L1 R1: both <= -50 kPa continuously for 10 s; seal only, not load proof')
+                    self.hold_pose = self.pose.copy()
+                    self.event(f'HOLD confirmed L1 R1: both <= -50 kPa continuously for 10 s at '
+                               f'commanded pitch {self.pose.pitch:g} deg; seal only, not load proof')
                     self.waiting = None
                 elif self.wait_elapsed >= self.DUAL_HOLD_TIMEOUT_S:
                     self.freeze('Dual-front hold not stable within 30 s; no automatic release/return')

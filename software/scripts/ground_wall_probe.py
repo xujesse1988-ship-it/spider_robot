@@ -3,12 +3,14 @@
 
 Default live mode uses torso support. --self-stand rises from the floor and
  tests only one front foot at a time. Add --dual-front for a static two-wall,
- four-floor test with a catch tether/support; no pitch or body translation.
+ four-floor test with a catch tether/support. Add --pitch-probe for <=2 deg
+ nose-up steps after pressure holds, with fixed world foot targets.
  Cold start only: constructors vent cups and disable servo power. No mode
  provides full ground-to-wall climbing. See docs/GROUND-WALL-TEST.md.
 """
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import select
@@ -32,6 +34,8 @@ Every command needs Enter; wait for SEGMENT complete before the next command.
   return L1/R1      after release confirmation, retract and return to floor
   pitch 1           absolute nose-up degrees; change <=1 deg each time;
                     requires both wall cups + four floor cups attached
+                    --pitch-probe: <=0.5 deg per step, 0..2 deg hard limit;
+                    two wall cups + four floor feet, hold before each increase
   hold              --dual-front only: two wall cups <=-50 kPa for 10 s continuously;
                     pressure recovery restarts timer, 30 s total timeout; no motion
   sit               --self-stand only: after all feet return, lower body to 20 mm
@@ -44,7 +48,10 @@ In --self-stand without --dual-front: finish and return L1 before preparing R1 (
 no floor press/attachment, two-front-foot transfer or pitch. Use sit then quit.
 With --self-stand --dual-front: attach first front foot before preparing second;
 use hold after both attach. Release/return one fully before releasing the other.
-Keep four middle/rear feet on floor. Use a catch tether/support; no pitch.
+Keep four middle/rear feet on floor. Use a catch tether/support.
+Without --pitch-probe, dual-front mode has no pitch. With --pitch-probe:
+hold -> pitch 0.5 -> hold -> pitch 0 -> hold for the first experiment.
+Return to commanded pitch 0 before releasing either wall foot. No body translation.
 Do not paste multiple commands: commands received while busy are rejected.
 """
 
@@ -54,7 +61,13 @@ def snapshot(b):
                 started=b.started,
                 commanded_pitch_deg=round(b.pose.pitch, 4),
                 commanded_hip_height_mm=b.geom.hip_height(b.pose),
+                commanded_body_origin_height_mm=b.geom.hip_height(b.pose),
                 self_stand=b.geom.s.self_stand, dual_front=b.geom.s.dual_front,
+                pitch_probe=b.geom.s.pitch_probe,
+                hold_confirmed_pitch_deg=b.hold_pose.pitch if b.hold_pose is not None else None,
+                commanded_hip_heights_mm={leg.name: round(b.geom.hip_height(b.pose)
+                    + math.sin(math.radians(b.pose.pitch))*leg.mount_x, 3)
+                    for leg in b.geom.cfg.legs},
                 waiting=b.waiting,
                 hold_good_s=round(b.good_elapsed, 3) if b.waiting == ('hold', None) else None,
                 seated=b.seated, stage=dict(b.stage),
@@ -64,7 +77,7 @@ def snapshot(b):
                 press_mm=dict(b.depth), virtual_feet_world_mm=dict(b.pose.feet))
 
 
-def demo_commands(scenario, depth=18, pitch=2, self_stand=False, dual_front=False):
+def demo_commands(scenario, depth=18, pitch=2, self_stand=False, dual_front=False, pitch_probe=False):
     yield 'start'
     for n in ('L1', 'R1') if scenario == 'mixed' or self_stand else ('L1',):
         yield f'prepare {n}'
@@ -80,6 +93,16 @@ def demo_commands(scenario, depth=18, pitch=2, self_stand=False, dual_front=Fals
             yield f'return {n}'
     if dual_front:
         yield 'hold'
+        if pitch_probe:
+            angle = 0.0
+            while angle < pitch:
+                angle = min(pitch, angle+0.5)
+                yield f'pitch {angle:g}'
+                yield 'hold'
+            while angle > 0:
+                angle = max(0, angle-0.5)
+                yield f'pitch {angle:g}'
+                yield 'hold'
         for n in ('R1', 'L1'):
             yield f'release {n}'
             yield f'return {n}'
@@ -108,14 +131,17 @@ def demo_commands(scenario, depth=18, pitch=2, self_stand=False, dual_front=Fals
 def simulate(settings, scenario, pitch):
     b = Bench(MockDriver(), MockVacuumIO(), settings)
     report = dict(mode='offline ideal-seal simulation', scenario=scenario,
-                  assumptions=('Static dual-front test, four nominal floor contacts; catch tether/support required; '
+                  assumptions=('Small pitch probe, two wall seals/four nominal floor contacts; catch tether/support required; '
+                               if settings.pitch_probe else
+                               'Static dual-front test, four nominal floor contacts; catch tether/support required; '
                                if settings.dual_front else
                                'Self-standing, five nominal floor supports during each front-foot test; '
                                if settings.self_stand else 'Torso supported; ')
                               + 'no mesh collision/force/physical seal validation',
                   settings=vars(settings), segments=[])
     try:
-        for cmd in demo_commands(scenario, settings.max_press, pitch, settings.self_stand, settings.dual_front):
+        for cmd in demo_commands(scenario, settings.max_press, pitch, settings.self_stand,
+                                 settings.dual_front, settings.pitch_probe):
             b.command(cmd)
             ticks = 0
             while b.busy and not b.frozen:
@@ -145,6 +171,8 @@ def main(argv=None):
                     help='stand from ground; defaults to one front foot at a time, no pitch')
     ap.add_argument('--dual-front', action='store_true',
                     help='requires --self-stand; sequential two-wall/four-floor static test; catch tether/support required')
+    ap.add_argument('--pitch-probe', action='store_true',
+                    help='requires --self-stand --dual-front; <=2 deg nose-up, <=0.5 deg per command, hold before increase')
     ap.add_argument('--scenario', choices=['front','mixed'], default='front')
     ap.add_argument('--distance', type=float, default=160, help='level front hip to wall, mm')
     ap.add_argument('--height', type=float, default=224, help='wall lip centre above floor, mm')
@@ -153,7 +181,8 @@ def main(argv=None):
     ap.add_argument('--max-press', type=float,
                     help='total virtual overtravel limit, mm (default: 2 with --dual-front, otherwise 18)')
     ap.add_argument('--pitch-limit', type=float, default=5)
-    ap.add_argument('--demo-pitch', type=int, default=2)
+    ap.add_argument('--demo-pitch', type=int,
+                    help='offline peak angle (default: 2, or a lower configured whole-degree limit)')
     ap.add_argument('--port', default='/dev/ttyACM0')
     ap.add_argument('--log-dir', default=str(Path(__file__).resolve().parents[1]/'logs'))
     ap.add_argument('--report', help='write offline JSON report to this path')
@@ -162,11 +191,14 @@ def main(argv=None):
         args.max_press = 2 if args.dual_front else 18
     settings = Settings(distance=args.distance, height=args.height, body_height=args.body_height,
                         speed=args.speed, max_press=args.max_press, pitch_limit=args.pitch_limit,
-                        self_stand=args.self_stand, dual_front=args.dual_front)
+                        self_stand=args.self_stand, dual_front=args.dual_front, pitch_probe=args.pitch_probe)
     try:
         settings.validate()
-        if not 0 <= args.demo_pitch <= settings.pitch_limit:
-            raise EntryError('--demo-pitch must be between 0 and --pitch-limit')
+        limit = min(2, settings.pitch_limit) if settings.pitch_probe else settings.pitch_limit
+        if args.demo_pitch is None:
+            args.demo_pitch = min(2, math.floor(limit))
+        if not 0 <= args.demo_pitch <= limit:
+            raise EntryError('--demo-pitch must be between 0 and effective pitch limit')
     except EntryError as e:
         ap.error(str(e))
     if args.self_stand and args.scenario == 'mixed':
@@ -189,11 +221,22 @@ def main(argv=None):
         ap.error('Interactive mode requires a terminal; use --mock --demo for automation')
     # Geometry preflight before opening ANY live IO. A failure requires geometry
     # adjustment, not bypassing a guard. Dual mode includes both feet and return.
-    preflight = simulate(settings, 'front', 0)
+    # Live pitch mode always checks its whole allowed envelope and return,
+    # even if --demo-pitch 0 was supplied for an earlier offline run.
+    preflight = simulate(settings, 'front', limit if settings.pitch_probe else 0)
     if not preflight['passed']:
         ap.error('Preflight rejected: '+preflight['reason'])
     print(HELP)
-    if args.live and args.dual_front:
+    if args.live and args.pitch_probe:
+        print('LIVE pitch probe: cold start crouched, cups unloaded/off vacuum. '
+              'Catch tether/support must be able to carry the whole robot.\n'
+              'After both wall feet attach, hold -> pitch 0.5 -> hold -> pitch 0 -> hold. '
+              'First experiment ends there; observe body, ground feet and cup peeling.\n'
+              'Hold is required before every increase; <=0.5 deg steps, <=2 deg hard cap. '
+              'Four floor targets stay fixed; pressure is seal feedback, not load/pose feedback.\n'
+              'Return to commanded pitch 0 before release/return of either wall foot; sit before quit. '
+              'stop freezes without automatic recovery; quit cuts servo power.')
+    elif args.live and args.dual_front:
         print('LIVE dual-front: cold start from crouch, all cups unloaded/off vacuum. '
               'Use a catch tether or torso support able to carry the whole robot.\n'
               'Four middle/rear floor contacts and wall seal pressure do not prove load capacity. '

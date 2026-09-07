@@ -269,7 +269,7 @@ Note the "below the wall" parts at both ends: during VENT the foot still sits on
 <tr><th>State</th><th>What it does</th><th>Why this state must exist (all lessons from real climbs)</th></tr>
 <tr><td><b>VENT</b> 0.3s</td><td>Stay in place, open the vent valve only</td><td>Lifting while venting: exhaust builds slower than lift-off, and the leg gets "yanked up" by residual vacuum (real machine, 08-19)</td></tr>
 <tr><td><b>LIFT</b> ≈0.83s</td><td>Pull out from the press position −18 along the wall normal and retreat to +15 above the surface, 33 mm total (40 mm/s)</td><td>The cup itself rebounds 11–13 mm; retreat too little and the foot still rubs the wall. <b>The phase clock reaches the window end and stops 0.3 s into LIFT (the foot is still 6 mm below the surface then)</b> — the stance legs freeze earlier than the swing foot leaves the surface</td></tr>
-<tr><td><b>TRANSFER</b> 0.6s</td><td>Translate to directly above the landing point (smoothstep)</td><td>Get "directly above" first, then descend, so the landing has no lateral velocity and does not drag the foot</td></tr>
+<tr><td><b>TRANSFER</b> 0.6s</td><td>XY smoothstep to directly above the landing point; meanwhile z rides a sine arc another 25 mm up, peaking at +40 off the surface (= step_height), and is back at +15 on arrival</td><td>Get "directly above" first, then descend, so the landing has no lateral velocity and does not drag the foot; the mid-way arc is the floor gait's swing shape reused (step_height − lift_clearance)</td></tr>
 <tr><td><b>DESCEND</b></td><td>Slow vertical probe (30 mm/s), XY frozen</td><td>Kills "slapping" — the impact velocity at contact would break the seal</td></tr>
 <tr><td><b>PRESS</b></td><td>Keep pressing in 18 mm (15 mm/s)</td><td>The bellows cup must be flattened to seal; 13 mm is mostly eaten by leg-chain give, measured deepened to 18</td></tr>
 <tr><td><b>WAIT</b></td><td>Pump, wait for the cup pressure past −30 kPa to confirm attachment</td><td>If not attached, lift 5 mm and retry <b>5 mm deeper than last time</b> (re-pressing at the same depth fails the same way); after 3 failures the whole robot freezes and alarms</td></tr>
@@ -284,7 +284,7 @@ This "clock that can stop" is the essential difference between the climb engine 
 
 <h2 id="s4">4. The math of stance: 0.3 millimeters per frame</h2>
 
-<p>How does a velocity command become stance-foot targets? Three steps (gait.py):</p>
+<p>How does a velocity command become stance-foot targets? Three steps (① ② in gait.py, ③ in climb.py):</p>
 
 <pre>① Stride vector u = velocity × stance duration        (climbing: T_stance = 3.6 s × 5/6 = 3 s)
    e.g. vx=13 mm/s straight → u ≈ 40 mm (exactly the climbing single-step cap climb_max_step)
@@ -292,8 +292,13 @@ This "clock that can stop" is the essential difference between the climb engine 
 ② When turning, u differs per leg: u = (v + ω×r) × T_stance
    — rigid-body velocity field: legs far from the turning axis travel longer arcs; turning in place, the six u directions all differ
 
-③ Within stance, the target slides at constant speed from stance position + u/2 to stance position − u/2:
-   target = stance position + u × (0.5 − phase progress)</pre>
+③ Landing point = stance position + u/2, then clipped radially to the landing band (radius 151–198 mm,
+   i.e. cup axis within ±12° of the surface normal at the press position; out of band → shorter step,
+   so the lip never meets the surface tilted)
+   After landing, every tick pushes the target backward: target −= v × adv (when turning, also rotate by −ω×adv),
+   adv = the phase-clock time elapsed this tick. A full stance of clock time (3 s) slides it exactly to stance position − u/2
+   (during the 0.3 s of VENT the foot still sits on the surface following the field, so ≈4 mm more in practice);
+   clock stopped → adv = 0 → the target does not move — this is how the "clock that can stop" freezes the whole body</pre>
 
 <p>In the 50 Hz loop, a speed of 15 mm/s means <b>the target moves only 0.3 mm per frame</b>.
 The servos receive a series of position commands spaced very closely, which looks like continuous motion.
@@ -400,6 +405,7 @@ Every "measure and back-fill" and "criteria on pressure/current, not commanded p
 
 <pre>1. Read the keyboard: velocity command (vx, vy, wz)
 2. eng.update(dt, vx, vy, wz)                        # climb.py
+   ├ first line inside: ctl.update(dt) — the pneumatic state machine runs valves and pump, reads cup pressures (same thread, nothing separate)
    ├ advance the phase clock (or pause for interlock / threshold / not attached / leak)
    ├ swing leg: compute this frame's position per the state machine (VENT→…→WAIT), drive the valves
    └ stance legs: translate targets backward by v·dt (≈0.3 mm), including slip compensation
@@ -411,8 +417,7 @@ Every "measure and back-fill" and "criteria on pressure/current, not commanded p
    └ 18 pulse widths ordered by channel number
 4. driver.set_all_pulses_us(...)                     # driver.py
    → 0xD3 serial packet → Servo2040 → 18-channel PWM → servos turn
-5. Another thread/tick: pneumatic state machine ctl.update(dt) runs valves and pump, reads cup pressures
-6. sleep until the next 20 ms</pre>
+5. sleep until the next 20 ms</pre>
 
 <table>
 <tr><th>To see which link</th><th>Go to which file</th></tr>
@@ -425,7 +430,8 @@ Every "measure and back-fill" and "criteria on pressure/current, not commanded p
 </table>
 
 <p><small>Page generated 2026-08-19. Parameter snapshot: stand height 90 / reach 130 (floor), climbing stance radius 176.6 (vertical solution at the press position),
-press_delta 18, period 3.6 s, stride cap 40, 50 Hz. If config changes, the code is authoritative.</small></p>
+press_delta 18, period 3.6 s, stride cap 40, 50 Hz. If config changes, the code is authoritative.
+Checked against the current climb_walk code on 2026-09-07; three corrections: the sine arc in TRANSFER (peak +40), the pneumatic state machine called synchronously inside eng.update, and stance targets integrated per tick rather than by the phase formula.</small></p>
 
 <script>
 "use strict";
@@ -560,7 +566,7 @@ function climbState(t){
       st=seg;
       if(seg==="VENT"){ z=-18; wx=landW; }
       else if(seg==="LIFT"){ z=-18+33*f; wx=landW; }
-      else if(seg==="TRANSFER"){ z=15; const ss=f*f*(3-2*f); wx=landW+(targetW-landW)*ss; }
+      else if(seg==="TRANSFER"){ z=15+25*Math.sin(Math.PI*f); const ss=f*f*(3-2*f); wx=landW+(targetW-landW)*ss; }   // z sine arc, peak +40
       else if(seg==="DESCEND"){ z=15*(1-f); wx=targetW; }
       else if(seg==="PRESS"){ z=-18*f; wx=targetW; }
       else { z=-18; wx=targetW; }
@@ -586,7 +592,7 @@ function tripodState(t){
 }
 const PHCOL={STANCE:"#1565c0",VENT:"#e65100",LIFT:"#fff",TRANSFER:"#fff",DESCEND:"#fff",
              PRESS:"#c62828",WAIT:"#6a1b9a",SWING:"#fff"};
-const PHNAME={VENT:"VENT venting",LIFT:"LIFT pull-out/lift-off",TRANSFER:"TRANSFER translate",
+const PHNAME={VENT:"VENT venting",LIFT:"LIFT pull-out/lift-off",TRANSFER:"TRANSFER arc translate",
               DESCEND:"DESCEND probe down",PRESS:"PRESS press in",WAIT:"WAIT pump and attach"};
 function drawGait(stt){
   gv.innerHTML="";
@@ -687,7 +693,7 @@ requestAnimationFrame(stepAnim);
   });
   txt(svg,X0,20,"One full foot change ≈"+SLOT.toFixed(2)+"s; the schedule window is only 0.6 s → the phase clock stops early in LIFT, everything else happens while the clock is stopped",{fill:"#333","font-weight":"bold"});
   // z trajectory (foot height off the wall; stance/VENT hold at the pressed-in −18, not 0)
-  const Y0=192, ZS=2.9;
+  const Y0=192, ZS=2.0;
   const zy=z=>Y0-z*ZS;
   const t2x=t=>X0+t/SLOT*W;
   mk("line",{x1:X0-10,y1:zy(0),x2:X0+W,y2:zy(0),stroke:"#888","stroke-dasharray":"6 4"},svg);
@@ -695,19 +701,21 @@ requestAnimationFrame(stepAnim);
   mk("line",{x1:X0-10,y1:zy(-18),x2:X0+W,y2:zy(-18),stroke:"#cc99aa","stroke-dasharray":"2 4"},svg);
   txt(svg,X0+W-230,zy(-18)+14,"Press position −18 (stance stays at this depth)",{fill:"#a66","font-size":11});
   txt(svg,8,zy(15)+4,"z lift-off",{fill:"#666"});
-  // segmented polyline: VENT −18 | LIFT −18→15 | TRANSFER 15 | DESCEND 15→0 | PRESS 0→−18 | WAIT −18
-  let d=`M${t2x(0)},${zy(-18)} L${t2x(0.3)},${zy(-18)} L${t2x(1.125)},${zy(15)} `+
-        `L${t2x(1.725)},${zy(15)} L${t2x(2.225)},${zy(0)} L${t2x(3.425)},${zy(-18)} L${t2x(SLOT)},${zy(-18)}`;
+  // segmented polyline: VENT −18 | LIFT −18→15 | TRANSFER 15→40→15 (sine arc) | DESCEND 15→0 | PRESS 0→−18 | WAIT −18
+  let arc="";
+  for(let k=1;k<=12;k++){ const s=k/12; arc+=`L${t2x(1.125+0.6*s)},${zy(15+25*Math.sin(Math.PI*s))} `; }
+  let d=`M${t2x(0)},${zy(-18)} L${t2x(0.3)},${zy(-18)} L${t2x(1.125)},${zy(15)} `+arc+
+        `L${t2x(2.225)},${zy(0)} L${t2x(3.425)},${zy(-18)} L${t2x(SLOT)},${zy(-18)}`;
   mk("path",{d,stroke:"#1565c0","stroke-width":3,fill:"none","stroke-linejoin":"round"},svg);
   // phase-clock stop point: 0.6s (VENT 0.3 + first 0.3 of LIFT, foot at −6, not yet clear of the surface)
-  mk("line",{x1:t2x(0.6),y1:zy(22),x2:t2x(0.6),y2:zy(-23),stroke:"#c00","stroke-width":2,
+  mk("line",{x1:t2x(0.6),y1:zy(44),x2:t2x(0.6),y2:zy(-23),stroke:"#c00","stroke-width":2,
      "stroke-dasharray":"5 3"},svg);
   mk("circle",{cx:t2x(0.6),cy:zy(-6),r:5,fill:"#c00"},svg);
-  txt(svg,t2x(0.6)+8,zy(20),"0.6 s: clock reaches the window end and stops — foot still 6 below the surface, stance legs already frozen",
+  txt(svg,t2x(0.6)+8,zy(45),"0.6 s: clock reaches the window end and stops — foot still 6 below the surface, stance legs already frozen",
      {fill:"#c00","font-size":11,"font-weight":"bold"});
   // labels
   txt(svg,t2x(0.72),zy(-13),"LIFT: pull out from the press position + lift off, 33 mm total (cup rebound 11–13)",{fill:"#555","font-size":11});
-  txt(svg,t2x(1.15),zy(15)-8,"Translate to directly above the landing point",{fill:"#555","font-size":11});
+  txt(svg,t2x(1.6)+6,zy(35),"TRANSFER: XY to above the landing point, z on a sine arc +25 (peak +40 = step_height)",{fill:"#555","font-size":11});
   txt(svg,t2x(2.38),zy(-7),"Press in 18 mm = press_delta",{fill:"#c62828","font-size":11});
   txt(svg,t2x(3.45),zy(-18)-8,"Pump to −30 kPa to count as attached",{fill:"#6a1b9a","font-size":11});
   mk("rect",{x:t2x(0),y:zy(-18)+6,width:t2x(0.3)-t2x(0),height:5,fill:"#e65100",opacity:.6},svg);

@@ -216,6 +216,33 @@ def test_power_fault_disables_servos(fault):
     assert b.frozen and not b.drv.enabled
 
 
+@pytest.mark.parametrize('self_stand', [False, True])
+@pytest.mark.parametrize('powered_voltage', [7.4, 5.5])
+def test_unpowered_bus_is_not_undervoltage_but_powered_bus_is_checked_before_motion(
+        self_stand, powered_voltage):
+    drv = MockDriver()
+    drv.read_voltage_v = lambda: powered_voltage if drv.powered else 0.0
+    b = Bench(drv, MockVacuumIO(), Settings(self_stand=self_stand))
+    for _ in range(40):
+        b.tick()
+    assert b.voltage == 0.0
+    assert not b.frozen and not b.started and not drv.powered
+    assert not drv.history
+
+    b.command('start')
+    count = len(drv.history)
+    pose = b.pose.copy()
+    b.tick()
+    if powered_voltage < b.geom.cfg.volt_cutoff:
+        assert '5.50 V' in b.frozen and '6.00 V' in b.frozen
+        assert not drv.enabled and not drv.powered
+        assert b.pose == pose and len(drv.history) == count
+        assert not b.busy
+    else:
+        assert not b.frozen and drv.enabled
+        assert len(drv.history) == count+1
+
+
 def test_shutdown_attempts_every_cleanup_even_if_valve_call_fails():
     b = bench()
     run(b, 'start')

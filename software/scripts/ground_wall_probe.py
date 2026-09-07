@@ -45,6 +45,7 @@ Do not paste multiple commands: commands received while busy are rejected.
 
 def snapshot(b):
     return dict(t_s=round(b.elapsed, 3), busy=b.busy, frozen=b.frozen,
+                started=b.started,
                 commanded_pitch_deg=round(b.pose.pitch, 4),
                 commanded_hip_height_mm=b.geom.hip_height(b.pose),
                 self_stand=b.geom.s.self_stand, seated=b.seated, stage=dict(b.stage),

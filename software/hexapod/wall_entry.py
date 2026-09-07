@@ -358,10 +358,15 @@ class Bench:
                 raise EntryError('Nonfinite telemetry')
             if any(not -100 <= p <= 10 for p in self.pressures):
                 raise EntryError('Pressure outside plausible range')
-            if self.voltage < self.geom.cfg.volt_cutoff:
+            # Servo2040 reports the switched servo bus. Before start, the
+            # relay is open: a low bus reading is not a battery diagnosis.
+            # Once power_on returns, check before sending any motion frame.
+            if self.started and self.voltage < self.geom.cfg.volt_cutoff:
                 self.drv.enable(False)
-                raise EntryError('Battery below cutoff; servo power disabled')
-            self.overcurrent_s = self.overcurrent_s+dt if self.current > self.geom.cfg.curr_warn else 0.0
+                raise EntryError(f'Servo bus {self.voltage:.2f} V below cutoff '
+                                 f'{self.geom.cfg.volt_cutoff:.2f} V after power-on; servo power disabled')
+            self.overcurrent_s = (self.overcurrent_s+dt
+                                  if self.started and self.current > self.geom.cfg.curr_warn else 0.0)
             if self.overcurrent_s >= 0.3:
                 self.drv.enable(False)
                 raise EntryError('Current above configured warning for 0.3 s; servo power disabled')

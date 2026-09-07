@@ -20,6 +20,7 @@ pip install -e ".[pi]"
 | `hexapod/kinematics.py` | 单腿 3DOF IK/FK（有工作空间检查） |
 | `hexapod/gait.py` | 相位式步态引擎：tripod（三角）/ wave（波浪）/ climb（爬墙五足支撑） |
 | `hexapod/robot.py` | 身体系足端目标 → 变换 → IK → 18 路脉宽；身体姿态偏移（爬墙贴墙姿态用） |
+| `hexapod/wall_entry.py` | 承托台架上的前足触墙/混合接触小幅俯仰验证；逐足法向、整段轨迹预检、未截断脉宽检查与压力互锁 |
 | `hexapod/driver.py` | Servo2040 chica 协议驱动 + MockDriver；含足底开关/电压/电流读取 |
 | `hexapod/adhesion.py` | 吸附状态机（RELEASED→PRESSING→SUCKING→ATTACHED→VENTING）+ 真空回路仿真；`Pi5VacuumIO` 留待 P1 台架按实际接线补全 |
 | `hexapod/voice/` | 语音交互（`docs/VOICE-GUIDE.md`）：`intents.py` 识别文本→意图（纯规则）、`keywords.py` 唤醒词→KWS 关键词表、`audio.py` arecord/aplay 录放音、`tts.py` 离线合成+缓存+分句播报、`engine.py` KWS→VAD→SenseVoice 引擎线程、`voiceprint.py` 声纹锁 |
@@ -38,6 +39,13 @@ python scripts/voice_climb.py                    # 7. 爬墙语音壳：climb_wa
 ```
 
 全部脚本支持 `--mock` 干跑（`voice_*` 还支持 `--wav` 用录音顶替麦克风）。测试：`pytest tests/`（覆盖 IK 往返、步态约束、协议字节、吸附状态机、语音意图/关键词/回声过滤/声纹锁）。
+
+地墙过渡验证另见 [GROUND-WALL-TEST.md](../docs/GROUND-WALL-TEST.md)。在本目录先运行
+`python scripts/ground_wall_probe.py --plan --report /tmp/wall-entry-front.json`，再用
+`--mock --demo --scenario mixed` 检查六足混合接触与小幅抬身序列。
+实机默认`--live`使用独立承托；`--live --self-stand`采用与`stand_up.py`相同的
+蹲姿→9 cm站姿，随后一次只测试一只前足，其他五足留地，结束可用`sit`趴低。
+两种模式都只能未吸附冷启动，初始化会排气并断舵机电，不支持挂墙续跑或完整自主翻身。
 
 语音一键安装（树莓派）：`bash scripts/voice_setup.sh`，依赖见 `requirements.txt` 语音段。
 

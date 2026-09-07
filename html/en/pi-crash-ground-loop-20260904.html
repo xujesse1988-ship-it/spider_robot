@@ -179,9 +179,9 @@
 
 <div class="page">
 <header>
-  <div class="eyebrow">Hexapod wall-climbing robot · troubleshooting case file · 2026-09-02 to 09-06</div>
+  <div class="eyebrow">Hexapod wall-climbing robot · troubleshooting case file · 2026-09-02 to 09-07</div>
   <h1 style="margin-top:10px">The ground loop at the instant of relay closure</h1>
-  <p class="lede">The Raspberry Pi 5 would randomly lose power and die at the instant the servo relay closed. Over three days the suspicion moved from "valve coils" to "5 V margin" to "18 servos drawing a big current", and was finally settled by a log line 14 milliseconds long and one USB cable. This case file records the detours, the tools that actually worked, and the lessons worth carrying to the next project. Sequel 09-06: with the USB isolator fitted it still died at closure, and one island test narrowed the entry to the buck module itself; the conclusion changed from "one path" to "two entries".</p>
+  <p class="lede">The Raspberry Pi 5 would randomly lose power and die at the instant the servo relay closed. Over three days the suspicion moved from "valve coils" to "5 V margin" to "18 servos drawing a big current", and was finally settled by a log line 14 milliseconds long and one USB cable. This case file records the detours, the tools that actually worked, and the lessons worth carrying to the next project. Sequel 09-06: with the USB isolator fitted it still died at closure, and one island test narrowed the entry to the buck module itself; the conclusion changed from "one path" to "two entries". Sequel 09-07: closing the relay before the valve coils died just the same; the valve-load reading is withdrawn, the trigger is closure itself, and what remains is one A/B with the Pi on its own supply. Evening of 09-07: the Pi moved to a power bank with nothing else changed, and closure no longer kills it. The entry is located on the Pi's 5 V source; with a fully charged battery on the same buck, closure left the sticky bit at 0x0, so battery voltage is the controlling variable. The mechanism is still inference, awaiting a scope.</p>
   <div class="meta">
     <span>Machine: <b>Pi 5 + Servo2040 + 18 servos + six valves</b></span>
     <span>Power: <b>2S LiPo → 5 V buck for the Pi; relay switches the servo positive</b></span>
@@ -190,9 +190,9 @@
 </header>
 
 <div class="verdict">
-  <div><div class="k">Root cause</div><div class="v bad">The closure pulse has two entries: the USB ground loop (settled 09-04, cut by the isolator); and a buck module with under 1 V of margin on the 2S pack, pulled down by the pulse (09-06)</div></div>
-  <div><div class="k">Decisive evidence</div><div class="v">USB unplugged, ten closures 0x0; plugged back in, first closure 0x50000; with the isolator fitted it still died tens of ms after closure; with the buck IN− removed, Pi ground and battery negative are open</div></div>
-  <div><div class="k">Remedies</div><div class="v">USB isolator (fitted); replace the buck with a low-dropout synchronous buck or buck-boost suited to 2S; pre-charge demoted to secondary</div></div>
+  <div><div class="k">Root cause</div><div class="v bad">The closure pulse has two entries: the USB ground loop (settled 09-04, cut by the isolator); and the Pi's 5 V source, an XL4015 with under 1 V of margin on the 2S pack (09-07: three deaths in three at 7.3 to 7.9 V, sticky bit 0x0 after closure on a full battery; the pulse-collapses-the-buck mechanism is still inference)</div></div>
+  <div><div class="k">Decisive evidence</div><div class="v">USB unplugged, ten closures 0x0; plugged back in, first closure 0x50000; with the isolator fitted it still died tens of ms after closure; with the buck IN− removed, Pi ground and battery negative are open; with the relay closed before the valve coils it still died tens of ms after closure; same buck, battery fully charged, closure 0x0; with the Pi on a power bank, alive</div></div>
+  <div><div class="k">Remedies</div><div class="v">USB isolator (fitted); replace the buck with a low-dropout synchronous buck or buck-boost suited to 2S, or give the Pi its own battery; pre-charge demoted to secondary</div></div>
 </div>
 
 <div class="doc">
@@ -357,8 +357,8 @@ for i in range(10):
 </section>
 
 <section>
-  <div class="sec-head"><span class="num">08</span><h2>Sequel: after the isolator (09-06)</h2></div>
-  <p>The USB isolator was the cleanest of the three remedies, and once fitted it completed the third leg of the A/B: cable plugged in, an ADuM3160 in the middle, ten closures alone all 0x0. But on the same day the Pi died twice around it, the second time with a black box running. This section records the way from "path broken" to "more than one entry" to "the remaining entry is the buck module itself".</p>
+  <div class="sec-head"><span class="num">08</span><h2>Sequel: after the isolator (09-06 to 09-07)</h2></div>
+  <p>The USB isolator was the cleanest of the three remedies, and once fitted it completed the third leg of the A/B: cable plugged in, an ADuM3160 in the middle, ten closures alone all 0x0. But on the same day the Pi died twice around it, the second time with a black box running. This section records the way from "path broken" to "more than one entry" to "the remaining entry is the buck module itself", and what is left after 09-07 removed the "valve load" link.</p>
   <ul class="steps">
     <li><span class="when">09-06 morning</span><span class="what"><b>ADuM3160 fitted. The first run of the GPIO17 script died outright; the second run read 0x0 before closure and 0x0 after all ten closures.</b><span class="so">The USB path really is cut; the sticky bit no longer sets. But that death was a solid red LED, the same class as before, and left no record.</span></span></li>
     <li><span class="when">09-06</span><span class="what"><b>power_reset control: still reads 2 after several normal poweroffs / reboots.</b><span class="so">On this machine the field cannot tell a PMIC cut from a normal shutdown; withdrawn as evidence (sections 02, 07). The LED color is what tells the kind of death: solid red is a PMIC cut.</span></span></li>
@@ -374,9 +374,9 @@ for i in range(10):
   <h3>Closure alone is clean, the real scripts die: the difference is before closure</h3>
   <div class="two">
     <div class="panel ok"><h3>Closure only (GPIO17 script)</h3><div class="big">10 / 10 → 0x0</div><p>Valves not energized, serial port closed. The battery carries only the quiescent current of the Pi and the Servo2040.</p></div>
-    <div class="panel bad"><h3>Real scripts (body_lean / walk_teleop)</h3><div class="big">dies at closure</div><p>Six valves already energized, about 25 W, roughly 3.5 A more on the battery side; serial port open. Serial data cannot carry a pulse across the isolator, so the valve load is the only item left.</p></div>
+    <div class="panel bad"><h3>Real scripts (body_lean / walk_teleop)</h3><div class="big">dies at closure</div><p>Six valves already energized, about 25 W, roughly 3.5 A more on the battery side; serial port open. Serial data cannot carry a pulse across the isolator, so the valve load is the only item left. (09-07 correction: see below, the valve load has been ruled out.)</p></div>
   </div>
-  <p>The valve load creates no new ground path. It does one thing only: it pulls the battery voltage down a notch beforehand. So the only entry left is the Pi's one remaining wire, the buck module itself.</p>
+  <p>The valve load creates no new ground path. It does one thing only: it pulls the battery voltage down a notch beforehand. So the only entry left is the Pi's one remaining wire, the buck module itself. (09-07 correction: with the relay closed first it died just the same, so the valve load is not a condition. The buck module is still the Pi's only wire, but the link "the valve load pulls the battery down first" is withdrawn.)</p>
   <h3>The buck module's margin</h3>
   <div class="wide"><table>
     <thead><tr><th>Item</th><th>Value</th><th>Source</th></tr></thead>
@@ -391,19 +391,74 @@ for i in range(10):
   </table></div>
   <p>Under 1 V of margin, and one pulse eats it all. The XL4015 is an old non-synchronous 180 kHz part with a slow loop; it cannot fill a sub-millisecond hole in its input, so the output sags for a fraction of a millisecond and the PMIC cuts power. This also accounts for the green LED in section 06: when the output current momentarily drops to zero, the CC/CV board reads it as "full". Section 06 attributed the flash to the pulse crossing the sense resistor; the module losing regulation flashes it just the same, so the LED no longer separates the two. The old fixed 5 V module put out only 4.89 V unloaded, the same high-dropout kind of part starved on a 2S pack, the same disease.</p>
   <p>The explanation leaves one gap: the first death after the isolator was fitted happened in the GPIO17 script, with the valves off. It says the system was already at the edge, where the battery's state at the time or one slightly worse contact bounce is enough to push it over; and it says "ten clean closures" is not a proof of safety, only ten closures that did not catch it.</p>
+  <h3>09-07: relay closed first of all, dies just the same</h3>
+  <ul class="steps">
+    <li><span class="when">09-07 15:23</span><span class="what"><b>climb_walk died, the third time.</b><span class="so">5 V held at 5.10 V through all six valve coils, last line at 1.629 s "relay closed", the 0.05 s sample after closure never came. The buck was unchanged; same signature as 09-06, no new information.</span></span></li>
+    <li><span class="when">09-07</span><span class="what"><b>The four startup scripts gained <code>--relay-first</code>: the relay closes as soon as the serial port is open, firmware enable follows the six valve coils.</b><span class="so">Closure lands at the lightest battery load, only the Pi drawing: the very condition under which the closure-only script ran ten clean closures. The criterion set in advance: if it still dies with the relay first, "the valve load eats the margin" does not hold.</span></span></li>
+    <li><span class="when">same day</span><span class="what"><b>body_lean --no-tank --relay-first died on its first run.</b><span class="so">Last line at 0.452 s "relay closed"; the valve coils were not energized, 5 V read 5.101 V throughout, the serial port had been opened only 0.25 s before closure. The same signature as the three before.</span></span></li>
+  </ul>
+  <pre class="log"><span class="t">[    0.204]</span> EVT startup: open servo serial port + relay GPIO17 (kept open)  Pi[5V=5.101V core=0.831V/0.78A thr=0x0]
+<span class="t">[    0.329]</span> TLM power 5V=5.101V core=0.830V/0.80A thr=0x0
+<span class="t">[    0.448]</span> EVT before servo relay closure (relay first, valve coils not energized) bus=<span class="hi">0.05V 0.00A</span>  Pi[5V=5.101V thr=0x0]
+<span class="t">[    0.452]</span> EVT <span class="bad">servo relay closed</span> (18 servos energized, firmware not enabled, no torque)
+<span class="note">(No next line. The sample 0.05 s after closure never came.)</span></pre>
+  <p>By the criterion set in advance, the valve-load reading is withdrawn. The valve load only lowers the battery's static voltage by a tenth or two of a volt; the closure pulse itself does not change with it, and the "battery, six valves energized: 7.70 V" row in the margin table above is no longer the key. The trigger is closure itself, whether or not the valves are energized.</p>
+  <div class="wide"><table>
+    <thead><tr><th>After the isolator</th><th>Died / ran</th><th>State at closure</th></tr></thead>
+    <tbody>
+      <tr><td>Closure-only script (GPIO17)</td><td class="num">1 / 11</td><td>Serial port closed, Pi idle, no black box</td></tr>
+      <tr><td>Real scripts (lean 09-06, climb 09-07, lean relay-first)</td><td class="num">3 / 3</td><td>Serial port open; the power watch spawns a subprocess every 0.1 s, the black box fsyncs every line, and the write of the "relay closed" line lands right at the closure instant</td></tr>
+    </tbody>
+  </table></div>
+  <p>Three deaths in three against one in eleven is not luck. At the instant of closure, only two things now separate the real scripts from the closure-only script: the serial port is open, linked to the Servo2040 through the isolator; and the Pi itself is busier, a heavier load on the 5 V rail. The second still belongs to "the Pi's own load on a buck module with no margin"; the first is the only item that does not go through the power supply.</p>
+  <h3>Next: the Pi on its own supply</h3>
+  <p>Disconnect the buck's feed to the Pi, plug a power bank into the Pi's USB-C, leave all other wiring as it is, run a real script three times and read the sticky bit each time. The bus readings come from the Servo2040's own sensing over serial, and nothing on the Pi side needs the battery ground, so the Pi side can float entirely, with no ground wire at all. Three runs alive and 0x0: the entry is the Pi's 5 V source, buy the low-dropout synchronous buck. Still dies: nothing to do with conducted power, the prime suspect becomes the serial link, and the next step is the closure-only script with one added line that opens the serial port.</p>
+  <h3>Evening of 09-07: the Pi on its own supply, no death</h3>
+  <ul class="steps">
+    <li><span class="when">Wiring</span><span class="what"><b>Pi on a power bank. The relay module's coil side DC+/DC− was first wired to the buck's OUT±, and the GPIO17 script got no reaction from the relay at all.</b><span class="so">IN1 is judged against the module's DC−; the Pi's ground and the battery-side ground were no longer connected, so the signal had no return path. Moved to the Pi header's 5V/GND pins, it worked again; the user confirmed this choice on 09-07. Now not one wire joins the Pi side to the battery side; the contact side still switches the servo positive.</span></span></li>
+    <li><span class="when">Result</span><span class="what"><b>A real script was run with the Pi on the power bank, and it did not die.</b><span class="so">The user confirmed on 09-07 that it was a real script; the number of runs and the sticky-bit readings were not recorded.</span></span></li>
+  </ul>
+  <p>Same battery, same closure, same serial link and black box, with only the Pi's supply changed, and no death; the serial link and the Pi's own load are cleared together. With no run count, this group alone carries limited weight; the full-battery control that followed made it solid.</p>
+  <h3>Later the same day: battery fully charged, Pi back on the buck, sticky bit 0x0</h3>
+  <ul class="steps">
+    <li><span class="when">Wiring</span><span class="what"><b>Battery fully charged; the Pi's 5V/GND and the relay coil side DC+/DC− reconnected together to the buck's OUT+/OUT−.</b><span class="so">Against the three real-script runs that all died, the only variable changed is the battery's charge.</span></span></li>
+    <li><span class="when">Result</span><span class="what"><b>A real script stood the robot up, and get_throttled then read 0x0.</b><span class="so">Closure did not even leave "undervoltage occurred"; this was not a narrow escape.</span></span></li>
+  </ul>
+  <div class="wide"><table>
+    <thead><tr><th>Battery</th><th>Pi supply</th><th>Real-script closure outcome</th></tr></thead>
+    <tbody>
+      <tr><td>7.3 to 7.9 V</td><td>XL4015</td><td class="num">3 died / 3</td></tr>
+      <tr><td>Full (not measured; a full 2S is about 8.4 V)</td><td>XL4015</td><td class="num">alive, 0x0</td></tr>
+      <tr><td>Irrelevant</td><td>Power bank</td><td class="num">alive, runs not counted</td></tr>
+    </tbody>
+  </table></div>
+  <p>This table pins the entry to the path from the battery through the buck to the Pi: same buck, same wiring, same script, and a change in battery voltage turns certain death into not even a sticky bit. If the serial link were the entry, a full battery would make no difference. The "hole deeper than the margin" step of the mechanism gets support in direction: raise the margin from 0.6 to 1.2 V to about 1.7 V and the hole no longer gets through. There is still no waveform; how deep the hole actually is remains computed.</p>
+  <p>This is not a remedy. Over one session the battery drops back to around 7.6 V, and a restart mid-session is back in the zone where it dies. The interim rule before the swap: measure the battery with a meter before powering up, and below 8.0 V do not expect startup to get through.</p>
+  <h3>Mechanism: a five-step chain, which steps were measured and which computed</h3>
+  <ul class="plain">
+    <li><b>Closure is a pulse of tens of amps.</b> The input capacitors of 18 servos and the Servo2040 are empty and the battery pours straight in; only internal resistance, wiring and the contact limit it, and contact bounce repeats it a few times. The servos produce no torque; it is pure capacitor charging. (Inferred; magnitude estimated from capacitance and loop resistance)</li>
+    <li><b>The pulse pulls the battery terminal voltage down by about a volt.</b> Tens of amps through the internal resistance and the leads, with lead-inductance spikes on top. The buck's input is on this battery. (Inferred; never seen on a scope)</li>
+    <li><b>The buck loses regulation in that hole.</b> The XL4015 needs its input 1.5 V above its output; the static margin is 0.6 to 1.2 V, and the hole is deeper than the margin. For those few hundred microseconds the output is held only by the module's own capacitor; the Pi draws close to 1 A, which drops a few tenths of a volt in a few hundred microseconds and one or two volts if bounce stretches it to a millisecond; the loop is slow and cannot catch up. (Inferred; margin figures in the table above; the full-battery control supports it in direction)</li>
+    <li><b>The PMIC cuts the SoC.</b> A shallow dip only leaves the "undervoltage occurred" sticky bit; a deep or long one cuts the power, solid red LED. A hardware action, the kernel has no time to speak, which is why the journal stops abruptly and the black box ends at "relay closed". (Measured: sticky bit, LED, last log lines)</li>
+    <li><b>Change the battery voltage and the outcome follows.</b> With the battery fully charged, closure on the same buck leaves the sticky bit at 0x0; with the Pi on a power bank it does not die either. (Measured: 0x0 on a full battery, alive on the power bank)</li>
+  </ul>
+  <p>Two side observations fit: the closure-only script mostly survives on the buck, because an idle Pi draws about a third less current and there is no disk write or subprocess at that instant, so the capacitor drops less, right on the line between dying and not; and the valve load makes no difference, because it lowers the battery's static voltage by only a tenth or two of a volt, not on the scale of a dynamic hole of over a volt.</p>
+  <p>Steps 2 and 3 have no waveform; they are computed from the margin. One measurement settles it: at closure, a scope on the buck's input and output at the same time; both collapsing together confirms the chain, and an input that does not dip while the Pi still dies refutes it.</p>
+  <h3>Revision record of the conclusion</h3>
+  <p>The conclusion in this case file has changed four times, each time a control experiment overturning an inference: power_reset=2 taken as the PMIC's testimony, withdrawn after the normal-shutdown control (09-06); the XL4015 minimum input written as 8 V from the datasheet, changed to the 1.5 V headroom from the module's spec (09-06); "one path" changed to "two entries" after it still died with the isolator fitted (09-06); "the valve load eats the margin" withdrawn after it died just the same with the relay closed first (09-07). The present one deserves the same attitude: the location of the entry rests on a measured A/B, the mechanism on inference, and the latter can still be rewritten by a scope. For a second opinion, these suffice: the 14 ms log in section 04, the USB unplug/replug control in section 05, the island test, the two A/Bs and the full-battery control in section 08, and the scope measurement still to be made.</p>
 </section>
 
 <section>
   <div class="sec-head"><span class="num">09</span><h2>Conclusion and remedies</h2></div>
-  <p>The pulse that charges the servo-side capacitance at closure has two entries into the Pi. The first is the USB ground loop settled on 09-04: the pulse floods in through the USB ground between the Pi and the Servo2040, and the drop across the GND Dupont wire and the sense resistor is judged by the PMIC as undervoltage. That path is real, the sticky bit proved it, and the isolator has cut it. The second is the buck module itself, narrowed down on 09-06: the XL4015 needs at least 6.7 V in for 5.19 V out, the 2S pack has only 1 V of margin left under the valve load, the closure pulse pulls the battery down, the buck loses regulation, the output sags, the PMIC cuts. The first entry had been masking the second.</p>
+  <p>The pulse that charges the servo-side capacitance at closure has two entries into the Pi. The first is the USB ground loop settled on 09-04: the pulse floods in through the USB ground between the Pi and the Servo2040, and the drop across the GND Dupont wire and the sense resistor is judged by the PMIC as undervoltage. That path is real, the sticky bit proved it, and the isolator has cut it. The second is the buck module itself, narrowed down on 09-06: the XL4015 needs at least 6.7 V in for 5.19 V out, the 2S pack has only 1 V of margin left under the valve load, the closure pulse pulls the battery down, the buck loses regulation, the output sags, the PMIC cuts. The first entry had been masking the second. One line added on 09-07: the link "the valve load pulls the battery down first" in the second entry is withdrawn, since closing the relay first died just the same; the buck module is still the Pi's only wire, and on the evening of 09-07 two controls followed: with the Pi on a power bank it stayed alive; with the battery fully charged and the Pi back on the buck, closure left the sticky bit at 0x0. The entry is located on the path from the battery through the buck to the Pi.</p>
   <ol class="fix">
-    <li><b>Replace the buck module.</b> Ignore the broad "input range" figure and look at the dropout: it must hold 5.1 V with the input down to a little over 6 V. Synchronous rectification, 5 A or more, dropout under 0.5 V; or go straight to a buck-boost, untroubled anywhere from 5 to 8.4 V. Old non-synchronous parts like the XL4015 and LM2596 were the wrong choice for a 2S pack from the start.</li>
+    <li><b>Replace the buck module.</b> Ignore the broad "input range" figure and look at the dropout: it must hold 5.1 V with the input down to a little over 6 V. Synchronous rectification, 5 A or more, dropout under 0.5 V; or go straight to a buck-boost, untroubled anywhere from 5 to 8.4 V. Old non-synchronous parts like the XL4015 and LM2596 were the wrong choice for a 2S pack from the start. The other route is a small separate battery for the Pi: not one wire between the logic side and the power side, the most thorough option, at the cost of about a hundred grams.</li>
     <li><b>Keep the USB isolator.</b> The path it cut is real; remove it and the sticky bit comes back.</li>
     <li><b>Pre-charge of the servo rail demoted to secondary.</b> With a suitable buck it is no longer necessary; it can still be fitted, but it only softens the pulse and does nothing for the margin.</li>
   </ol>
   <p>A large capacitor plus a Schottky diode at the buck input buys only a few milliseconds and costs an extra diode drop; not recommended. A capacitor across the Pi's 5 V pins likewise only treats the symptom. Whether R050 is bridged no longer matters.</p>
-  <p>Verification: after the swap, run the real scripts (the ones that energize the valves) several times; the criterion is no sticky bit and no death. Two supporting experiments are optional: measure the battery with a multimeter after the valves are energized, below 7.5 V means out of spec; run <code>walk_teleop --vent off</code> three times, and if that stays clean while body_lean dies, the valve load is the trigger.</p>
-  <p>The software side is already in place: two-step closure, a black box with the same convention in the four startup scripts, the real timeline in the forensics script. <code>--startup-gap</code> is no longer needed. On 09-07 the scripts gained <code>--relay-first</code>: the relay closes as soon as the serial port is open, and firmware enable follows the six valve coils, so closure lands at the lightest battery load, with only the Pi drawing. It is a stopgap before the swap and doubles as an A/B: if it still dies with the relay first, "the valve load eats the margin" does not hold.</p>
+  <p>Verification: after the swap, run the real scripts (the ones that energize the valves) several times; the criterion is no sticky bit and no death. The full-battery control has located the entry on the Pi's 5 V source, see the end of section 08. The <code>walk_teleop --vent off</code> control has been superseded by closing the relay first and is no longer needed.</p>
+  <p>The software side is already in place: two-step closure, a black box with the same convention in the four startup scripts, the real timeline in the forensics script. <code>--startup-gap</code> is no longer needed. On 09-07 the scripts gained <code>--relay-first</code>: the relay closes as soon as the serial port is open, and firmware enable follows the six valve coils, so closure lands at the lightest battery load, with only the Pi drawing. It was meant as a stopgap and an A/B; it died on its first run, and the A/B's conclusion is at the end of section 08. Leave it off in normal use; it stays as a record.</p>
 </section>
 
 <section>
@@ -419,6 +474,8 @@ for i in range(10):
     <div class="card"><h3>Measure the evidence before swapping parts</h3><p>Swapping the buck module only proved "static voltage is not the root cause"; that conclusion is worth something, but had the sticky bit been checked first, that step could have been skipped.</p></div>
     <div class="card"><h3>One path proven is not the only path</h3><p>The A/B nailed the USB ground loop beyond dispute, but it only proved that this path exists, not that no other does. Fix it and the crash comes back in a rarer form.</p></div>
     <div class="card"><h3>Island test: disconnect the wire you know about, then measure</h3><p>The Pi's ground is supposed to be connected to the battery negative, so continuity proves nothing. Pull the wire the design put there and measure again; open means an island, and the remaining entry can only be on that wire itself.</p></div>
+    <div class="card"><h3>Before an A/B, work out what it can tell apart</h3><p>Closing the relay first only moved two tenths of a volt of static load off the battery, small change against a pulse of tens of amps. All it could kill was the sentence "the valve load is a condition"; it could not touch the main line about the buck module. What an A/B changes must be on the same scale as the effect under test, or neither outcome says much.</p></div>
+    <div class="card"><h3>Label inference as inference</h3><p>In this chain, only the sticky bit, the LED color, the last log lines, the 0x0 on a full battery and the survival after the supply swap were measured; the two middle steps are computed. Writing the measured and the computed apart tells the reader how far each sentence can be trusted, and tells a reviewer where to put the probe.</p></div>
   </div>
 </section>
 
@@ -432,6 +489,8 @@ for i in range(10):
     <dt>logs/lean_20260903_135325.log</dt><dd>First autopsy, dead within 50 ms of closure</dd>
     <dt>logs/walk_20260904_215456.log</dt><dd>Decisive log, undervoltage 14 ms after closure with servos at 0 A</dd>
     <dt>logs/lean_20260906_234509.log</dt><dd>The death after the isolator was fitted, within tens of ms of closure, last line "relay closed"</dd>
+    <dt>logs/climb_20260907_152317.log</dt><dd>Third death after the isolator, same signature, buck unchanged</dd>
+    <dt>logs/lean_20260907_*.log (--relay-first)</dt><dd>The death with the relay closed first, last line at 0.452 s "relay closed", valve coils not energized</dd>
     <dt>docs/P4-GUIDE.md</dt><dd>The case notes in the common-problems section</dd>
     <dt>html/en/p4-pneumatic-electrical.html</dt><dd>Pneumatic-electrical page: YYNMOS-8 IN− to DC− measured open, single-point ground topology</dd>
     <dt>forums.raspberrypi.com t=361231</dt><dd>timg236 on power_reset and PMIC undervoltage shutdown (after the 09-06 control, the field has no discriminating power on this machine)</dd>
@@ -442,5 +501,5 @@ bash scripts/pi_forensics.sh check         # after the power cycle, brings out a
 </section>
 
 </div>
-<footer>Case file compiled 2026-09-04, sequel added 09-06 (section 08). The machine is still in stage P4; the isolator is fitted, the buck module awaits replacement, and the verification criterion is no sticky bit and no death.</footer>
+<footer>Case file compiled 2026-09-04, sequel added 09-06 (section 08), the relay-first and Pi-on-its-own-supply A/Bs added 09-07. The machine is still in stage P4; the isolator is fitted, the entry is located on the Pi's 5 V source, the mechanism awaits a scope, the buck module awaits replacement, and the verification criterion is no sticky bit and no death.</footer>
 </div>

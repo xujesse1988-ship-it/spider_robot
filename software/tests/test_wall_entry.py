@@ -317,3 +317,184 @@ def test_self_stand_geometry_rejects_pitch_even_if_called_directly():
     g = Geometry(Settings(self_stand=True))
     with pytest.raises(EntryError, match='no pitch'):
         g.solve(Pose(dict(g.ground), pitch=1, body_z=90), {})
+
+
+def dual_bench():
+    return Bench(MockDriver(), MockVacuumIO(), Settings(self_stand=True, dual_front=True))
+
+
+def test_dual_front_requires_explicit_self_stand():
+    with pytest.raises(EntryError, match='requires self_stand'):
+        Geometry(Settings(dual_front=True))
+
+
+@pytest.mark.parametrize('first', ['L1', 'R1'])
+@pytest.mark.parametrize('return_first', ['L1', 'R1'])
+def test_dual_front_full_cycle_keeps_four_ground_targets_and_body_fixed(first, return_first):
+    b = dual_bench()
+    run(b, 'start')
+    ground = dict(b.pose.feet)
+    original_solve = b.geom.solve
+    def checked_solve(pose, surfaces):
+        assert pose.pitch == 0 and pose.body_z == 90
+        for n in ('L2', 'L3', 'R2', 'R3'):
+            assert pose.feet[n] == ground[n]
+        return original_solve(pose, surfaces)
+    b.geom.solve = checked_solve
+    second = 'R1' if first == 'L1' else 'L1'
+    front_attached(b, first)
+    front_attached(b, second)
+    assert b.attached == {'L1', 'R1'}
+    history = len(b.drv.history)
+    run(b, 'hold')
+    assert b.good_elapsed >= b.DUAL_HOLD_S - 1e-9
+    assert len(b.drv.history) == history
+    return_second = 'R1' if return_first == 'L1' else 'L1'
+    run(b, f'release {return_first}')
+    valves = list(b.io.valve)
+    with pytest.raises(EntryError, match='other front foot'):
+        b.command(f'release {return_second}')
+    assert b.io.valve == valves and b.attached == {return_second}
+    run(b, f'return {return_first}')
+    run(b, f'release {return_second}')
+    run(b, f'return {return_second}')
+    assert b.pose.feet == ground
+    b.geom.solve = original_solve
+    run(b, 'sit')
+    assert b.seated and b.pose.body_z == 20
+
+
+def test_dual_front_cannot_prepare_second_before_first_is_attached():
+    b = dual_bench()
+    run(b, 'start')
+    for cmd in ('prepare L1', 'touch L1', 'press L1 2'):
+        run(b, cmd)
+        count = len(b.drv.history)
+        with pytest.raises(EntryError, match='other front foot'):
+            b.command('prepare R1')
+        assert not b.busy and len(b.drv.history) == count
+    run(b, 'attach L1')
+    run(b, 'prepare R1')
+
+
+@pytest.mark.parametrize('cmd', ['pitch 1', 'press L2 2', 'attach L3', 'release R2', 'prepare R3', 'sit'])
+def test_dual_front_rejects_body_or_ground_foot_commands(cmd):
+    b = dual_bench()
+    run(b, 'start')
+    front_attached(b)
+    count, valves = len(b.drv.history), list(b.io.valve)
+    with pytest.raises(EntryError):
+        b.command(cmd)
+    assert len(b.drv.history) == count and b.io.valve == valves
+
+
+def test_dual_front_hold_requires_two_attached_feet():
+    b = dual_bench()
+    run(b, 'start')
+    front_attached(b)
+    with pytest.raises(EntryError, match='two confirmed'):
+        b.command('hold')
+
+
+def test_dual_front_hold_restarts_continuous_timer_on_pressure_dip():
+    b = dual_bench()
+    run(b, 'start')
+    front_attached(b, 'L1')
+    front_attached(b, 'R1')
+    b.io.step = lambda dt: None
+    b.command('hold')
+    count = len(b.drv.history)
+    for _ in range(120):
+        b.tick()
+    b.io.foot_kpa[0] = -40
+    b.tick()
+    assert b.good_elapsed == 0 and b.busy and not b.frozen
+    b.io.foot_kpa[0] = -70
+    for _ in range(120):
+        b.tick()
+    assert b.busy
+    for _ in range(80):
+        b.tick()
+    assert not b.busy and not b.frozen
+    assert len(b.drv.history) == count
+
+
+def test_dual_front_unstable_hold_times_out_without_release_or_motion():
+    b = dual_bench()
+    run(b, 'start')
+    front_attached(b, 'L1')
+    front_attached(b, 'R1')
+    b.command('hold')
+    b.io.step = lambda dt: None
+    b.io.foot_kpa[3] = -40
+    count, valves = len(b.drv.history), list(b.io.valve)
+    for _ in range(602):
+        b.tick()
+    assert b.frozen and 'hold not stable' in b.frozen
+    assert not b.io.pump and b.io.valve == valves
+    assert len(b.drv.history) == count
+
+
+def test_first_wall_cup_loss_during_second_prepare_freezes_before_next_frame():
+    b = dual_bench()
+    run(b, 'start')
+    front_attached(b, 'L1')
+    b.command('prepare R1')
+    b.tick()
+    b.io.step = lambda dt: None
+    b.io.foot_kpa[0] = -20
+    pose, count, valves = b.pose.copy(), len(b.drv.history), list(b.io.valve)
+    b.tick()
+    assert b.frozen and not b.busy and not b.io.pump
+    assert b.pose == pose and len(b.drv.history) == count and b.io.valve == valves
+
+
+def test_second_cup_failed_seal_keeps_first_attached_without_retraction():
+    b = dual_bench()
+    run(b, 'start')
+    front_attached(b, 'L1')
+    for cmd in ('prepare R1', 'touch R1', 'press R1 2'):
+        run(b, cmd)
+    b.io.sealed[3] = False
+    b.command('attach R1')
+    count, pose = len(b.drv.history), b.pose.copy()
+    for _ in range(220):
+        b.tick()
+        if b.frozen:
+            break
+    assert b.frozen and b.attached == {'L1'} and b.io.valve[0]
+    assert not b.io.pump and b.pose == pose and len(b.drv.history) == count
+
+
+def test_dual_front_geometry_still_rejects_pitch():
+    g = Geometry(Settings(self_stand=True, dual_front=True))
+    with pytest.raises(EntryError, match='no pitch'):
+        g.solve(Pose(dict(g.ground), pitch=1, body_z=90), {})
+
+
+def test_dual_front_cli_defaults_and_complete_offline_sequence(tmp_path):
+    import json
+    import runpy
+    from pathlib import Path
+    script = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/ground_wall_probe.py'))
+    report = tmp_path / 'dual.json'
+    assert script['main'](['--self-stand', '--dual-front', '--mock', '--demo',
+                           '--report', str(report)]) == 0
+    data = json.loads(report.read_text())
+    assert data['passed'] and data['settings']['max_press'] == 2
+    assert [s['command'] for s in data['segments']] == [
+        'start', 'prepare L1', 'touch L1', 'press L1 2', 'attach L1',
+        'prepare R1', 'touch R1', 'press R1 2', 'attach R1', 'hold',
+        'release R1', 'return R1', 'release L1', 'return L1', 'sit']
+    assert data['segments'][9]['state']['attached'] == ['L1', 'R1']
+    assert data['segments'][-1]['state']['seated']
+    with pytest.raises(SystemExit) as e:
+        script['main'](['--plan', '--dual-front'])
+    assert e.value.code == 2
+
+
+def test_hold_does_not_enable_dual_front_in_default_single_mode():
+    b = Bench(MockDriver(), MockVacuumIO(), Settings(self_stand=True))
+    run(b, 'start')
+    with pytest.raises(EntryError, match='requires --self-stand --dual-front'):
+        b.command('hold')

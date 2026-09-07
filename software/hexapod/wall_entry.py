@@ -1,4 +1,4 @@
-"""Ground/wall experiments with supported or five-ground-foot entry mode.
+"""Ground/wall experiments with supported, single-front or dual-front entry.
 
 World +X faces the wall, +Z is up; positive pitch raises the nose.
 Feet are virtual free-cup targets (pressure overtravel included), not measured
@@ -27,10 +27,13 @@ class Settings:
     max_press: float = 18.0
     pitch_limit: float = 5.0      # experimental envelope, not a validated limit
     self_stand: bool = False     # stand_up geometry, one front foot off floor at a time
+    dual_front: bool = False     # opt-in static two-wall/four-floor test; no pitch
 
     def validate(self):
         if not isinstance(self.self_stand, bool):
             raise EntryError('self_stand must be boolean')
+        if not isinstance(self.dual_front, bool) or (self.dual_front and not self.self_stand):
+            raise EntryError('dual_front requires self_stand')
         bounds = dict(distance=(120, 200), height=(150, 280),
                       body_height=(70, 100), speed=(1, 15),
                       tilt_limit=(1, 15), max_press=(2, 18), pitch_limit=(1, 10))
@@ -150,6 +153,8 @@ class Geometry:
 
 class Bench:
     DT = 0.05
+    DUAL_HOLD_S = 10.0
+    DUAL_HOLD_TIMEOUT_S = 30.0
 
     def __init__(self, driver, io, settings=Settings(), event=None, power_on=None):
         self.geom = Geometry(settings)
@@ -214,6 +219,20 @@ class Bench:
         return all(self.ctl.is_attached(LEG_NAMES.index(n))
                    and self.pressures[LEG_NAMES.index(n)] <= -50 for n in names)
 
+    def floor_ready(self, name):
+        """Command/pressure checks only: floor contact and load are not sensed."""
+        idx = LEG_NAMES.index(name)
+        return (self.stage[name] == 'floor' and self.surfaces[name] == 'floor'
+                and self.depth[name] == 0 and name not in self.attached
+                and self.pressures[idx] >= -5 and self.ctl.state[idx] == FootState.RELEASED)
+
+    def dual_support_ready(self, name):
+        other = 'R1' if name == 'L1' else 'L1'
+        return (all(self.floor_ready(n) for n in ('L2', 'L3', 'R2', 'R3'))
+                and (self.floor_ready(other)
+                     or (self.stage[other] == 'wall' and self.surfaces[other] == 'wall'
+                         and other in self.attached and self.strong([other]))))
+
     def command(self, text):
         words = text.strip().split()
         if not words:
@@ -251,6 +270,18 @@ class Bench:
             raise EntryError('Use start first')
         if self.seated:
             raise EntryError('Seated; quit and restart for another experiment')
+        if cmd == 'hold' and len(words) == 1:
+            if not s.dual_front:
+                raise EntryError('hold requires --self-stand --dual-front')
+            if (self.attached != {'L1', 'R1'} or not self.strong(('L1', 'R1'))
+                    or any(self.stage[n] != 'wall' or self.surfaces[n] != 'wall'
+                           for n in ('L1', 'R1'))
+                    or not all(self.floor_ready(n) for n in ('L2', 'L3', 'R2', 'R3'))):
+                raise EntryError('hold requires two confirmed wall cups and four floor feet')
+            self.waiting = ('hold', None)
+            self.wait_elapsed = self.good_elapsed = 0.0
+            self.event('HOLD begin: both wall cups <= -50 kPa for 10 s; observe body/floor feet')
+            return
         if cmd == 'sit' and len(words) == 1:
             if not s.self_stand:
                 raise EntryError('sit is for self-standing mode')
@@ -264,7 +295,7 @@ class Bench:
             return
         if cmd == 'pitch' and len(words) == 2:
             if s.self_stand:
-                raise EntryError('Self-standing mode only tests one front foot; pitch needs supported mode')
+                raise EntryError('Self-standing modes have no pitch; pitch needs supported mode')
             pitch = float(words[1])
             if self.attached != set(LEG_NAMES) or not self.strong(LEG_NAMES):
                 raise EntryError('Pitch requires six confirmed cups: two wall, four floor')
@@ -281,12 +312,16 @@ class Bench:
             raise EntryError('Expected prepare/touch/press/attach/release/return LEG, or pitch DEG')
         name = words[1].upper()
         idx = LEG_NAMES.index(name)
+        if s.dual_front and name not in ('L1', 'R1'):
+            raise EntryError('Dual-front mode keeps all four middle/rear feet on floor')
+        if s.dual_front and cmd in ('prepare', 'release', 'return') and not self.dual_support_ready(name):
+            raise EntryError('Keep four floor feet; other front foot must be back on floor or confirmed on wall')
         if self.pose.pitch != 0:
             raise EntryError('Return pitch to 0 before individual foot operations')
         if cmd in ('prepare','touch','return') and name not in ('L1','R1'):
             raise EntryError('Only L1/R1 may move to/from wall')
         if cmd == 'prepare' and len(words) == 2:
-            if s.self_stand and any(self.stage[n] != 'floor' or self.depth[n] != 0
+            if s.self_stand and not s.dual_front and any(self.stage[n] != 'floor' or self.depth[n] != 0
                                     or n in self.attached for n in LEG_NAMES if n != name):
                 raise EntryError('Self-standing mode requires the other five feet on floor; return first foot before testing another')
             if (self.stage[name] != 'floor' or name in self.attached or self.depth[name] != 0
@@ -380,6 +415,15 @@ class Bench:
             return
         if self.waiting:
             mode, name = self.waiting
+            if mode == 'hold':
+                self.wait_elapsed += dt
+                self.good_elapsed = self.good_elapsed+dt if self.strong(('L1', 'R1')) else 0.0
+                if self.good_elapsed + 1e-9 >= self.DUAL_HOLD_S:
+                    self.event('HOLD confirmed L1 R1: both <= -50 kPa continuously for 10 s; seal only, not load proof')
+                    self.waiting = None
+                elif self.wait_elapsed >= self.DUAL_HOLD_TIMEOUT_S:
+                    self.freeze('Dual-front hold not stable within 30 s; no automatic release/return')
+                return
             idx = LEG_NAMES.index(name)
             self.wait_elapsed += dt
             good = (self.ctl.is_attached(idx) and self.pressures[idx] <= -50) if mode=='attach' else (

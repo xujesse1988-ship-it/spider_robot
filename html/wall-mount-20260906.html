@@ -1,0 +1,412 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>地-墙过渡</title>
+<style>
+:root{
+  --bg:#fafafa;--fg:#222;--muted:#666;--rule:#c00;--panel:#fff;--border:#d9d9d9;
+  --box:#fff3f0;--box-b:#e0b0a0;--note:#f0f4fa;--note-b:#a0b4d0;--ok:#f0f8f0;--ok-b:#a0c0a0;
+  --code:#eee;--th:#eee;
+  --glass:#dde9ef;--glass-edge:#9db6c3;--floor:#e9e4d8;--floor-edge:#b8ad98;
+  --body:#2b3440;--belly:#4b5766;--leg:#555;--leg-far:#9a9a9a;--cup-on:#c00;--cup-off:#fff;
+  --air:#8a8a8a;--axis:#1d6fb8;--hl:#c00;--track:#e4e4e4;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181c;--fg:#e4e6ea;--muted:#9aa3ad;--rule:#ff6a5a;--panel:#1d2126;--border:#343a42;
+    --box:#2a1f1d;--box-b:#6a3a33;--note:#1c2530;--note-b:#3b5673;--ok:#1c2a1e;--ok-b:#3f6b45;
+    --code:#2a2f36;--th:#262b31;
+    --glass:#22313a;--glass-edge:#4c6b7a;--floor:#2a2823;--floor-edge:#5a5344;
+    --body:#dde2e8;--belly:#aab3bf;--leg:#cfd3d8;--leg-far:#6f767e;--cup-on:#ff6a5a;--cup-off:#1d2126;
+    --air:#7a828b;--axis:#6fb1ff;--hl:#ff6a5a;--track:#353b43;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181c;--fg:#e4e6ea;--muted:#9aa3ad;--rule:#ff6a5a;--panel:#1d2126;--border:#343a42;
+  --box:#2a1f1d;--box-b:#6a3a33;--note:#1c2530;--note-b:#3b5673;--ok:#1c2a1e;--ok-b:#3f6b45;
+  --code:#2a2f36;--th:#262b31;
+  --glass:#22313a;--glass-edge:#4c6b7a;--floor:#2a2823;--floor-edge:#5a5344;
+  --body:#dde2e8;--belly:#aab3bf;--leg:#cfd3d8;--leg-far:#6f767e;--cup-on:#ff6a5a;--cup-off:#1d2126;
+  --air:#7a828b;--axis:#6fb1ff;--hl:#ff6a5a;--track:#353b43;
+}
+body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+ max-width:1080px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:var(--fg);background:var(--bg)}
+h1{font-size:1.5rem;border-bottom:2px solid var(--rule);padding-bottom:.4rem;text-wrap:balance}
+h2{font-size:1.2rem;margin-top:2.4rem;border-left:4px solid var(--rule);padding-left:.5rem;text-wrap:balance}
+h3{font-size:1.02rem;margin-top:1.6rem}
+p{max-width:72ch}
+table{border-collapse:collapse;margin:.8rem 0;font-variant-numeric:tabular-nums}
+td,th{border:1px solid var(--border);padding:.35rem .7rem;font-size:.92rem;text-align:left}
+th{background:var(--th)}
+.tbl{overflow-x:auto}
+.box{background:var(--box);border:1px solid var(--box-b);border-radius:6px;padding:.8rem 1rem;margin:1rem 0}
+.ok{background:var(--ok);border-color:var(--ok-b)}
+.note{background:var(--note);border-color:var(--note-b)}
+code{background:var(--code);padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+pre{background:var(--code);border:1px solid var(--border);border-radius:6px;padding:.7rem .9rem;overflow-x:auto;font-size:.88rem;line-height:1.5}
+small,.muted{color:var(--muted)}
+.fig{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0;overflow-x:auto}
+.fig figcaption{font-size:.88rem;color:var(--muted);margin-top:.5rem;line-height:1.5}
+svg{display:block;margin:0 auto;max-width:100%;height:auto}
+kbd{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85em;background:var(--code);border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 .35em}
+.meta{font-size:.9rem;color:var(--muted);margin:-.4rem 0 1.2rem}
+/* 模拟面板 */
+.sim{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0}
+.sim .views{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:.8rem;align-items:start}
+@media (max-width:760px){.sim .views{grid-template-columns:1fr}}
+.sim .view{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.4rem}
+.sim .view h4{margin:.1rem 0 .3rem .3rem;font-size:.85rem;font-weight:600;color:var(--muted);letter-spacing:.04em}
+.ctl{display:flex;flex-wrap:wrap;gap:.5rem .8rem;align-items:center;margin:.8rem 0 .4rem}
+.ctl button,.ctl select{font:inherit;font-size:.9rem;padding:.3rem .7rem;border:1px solid var(--border);border-radius:5px;background:var(--panel);color:var(--fg);cursor:pointer}
+.ctl button:hover{border-color:var(--rule)}
+.ctl button:focus-visible,.ctl select:focus-visible,.ctl input:focus-visible{outline:2px solid var(--rule);outline-offset:2px}
+.ctl input[type=range]{flex:1 1 220px;min-width:160px;accent-color:var(--rule)}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.4rem .9rem;font-size:.9rem;font-variant-numeric:tabular-nums;margin:.3rem 0 .6rem}
+.read b{display:block;font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.read .v{font-size:1.05rem}
+.stage{font-size:1rem;font-weight:600;color:var(--hl)}
+.legend{display:flex;flex-wrap:wrap;gap:.3rem 1.1rem;font-size:.82rem;color:var(--muted);margin:.2rem 0 .4rem}
+.legend span::before{content:"";display:inline-block;width:.9em;height:.9em;border-radius:50%;vertical-align:-.1em;margin-right:.35em;border:1.5px solid var(--leg)}
+.legend .on::before{background:var(--cup-on);border-color:var(--cup-on)}
+.legend .off::before{background:var(--cup-off)}
+.legend .air::before{border-style:dashed;border-color:var(--air)}
+.legend .ax::before{border-radius:0;height:.15em;background:var(--axis);border:0;vertical-align:.25em}
+.steps{max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:6px;margin-top:.6rem}
+.steps table{margin:0;width:100%}
+.steps td,.steps th{border:0;border-bottom:1px solid var(--border);padding:.25rem .6rem;font-size:.85rem}
+.steps tr{cursor:pointer}
+.steps tr:hover td{background:var(--code)}
+.steps tr.cur td{background:var(--box);color:var(--fg)}
+.steps tr.cur td:first-child{border-left:3px solid var(--hl)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.sim *{transition:none !important}}
+</style></head><body>
+
+<h1>地-墙过渡：从地面爬上竖直玻璃</h1>
+<p class="meta">2026-09-06 · P5 探索线第一稿 · 运动学评估 + 实验脚本已出，尚未实机 · 依据 <code>tools/mount_analysis.py</code>、<code>tools/mount_plan.py</code>、<code>software/hexapod/mount.py</code></p>
+
+<p>六足机器人已经能在竖直玻璃上稳定爬行，下一步是不用人放，自己从地面爬上墙。这一页说清楚三件事：为什么过渡的顺序只能是<b>前腿→后腿→中腿</b>，中间那段"两只脚在墙上、两只脚在地上"的扶梯阶段要换几次脚，以及哪一下最容易掉下来。下面的动画是用真机的连杆长度、关节行程和吸盘几何算出来的一条完整序列，每一帧都过了和实机引擎同一套可行性判据，不是示意图。</p>
+
+<div class="box ok"><b>结论。</b>不改腿的几何就能做，但顺序和路线图里写的"前→中→后"不一样：吸盘轴永远在腿平面里，coxa 只能转这个平面，中腿在身体俯仰 20°~70° 之间既对不正地面也对不正墙面，只能悬空。整条序列 <b>34</b> 次单腿动作、<b>21</b> 段身体位姿改变，四足扶梯阶段要换 <b>9</b> 对脚、抬到俯仰 72° 后腿才能上墙——比几何窗口（50°）晚得多，因为后足踩着地时后髋离地很低，脚只能落到髋以下的墙面，得先把身体抬高到离地约 250 mm。最大风险是换前足那一下：只剩一只墙盘时剪切力上界 20~23N，超过实测的 15N 容量，必须先在地面玻璃板上做实验。</div>
+
+<h2>动画：整条序列</h2>
+<div class="sim" id="sim">
+  <div class="views">
+    <div class="view"><h4>侧视（x 向右为墙，z 向上）</h4>
+      <svg id="side" viewBox="0 0 680 590" role="img" aria-label="侧视动画：六足机器人从地面爬上右侧竖直玻璃墙的过程"></svg></div>
+    <div class="view"><h4>俯视（y 向上为机器人左侧）</h4>
+      <svg id="top" viewBox="0 0 680 540" role="img" aria-label="俯视动画：各腿 coxa 偏摆与落点位置"></svg></div>
+  </div>
+  <div class="ctl">
+    <button id="play" aria-label="播放/暂停">播放</button>
+    <button id="prev" title="上一段">◀ 上一段</button>
+    <button id="next" title="下一段">下一段 ▶</button>
+    <label>速度 <select id="speed"><option value="1">1×</option><option value="3" selected>3×</option><option value="8">8×</option><option value="20">20×</option></select></label>
+    <input id="seek" type="range" min="0" max="1000" value="0" aria-label="时间轴">
+    <span id="clock" class="muted" style="font-variant-numeric:tabular-nums">0:00 / 0:00</span>
+  </div>
+  <div class="read">
+    <div><b>阶段</b><span class="stage" id="r-stage">—</span></div>
+    <div><b>俯仰</b><span class="v" id="r-pitch">0.0°</span></div>
+    <div><b>身体高度</b><span class="v" id="r-z">90 mm</span></div>
+    <div><b>前髋距墙</b><span class="v" id="r-d">140 mm</span></div>
+    <div><b>接触足</b><span class="v" id="r-contact">6</span></div>
+    <div><b>已挪腿</b><span class="v" id="r-moves">0</span></div>
+  </div>
+  <div class="legend"><span class="on">吸附中的盘</span><span class="off">摆动/悬停中的盘</span><span class="air">收在空中的腿</span><span class="ax">吸盘轴（应垂直于面）</span><span style="color:var(--muted)">左侧腿实线在前，右侧腿淡色在后</span></div>
+  <div class="steps" id="steps"></div>
+  <p class="muted" style="font-size:.85rem;margin:.5rem 0 0">回放按引擎的真实速度：挪腿 60 mm/s、抬离 40 mm/s、下探 30 mm/s、压入 15 mm/s，身体俯仰 2°/s、平移 10 mm/s。1× 就是实机预计的节奏（约 5 分钟）。世界系：墙面 x=0，地面 z=0，机器人头朝墙。</p>
+</div>
+
+<h2>一、为什么顺序只能是 前→后→中</h2>
+<p>每条腿三个舵机：coxa 绕竖轴转，femur 和 tibia 绕两根平行的横轴转。后两个关节把小腿和吸盘限制在一个竖直平面里，coxa 只能把这个平面整体转个方向。<b>吸盘轴永远在腿平面里</b>，能不能对正一个面，取决于腿平面和这个面的法线是不是共面。</p>
+<figure class="fig">
+<svg viewBox="0 0 640 250" role="img" aria-label="俯视示意：前腿平面转到指向正前时包含墙面法线，中腿平面与墙面法线垂直，吸盘怎么转都对不正">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+  <g fill="none" stroke="currentColor" stroke-width="1.2" font-size="12" font-family="system-ui,sans-serif">
+    <rect x="470" y="20" width="14" height="210" fill="var(--glass)" stroke="var(--glass-edge)"/>
+    <text x="477" y="16" text-anchor="middle" fill="currentColor" stroke="none">墙</text>
+    <rect x="150" y="70" width="180" height="110" rx="6" fill="var(--panel)" stroke="currentColor"/>
+    <text x="240" y="130" text-anchor="middle" fill="currentColor" stroke="none">机身（俯视）</text>
+    <line x1="330" y1="125" x2="400" y2="125" marker-end="url(#ah)"/>
+    <text x="365" y="118" text-anchor="middle" fill="currentColor" stroke="none">头朝墙 +x</text>
+    <!-- 前腿：平面指正前 -->
+    <circle cx="330" cy="82" r="4" fill="currentColor"/>
+    <line x1="330" y1="82" x2="470" y2="82" stroke="var(--hl)" stroke-width="2.4"/>
+    <circle cx="462" cy="82" r="6" fill="var(--cup-on)" stroke="none"/>
+    <text x="392" y="70" text-anchor="middle" fill="var(--hl)" stroke="none">前腿 β=0°：腿平面含墙法线</text>
+    <!-- 中腿：平面横着 -->
+    <circle cx="240" cy="70" r="4" fill="currentColor"/>
+    <line x1="240" y1="70" x2="240" y2="10" stroke="currentColor" stroke-width="2.4"/>
+    <circle cx="240" cy="14" r="6" fill="var(--cup-off)" stroke="currentColor"/>
+    <line x1="240" y1="30" x2="300" y2="30" stroke="var(--axis)" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+    <text x="352" y="34" text-anchor="middle" fill="var(--axis)" stroke="none">吸盘轴出不了腿平面</text>
+    <text x="205" y="52" text-anchor="end" fill="currentColor" stroke="none">中腿 β=90°</text>
+    <!-- 后腿：指正后 -->
+    <circle cx="150" cy="168" r="4" fill="currentColor"/>
+    <line x1="150" y1="168" x2="30" y2="168" stroke="var(--hl)" stroke-width="2.4"/>
+    <circle cx="38" cy="168" r="6" fill="var(--cup-on)" stroke="none"/>
+    <text x="90" y="190" text-anchor="middle" fill="var(--hl)" stroke="none">后腿 β=180°：腿平面含地面法线</text>
+    <text x="20" y="235" fill="currentColor" stroke="none">β = 腿平面相对机身 x 轴的夹角。面外倾角：地面足 asin(sinφ·|sinβ|)，墙面足 asin(cosφ·|sinβ|)，φ = 身体俯仰。</text>
+  </g>
+</svg>
+<figcaption>前腿 coxa 内摆 55° 指向正前、后腿后摆 55° 指向正后，它们的腿平面分别包含墙面法线和地面法线，身体怎么俯仰都对得正。中腿的平面横着，只有身体几乎平行于墙（φ≥70°）时才能对正墙，也只有身体几乎平躺（φ≤20°）时才对得正地面。</figcaption>
+</figure>
+<div class="tbl"><table>
+<tr><th>腿</th><th>对地面正（倾角≤12~15°）</th><th>对墙面正</th></tr>
+<tr><td>前腿，coxa 内摆到指正前</td><td>任何俯仰</td><td>任何俯仰</td></tr>
+<tr><td>后腿，coxa 后摆到指正后</td><td>任何俯仰</td><td>几何上 φ ≥ 50°；序列里要到 72.5°（后髋须抬到离地约 170 mm，脚才落得到髋以下的墙面）</td></tr>
+<tr><td>中腿（前摆 45° 也只能到 β=45°）</td><td>φ ≤ 15~20°</td><td>φ ≥ 70~75°</td></tr>
+</table></div>
+<p>所以过渡分四段：<b>A</b> 六足在地面时把两只前足送上墙、两只后足摆到正后方；<b>B</b> 收起中腿，靠"前两盘在墙 + 后两足在地"的四足扶梯把身体抬到 60~70°，期间前足往上换、后足往前换；<b>C</b> 后足落到墙脚（离地 20 mm），四盘都在墙上再抬到 75°；<b>D</b> 中腿上墙，身体转到平行墙面；<b>E</b> 身体退到离墙 90 mm、六足逐一换回爬墙站位，交给 <code>climb_walk</code>。路线图里写的"前足→中足→后足"在几何上走不通，CLIMBING-DESIGN §6 那张 2D 可落足带表没错，但它隐含前腿 coxa 已经指正前——中性角 55° 时前盘对墙偏 55°，根本吸不上。</p>
+
+<h2>二、四足扶梯阶段的数字</h2>
+<p>接触点固定时身体每次只能抬 15~25°：前腿在墙上的可落足带只有 60~80 mm 高，身体一抬前髋就跑出带；抬头时机尾下沉，舱体压向地面，身体又得升高；后腿要上墙，脚必须落在后髋以下，而后髋被地面上的后足拖着离地只有一百多毫米。所以只能"抬一段、换一对脚、再抬一段"。用真机 IK、各腿关节行程和引擎判据做最少换步搜索（<code>tools/mount_plan.py</code>，抬头段按 15° 保持容差、落点按 12° 带）得到上面动画那条路：</p>
+<div class="tbl"><table id="ladder-table">
+<tr><th>阶段</th><th>动作</th><th>俯仰</th><th>身体高度</th><th>前髋距墙</th></tr>
+<tr><td>B0</td><td>六接触抬头到 15.0°</td><td>15.0°</td><td>80 mm</td><td>133 mm</td></tr>
+<tr><td>B0</td><td>中腿收起</td><td>15.0°</td><td>80 mm</td><td>133 mm</td></tr>
+<tr><td>B0</td><td>抬头到 17.5°</td><td>17.5°</td><td>80 mm</td><td>130 mm</td></tr>
+<tr><td>B0</td><td>前足换到墙高 270</td><td>17.5°</td><td>80 mm</td><td>130 mm</td></tr>
+<tr><td>B1</td><td>前足换到墙高 320</td><td>17.5°</td><td>130 mm</td><td>130 mm</td></tr>
+<tr><td>B2</td><td>抬头到 37.5°</td><td>37.5°</td><td>140 mm</td><td>164 mm</td></tr>
+<tr><td>B2</td><td>后足换到距墙 423</td><td>37.5°</td><td>120 mm</td><td>164 mm</td></tr>
+<tr><td>B3</td><td>抬头到 45.0°</td><td>45.0°</td><td>120 mm</td><td>171 mm</td></tr>
+<tr><td>B3</td><td>后足换到距墙 363</td><td>45.0°</td><td>120 mm</td><td>131 mm</td></tr>
+<tr><td>B4</td><td>抬头到 47.5°</td><td>47.5°</td><td>120 mm</td><td>124 mm</td></tr>
+<tr><td>B4</td><td>后足换到距墙 303</td><td>47.5°</td><td>130 mm</td><td>74 mm</td></tr>
+<tr><td>B5</td><td>抬头到 60.0°</td><td>60.0°</td><td>130 mm</td><td>68 mm</td></tr>
+<tr><td>B5</td><td>前足换到墙高 360</td><td>60.0°</td><td>130 mm</td><td>68 mm</td></tr>
+<tr><td>B6</td><td>抬头到 65.0°</td><td>65.0°</td><td>130 mm</td><td>85 mm</td></tr>
+<tr><td>B6</td><td>后足换到距墙 253</td><td>65.0°</td><td>160 mm</td><td>65 mm</td></tr>
+<tr><td>B7</td><td>抬头到 72.5°</td><td>72.5°</td><td>160 mm</td><td>55 mm</td></tr>
+<tr><td>B7</td><td>前足换到墙高 400</td><td>72.5°</td><td>160 mm</td><td>55 mm</td></tr>
+<tr><td>B8</td><td>前足换到墙高 450</td><td>72.5°</td><td>190 mm</td><td>65 mm</td></tr>
+<tr><td>C1</td><td>后足上墙</td><td>72.5°</td><td>250 mm</td><td>55 mm</td></tr>
+<tr><td>C0</td><td>抬头到 75.0°</td><td>75.0°</td><td>240 mm</td><td>58 mm</td></tr>
+<tr><td>D1</td><td>中腿上墙</td><td>75.0°</td><td>240 mm</td><td>48 mm</td></tr>
+<tr><td>D3</td><td>六盘在墙转到 90.0°</td><td>90.0°</td><td>220 mm</td><td>50 mm</td></tr>
+<tr><td>E0</td><td>身体滑到离墙 55</td><td>90.0°</td><td>220 mm</td><td>55 mm</td></tr>
+<tr><td>E1</td><td>身体滑到离墙 90</td><td>90.0°</td><td>220 mm</td><td>90 mm</td></tr>
+</table></div>
+<p>腹面厚度按 40 mm 假设（舱体贴底，待量）。搜索只管运动学，不管载荷；每对换脚在实机上是两次单腿动作，中间那只脚悬空时只剩一只墙盘（见下节）。</p>
+
+<h2>三、最大风险：换前足那一下</h2>
+<p>绕后足触地线做力矩平衡（整机 34.7 N，重心按机身中心髋面下 10 mm）：四盘阶段每只墙盘的剪切 7~10 N，对实测 15 N 容量还行；换前足时只剩一只墙盘，如果地面不提供水平推力，剪切上界就到 20~23 N。</p>
+<div class="tbl"><table>
+<tr><th>时刻</th><th>单墙盘剪切上界（地面不推）</th><th>若改由地面扛：需摩擦力</th></tr>
+<tr><td>低俯仰（≈17°）换前足，序列里两次</td><td>20 N</td><td>22~29 N（μ≥0.6~0.8）</td></tr>
+<tr><td>高俯仰（60~73°）换前足，序列里三次</td><td>21~23 N</td><td>15~18 N</td></tr>
+</table></div>
+<p>真实分配由腿链刚度决定，落在两端之间。要么让地面也能"拉"——后足踩在玻璃板上吸附，或铺高摩擦垫；要么换 BOM 备选的 40 mm 吸盘（法向力 ×1.8）。这一条只能实测，算不出来。</p>
+
+<h2>四、软件：已经写好的部分</h2>
+<div class="two">
+<div class="box note"><b><code>hexapod/mount.py</code> 过渡引擎。</b>每腿一个接触面（地面 / 墙面 / 空中），抬离和压入沿各自面的法向；单腿挪动走 VENT→LIFT→TRANSFER→HOVER→落下→DESCEND→PRESS→WAIT，分段语义和爬墙引擎一样（先通气再抬、悬停等人确认、失败加深重试、耗尽冻结）；身体位姿（俯仰、离墙、高度）慢速改变时接触足在世界系钉死、悬空足随身体，整段中间位姿逐个预检，任一不过整段拒绝原地不动。吸附状态机、黑匣子原样复用。9 项 pytest。</div>
+<div class="box note"><b><code>scripts/mount_wall.py</code> 实验脚本。</b>地面玻璃板六足吸住后：<kbd>1</kbd>~<kbd>6</kbd> 选腿，<kbd>w</kbd> 上墙（墙前 15 mm 悬停，目视对正后 <kbd>i</kbd> 压入吸附），<kbd>g</kbd> 回地，<kbd>b</kbd> 正后方，<kbd>h</kbd> 收起悬空；<kbd>↑</kbd><kbd>↓</kbd> 俯仰、<kbd>←</kbd><kbd>→</kbd> 离/贴墙、<kbd>[</kbd><kbd>]</kbd> 升降；<kbd>f</kbd> 解冻、<kbd>o</kbd>×2 取机、<kbd>ESC</kbd>×2 退出。<code>--mock</code> 已把 E1/E2/E3 键序跑通。</div>
+</div>
+<p>没做的：整条序列的自动执行（现在每一步都是人按键）、载荷监视、IMU。没有 IMU 看不见真实俯仰，腿链是软的（指令位移只有约四成被实现），建议装 MPU6050 前先用手机侧拍量。</p>
+
+<h2>五、先做什么</h2>
+<ol>
+<li><b>核三个假设。</b>coxa 能否内摆/后摆 55° 不撞机身和邻腿（前腿指正前、后腿指正后）；髋平面以下舱体厚度；重心位置。</li>
+<li><b>E1 一只前足上墙。</b>地面玻璃板六足吸住 → <kbd>1</kbd><kbd>w</kbd> 悬停看对正 → <kbd>i</kbd> 吸附 → <kbd>g</kbd> 回地。验证 coxa 内摆 55° 不撞、压入方向改成 +x 后的吸附确认、可落足带与实机对得上。</li>
+<li><b>E2 双前足上墙 + 俯仰 10~15°。</b>六接触下抬头，手机侧拍量真实俯仰对指令的比例。</li>
+<li><b>E3 四接触静停，再抬一只前足。</b>中腿收起、φ≈25° 静停 30 s 看盘压和电流，然后抬一只前足，看剩下那盘扛不扛得住。最大风险项：低俯仰、安全绳绷紧再做。</li>
+</ol>
+<div class="box"><b>安全。</b>全程安全绳；首批实验在地面玻璃板上做，六足都能吸附；有足在墙上时放开吸盘即坠，取机前先扶稳。</div>
+
+<p class="muted" style="font-size:.85rem;margin-top:2.5rem">来源：<code>tools/mount_analysis.py</code>（面外倾角规律、四足阶段扫描、静力估算）、<code>tools/mount_plan.py</code>（本页动画序列）、<code>software/hexapod/mount.py</code>、<code>software/scripts/mount_wall.py</code>、<code>docs/CLIMBING-DESIGN.md</code> §6、<code>docs/ROADMAP.md</code> P5。吸盘剪切容量 15 N 为 P2 单腿实测；整机 3.537 kg 为 09-04 实测。2026-09-06。</p>
+
+<script id="plan" type="application/json">{"params":{"coxa":43.0,"femur":81.0,"tibia":123.7,"cup_delta":-25.2,"stand":90.0,"lift_clearance":15.0,"lift_speed":40.0,"transfer_speed":60.0,"transfer_min":0.6,"descend_speed":30.0,"press_speed":15.0,"pitch_rate":2.0,"lin_rate":10.0,"belly":40.0,"body_half":100.0,"tilt_band":12.0,"legs":{"L1":{"mx":83.5,"my":63.0,"ang":55.0,"press":18.0},"L2":{"mx":0.0,"my":81.5,"ang":90.0,"press":18.0},"L3":{"mx":-83.5,"my":63.0,"ang":125.0,"press":18.0},"R1":{"mx":83.5,"my":-63.0,"ang":-55.0,"press":18.0},"R2":{"mx":0.0,"my":-81.5,"ang":-90.0,"press":18.0},"R3":{"mx":-83.5,"my":-63.0,"ang":-125.0,"press":18.0}}},"wall_dist":140.0,"init":{"pose":[-223.5,90.0,0.0],"legs":{"L1":{"surf":"floor","pw":[-38.72151862944568,207.64066129522553,0.0],"depth":0.0},"L2":{"surf":"floor","pw":[-223.5,258.073643810864,0.0],"depth":0.0},"L3":{"surf":"floor","pw":[-408.27848137055435,207.6406612952255,0.0],"depth":0.0},"R1":{"surf":"floor","pw":[-38.72151862944568,-207.64066129522553,0.0],"depth":0.0},"R2":{"surf":"floor","pw":[-223.5,-258.073643810864,0.0],"depth":0.0},"R3":{"surf":"floor","pw":[-408.27848137055435,-207.6406612952255,0.0],"depth":0.0}}},"segs":[{"type":"move","leg":"L1","label":"A1 左前足上墙","pose":[-223.5,90.0,0.0],"from_w":[-38.72151862944568,207.64066129522553,0.0],"n_a":[0.0,0.0,1.0],"start_w":[-38.72151862944568,207.64066129522553,15.0],"end_w":[-15.0,63.0,220.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,63.0,220.0],"depth":18.0,"gamma":-55.0,"tilt":1.9},{"type":"move","leg":"R1","label":"A2 右前足上墙","pose":[-223.5,90.0,0.0],"from_w":[-38.72151862944568,-207.64066129522553,0.0],"n_a":[0.0,0.0,1.0],"start_w":[-38.72151862944568,-207.64066129522553,15.0],"end_w":[-15.0,-63.0,220.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-63.0,220.0],"depth":18.0,"gamma":55.0,"tilt":1.9},{"type":"move","leg":"L3","label":"A3 左后足指正后","pose":[-223.5,90.0,0.0],"from_w":[-408.27848137055435,207.6406612952255,0.0],"n_a":[0.0,0.0,1.0],"start_w":[-408.27848137055435,207.6406612952255,15.0],"end_w":[-483.573643810864,63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":25.0,"dst":"floor","p_to":[-483.573643810864,63.0,0.0],"depth":18.0,"gamma":55.0,"tilt":0.0},{"type":"move","leg":"R3","label":"A4 右后足指正后","pose":[-223.5,90.0,0.0],"from_w":[-408.27848137055435,-207.6406612952255,0.0],"n_a":[0.0,0.0,1.0],"start_w":[-408.27848137055435,-207.6406612952255,15.0],"end_w":[-483.573643810864,-63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":25.0,"dst":"floor","p_to":[-483.573643810864,-63.0,0.0],"depth":18.0,"gamma":-55.0,"tilt":0.0},{"type":"pose","label":"B0 六足抬头到 15.0°","path":[[-223.5,90.0,0.0],[-223.5,90.0,0.04363323129985824],[-223.5,90.0,0.08726646259971647],[-223.5,90.0,0.1308996938995747],[-223.5,90.0,0.17453292519943295],[-223.5,80.0,0.2181661564992912],[-213.5,80.0,0.2617993877991494]]},{"type":"move","leg":"L2","label":"B0 左中腿收起","pose":[-213.5,80.0,0.2617993877991494],"from_w":[-223.5,258.073643810864,0.0],"n_a":[0.0,0.0,1.0],"start_w":[-223.5,258.073643810864,15.0],"end_w":[-201.85314297038656,187.4441862865184,36.533337816991924],"n_b":[0.0,0.0,1.0],"arc":0.0,"dst":"air","pb_to":[6.487210431202783e-15,187.4441862865184,-45.0]},{"type":"move","leg":"R2","label":"B0 右中腿收起","pose":[-213.5,80.0,0.2617993877991494],"from_w":[-223.5,-258.073643810864,0.0],"n_a":[0.0,0.0,1.0],"start_w":[-223.5,-258.073643810864,15.0],"end_w":[-201.85314297038656,-187.4441862865184,36.533337816991924],"n_b":[0.0,0.0,1.0],"arc":0.0,"dst":"air","pb_to":[6.487210431202783e-15,-187.4441862865184,-45.0]},{"type":"pose","label":"B1 平移","path":[[-213.5,80.0,0.2617993877991494],[-210.0,80.0,0.2617993877991494]]},{"type":"pose","label":"B0 抬头到 17.5°","path":[[-210.0,80.0,0.2617993877991494],[-210.0,80.0,0.30543261909900765]]},{"type":"move","leg":"L1","label":"B0 左前足换到墙高 270","pose":[-210.0,80.0,0.30543261909900765],"from_w":[18.0,63.0,220.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,63.0,220.0],"end_w":[-15.0,63.0,270.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,63.0,270.0],"depth":18.0,"gamma":-55.0,"tilt":9.9},{"type":"move","leg":"R1","label":"B0 右前足换到墙高 270","pose":[-210.0,80.0,0.30543261909900765],"from_w":[18.0,-63.0,220.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,-63.0,220.0],"end_w":[-15.0,-63.0,270.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-63.0,270.0],"depth":18.0,"gamma":55.0,"tilt":9.9},{"type":"pose","label":"B1 平移","path":[[-210.0,80.0,0.30543261909900765],[-210.0,85.0,0.30543261909900765],[-210.0,90.0,0.30543261909900765],[-210.0,95.0,0.30543261909900765],[-210.0,100.0,0.30543261909900765],[-210.0,105.0,0.30543261909900765],[-210.0,110.0,0.30543261909900765],[-210.0,115.0,0.30543261909900765],[-210.0,120.0,0.30543261909900765],[-210.0,125.0,0.30543261909900765],[-210.0,130.0,0.30543261909900765]]},{"type":"move","leg":"L1","label":"B1 左前足换到墙高 320","pose":[-210.0,130.0,0.30543261909900765],"from_w":[18.0,63.0,270.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,63.0,270.0],"end_w":[-15.0,63.0,320.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,63.0,320.0],"depth":18.0,"gamma":-55.0,"tilt":9.9},{"type":"move","leg":"R1","label":"B1 右前足换到墙高 320","pose":[-210.0,130.0,0.30543261909900765],"from_w":[18.0,-63.0,270.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,-63.0,270.0],"end_w":[-15.0,-63.0,320.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-63.0,320.0],"depth":18.0,"gamma":55.0,"tilt":9.9},{"type":"pose","label":"B2 抬头到 37.5°","path":[[-210.0,130.0,0.30543261909900765],[-210.0,130.0,0.3490658503988659],[-210.0,130.0,0.39269908169872414],[-210.0,130.0,0.4363323129985824],[-220.0,130.0,0.4799655442984406],[-220.0,130.0,0.5235987755982988],[-220.0,130.0,0.5672320068981571],[-220.0,140.0,0.6108652381980153],[-230.0,140.0,0.6544984694978736]]},{"type":"pose","label":"B2 平移","path":[[-230.0,140.0,0.6544984694978736],[-230.0,135.0,0.6544984694978736],[-230.0,130.0,0.6544984694978736],[-230.0,125.0,0.6544984694978736],[-230.0,120.0,0.6544984694978736]]},{"type":"move","leg":"L3","label":"B2 左后足换到距墙 423","pose":[-230.0,120.0,0.6544984694978736],"from_w":[-483.573643810864,63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-483.573643810864,63.0,15.0],"end_w":[-423.0,63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":25.0,"dst":"floor","p_to":[-423.0,63.0,0.0],"depth":18.0,"gamma":55.0,"tilt":8.5},{"type":"move","leg":"R3","label":"B2 右后足换到距墙 423","pose":[-230.0,120.0,0.6544984694978736],"from_w":[-483.573643810864,-63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-483.573643810864,-63.0,15.0],"end_w":[-423.0,-63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":25.0,"dst":"floor","p_to":[-423.0,-63.0,0.0],"depth":18.0,"gamma":-55.0,"tilt":8.5},{"type":"pose","label":"B3 抬头到 45.0°","path":[[-230.0,120.0,0.6544984694978736],[-230.0,120.0,0.6981317007977318],[-230.0,120.0,0.7417649320975901],[-230.0,120.0,0.7853981633974483]]},{"type":"pose","label":"B3 平移","path":[[-230.0,120.0,0.7853981633974483],[-225.0,120.0,0.7853981633974483],[-220.0,120.0,0.7853981633974483],[-215.0,120.0,0.7853981633974483],[-210.0,120.0,0.7853981633974483],[-205.0,120.0,0.7853981633974483],[-200.0,120.0,0.7853981633974483],[-195.0,120.0,0.7853981633974483],[-190.0,120.0,0.7853981633974483]]},{"type":"move","leg":"L3","label":"B3 左后足换到距墙 363","pose":[-190.0,120.0,0.7853981633974483],"from_w":[-423.0,63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-423.0,63.0,15.0],"end_w":[-363.0,63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":12.5,"dst":"floor","p_to":[-363.0,63.0,0.0],"depth":18.0,"gamma":55.0,"tilt":6.2},{"type":"move","leg":"R3","label":"B3 右后足换到距墙 363","pose":[-190.0,120.0,0.7853981633974483],"from_w":[-423.0,-63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-423.0,-63.0,15.0],"end_w":[-363.0,-63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":12.5,"dst":"floor","p_to":[-363.0,-63.0,0.0],"depth":18.0,"gamma":-55.0,"tilt":6.2},{"type":"pose","label":"B4 抬头到 47.5°","path":[[-190.0,120.0,0.7853981633974483],[-180.0,120.0,0.8290313946973066]]},{"type":"pose","label":"B4 平移","path":[[-180.0,120.0,0.8290313946973066],[-175.0,121.0,0.8290313946973066],[-170.0,122.0,0.8290313946973066],[-165.0,123.0,0.8290313946973066],[-160.0,124.0,0.8290313946973066],[-155.0,125.0,0.8290313946973066],[-150.0,126.0,0.8290313946973066],[-145.0,127.0,0.8290313946973066],[-140.0,128.0,0.8290313946973066],[-135.0,129.0,0.8290313946973066],[-130.0,130.0,0.8290313946973066]]},{"type":"move","leg":"L3","label":"B4 左后足换到距墙 303","pose":[-130.0,130.0,0.8290313946973066],"from_w":[-363.0,63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-363.0,63.0,15.0],"end_w":[-303.0,63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":25.0,"dst":"floor","p_to":[-303.0,63.0,0.0],"depth":18.0,"gamma":55.0,"tilt":7.8},{"type":"move","leg":"R3","label":"B4 右后足换到距墙 303","pose":[-130.0,130.0,0.8290313946973066],"from_w":[-363.0,-63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-363.0,-63.0,15.0],"end_w":[-303.0,-63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":25.0,"dst":"floor","p_to":[-303.0,-63.0,0.0],"depth":18.0,"gamma":-55.0,"tilt":7.8},{"type":"pose","label":"B5 抬头到 60.0°","path":[[-130.0,130.0,0.8290313946973066],[-130.0,130.0,0.8726646259971648],[-130.0,130.0,0.9162978572970231],[-120.0,130.0,0.9599310885968813],[-110.0,130.0,1.0035643198967394],[-110.0,130.0,1.0471975511965976]]},{"type":"move","leg":"L1","label":"B5 左前足换到墙高 360","pose":[-110.0,130.0,1.0471975511965976],"from_w":[18.0,63.0,320.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,63.0,320.0],"end_w":[-15.0,63.0,360.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,63.0,360.0],"depth":18.0,"gamma":-55.0,"tilt":0.7},{"type":"move","leg":"R1","label":"B5 右前足换到墙高 360","pose":[-110.0,130.0,1.0471975511965976],"from_w":[18.0,-63.0,320.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,-63.0,320.0],"end_w":[-15.0,-63.0,360.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-63.0,360.0],"depth":18.0,"gamma":55.0,"tilt":0.7},{"type":"pose","label":"B6 抬头到 65.0°","path":[[-110.0,130.0,1.0471975511965976],[-110.0,130.0,1.090830782496456],[-120.0,130.0,1.1344640137963142]]},{"type":"pose","label":"B6 平移","path":[[-120.0,130.0,1.1344640137963142],[-116.66666666666667,135.0,1.1344640137963142],[-113.33333333333333,140.0,1.1344640137963142],[-110.0,145.0,1.1344640137963142],[-106.66666666666667,150.0,1.1344640137963142],[-103.33333333333333,155.0,1.1344640137963142],[-100.0,160.0,1.1344640137963142]]},{"type":"move","leg":"L3","label":"B6 左后足换到距墙 253","pose":[-100.0,160.0,1.1344640137963142],"from_w":[-303.0,63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-303.0,63.0,15.0],"end_w":[-253.0,63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":0.0,"dst":"floor","p_to":[-253.0,63.0,0.0],"depth":18.0,"gamma":55.0,"tilt":6.7},{"type":"move","leg":"R3","label":"B6 右后足换到距墙 253","pose":[-100.0,160.0,1.1344640137963142],"from_w":[-303.0,-63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-303.0,-63.0,15.0],"end_w":[-253.0,-63.0,15.0],"n_b":[0.0,0.0,1.0],"arc":12.5,"dst":"floor","p_to":[-253.0,-63.0,0.0],"depth":18.0,"gamma":-55.0,"tilt":6.7},{"type":"pose","label":"B7 抬头到 72.5°","path":[[-100.0,160.0,1.1344640137963142],[-90.0,160.0,1.1780972450961724],[-90.0,160.0,1.2217304763960306],[-80.0,160.0,1.265363707695889]]},{"type":"move","leg":"L1","label":"B7 左前足换到墙高 400","pose":[-80.0,160.0,1.265363707695889],"from_w":[18.0,63.0,360.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,63.0,360.0],"end_w":[-15.0,63.0,400.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,63.0,400.0],"depth":18.0,"gamma":-55.0,"tilt":1.7},{"type":"move","leg":"R1","label":"B7 右前足换到墙高 400","pose":[-80.0,160.0,1.265363707695889],"from_w":[18.0,-63.0,360.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,-63.0,360.0],"end_w":[-15.0,-63.0,400.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-63.0,400.0],"depth":18.0,"gamma":55.0,"tilt":1.7},{"type":"pose","label":"B8 平移","path":[[-80.0,160.0,1.265363707695889],[-81.66666666666667,165.0,1.265363707695889],[-83.33333333333333,170.0,1.265363707695889],[-85.0,175.0,1.265363707695889],[-86.66666666666667,180.0,1.265363707695889],[-88.33333333333333,185.0,1.265363707695889],[-90.0,190.0,1.265363707695889]]},{"type":"move","leg":"L1","label":"B8 左前足换到墙高 450","pose":[-90.0,190.0,1.265363707695889],"from_w":[18.0,63.0,400.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,63.0,400.0],"end_w":[-15.0,63.0,450.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,63.0,450.0],"depth":18.0,"gamma":-55.0,"tilt":7.1},{"type":"move","leg":"R1","label":"B8 右前足换到墙高 450","pose":[-90.0,190.0,1.265363707695889],"from_w":[18.0,-63.0,400.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,-63.0,400.0],"end_w":[-15.0,-63.0,450.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-63.0,450.0],"depth":18.0,"gamma":55.0,"tilt":7.1},{"type":"pose","label":"B9 靠墙 平移","path":[[-90.0,190.0,1.265363707695889],[-89.16666666666667,195.0,1.265363707695889],[-88.33333333333333,200.0,1.265363707695889],[-87.5,205.0,1.265363707695889],[-86.66666666666667,210.0,1.265363707695889],[-85.83333333333333,215.0,1.265363707695889],[-85.0,220.0,1.265363707695889],[-84.16666666666667,225.0,1.265363707695889],[-83.33333333333333,230.0,1.265363707695889],[-82.5,235.0,1.265363707695889],[-81.66666666666667,240.0,1.265363707695889],[-80.83333333333333,245.0,1.265363707695889],[-80.0,250.0,1.265363707695889]]},{"type":"move","leg":"L3","label":"C1 左后足上墙","pose":[-80.0,250.0,1.265363707695889],"from_w":[-253.0,63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-253.0,63.0,15.0],"end_w":[-15.0,123.0,20.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,123.0,20.0],"depth":18.0,"gamma":25.6,"tilt":10.4},{"type":"move","leg":"R3","label":"C2 右后足上墙","pose":[-80.0,250.0,1.265363707695889],"from_w":[-253.0,-63.0,-18.0],"n_a":[0.0,0.0,1.0],"start_w":[-253.0,-63.0,15.0],"end_w":[-15.0,-123.0,20.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-123.0,20.0],"depth":18.0,"gamma":-25.6,"tilt":10.4},{"type":"pose","label":"C0 抬头到 75.0°","path":[[-80.0,250.0,1.265363707695889],[-80.0,240.0,1.3089969389957472]]},{"type":"pose","label":"C0 靠墙 平移","path":[[-80.0,240.0,1.3089969389957472],[-75.0,240.0,1.3089969389957472],[-70.0,240.0,1.3089969389957472]]},{"type":"move","leg":"L2","label":"D1 左中腿上墙","pose":[-70.0,240.0,1.3089969389957472],"from_w":[-26.533337816991924,187.4441862865184,228.35314297038659],"n_a":[-1.0,0.0,0.0],"start_w":[-26.533337816991924,187.4441862865184,228.35314297038659],"end_w":[-15.0,161.5,90.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,161.5,90.0],"depth":18.0,"gamma":56.8,"tilt":8.5},{"type":"move","leg":"R2","label":"D2 右中腿上墙","pose":[-70.0,240.0,1.3089969389957472],"from_w":[-26.533337816991924,-187.4441862865184,228.35314297038659],"n_a":[-1.0,0.0,0.0],"start_w":[-26.533337816991924,-187.4441862865184,228.35314297038659],"end_w":[-15.0,-161.5,90.0],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-161.5,90.0],"depth":18.0,"gamma":-56.8,"tilt":8.5},{"type":"pose","label":"D3 六盘在墙转到 90.0°","path":[[-70.0,240.0,1.3089969389957472],[-70.0,240.0,1.3526301702956054],[-70.0,240.0,1.3962634015954636],[-60.0,240.0,1.4398966328953218],[-60.0,230.0,1.48352986419518],[-60.0,230.0,1.5271630954950381],[-50.0,220.0,1.5707963267948963]]},{"type":"pose","label":"E0 身体向离墙站高滑到 55","path":[[-50.0,220.0,1.5707963267948963],[-55.0,220.0,1.5707963267948963]]},{"type":"move","leg":"R3","label":"E0 R3 换到站位","pose":[-55.0,220.0,1.5707963267948963],"from_w":[18.0,-123.0,20.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,-123.0,20.0],"end_w":[-15.0,-207.6406612952255,35.221518629445654],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-207.6406612952255,35.221518629445654],"depth":18.0,"gamma":0.0,"tilt":4.1},{"type":"move","leg":"L1","label":"E0 L1 换到站位","pose":[-55.0,220.0,1.5707963267948963],"from_w":[18.0,63.0,450.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,63.0,450.0],"end_w":[-15.0,207.64066129522553,404.7784813705543],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,207.64066129522553,404.7784813705543],"depth":18.0,"gamma":0.0,"tilt":4.1},{"type":"move","leg":"R2","label":"E0 R2 换到站位","pose":[-55.0,220.0,1.5707963267948963],"from_w":[18.0,-161.5,90.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,-161.5,90.0],"end_w":[-15.0,-258.073643810864,219.99999999999997],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-258.073643810864,219.99999999999997],"depth":18.0,"gamma":-0.0,"tilt":4.1},{"type":"move","leg":"L3","label":"E0 L3 换到站位","pose":[-55.0,220.0,1.5707963267948963],"from_w":[18.0,123.0,20.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,123.0,20.0],"end_w":[-15.0,207.6406612952255,35.221518629445654],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,207.6406612952255,35.221518629445654],"depth":18.0,"gamma":0.0,"tilt":4.1},{"type":"move","leg":"R1","label":"E0 R1 换到站位","pose":[-55.0,220.0,1.5707963267948963],"from_w":[18.0,-63.0,450.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,-63.0,450.0],"end_w":[-15.0,-207.64066129522553,404.7784813705543],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,-207.64066129522553,404.7784813705543],"depth":18.0,"gamma":0.0,"tilt":4.1},{"type":"move","leg":"L2","label":"E0 L2 换到站位","pose":[-55.0,220.0,1.5707963267948963],"from_w":[18.0,161.5,90.0],"n_a":[-1.0,0.0,0.0],"start_w":[-15.0,161.5,90.0],"end_w":[-15.0,258.073643810864,219.99999999999997],"n_b":[-1.0,0.0,0.0],"arc":25.0,"dst":"wall","p_to":[0.0,258.073643810864,219.99999999999997],"depth":18.0,"gamma":0.0,"tilt":4.1},{"type":"pose","label":"E1 身体向离墙站高滑到 90","path":[[-55.0,220.0,1.5707963267948963],[-60.0,220.0,1.5707963267948963],[-65.0,220.0,1.5707963267948963],[-70.0,220.0,1.5707963267948963],[-75.0,220.0,1.5707963267948963],[-80.0,220.0,1.5707963267948963],[-85.0,220.0,1.5707963267948963],[-90.0,220.0,1.5707963267948963]]}],"log":["[φ=  0.0° 高  90 前髋距墙 140] A 起点：前腿可落足带 离地 200~240，取 220","[φ=  0.0° 高  90 前髋距墙 140] A1 左前足上墙：L1 → wall (0,63,220) coxa -55° 倾角 1.9° 弧 25","[φ=  0.0° 高  90 前髋距墙 140] A2 右前足上墙：R1 → wall (0,-63,220) coxa +55° 倾角 1.9° 弧 25","[φ=  0.0° 高  90 前髋距墙 140] A3 左后足指正后：L3 → floor (-484,63,0) coxa +55° 倾角 0.0° 弧 25","[φ=  0.0° 高  90 前髋距墙 140] A4 右后足指正后：R3 → floor (-484,-63,0) coxa -55° 倾角 0.0° 弧 25","[φ= 15.0° 高  80 前髋距墙 133] B0 六接触抬头到 15.0°","[φ= 15.0° 高  80 前髋距墙 133] B0 左中腿收起：L2 收起悬空","[φ= 15.0° 高  80 前髋距墙 133] B0 右中腿收起：R2 收起悬空","[φ= 17.5° 高  80 前髋距墙 130] B0 抬头到 17.5°","[φ= 17.5° 高  80 前髋距墙 130] B0 左前足换到墙高 270：L1 → wall (0,63,270) coxa -55° 倾角 9.9° 弧 25","[φ= 17.5° 高  80 前髋距墙 130] B0 右前足换到墙高 270：R1 → wall (0,-63,270) coxa +55° 倾角 9.9° 弧 25","[φ= 17.5° 高 130 前髋距墙 130] B1 左前足换到墙高 320：L1 → wall (0,63,320) coxa -55° 倾角 9.9° 弧 25","[φ= 17.5° 高 130 前髋距墙 130] B1 右前足换到墙高 320：R1 → wall (0,-63,320) coxa +55° 倾角 9.9° 弧 25","[φ= 37.5° 高 140 前髋距墙 164] B2 抬头到 37.5°","[φ= 37.5° 高 120 前髋距墙 164] B2 左后足换到距墙 423：L3 → floor (-423,63,0) coxa +55° 倾角 8.5° 弧 25","[φ= 37.5° 高 120 前髋距墙 164] B2 右后足换到距墙 423：R3 → floor (-423,-63,0) coxa -55° 倾角 8.5° 弧 25","[φ= 45.0° 高 120 前髋距墙 171] B3 抬头到 45.0°","[φ= 45.0° 高 120 前髋距墙 131] B3 左后足换到距墙 363：L3 → floor (-363,63,0) coxa +55° 倾角 6.2° 弧 12.5","[φ= 45.0° 高 120 前髋距墙 131] B3 右后足换到距墙 363：R3 → floor (-363,-63,0) coxa -55° 倾角 6.2° 弧 12.5","[φ= 47.5° 高 120 前髋距墙 124] B4 抬头到 47.5°","[φ= 47.5° 高 130 前髋距墙  74] B4 左后足换到距墙 303：L3 → floor (-303,63,0) coxa +55° 倾角 7.8° 弧 25","[φ= 47.5° 高 130 前髋距墙  74] B4 右后足换到距墙 303：R3 → floor (-303,-63,0) coxa -55° 倾角 7.8° 弧 25","[φ= 60.0° 高 130 前髋距墙  68] B5 抬头到 60.0°","[φ= 60.0° 高 130 前髋距墙  68] B5 左前足换到墙高 360：L1 → wall (0,63,360) coxa -55° 倾角 0.7° 弧 25","[φ= 60.0° 高 130 前髋距墙  68] B5 右前足换到墙高 360：R1 → wall (0,-63,360) coxa +55° 倾角 0.7° 弧 25","[φ= 65.0° 高 130 前髋距墙  85] B6 抬头到 65.0°","[φ= 65.0° 高 160 前髋距墙  65] B6 左后足换到距墙 253：L3 → floor (-253,63,0) coxa +55° 倾角 6.7° 弧 0","[φ= 65.0° 高 160 前髋距墙  65] B6 右后足换到距墙 253：R3 → floor (-253,-63,0) coxa -55° 倾角 6.7° 弧 12.5","[φ= 72.5° 高 160 前髋距墙  55] B7 抬头到 72.5°","[φ= 72.5° 高 160 前髋距墙  55] B7 左前足换到墙高 400：L1 → wall (0,63,400) coxa -55° 倾角 1.7° 弧 25","[φ= 72.5° 高 160 前髋距墙  55] B7 右前足换到墙高 400：R1 → wall (0,-63,400) coxa +55° 倾角 1.7° 弧 25","[φ= 72.5° 高 190 前髋距墙  65] B8 左前足换到墙高 450：L1 → wall (0,63,450) coxa -55° 倾角 7.1° 弧 25","[φ= 72.5° 高 190 前髋距墙  65] B8 右前足换到墙高 450：R1 → wall (0,-63,450) coxa +55° 倾角 7.1° 弧 25","[φ= 72.5° 高 250 前髋距墙  55] C1 左后足上墙：L3 → wall (0,123,20) coxa +26° 倾角 10.4° 弧 25","[φ= 72.5° 高 250 前髋距墙  55] C2 右后足上墙：R3 → wall (0,-123,20) coxa -26° 倾角 10.4° 弧 25","[φ= 75.0° 高 240 前髋距墙  58] C0 抬头到 75.0°","[φ= 75.0° 高 240 前髋距墙  48] D1 左中腿上墙：L2 → wall (0,162,90) coxa +57° 倾角 8.5° 弧 25","[φ= 75.0° 高 240 前髋距墙  48] D2 右中腿上墙：R2 → wall (0,-162,90) coxa -57° 倾角 8.5° 弧 25","[φ= 90.0° 高 220 前髋距墙  50] D3 六盘在墙转到 90.0°","[φ= 90.0° 高 220 前髋距墙  55] E0 身体滑到离墙 55","[φ= 90.0° 高 220 前髋距墙  55] E0 R3 换到站位：R3 → wall (0,-208,35) coxa +0° 倾角 4.1° 弧 25","[φ= 90.0° 高 220 前髋距墙  55] E0 L1 换到站位：L1 → wall (0,208,405) coxa +0° 倾角 4.1° 弧 25","[φ= 90.0° 高 220 前髋距墙  55] E0 R2 换到站位：R2 → wall (0,-258,220) coxa -0° 倾角 4.1° 弧 25","[φ= 90.0° 高 220 前髋距墙  55] E0 L3 换到站位：L3 → wall (0,208,35) coxa +0° 倾角 4.1° 弧 25","[φ= 90.0° 高 220 前髋距墙  55] E0 R1 换到站位：R1 → wall (0,-208,405) coxa +0° 倾角 4.1° 弧 25","[φ= 90.0° 高 220 前髋距墙  55] E0 L2 换到站位：L2 → wall (0,258,220) coxa +0° 倾角 4.1° 弧 25","[φ= 90.0° 高 220 前髋距墙  90] E1 身体滑到离墙 90"],"final_stance":true}</script>
+<script>
+(function(){
+"use strict";
+const P = JSON.parse(document.getElementById("plan").textContent);
+const prm = P.params, LEGS = ["L1","L2","L3","R1","R2","R3"];
+const d2r = d => d*Math.PI/180, r2d = r => r*180/Math.PI;
+
+// ---------- 几何（与 hexapod/mount.py 同式） ----------
+// KIN-BEGIN
+function rot(phi){const c=Math.cos(phi),s=Math.sin(phi);return [[c,0,-s],[0,1,0],[s,0,c]];}
+function b2w(v,pose){const R=rot(pose[2]);return [R[0][0]*v[0]+R[0][2]*v[2]+pose[0], v[1], R[2][0]*v[0]+R[2][2]*v[2]+pose[1]];}
+function w2b(v,pose){const R=rot(pose[2]);const d=[v[0]-pose[0],v[1],v[2]-pose[1]];return [R[0][0]*d[0]+R[2][0]*d[2], d[1], R[0][2]*d[0]+R[2][2]*d[2]];}
+function legIK(x,y,z){
+  const l1=prm.coxa,l2=prm.femur,l3=prm.tibia;
+  const g=Math.atan2(y,x); const r=Math.hypot(x,y)-l1; const d=Math.hypot(r,z);
+  if(d>l2+l3-1e-9||d<Math.abs(l2-l3)+1e-9) return null;
+  const th=Math.acos((l2*l2+l3*l3-d*d)/(2*l2*l3));
+  const a=Math.atan2(z,r)+Math.acos((l2*l2+d*d-l3*l3)/(2*l2*d));
+  return [g,a,th];
+}
+function legPoints(name,pb){
+  const L=prm.legs[name], psi=d2r(L.ang);
+  const x=pb[0]-L.mx, y=pb[1]-L.my;
+  const xl=x*Math.cos(psi)+y*Math.sin(psi), yl=-x*Math.sin(psi)+y*Math.cos(psi), z=pb[2];
+  const ik=legIK(xl,yl,z); if(!ik) return null;
+  const [g,a,th]=ik, cg=Math.cos(g), sg=Math.sin(g);
+  const l1=prm.coxa,l2=prm.femur,l3=prm.tibia, at=a+th-Math.PI;
+  const ptsL=[[0,0,0],[l1*cg,l1*sg,0],[l1*cg+l2*Math.cos(a)*cg, l1*sg+l2*Math.cos(a)*sg, l2*Math.sin(a)]];
+  ptsL.push([ptsL[2][0]+l3*Math.cos(at)*cg, ptsL[2][1]+l3*Math.cos(at)*sg, ptsL[2][2]+l3*Math.sin(at)]);
+  const ac=at+d2r(prm.cup_delta);
+  ptsL.push([ptsL[3][0]+22*Math.cos(ac)*cg, ptsL[3][1]+22*Math.cos(ac)*sg, ptsL[3][2]+22*Math.sin(ac)]); // 吸盘轴末端
+  const cp=Math.cos(psi), sp=Math.sin(psi);
+  return ptsL.map(p=>[p[0]*cp-p[1]*sp+L.mx, p[0]*sp+p[1]*cp+L.my, p[2]]);
+}
+// KIN-END
+// ---------- 时间轴 ----------
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+const lerp=(a,b,s)=>a.map((v,i)=>v+(b[i]-v)*s);
+const smooth=s=>s*s*(3-2*s);
+function cloneLegs(L){const o={};for(const n in L){o[n]=Object.assign({},L[n]);if(L[n].pw)o[n].pw=L[n].pw.slice();if(L[n].pb)o[n].pb=L[n].pb.slice();}return o;}
+const items=[]; let t=0; let legs=cloneLegs(P.init.legs); let pose=P.init.pose.slice(); let moves=0;
+const HOLD=0.6;
+for(const sg of P.segs){
+  const it={seg:sg,t0:t,legs0:cloneLegs(legs),pose0:pose.slice(),moves0:moves};
+  if(sg.type==="pose"){
+    it.wp=sg.path; it.wt=[0];
+    for(let i=1;i<sg.path.length;i++){const a=sg.path[i-1],b=sg.path[i];
+      const d=Math.max(r2d(Math.abs(b[2]-a[2]))/prm.pitch_rate, Math.abs(b[0]-a[0])/prm.lin_rate, Math.abs(b[1]-a[1])/prm.lin_rate, 0.05);
+      it.wt.push(it.wt[i-1]+d);}
+    it.dur=it.wt[it.wt.length-1]+HOLD; pose=sg.path[sg.path.length-1].slice();
+  }else{
+    const fromSurf=legs[sg.leg].surf; const ph=[];
+    if(fromSurf){ph.push({k:"lift",d:dist(sg.from_w,sg.start_w)/prm.lift_speed});}
+    ph.push({k:"transfer",d:Math.max(prm.transfer_min,dist(sg.start_w,sg.end_w)/prm.transfer_speed)});
+    if(sg.dst!=="air"){ph.push({k:"hover",d:0.5});ph.push({k:"descend",d:prm.lift_clearance/prm.descend_speed});ph.push({k:"press",d:sg.depth/prm.press_speed});ph.push({k:"attach",d:0.6});}
+    let acc=0; for(const p of ph){p.t0=acc;acc+=p.d;} it.ph=ph; it.dur=acc+HOLD;
+    if(sg.dst==="air") legs[sg.leg]={surf:null,pb:sg.pb_to.slice()}; else legs[sg.leg]={surf:sg.dst,pw:sg.p_to.slice(),depth:sg.depth,n:sg.n_b};
+    moves++;
+  }
+  t+=it.dur;
+}
+const TOTAL=t;
+const N=[0,0,1], NW=[-1,0,0];
+function normOf(l){return l.surf==="wall"?NW:N;}
+function initNorm(){for(const n of LEGS){const l=P.init.legs[n]; if(l.surf) l.n=normOf(l);}}
+initNorm(); for(const it of items){for(const n of LEGS){const l=it.legs0[n]; if(l.surf&&!l.n) l.n=normOf(l);}}
+function pathPoint(sg,s){
+  const ss=smooth(s); const p=lerp(sg.start_w,sg.end_w,ss);
+  if(sg.arc<=0) return p;
+  let u=[sg.n_a[0]+sg.n_b[0],sg.n_a[1]+sg.n_b[1],sg.n_a[2]+sg.n_b[2]]; let nu=Math.hypot(u[0],u[1],u[2]);
+  if(nu<1e-6){u=sg.n_b;nu=1;} const k=sg.arc*Math.sin(Math.PI*s)/nu;
+  return [p[0]+u[0]*k,p[1]+u[1]*k,p[2]+u[2]*k];
+}
+function stateAt(time){
+  time=Math.max(0,Math.min(TOTAL,time));
+  let it=items[items.length-1];
+  for(const x of items){ if(time<x.t0+x.dur){it=x;break;} }
+  const legs=cloneLegs(it.legs0); let pose=it.pose0.slice(); const tt=time-it.t0; let moving=null, sub="";
+  if(it.seg.type==="pose"){
+    const wp=it.wp, wt=it.wt; let i=1; while(i<wt.length&&tt>wt[i]) i++;
+    if(i>=wt.length) pose=wp[wp.length-1].slice(); else { const s=(tt-wt[i-1])/(wt[i]-wt[i-1]); pose=lerp(wp[i-1],wp[i],Math.max(0,Math.min(1,s))); }
+  }else{
+    const sg=it.seg; let fw=null; sub="收口";
+    for(const p of it.ph){ if(tt<p.t0+p.d||p===it.ph[it.ph.length-1]&&tt<it.dur-HOLD){ const s=Math.max(0,Math.min(1,(tt-p.t0)/p.d)); sub=p.k;
+      if(p.k==="lift") fw=lerp(sg.from_w,sg.start_w,s);
+      else if(p.k==="transfer") fw=pathPoint(sg,s);
+      else if(p.k==="hover") fw=sg.end_w.slice();
+      else if(p.k==="descend") fw=lerp(sg.end_w,sg.p_to,s);
+      else if(p.k==="press") fw=lerp(sg.p_to,[sg.p_to[0]-sg.n_b[0]*sg.depth,sg.p_to[1]-sg.n_b[1]*sg.depth,sg.p_to[2]-sg.n_b[2]*sg.depth],s);
+      else if(p.k==="attach") fw=[sg.p_to[0]-sg.n_b[0]*sg.depth,sg.p_to[1]-sg.n_b[1]*sg.depth,sg.p_to[2]-sg.n_b[2]*sg.depth];
+      break; } }
+    if(fw){ moving={leg:sg.leg,fw:fw,attached:sub==="attach"}; }
+    else { // 收口
+      if(sg.dst==="air") legs[sg.leg]={surf:null,pb:sg.pb_to.slice()}; else legs[sg.leg]={surf:sg.dst,pw:sg.p_to.slice(),depth:sg.depth,n:sg.n_b};
+    }
+  }
+  return {it,legs,pose,moving,sub,moves:it.moves0+(it.seg.type==="move"&&!moving?1:0)};
+}
+// ---------- 绘制 ----------
+const side=document.getElementById("side"), top=document.getElementById("top");
+const SX=x=>x+620, SY=z=>560-z, TX=x=>x+620, TY=y=>270-y;
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function el(tag,attrs){const e=document.createElementNS("http://www.w3.org/2000/svg",tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
+function draw(st){
+  const {legs,pose,moving}=st;
+  while(side.firstChild) side.removeChild(side.firstChild);
+  while(top.firstChild) top.removeChild(top.firstChild);
+  // 面
+  side.appendChild(el("rect",{x:SX(0),y:0,width:60,height:590,fill:css("--glass"),stroke:css("--glass-edge")}));
+  side.appendChild(el("rect",{x:0,y:SY(0),width:680,height:30,fill:css("--floor"),stroke:css("--floor-edge")}));
+  side.appendChild(el("text",{x:SX(30),y:26,"text-anchor":"middle","font-size":"12",fill:css("--muted")})).textContent="玻璃墙";
+  side.appendChild(el("text",{x:20,y:SY(0)+20,"font-size":"12",fill:css("--muted")})).textContent="地面玻璃板";
+  for(let z=100;z<=500;z+=100){ side.appendChild(el("line",{x1:SX(-620),y1:SY(z),x2:SX(0),y2:SY(z),stroke:css("--track"),"stroke-width":"1"}));
+    side.appendChild(el("text",{x:8,y:SY(z)-3,"font-size":"10",fill:css("--muted")})).textContent=z+" mm"; }
+  top.appendChild(el("rect",{x:TX(0),y:0,width:60,height:540,fill:css("--glass"),stroke:css("--glass-edge")}));
+  top.appendChild(el("text",{x:TX(30),y:26,"text-anchor":"middle","font-size":"12",fill:css("--muted")})).textContent="玻璃墙";
+  for(let x=-600;x<=-100;x+=100){ top.appendChild(el("line",{x1:TX(x),y1:0,x2:TX(x),y2:540,stroke:css("--track")}));
+    top.appendChild(el("text",{x:TX(x)+3,y:534,"font-size":"10",fill:css("--muted")})).textContent=x; }
+  // 机身
+  const H=prm.body_half, B=prm.belly;
+  const cornersTop=[[H,H,0],[H,-H,0],[-H,-H,0],[-H,H,0]].map(c=>b2w(c,pose));
+  const cornersBelly=[[H,H,-B],[H,-H,-B],[-H,-H,-B],[-H,H,-B]].map(c=>b2w(c,pose));
+  const sideBox=[cornersTop[0],cornersTop[3],cornersBelly[3],cornersBelly[0]].map(c=>SX(c[0])+","+SY(c[2])).join(" ");
+  side.appendChild(el("polygon",{points:sideBox,fill:css("--body"),stroke:css("--belly"),"stroke-width":"1.5",opacity:"0.92"}));
+  const topBox=cornersTop.map(c=>TX(c[0])+","+TY(c[1])).join(" ");
+  top.appendChild(el("polygon",{points:topBox,fill:css("--body"),stroke:css("--belly"),opacity:"0.85"}));
+  const bellyTop=cornersBelly.map(c=>TX(c[0])+","+TY(c[1])).join(" ");
+  top.appendChild(el("polygon",{points:bellyTop,fill:"none",stroke:css("--belly"),"stroke-dasharray":"3 3"}));
+  // 腿：右侧先画（在后），左侧后画
+  const order=["R3","R2","R1","L3","L2","L1"];
+  for(const n of order){
+    const l=legs[n]; let pb, attached=false, air=false, mv=false;
+    if(moving&&moving.leg===n){ pb=w2b(moving.fw,pose); attached=moving.attached; mv=true; }
+    else if(l.surf){ pb=w2b([l.pw[0]-l.n[0]*l.depth,l.pw[1]-l.n[1]*l.depth,l.pw[2]-l.n[2]*l.depth],pose); attached=true; }
+    else { pb=l.pb; air=true; }
+    const pts=legPoints(n,pb); if(!pts) continue;
+    const w=pts.map(p=>b2w(p,pose));
+    const far=n[0]==="R";
+    const col=far?css("--leg-far"):css("--leg"), sw=far?2.2:3.2;
+    const dash=air?"6 4":"none";
+    side.appendChild(el("polyline",{points:w.slice(0,4).map(p=>SX(p[0])+","+SY(p[2])).join(" "),fill:"none",stroke:col,"stroke-width":sw,"stroke-linejoin":"round","stroke-linecap":"round","stroke-dasharray":dash}));
+    side.appendChild(el("line",{x1:SX(w[3][0]),y1:SY(w[3][2]),x2:SX(w[4][0]),y2:SY(w[4][2]),stroke:css("--axis"),"stroke-width":"1.6",opacity:far?"0.55":"1"}));
+    side.appendChild(el("circle",{cx:SX(w[3][0]),cy:SY(w[3][2]),r:"7",fill:attached?css("--cup-on"):css("--cup-off"),stroke:attached?css("--cup-on"):(air?css("--air"):col),"stroke-width":"1.6","stroke-dasharray":air?"3 2":"none",opacity:far?"0.7":"1"}));
+    side.appendChild(el("circle",{cx:SX(w[0][0]),cy:SY(w[0][2]),r:"3.5",fill:css("--panel"),stroke:col}));
+    side.appendChild(el("text",{x:SX(w[3][0])+(n[0]==="L"?9:-9),y:SY(w[3][2])+4,"font-size":"11","text-anchor":n[0]==="L"?"start":"end",fill:css("--muted")})).textContent=n;
+    top.appendChild(el("polyline",{points:w.slice(0,4).map(p=>TX(p[0])+","+TY(p[1])).join(" "),fill:"none",stroke:col,"stroke-width":sw,"stroke-linejoin":"round","stroke-linecap":"round","stroke-dasharray":dash}));
+    top.appendChild(el("circle",{cx:TX(w[3][0]),cy:TY(w[3][1]),r:"7",fill:attached?css("--cup-on"):css("--cup-off"),stroke:attached?css("--cup-on"):(air?css("--air"):col),"stroke-width":"1.6","stroke-dasharray":air?"3 2":"none"}));
+    top.appendChild(el("circle",{cx:TX(w[0][0]),cy:TY(w[0][1]),r:"3.5",fill:css("--panel"),stroke:col}));
+    top.appendChild(el("text",{x:TX(w[3][0]),y:TY(w[3][1])+(n[0]==="L"?-10:16),"font-size":"11","text-anchor":"middle",fill:css("--muted")})).textContent=n;
+  }
+  // 读数
+  const it=st.it;
+  document.getElementById("r-stage").textContent=it.seg.label+(st.sub&&st.moving?"（"+({lift:"抬离",transfer:"平移",hover:"悬停",descend:"下探",press:"压入",attach:"抽气确认"}[st.sub]||st.sub)+"）":"");
+  document.getElementById("r-pitch").textContent=r2d(pose[2]).toFixed(1)+"°";
+  document.getElementById("r-z").textContent=pose[1].toFixed(0)+" mm";
+  const fh=b2w([Math.max(...LEGS.map(n=>prm.legs[n].mx)),0,0],pose);
+  document.getElementById("r-d").textContent=(-fh[0]).toFixed(0)+" mm";
+  const cnt=LEGS.filter(n=>legs[n].surf&&!(moving&&moving.leg===n)).length;
+  const onWall=LEGS.filter(n=>legs[n].surf==="wall"&&!(moving&&moving.leg===n)).length;
+  document.getElementById("r-contact").textContent=cnt+"（墙 "+onWall+"）";
+  document.getElementById("r-moves").textContent=st.moves;
+  const rows=document.querySelectorAll("#steps tr[data-i]"); rows.forEach(r=>r.classList.toggle("cur",+r.dataset.i===items.indexOf(it)));
+}
+// ---------- 步骤表 ----------
+(function(){
+  const tb=document.createElement("table"); const hd=tb.insertRow(); ["#","动作","俯仰","时长"].forEach(h=>{const th=document.createElement("th");th.textContent=h;hd.appendChild(th);});
+  items.forEach((it,i)=>{ const r=tb.insertRow(); r.dataset.i=i; r.tabIndex=0;
+    const endPose=it.seg.type==="pose"?it.seg.path[it.seg.path.length-1]:it.pose0;
+    [i+1,it.seg.label,r2d(endPose[2]).toFixed(1)+"°",it.dur.toFixed(1)+" s"].forEach(v=>{const td=r.insertCell();td.textContent=v;});
+    r.addEventListener("click",()=>{setTime(it.t0+0.01);}); r.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setTime(it.t0+0.01);}});
+  });
+  document.getElementById("steps").appendChild(tb);
+})();
+// ---------- 播放控制 ----------
+let cur=0, playing=false, last=null, speed=3;
+const seek=document.getElementById("seek"), clock=document.getElementById("clock"), playBtn=document.getElementById("play");
+const fmt=s=>Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0");
+function setTime(x){ cur=Math.max(0,Math.min(TOTAL,x)); draw(stateAt(cur)); seek.value=Math.round(cur/TOTAL*1000); clock.textContent=fmt(cur)+" / "+fmt(TOTAL); }
+function tick(ts){ if(!playing) return; if(last!=null){ cur+=(ts-last)/1000*speed; if(cur>=TOTAL){cur=TOTAL;playing=false;playBtn.textContent="重播";} setTime(cur);} last=ts; if(playing) requestAnimationFrame(tick); }
+playBtn.addEventListener("click",()=>{ if(playing){playing=false;playBtn.textContent="播放";return;} if(cur>=TOTAL) cur=0; playing=true; last=null; playBtn.textContent="暂停"; requestAnimationFrame(tick); });
+document.getElementById("speed").addEventListener("change",e=>{speed=+e.target.value;});
+seek.addEventListener("input",e=>{ setTime(+e.target.value/1000*TOTAL); });
+document.getElementById("prev").addEventListener("click",()=>{ let i=items.findIndex(it=>cur<it.t0+it.dur); if(i<0) i=items.length-1; const it=items[i]; setTime(cur-it.t0>0.5?it.t0+0.01:(i>0?items[i-1].t0+0.01:0)); });
+document.getElementById("next").addEventListener("click",()=>{ let i=items.findIndex(it=>cur<it.t0+it.dur); if(i<0||i>=items.length-1) {setTime(TOTAL);return;} setTime(items[i+1].t0+0.01); });
+const mq=window.matchMedia("(prefers-color-scheme: dark)"); mq.addEventListener("change",()=>setTime(cur));
+new MutationObserver(()=>setTime(cur)).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+setTime(0);
+if(!window.matchMedia("(prefers-reduced-motion: reduce)").matches){ playBtn.click(); }
+})();
+</script>
+</body></html>

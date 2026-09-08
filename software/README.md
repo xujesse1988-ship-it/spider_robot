@@ -31,6 +31,7 @@ python scripts/sim_walk.py --gif walk.gif        # 0. 无硬件仿真，先看�
 python scripts/servo_center.py                   # 1. 装配标定：全舵机回中，装舵盘
 python scripts/stand_up.py                       # 2. 站立测试 + 传感器读数
 python scripts/walk_teleop.py                    # 3. 键盘遥控行走 (wasd/qe)；m 键进/出原地踏步（身体不动、手动逐脚：t/g/b=左前中后、y/h/n=右前中后，按一下抬起 70mm 再按踩下，`--march-lift` 改高度；该状态只认这六个键+m+ESC，其余按键忽略；全程六阀通电排气，出踏步时抬着的脚先滑回站位）；装气路后阀策略 --vent auto（默认）：站起/走动时六阀通电排气让吸盘通大气、站着不动断电；on 常通；off 不碰阀=脚被被动真空吸住抬不起（对照，v 键轮换）
+python scripts/mount_wall.py --mock              # 3c. 地-墙过渡首批实验（P5 探索线，09-06）：地面玻璃板六足吸住→选腿 w 上墙（coxa 摆到指正前、墙前 15mm 悬停、i 压入吸附）/ g 回地 / b 正后方 / h 收起悬空，↑↓ 俯仰、←→ 离贴墙、[] 升降（接触足世界系钉死、中间位姿逐个预检）。引擎 `hexapod/mount.py`，可行性分析 `tools/mount_analysis.py`，序列规划 `tools/mount_plan.py`；E1/E2/E3 步骤见脚本头
 python scripts/voice_check.py                    # 4. 语音自检：录 5 秒→回放→识别→TTS（要 ReSpeaker Lite，见 docs/VOICE-GUIDE.md）
 python scripts/voice_enroll.py                   # 5. （可选）声纹注册：行走指令只听你，急停谁喊都停；末尾补录"确认/退出"等短词锚点，已有档案用 --append 只补短词
 python scripts/voice_teleop.py                   # 6. 语音遥控行走（“小蜘蛛，前进”=一直走喊停为止、“前进三秒”=到点自停、“停下”急停；键盘照旧；阀排气同 walk_teleop）
@@ -41,7 +42,7 @@ python scripts/voice_climb.py                    # 7. 爬墙语音壳：climb_wa
 
 语音一键安装（树莓派）：`bash scripts/voice_setup.sh`，依赖见 `requirements.txt` 语音段。
 
-黑匣子与死机验尸：`climb_walk`/`body_lean`/`walk_teleop`/`voice_teleop` 每跑一次落一份 `logs/<tag>_时间.log`（tag=climb/lean/walk/voice；事件+遥测，`hexapod/runlog.py`）。09-02 起启动段逐步落盘（每路阀线圈通电前、舵机继电器合闸前后母线电压），并由 `hexapod/powerlog.py` 后台线程每 0.1s 记一行 Pi 5 的 5V 输入电压与欠压标志（`TLM 电源`，需 `vcgencmd`，用户在 video 组）。启动死机（灯绿→红、SSH 失联）排查：先 `bash scripts/pi_forensics.sh setup`（内核日志持久化，一次即可）→ 复现 → 重新上电 → `bash scripts/pi_forensics.sh check`；`check` 里的 `power_reset` 两次死机后都是 2，但 09-06 对照发现正常关机后也读 2，本机无区分力，仅作记录；死后红灯常亮本身就是 PMIC 断电的证据。详见 docs/P4-GUIDE.md 常见问题。
+黑匣子与死机验尸：`climb_walk`/`body_lean`/`walk_teleop`/`voice_teleop`/`mount_wall` 每跑一次落一份 `logs/<tag>_时间.log`（tag=climb/lean/walk/voice/mount；事件+遥测，`hexapod/runlog.py`）。09-02 起启动段逐步落盘（每路阀线圈通电前、舵机继电器合闸前后母线电压），并由 `hexapod/powerlog.py` 后台线程每 0.1s 记一行 Pi 5 的 5V 输入电压与欠压标志（`TLM 电源`，需 `vcgencmd`，用户在 video 组）。启动死机（灯绿→红、SSH 失联）排查：先 `bash scripts/pi_forensics.sh setup`（内核日志持久化，一次即可）→ 复现 → 重新上电 → `bash scripts/pi_forensics.sh check`；`check` 里的 `power_reset` 两次死机后都是 2，但 09-06 对照发现正常关机后也读 2，本机无区分力，仅作记录；死后红灯常亮本身就是 PMIC 断电的证据。详见 docs/P4-GUIDE.md 常见问题。
 
 ## 上电顺序（重要）
 

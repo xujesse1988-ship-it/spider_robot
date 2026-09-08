@@ -773,3 +773,207 @@ def test_double_speed_halves_motion_duration_preserving_targets_and_hold_time():
 def test_invalid_motion_speed_rejected(speed):
     with pytest.raises(EntryError, match='speed'):
         Geometry(Settings(speed=speed))
+
+
+def shift_bench():
+    b = Bench(MockDriver(), MockVacuumIO(),
+              Settings(self_stand=True, dual_front=True, pitch_probe=True,
+                       shift_probe=True, max_press=2))
+    run(b, 'start')
+    front_attached(b, 'L1')
+    front_attached(b, 'R1')
+    return b
+
+
+def test_shift_sweep_preserves_world_anchors_with_fk_and_returns_original_outputs():
+    from hexapod.kinematics import leg_fk
+    b = shift_bench()
+    initial = b.pose.copy()
+    pulses = list(b.drv.pulses)
+    run(b, 'hold')
+    run(b, 'pitch 0.5')
+    run(b, 'pitch 0')
+    run(b, 'hold')
+    for offset in (*range(5, 31, 5), *range(25, -1, -5)):
+        previous = b.pose.body_x
+        b.command(f'shift {offset}')
+        samples = [previous]
+        while b.busy:
+            b.tick()
+            assert not b.frozen
+            assert b.pose.feet == initial.feet
+            assert b.pose.pitch == 0 and b.pose.body_z == 90
+            assert b.attached == {'L1', 'R1'}
+            samples.append(b.pose.body_x)
+            # Decode actual commanded pulses and use FK, independently of the
+            # body's inverse transform, to recover all six fixed world targets.
+            for leg in b.geom.cfg.legs:
+                angles = []
+                for cal in (leg.coxa, leg.femur, leg.tibia):
+                    angle = cal.attach_deg + (b.drv.pulses[cal.channel]
+                        - (cal.us_m45+cal.us_p45)/2) * 90 / (cal.sign*(cal.us_p45-cal.us_m45))
+                    angles.append(math.radians(angle))
+                x, y, z = leg_fk(b.geom.cfg, angles[0], angles[1], math.pi-angles[2])
+                a = math.radians(leg.mount_angle_deg)
+                world = (b.pose.body_x+leg.mount_x+math.cos(a)*x-math.sin(a)*y,
+                         leg.mount_y+math.sin(a)*x+math.cos(a)*y, b.pose.body_z+z)
+                assert world == pytest.approx(initial.feet[leg.name], abs=1e-8)
+        assert samples == sorted(samples, reverse=offset < previous)
+        assert samples[-1] == offset
+        assert max(abs(y-x) for x,y in zip(samples,samples[1:])) <= 5*b.DT+1e-9
+        if offset > previous:
+            run(b, 'hold')
+    assert b.pose == initial and b.drv.pulses == pytest.approx(pulses)
+    for n in ('R1', 'L1'):
+        run(b, f'release {n}')
+        run(b, f'return {n}')
+    run(b, 'sit')
+    assert b.seated
+
+
+def test_shift_requires_opt_in_and_fresh_hold_but_retreat_does_not():
+    for settings in (Settings(shift_probe=True), Settings(self_stand=True, shift_probe=True)):
+        with pytest.raises(EntryError, match='shift_probe requires'):
+            Geometry(settings)
+    b = pitch_bench()
+    with pytest.raises(EntryError, match='requires --shift-probe'):
+        b.command('shift 5')
+    b = shift_bench()
+    with pytest.raises(EntryError, match='Use hold'):
+        b.command('shift 5')
+    run(b, 'hold')
+    run(b, 'shift 5')
+    with pytest.raises(EntryError, match='Use hold'):
+        b.command('shift 10')
+    run(b, 'shift 0')
+    with pytest.raises(EntryError, match='Use hold'):
+        b.command('shift 5')
+
+
+@pytest.mark.parametrize('offset', ['nan', 'inf', '-1', '0', '6', '30', '31'])
+def test_invalid_shift_does_not_output_or_mutate_state(offset):
+    b = shift_bench()
+    run(b, 'hold')
+    pose, count = b.pose.copy(), len(b.drv.history)
+    with pytest.raises(EntryError, match='Shift probe:'):
+        b.command('shift '+offset)
+    assert b.pose == pose and len(b.drv.history) == count and not b.busy
+    assert b.hold_pose == pose
+
+
+@pytest.mark.parametrize('cmd', ['pitch 0.5', 'prepare L1', 'touch L1', 'press L1 2',
+                                'attach L1', 'release L1', 'return R1', 'sit'])
+def test_shift_blocks_foot_operations_and_pitch_until_origin(cmd):
+    b = shift_bench()
+    run(b, 'hold')
+    run(b, 'shift 5')
+    pose, count, valves = b.pose.copy(), len(b.drv.history), list(b.io.valve)
+    with pytest.raises(EntryError):
+        b.command(cmd)
+    assert b.pose == pose and len(b.drv.history) == count and b.io.valve == valves and not b.busy
+
+
+def test_shift_rejects_pitch_and_missing_support():
+    b = shift_bench()
+    run(b, 'hold')
+    run(b, 'pitch 0.5')
+    with pytest.raises(EntryError, match='Return pitch to 0'):
+        b.command('shift 5')
+    run(b, 'pitch 0')
+    run(b, 'release R1')
+    with pytest.raises(EntryError, match='two confirmed wall cups'):
+        b.command('shift 5')
+
+
+@pytest.mark.parametrize('fault', ['disabled', 'over_cap', 'negative', 'nan', 'pitch',
+                                 'body_height', 'floor_target', 'wall_surface'])
+def test_shift_geometry_guards_cannot_be_bypassed_by_scheduling(fault):
+    b = shift_bench()
+    pose, surfaces = b.pose.copy(), dict(b.surfaces)
+    pose.body_x = 5
+    if fault == 'disabled':
+        b.geom = Geometry(replace(b.geom.s, shift_probe=False))
+    elif fault in ('over_cap', 'negative', 'nan'):
+        pose.body_x = {'over_cap':31, 'negative':-1, 'nan':float('nan')}[fault]
+    elif fault == 'pitch':
+        pose.pitch = 0.5
+    elif fault == 'body_height':
+        pose.body_z = 89
+    elif fault == 'floor_target':
+        pose.feet['L2'] = (*pose.feet['L2'][:2], 1)
+    else:
+        surfaces['L1'] = None
+    with pytest.raises(EntryError):
+        b.geom.solve(pose, surfaces)
+
+
+def test_shift_recovery_invalidates_hold_and_pressure_loss_freezes_before_motion():
+    b = shift_bench()
+    run(b, 'hold')
+    b.io.step = lambda dt: None
+    b.io.foot_kpa[0] = -40
+    b.tick()
+    assert b.hold_pose is None and not b.frozen
+    b.io.foot_kpa[0] = -70
+    b.tick()
+    with pytest.raises(EntryError, match='Use hold'):
+        b.command('shift 5')
+    run(b, 'hold')
+    b.command('shift 5')
+    b.tick()
+    pose, count = b.pose.copy(), len(b.drv.history)
+    b.io.foot_kpa[3] = -40
+    b.tick()
+    assert not b.frozen and b.busy and b.pose == pose and len(b.drv.history) == count
+    b.io.foot_kpa[3] = -20
+    b.tick()
+    assert b.frozen and not b.busy and b.pose == pose and len(b.drv.history) == count
+    assert b.io.valve[0] and b.io.valve[3] and not b.io.pump
+    with pytest.raises(EntryError, match='Frozen'):
+        b.command('shift 0')
+
+
+def test_shift_return_preflight_failure_is_atomic():
+    b = shift_bench()
+    run(b, 'hold')
+    pose, count = b.pose.copy(), len(b.drv.history)
+    original_path = b.geom.path
+    def path(start, goals, surfaces, dt=0.05):
+        if start.body_x > 0 and goals[-1].body_x == 0:
+            raise EntryError('return route unavailable')
+        return original_path(start, goals, surfaces, dt)
+    b.geom.path = path
+    with pytest.raises(EntryError, match='return route unavailable'):
+        b.command('shift 5')
+    assert not b.busy and b.pose == pose and len(b.drv.history) == count and b.hold_pose == pose
+
+
+def test_shift_cli_checks_full_sweep_and_retreat_before_opening_live_io(tmp_path, monkeypatch):
+    import json
+    import runpy
+    from pathlib import Path
+    script = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/ground_wall_probe.py'))
+    report = tmp_path / 'shift.json'
+    flags = ['--self-stand', '--dual-front', '--pitch-probe', '--shift-probe', '--approach-gap', '60']
+    assert script['main'](flags+['--mock', '--demo', '--report', str(report)]) == 0
+    data = json.loads(report.read_text())
+    shifts = [s for s in data['segments'] if s['command'].startswith('shift ')]
+    assert [s['state']['commanded_body_x_mm'] for s in shifts] == [5,10,15,20,25,30,25,20,15,10,5,0]
+    assert all(s['state']['commanded_pitch_deg'] == 0 for s in shifts)
+    assert shifts[5]['state']['commanded_front_hip_wall_distance_mm'] == {'L1':130, 'R1':130}
+    assert data['segments'][-1]['state']['seated']
+    original = script['simulate']
+    def rejected(settings, scenario, pitch):
+        result = original(settings, scenario, pitch)
+        assert settings.shift_probe and settings.pitch_probe and pitch == 2
+        assert any(s['command'] == 'shift 30' for s in result['segments'])
+        assert result['segments'][-1]['state']['commanded_body_x_mm'] == 0
+        return {'passed':False, 'reason':'test full shift preflight rejected'}
+    monkeypatch.setitem(script['main'].__globals__, 'simulate', rejected)
+    monkeypatch.setattr(script['sys'].stdin, 'isatty', lambda: True)
+    def forbidden(*args, **kwargs):
+        pytest.fail('Live driver opened before successful preflight')
+    monkeypatch.setitem(script['main'].__globals__, 'Servo2040Driver', forbidden)
+    with pytest.raises(SystemExit) as e:
+        script['main'](flags+['--live', '--demo-pitch', '0'])
+    assert e.value.code == 2

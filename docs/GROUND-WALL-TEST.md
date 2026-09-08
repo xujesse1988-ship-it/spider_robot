@@ -4,6 +4,8 @@
 
 验证配置逐步开启：`--self-stand`从地面自行站起、一次验证一只前足；再加`--dual-front`验证双前足同时吸墙、四足留地的静态保持与逐足返回；在此基础上加`--pitch-probe`验证0～2°小幅抬头。单独使用`--live`则使用原承托模式，要求六足确认吸附后才能抬身。都不提供中后足转墙或整机自由翻身。默认只做离线检查；只有`--live`会打开树莓派硬件。离线PASS只代表当前模型和控制流程通过，不代表实物无碰撞或可承重。
 
+用户确认避墙轨迹目前正常后，默认运动速度提高一倍：`--speed 20`（原10），范围1～20 mm/s，腿部移动、站起/趴下及俯仰运动时间约减半，轨迹落点不变。`--speed 10`可恢复原速度。俯仰速度按同一倍率缩放；吸附/释放确认0.5秒、`hold`连续10秒及所有故障保护计时均不变，控制周期仍为50 ms。
+
 ## prepare剐蹭修正：先在远处抬高，再向墙接近
 
 用户反馈：L1吸墙后，R1在`prepare R1`过程中剐蹭墙面，并观察到抬前足时机身前部下沉。旧轨迹先升到离地50 mm，再斜向上接近墙前20 mm，升高和靠墙同时发生。尚无实测姿态数据，不能仅凭此现象把原因全部归为下沉。
@@ -27,7 +29,7 @@ python3 software/scripts/ground_wall_probe.py --live --self-stand --dual-front -
 
 ## 自行站立模式（无需机身下方垫支撑物）
 
-2026-09-07新增。启动的蹲姿与站姿采用`stand_up.py`相同的地面落足半径130 mm；六足在地面上的指令落点固定，机身髋高从20 mm缓慢升到默认90 mm。默认约11秒。它不是把六只脚在空中收起再踩下；第一拍使能仍与`stand_up.py`一样，发预设蹲姿，不能读取真实关节位置。
+2026-09-07新增。启动的蹲姿与站姿采用`stand_up.py`相同的地面落足半径130 mm；六足在地面上的指令落点固定，机身髋高从20 mm缓慢升到默认90 mm。当前默认运动约5.25秒（`--speed 10`约10.5秒，不含上电等待）。它不是把六只脚在空中收起再踩下；第一拍使能仍与`stand_up.py`一样，发预设蹲姿，不能读取真实关节位置。
 
 1. 将机器人以原来运行`stand_up.py`前的自然趴姿放在平地上，头朝光滑墙面，机身与墙面摆正，前髋轴距墙160 mm。停止其他控制程序、确保没有脚吸住墙面。无需在机身下垫块，首次前足测试保留防跌安全绳，正常时不承重。
 2. 先离线运行：
@@ -97,7 +99,7 @@ python3 software/scripts/ground_wall_probe.py --live --self-stand --dual-front
 
 在单足循环、双前足静态保持与逐足返回已完成的基础上，新增`--pitch-probe`。本阶段观察固定足端目标时机身小幅转动的表现；四只中后足继续留地承重，不能让两只前足提起整机。仍需能接住整机的安全绳或承托，记录是否分担重量，支撑装置应允许本轮小角度运动而非把机身夹死。
 
-**第一次只做0°→0.5°→0°。** `pitch`是绝对目标角，不是累加值。每次变化最多0.5°，角速度模型峰值不超过0.25°/s；0.5°段默认约3秒。新模式硬上限2°（`--pitch-limit`可降低上限，不能将其扩大到2°以上），每次继续增加角度前必须在当前姿态完成一次`hold`。向0°回退不要求新做10秒保持，但两只墙足仍需压力合格；没有自动退回水平或故障恢复。
+**第一次只做0°→0.5°→0°。** `pitch`是绝对目标角，不是累加值。每次变化最多0.5°，当前默认角速度模型峰值不超过0.5°/s；0.5°段约1.5秒（`--speed 10`恢复0.25°/s、约3秒）。新模式硬上限2°（`--pitch-limit`可降低上限，不能将其扩大到2°以上），每次继续增加角度前必须在当前姿态完成一次`hold`。向0°回退不要求新做10秒保持，但两只墙足仍需压力合格；没有自动退回水平或故障恢复。
 
 六个世界坐标足端指令点保持固定，机身绕身体原点抬头，原点高度保持90 mm。**原日志`commanded_hip_height_mm`在倾斜时表示原点高度，不能理解为所有髋轴仍离地90 mm。** 新增`commanded_body_origin_height_mm`及`commanded_hip_heights_mm`：0.5°时模型前髋约90.729 mm、后髋约89.271 mm；这些仍是指令值，没有IMU或实际关节位置反馈。地面足未抽气，其吸盘姿态和实际接触点会受顺应性影响，软件固定目标不代表实物不会滚动、滑动或翘边。
 
@@ -106,21 +108,31 @@ python3 software/scripts/ground_wall_probe.py --live --self-stand --dual-front
 同步更新脚本及`hexapod/wall_entry.py`，结束原运行、六足回到未吸附趴姿后，先离线检查再实机运行：
 
 ```bash
-python3 software/scripts/ground_wall_probe.py --self-stand --dual-front --pitch-probe --mock --demo --report /tmp/wall-entry-pitch-probe.json
-python3 software/scripts/ground_wall_probe.py --live --self-stand --dual-front --pitch-probe
+python3 software/scripts/ground_wall_probe.py --self-stand --dual-front --pitch-probe --approach-gap 60 --mock --demo --report /tmp/wall-entry-pitch-probe.json
+python3 software/scripts/ground_wall_probe.py --live --self-stand --dual-front --pitch-probe --approach-gap 60
 ```
 
 离线demo检查0→0.5→1→1.5→2→1.5→1→0.5→0及各姿态保持、释放返回和趴下。它不操作硬件；实机初轮按下表只试0.5°，不要照搬整个demo角度序列。
 
 | 阶段 | 逐条输入的命令 | 观察和完成条件 |
 |---|---|---|
-| 建立双足吸附 | `start`；按上一节依次完成L1、R1的`prepare`/`touch`/`press 2`/`attach` | 每段完成，两足各自确认吸附 |
+| 自行站起 | `start` | 等`SEGMENT complete`，核对实际髋高和墙距 |
+| L1准备 | `prepare L1` | 等`SEGMENT complete`，观察抬腿及墙前间隙 |
+| L1触墙 | `touch L1` | 等`SEGMENT complete`，目视确认吸盘接触墙面 |
+| L1压紧 | `press L1 2` | 等`SEGMENT complete`；累计压入2 mm，只执行一次 |
+| L1吸附 | `attach L1` | 等`ATTACH confirmed L1`后才能准备R1 |
+| R1准备 | `prepare R1` | 等`SEGMENT complete`，观察L1密封、机身下沉及剐蹭 |
+| R1触墙 | `touch R1` | 等`SEGMENT complete`，目视确认吸盘接触墙面 |
+| R1压紧 | `press R1 2` | 等`SEGMENT complete`；累计压入2 mm，只执行一次 |
+| R1吸附 | `attach R1` | 等`ATTACH confirmed R1`后进入水平基线保持 |
 | 水平基线 | `hold`，完成后`status` | 记录两足压力、电流和实际机身姿态 |
 | 首次抬头 | `pitch 0.5` | 等`SEGMENT complete`；观察机身、地面足、吸盘边缘和结构 |
 | 小角度保持 | `hold`，完成后`status` | 两足连续10秒压力达标，并记录物理表现 |
 | 回到水平 | `pitch 0` | 等`SEGMENT complete`，目视核对姿态 |
 | 水平复查 | `hold`，完成后`status` | 对比开始与回程后的读数和外观 |
 | 收尾 | `release R1`→`return R1`→`release L1`→`return L1`→`sit`→`quit` | 每条独立输入；先等释放确认再收腿，先等回地面再释放另一足，趴下后退出 |
+
+以上命令逐条输入，等待对应完成提示后再继续，不要整段粘贴。命令中的腿名不可省略，例如完整压紧命令是`press L1 2`，不是`press 2`。
 
 `hold_confirmed_pitch_deg`显示当前仍有效的保持角度；动作、放气或采样到墙足压力回升到−50 kPa以上会使结果失效，不能用旧结果继续加大角度。抬头时禁止释放、回腿及`sit`，先以每步≤0.5°回到0°。若已冻结，无法再执行这些回程命令，必须先由承托接管整机后人工取机。
 

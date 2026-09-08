@@ -1,0 +1,1610 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>六足机器人：地面到墙面过渡步态</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="六足机器人：地面到墙面过渡步态" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;六足机器人：地面到墙面过渡步态&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 10px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover,
+.nav-link:not(:disabled):not([aria-disabled=&quot;true&quot;]):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled=&quot;true&quot;] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, var(--font-size-normal));
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+
+  .form-range::-webkit-slider-runnable-track {
+    height: 44px;
+  }
+
+  .form-range::-moz-range-track {
+    height: 44px;
+  }
+
+  .form-range::-webkit-slider-thumb {
+    margin-top: 12px;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div id=&quot;wall-gait-explainer&quot;&gt;
+  &lt;div class=&quot;viz-row&quot;&gt;&lt;strong id=&quot;wg-title&quot;&gt;六足地面 → 墙面&lt;/strong&gt;&lt;span id=&quot;wg-proof&quot; class=&quot;viz-badge&quot;&gt;已实测阶段&lt;/span&gt;&lt;/div&gt;
+  &lt;div class=&quot;text-small&quot;&gt;骨架示意 · 第8–10步仅几何采样通过 · 第11步起仍为待计算概念&lt;/div&gt;
+  &lt;div class=&quot;wg-views&quot;&gt;
+    &lt;div class=&quot;wg-view&quot;&gt;
+      &lt;div class=&quot;text-small&quot;&gt;斜视图 · 六足位置&lt;/div&gt;
+      &lt;svg class=&quot;wg-scene&quot; role=&quot;img&quot; aria-label=&quot;六足机器人依次从地面转移到墙面；实测阶段与待验证概念分开标示&quot;&gt;&lt;title&gt;逐足转移与支撑交接&lt;/title&gt;&lt;desc&gt;方形脚标表示地面接触，实心圆表示墙面吸附，空心圆表示正在移动。每次只移动一只脚。&lt;/desc&gt;&lt;/svg&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;wg-view&quot;&gt;
+      &lt;div class=&quot;text-small&quot;&gt;侧视图 · X–Z 平面&lt;/div&gt;
+      &lt;svg class=&quot;wg-side&quot; role=&quot;img&quot; aria-label=&quot;从机器人右侧观察机身俯仰和足端运动&quot;&gt;&lt;title&gt;同步侧视图&lt;/title&gt;&lt;desc&gt;右腿实线，左腿虚线；同位置同状态足端合并标注。关节折线为示意，非逆解姿态。&lt;/desc&gt;&lt;/svg&gt;
+      &lt;div class=&quot;text-small tabular-nums&quot; id=&quot;wg-side-values&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;text-small&quot;&gt;侧视图：右腿实线，左腿虚线；重合足合并标注。关节折线为示意。&lt;/div&gt;
+  &lt;div id=&quot;wg-feet&quot; class=&quot;wg-feet&quot; aria-label=&quot;六足接触状态&quot;&gt;&lt;/div&gt;
+  &lt;div class=&quot;viz-controls&quot;&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; id=&quot;wg-play&quot;&gt;播放&lt;/button&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn&quot; id=&quot;wg-prev&quot;&gt;上一步&lt;/button&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn&quot; id=&quot;wg-next&quot;&gt;下一步&lt;/button&gt;
+    &lt;label class=&quot;form-label&quot;&gt;阶段 &lt;select id=&quot;wg-select&quot; class=&quot;form-select&quot; aria-label=&quot;选择上墙阶段&quot;&gt;&lt;/select&gt;&lt;/label&gt;
+  &lt;/div&gt;
+  &lt;label class=&quot;form-label&quot; for=&quot;wg-progress&quot;&gt;演示进度 &lt;span id=&quot;wg-position&quot; class=&quot;tabular-nums&quot;&gt;1 / 17&lt;/span&gt;&lt;/label&gt;
+  &lt;input class=&quot;form-range&quot; id=&quot;wg-progress&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;17000&quot; value=&quot;0&quot; step=&quot;1&quot; aria-label=&quot;拖动查看动作过程&quot;&gt;
+  &lt;div id=&quot;wg-detail&quot; class=&quot;text-small&quot; aria-live=&quot;polite&quot;&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;style&gt;
+#wall-gait-explainer { display: grid; gap: 12px; }
+#wall-gait-explainer .wg-views { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+#wall-gait-explainer .wg-view { min-width: 0; }
+#wall-gait-explainer .wg-scene, #wall-gait-explainer .wg-side { width: 100%; display: block; overflow: visible; }
+#wall-gait-explainer .wg-scene text, #wall-gait-explainer .wg-side text { fill: var(--foreground); font-size: var(--font-size-base); font-weight: 400; }
+@media(max-width:679px) { #wall-gait-explainer .wg-views { grid-template-columns: minmax(0,1fr); } }
+#wall-gait-explainer .wg-feet { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 8px; }
+#wall-gait-explainer .wg-foot { display: flex; gap: 5px; align-items: center; white-space: nowrap; }
+#wall-gait-explainer .wg-mark { width: 9px; height: 9px; flex: 0 0 9px; background: var(--muted-foreground); }
+#wall-gait-explainer .wg-foot[data-contact=&quot;wall&quot;] .wg-mark { background: var(--viz-series-1); border-radius: 50%; }
+#wall-gait-explainer .wg-foot[data-contact=&quot;air&quot;] .wg-mark { background: transparent; border: 2px solid var(--viz-series-2); border-radius: 50%; }
+@media(max-width:480px) { #wall-gait-explainer .wg-feet { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+&lt;/style&gt;
+&lt;script&gt;
+(() =&gt; {
+  const root = document.getElementById(&#x27;wall-gait-explainer&#x27;);
+  const scene = root.querySelector(&#x27;.wg-scene&#x27;);
+  const sideScene = root.querySelector(&#x27;.wg-side&#x27;);
+  const sideValues = root.querySelector(&#x27;#wg-side-values&#x27;);
+  const select = root.querySelector(&#x27;#wg-select&#x27;);
+  const slider = root.querySelector(&#x27;#wg-progress&#x27;);
+  const play = root.querySelector(&#x27;#wg-play&#x27;);
+  const previous = root.querySelector(&#x27;#wg-prev&#x27;);
+  const next = root.querySelector(&#x27;#wg-next&#x27;);
+  const title = root.querySelector(&#x27;#wg-title&#x27;);
+  const proof = root.querySelector(&#x27;#wg-proof&#x27;);
+  const detail = root.querySelector(&#x27;#wg-detail&#x27;);
+  const position = root.querySelector(&#x27;#wg-position&#x27;);
+  const names = [&#x27;L1&#x27;,&#x27;L2&#x27;,&#x27;L3&#x27;,&#x27;R1&#x27;,&#x27;R2&#x27;,&#x27;R3&#x27;];
+  const mounts = {L1:[83.5,63,0], L2:[0,81.5,0], L3:[-83.5,63,0], R1:[83.5,-63,0], R2:[0,-81.5,0], R3:[-83.5,-63,0]};
+  const wall = 243.5;
+  const base = {body:[0,0,90],angle:0,feet:{L1:[158.1,169.5,0],L2:[0,211.5,0],L3:[-158.1,169.5,0],R1:[158.1,-169.5,0],R2:[0,-211.5,0],R3:[-158.1,-169.5,0]}, contacts:Object.fromEntries(names.map(n=&gt;[n,&#x27;floor&#x27;]))};
+  const clone = s =&gt; JSON.parse(JSON.stringify(s));
+  const lerp = (a,b,t) =&gt; a.map((x,i)=&gt;x+(b[i]-x)*t);
+  const smooth = t =&gt; t*t*(3-2*t);
+  const stages = [];
+  let last = clone(base);
+  function stage(label,level,note,change,paths={},active=null,kind=&#x27;move&#x27;) {
+    const end=clone(last); change(end);
+    stages.push({label,level,note,start:clone(last),end,paths,active,kind}); last=end;
+  }
+  stage(&#x27;地面站立&#x27;,&#x27;实测流程&#x27;,&#x27;六足接地；墙在机头正前方。&#x27;,()=&gt;{});
+  stage(&#x27;L1：先在远处抬高&#x27;,&#x27;实测流程&#x27;,&#x27;保持原落脚点的水平位置，先抬至目标高度。&#x27;,s=&gt;{s.feet.L1=[158.1,169.5,224];s.contacts.L1=&#x27;air&#x27;;},{},&#x27;L1&#x27;);
+  stage(&#x27;L1：接近、压紧、吸附&#x27;,&#x27;实测流程&#x27;,&#x27;先停在墙前6 cm；touch、press、attach分开执行，虚拟足端含2 mm压入。&#x27;,s=&gt;{s.feet.L1=[wall+2,63,224];s.contacts.L1=&#x27;wall&#x27;;},{L1:[[158.1,169.5,224],[wall-60,63,224],[wall,63,224],[wall+2,63,224]]},&#x27;L1&#x27;);
+  stage(&#x27;R1：先在远处抬高&#x27;,&#x27;实测流程&#x27;,&#x27;L1保持吸附，中后四足留地；观察前部下沉。&#x27;,s=&gt;{s.feet.R1=[158.1,-169.5,224];s.contacts.R1=&#x27;air&#x27;;},{},&#x27;R1&#x27;);
+  stage(&#x27;R1：接近、压紧、吸附&#x27;,&#x27;实测流程&#x27;,&#x27;单足完成密封后再进入下一阶段；虚拟足端含2 mm压入。&#x27;,s=&gt;{s.feet.R1=[wall+2,-63,224];s.contacts.R1=&#x27;wall&#x27;;},{R1:[[158.1,-169.5,224],[wall-60,-63,224],[wall,-63,224],[wall+2,-63,224]]},&#x27;R1&#x27;);
+  stage(&#x27;双前足保持&#x27;,&#x27;实测通过&#x27;,&#x27;两足连续10秒压力达标；压力不是承重测量。&#x27;,()=&gt;{}, {},null,&#x27;hold&#x27;);
+  stage(&#x27;小幅抬头 → 回到水平&#x27;,&#x27;脚本待实测确认&#x27;,&#x27;现有pitch-probe首轮为0°→0.5°→0°；演示不放大角度。&#x27;,()=&gt;{}, {},null,&#x27;probe&#x27;);
+  stage(&#x27;候选：保持水平前移3 cm&#x27;,&#x27;几何采样通过 · 未实测&#x27;,&#x27;原点高9 cm、俯仰0°，六足目标固定；前足模型偏角约1.65°。&#x27;,s=&gt;{s.body=[30,0,90];s.angle=0;});
+  stage(&#x27;候选：L2转移到墙面&#x27;,&#x27;几何采样通过 · 未实测&#x27;,&#x27;落点高19 cm、向左11 cm；触墙偏角9.50°，压入2 mm后8.60°。&#x27;,s=&gt;{s.feet.L2=[wall+2,110,190];s.contacts.L2=&#x27;wall&#x27;;},{L2:[[0,211.5,0],[0,211.5,190],[wall-60,110,190],[wall,110,190],[wall+2,110,190]]},&#x27;L2&#x27;);
+  stage(&#x27;候选：R2转移到墙面&#x27;,&#x27;几何采样通过 · 未实测&#x27;,&#x27;落点高19 cm、向右11 cm；保持其余足目标，受力与实体碰撞仍待验证。&#x27;,s=&gt;{s.feet.R2=[wall+2,-110,190];s.contacts.R2=&#x27;wall&#x27;;},{R2:[[0,-211.5,0],[0,-211.5,190],[wall-60,-110,190],[wall,-110,190],[wall+2,-110,190]]},&#x27;R2&#x27;);
+  stage(&#x27;概念：后足逐只调整落点&#x27;,&#x27;后续概念 · 尚未计算&#x27;,&#x27;从此步起未按新候选重算；后足可能需要调整地面落点。&#x27;,s=&gt;{s.feet.L3=[-20,150,0];s.feet.R3=[-20,-150,0];},{},null,&#x27;rear-step&#x27;);
+  stage(&#x27;概念：前足逐只重新选点&#x27;,&#x27;待验证概念&#x27;,&#x27;不能假定最初两个墙面落点一直够用；每次仅释放一足。&#x27;,s=&gt;{s.feet.L1=[wall,63,300];s.feet.R1=[wall,-63,300];},{},null,&#x27;front-step&#x27;);
+  stage(&#x27;概念：继续调整机身&#x27;,&#x27;待验证概念&#x27;,&#x27;先验证墙足受力、关节余量与吸盘抗剥离能力。&#x27;,s=&gt;{s.body=[115,0,150];s.angle=55;});
+  stage(&#x27;概念：L3转移到墙面&#x27;,&#x27;待验证概念&#x27;,&#x27;墙面支撑能接管载荷后，才允许后足离地。&#x27;,s=&gt;{s.feet.L3=[wall,63,100];s.contacts.L3=&#x27;wall&#x27;;},{L3:[[-20,150,0],[50,150,100],[wall-60,63,100],[wall,63,100]]},&#x27;L3&#x27;);
+  stage(&#x27;概念：R3转移到墙面&#x27;,&#x27;待验证概念&#x27;,&#x27;最后一只地面足离地前，必须完成支撑交接验证。&#x27;,s=&gt;{s.feet.R3=[wall,-63,100];s.contacts.R3=&#x27;wall&#x27;;},{R3:[[-20,-150,0],[50,-150,100],[wall-60,-63,100],[wall,-63,100]]},&#x27;R3&#x27;);
+  stage(&#x27;概念：完成竖直姿态调整&#x27;,&#x27;待验证概念&#x27;,&#x27;六足在墙面；完整过渡的连续路径尚未证明。&#x27;,s=&gt;{s.body=[145,0,190];s.angle=90;});
+  stage(&#x27;接入墙面逐足步态&#x27;,&#x27;现有墙面步态 · 接入待验证&#x27;,&#x27;默认轮序R3→L1→R2→L3→R1→L2；一次移一足。&#x27;,s=&gt;{for(const n of names)s.feet[n][2]+=35;s.body[2]+=35;},{},null,&#x27;wall-walk&#x27;);
+  const footRows={};
+  for(const n of names){const e=document.createElement(&#x27;div&#x27;);e.className=&#x27;wg-foot text-small&#x27;;e.dataset.contact=&#x27;floor&#x27;;e.innerHTML=&#x27;&lt;span class=&quot;wg-mark&quot; aria-hidden=&quot;true&quot;&gt;&lt;/span&gt;&lt;span&gt;&#x27;+n+&#x27;&lt;/span&gt;&lt;span class=&quot;wg-contact&quot;&gt;地面&lt;/span&gt;&#x27;;root.querySelector(&#x27;#wg-feet&#x27;).append(e);footRows[n]=e;}
+  stages.forEach((s,i)=&gt;{const o=document.createElement(&#x27;option&#x27;);o.value=i;o.textContent=(i+1)+&#x27;. &#x27;+s.label;select.append(o);});
+  slider.max=stages.length*1000;
+  const NS=&#x27;http://www.w3.org/2000/svg&#x27;;
+  function el(tag,attrs={},text){const n=document.createElementNS(NS,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;return n;}
+  const structure=el(&#x27;g&#x27;),ghost=el(&#x27;g&#x27;),legs=el(&#x27;g&#x27;),bodyG=el(&#x27;g&#x27;),feetG=el(&#x27;g&#x27;),labels=el(&#x27;g&#x27;);
+  scene.append(structure,ghost,legs,bodyG,feetG,labels);
+  const sideDrawing=el(&#x27;g&#x27;);sideScene.append(sideDrawing);
+  let width=736,height=440,scale=1,tx=0,ty=0;
+  let sideWidth=360,sideHeight=300,sideScale=1,sideTx=0,sideTy=0;
+  function project([x,y,z]){return [tx+scale*(x+.42*y),ty-scale*(z+.17*y)];}
+  function sideProject([x,y,z]){return [sideTx+sideScale*x,sideTy-sideScale*z];}
+  function points(a,projection=project){return a.map(p=&gt;projection(p).join(&#x27;,&#x27;)).join(&#x27; &#x27;);}
+  function pathLine(group,ps,attrs={},projection=project){group.append(el(&#x27;polyline&#x27;,{points:points(ps,projection),fill:&#x27;none&#x27;,stroke:&#x27;var(--muted-foreground)&#x27;,&#x27;stroke-width&#x27;:2,&#x27;stroke-linecap&#x27;:&#x27;round&#x27;,&#x27;stroke-linejoin&#x27;:&#x27;round&#x27;,...attrs}));}
+  function label(group,p,text,attrs={},projection=project){const[x,y]=projection(p);group.append(el(&#x27;text&#x27;,{x,y,...attrs},text));}
+  function transform(p,s){const r=s.angle*Math.PI/180,c=Math.cos(r),a=Math.sin(r);return[s.body[0]+c*p[0]-a*p[2],s.body[1]+p[1],s.body[2]+a*p[0]+c*p[2]];}
+  function legPoints(n,s){
+    const hip=transform(mounts[n],s),side=n[0]===&#x27;L&#x27;?1:-1;
+    const elbow=transform([mounts[n][0],mounts[n][1]+side*26,0],s);
+    const knee=lerp(elbow,s.feet[n],.47);knee[2]+=28*Math.cos(s.angle*Math.PI/180);knee[0]-=24*Math.sin(s.angle*Math.PI/180);knee[1]+=side*20;
+    return [hip,elbow,knee,s.feet[n]];
+  }
+  function route(ps,t){const v=Math.min(ps.length-1-1e-8,t*(ps.length-1)),i=Math.floor(v);return lerp(ps[i],ps[i+1],smooth(v-i));}
+  function frame(i,t){const d=stages[i],s=clone(d.start),u=smooth(t);s.body=lerp(d.start.body,d.end.body,u);s.angle=d.start.angle+(d.end.angle-d.start.angle)*u;s.moving=[];
+    for(const n of names){s.feet[n]=d.paths[n]?route(d.paths[n],t):lerp(d.start.feet[n],d.end.feet[n],u);s.contacts[n]=t&gt;=.985?d.end.contacts[n]:d.start.contacts[n];}
+    if(d.active&amp;&amp;t&lt;.985){s.contacts[d.active]=&#x27;air&#x27;;s.moving=[d.active];}
+    if(d.kind===&#x27;probe&#x27;)s.angle=.5*Math.sin(Math.PI*t)**2;
+    if(d.kind===&#x27;rear-step&#x27;||d.kind===&#x27;front-step&#x27;){
+      const pair=d.kind===&#x27;rear-step&#x27;?[&#x27;L3&#x27;,&#x27;R3&#x27;]:[&#x27;L1&#x27;,&#x27;R1&#x27;];
+      pair.forEach((n,k)=&gt;{const v=Math.max(0,Math.min(1,t*2-k));s.feet[n]=lerp(d.start.feet[n],d.end.feet[n],smooth(v));if(v&gt;0&amp;&amp;v&lt;.985){if(d.kind===&#x27;rear-step&#x27;)s.feet[n][2]+=40*Math.sin(Math.PI*v);else s.feet[n][0]-=45*Math.sin(Math.PI*v);s.contacts[n]=&#x27;air&#x27;;s.moving.push(n);}});
+    }
+    if(d.kind===&#x27;wall-walk&#x27;){
+      s.body=d.start.body.slice();const order=[&#x27;R3&#x27;,&#x27;L1&#x27;,&#x27;R2&#x27;,&#x27;L3&#x27;,&#x27;R1&#x27;,&#x27;L2&#x27;];
+      order.forEach((n,k)=&gt;{const v=Math.max(0,Math.min(1,t*7-k));s.feet[n]=lerp(d.start.feet[n],d.end.feet[n],smooth(v));if(v&gt;0&amp;&amp;v&lt;.985){s.feet[n][0]-=35*Math.sin(Math.PI*v);s.contacts[n]=&#x27;air&#x27;;s.moving.push(n);}});
+      s.body=lerp(d.start.body,d.end.body,smooth(Math.max(0,t*7-6)));
+    }
+    return s;
+  }
+  function drawStage(i,t){const d=stages[i],s=frame(i,t);for(const g of[structure,ghost,legs,bodyG,feetG,labels])g.replaceChildren();
+    structure.append(el(&#x27;polygon&#x27;,{points:points([[-225,-245,0],[wall,-245,0],[wall,245,0],[-225,245,0]]),fill:&#x27;var(--muted)&#x27;,opacity:.4}));
+    structure.append(el(&#x27;polygon&#x27;,{points:points([[wall,-245,0],[wall,245,0],[wall,245,440],[wall,-245,440]]),fill:&#x27;var(--viz-series-1)&#x27;,opacity:.08}));
+    pathLine(structure,[[wall,-245,0],[wall,245,0]],{stroke:&#x27;var(--foreground)&#x27;,&#x27;stroke-width&#x27;:1.5});
+    pathLine(structure,[[wall,245,0],[wall,245,440]],{stroke:&#x27;var(--border)&#x27;,&#x27;stroke-width&#x27;:1});
+    label(labels,[-200,-210,0],&#x27;地面&#x27;,{&#x27;dy&#x27;:22});label(labels,[wall,215,420],&#x27;墙面&#x27;,{&#x27;text-anchor&#x27;:&#x27;end&#x27;});
+    if(d.paths[d.active])pathLine(ghost,d.paths[d.active],{stroke:&#x27;var(--viz-series-2)&#x27;,&#x27;stroke-dasharray&#x27;:&#x27;4 5&#x27;,&#x27;stroke-width&#x27;:1.5,opacity:.6});
+    for(const n of [&#x27;L3&#x27;,&#x27;L2&#x27;,&#x27;L1&#x27;,&#x27;R3&#x27;,&#x27;R2&#x27;,&#x27;R1&#x27;]){
+      const [hip,elbow,knee,foot]=legPoints(n,s);
+      pathLine(legs,[hip,elbow,knee,foot],{stroke:s.contacts[n]===&#x27;air&#x27;?&#x27;var(--viz-series-2)&#x27;:&#x27;var(--muted-foreground)&#x27;,&#x27;stroke-width&#x27;:s.contacts[n]===&#x27;air&#x27;?3.5:2.5,opacity:n[0]===&#x27;L&#x27;?.65:1});
+      const[kx,ky]=project(knee);legs.append(el(&#x27;circle&#x27;,{cx:kx,cy:ky,r:3,fill:&#x27;var(--foreground)&#x27;}));
+    }
+    bodyG.append(el(&#x27;polygon&#x27;,{points:points([[-94,-50,0],[94,-50,0],[106,0,0],[94,50,0],[-94,50,0]].map(p=&gt;transform(p,s))),fill:&#x27;var(--secondary)&#x27;,stroke:&#x27;var(--foreground)&#x27;,&#x27;stroke-width&#x27;:1.5}));
+    pathLine(bodyG,[transform([-55,0,0],s),transform([80,0,0],s)],{stroke:&#x27;var(--foreground)&#x27;,&#x27;stroke-width&#x27;:2});
+    pathLine(bodyG,[transform([63,-12,0],s),transform([80,0,0],s),transform([63,12,0],s)],{stroke:&#x27;var(--foreground)&#x27;,&#x27;stroke-width&#x27;:2});
+    for(const n of names){const f=s.feet[n],[x,y]=project(f),c=s.contacts[n],moving=c===&#x27;air&#x27;;
+      if(c===&#x27;floor&#x27;)feetG.append(el(&#x27;rect&#x27;,{x:x-4,y:y-4,width:8,height:8,fill:&#x27;var(--muted-foreground)&#x27;}));
+      else feetG.append(el(&#x27;circle&#x27;,{cx:x,cy:y,r:moving?6:5,fill:moving?&#x27;var(--background)&#x27;:&#x27;var(--viz-series-1)&#x27;,stroke:moving?&#x27;var(--viz-series-2)&#x27;:&#x27;var(--viz-series-1)&#x27;,&#x27;stroke-width&#x27;:2}));
+      const side=n[0]===&#x27;L&#x27;?1:-1;
+      label(labels,f,n,{&#x27;dx&#x27;:side&gt;0?11:-11,&#x27;dy&#x27;:c===&#x27;floor&#x27;?-10:5,&#x27;text-anchor&#x27;:side&gt;0?&#x27;start&#x27;:&#x27;end&#x27;});
+      const e=footRows[n];e.dataset.contact=c;e.querySelector(&#x27;.wg-contact&#x27;).textContent=c===&#x27;wall&#x27;?&#x27;墙吸&#x27;:c===&#x27;floor&#x27;?&#x27;地面&#x27;:&#x27;移动&#x27;;
+    }
+    const wallCount=names.filter(n=&gt;s.contacts[n]===&#x27;wall&#x27;).length;
+    const floorCount=names.filter(n=&gt;s.contacts[n]===&#x27;floor&#x27;).length;
+    scene.setAttribute(&#x27;aria-label&#x27;,d.label+&#x27;；&#x27;+wallCount+&#x27;足墙吸，&#x27;+floorCount+&#x27;足地面，&#x27;+s.moving.length+&#x27;足移动。动作顺序示意，非可执行轨迹。&#x27;);
+    drawSide(s,d);
+    for(const svg of [scene,sideScene]){svg.dataset.stage=i;svg.dataset.fraction=t;svg.dataset.body=JSON.stringify(s.body);svg.dataset.pitch=s.angle;}
+  }
+  function drawSide(s,d){
+    sideDrawing.replaceChildren();
+    const line=(ps,attrs={})=&gt;pathLine(sideDrawing,ps,attrs,sideProject);
+    const text=(p,value,attrs={})=&gt;label(sideDrawing,p,value,attrs,sideProject);
+    const [wx,wy]=sideProject([wall,0,440]);
+    sideDrawing.append(el(&#x27;rect&#x27;,{x:wx,y:wy,width:12,height:440*sideScale,fill:&#x27;var(--viz-series-1)&#x27;,opacity:.12}));
+    line([[-225,0,0],[wall,0,0]],{stroke:&#x27;var(--foreground)&#x27;,&#x27;stroke-width&#x27;:1.5});
+    line([[wall,0,0],[wall,0,440]],{stroke:&#x27;var(--foreground)&#x27;,&#x27;stroke-width&#x27;:1.5});
+    text([-210,0,0],&#x27;地面&#x27;,{&#x27;dy&#x27;:26});text([wall,0,440],&#x27;墙面&#x27;,{&#x27;dx&#x27;:-8,&#x27;dy&#x27;:0,&#x27;text-anchor&#x27;:&#x27;end&#x27;});
+    if(d.paths[d.active])line(d.paths[d.active],{stroke:&#x27;var(--viz-series-2)&#x27;,&#x27;stroke-dasharray&#x27;:&#x27;3 5&#x27;,&#x27;stroke-width&#x27;:1.5,opacity:.6});
+    for(const n of [&#x27;R3&#x27;,&#x27;R2&#x27;,&#x27;R1&#x27;,&#x27;L3&#x27;,&#x27;L2&#x27;,&#x27;L1&#x27;]){
+      const left=n[0]===&#x27;L&#x27;,air=s.contacts[n]===&#x27;air&#x27;;
+      line(legPoints(n,s),{stroke:air?&#x27;var(--viz-series-2)&#x27;:&#x27;var(--muted-foreground)&#x27;,&#x27;stroke-width&#x27;:left?1.5:3,&#x27;stroke-dasharray&#x27;:left?&#x27;5 5&#x27;:&#x27;none&#x27;,opacity:left?.8:.6,&#x27;data-leg&#x27;:n});
+    }
+    const hull=[[-94,0,-7],[94,0,-7],[106,0,0],[94,0,7],[-94,0,7]].map(p=&gt;transform(p,s));
+    sideDrawing.append(el(&#x27;polygon&#x27;,{points:points(hull,sideProject),fill:&#x27;var(--secondary)&#x27;,stroke:&#x27;var(--foreground)&#x27;,&#x27;stroke-width&#x27;:1.5}));
+    const [bx,bz]=sideProject(s.body);
+    sideDrawing.append(el(&#x27;circle&#x27;,{cx:bx,cy:bz,r:3,fill:&#x27;var(--foreground)&#x27;}));
+    const groups=[];
+    for(const n of names){
+      const p=s.feet[n],c=s.contacts[n];
+      const match=groups.find(g=&gt;g.contact===c&amp;&amp;Math.abs(g.p[0]-p[0])&lt;.01&amp;&amp;Math.abs(g.p[2]-p[2])&lt;.01);
+      if(match)match.names.push(n);else groups.push({p,contact:c,names:[n]});
+    }
+    const placed=[];
+    for(const g of groups.sort((a,b)=&gt;b.p[2]-a.p[2])){
+      const [x,y]=sideProject(g.p),air=g.contact===&#x27;air&#x27;;
+      if(g.contact===&#x27;floor&#x27;)sideDrawing.append(el(&#x27;rect&#x27;,{x:x-4,y:y-4,width:8,height:8,fill:&#x27;var(--muted-foreground)&#x27;}));
+      else sideDrawing.append(el(&#x27;circle&#x27;,{cx:x,cy:y,r:air?6:5,fill:air?&#x27;var(--background)&#x27;:&#x27;var(--viz-series-1)&#x27;,stroke:air?&#x27;var(--viz-series-2)&#x27;:&#x27;var(--viz-series-1)&#x27;,&#x27;stroke-width&#x27;:2}));
+      const value=g.names.join(&#x27;/&#x27;);
+      const labelY=y+(g.contact===&#x27;wall&#x27;?5:-10);
+      const node=el(&#x27;text&#x27;,{x:x-10,y:labelY,&#x27;text-anchor&#x27;:&#x27;end&#x27;},value);sideDrawing.append(node);
+      let bounds=node.getBBox();
+      for(let attempt=0;attempt&lt;12&amp;&amp;placed.some(b=&gt;bounds.x&lt;b.x+b.width+4&amp;&amp;bounds.x+bounds.width+4&gt;b.x&amp;&amp;bounds.y&lt;b.y+b.height+4&amp;&amp;bounds.y+bounds.height+4&gt;b.y);attempt++){
+        node.setAttribute(&#x27;y&#x27;,Number(node.getAttribute(&#x27;y&#x27;))+(g.contact===&#x27;wall&#x27;?18:-18));bounds=node.getBBox();
+      }
+      if(bounds.x&lt;4){node.setAttribute(&#x27;text-anchor&#x27;,&#x27;start&#x27;);node.setAttribute(&#x27;x&#x27;,x+10);bounds=node.getBBox();}
+      if(Number(node.getAttribute(&#x27;y&#x27;))!==labelY)sideDrawing.insertBefore(el(&#x27;line&#x27;,{x1:x-6,y1:y,x2:bounds.x+bounds.width+3,y2:bounds.y+bounds.height/2,stroke:&#x27;var(--muted-foreground)&#x27;,&#x27;stroke-width&#x27;:1}),node);
+      placed.push(bounds);
+    }
+    sideValues.textContent=&#x27;原点高度 &#x27;+(s.body[2]/10).toFixed(1)+&#x27; cm · 俯仰 &#x27;+s.angle.toFixed(1)+&#x27;°&#x27;;
+    sideScene.setAttribute(&#x27;aria-label&#x27;,d.label+&#x27;；侧视图，机身原点高&#x27;+(s.body[2]/10).toFixed(1)+&#x27;厘米，俯仰&#x27;+s.angle.toFixed(1)+&#x27;度。&#x27;+(s.moving.length?&#x27;移动足：&#x27;+s.moving.join(&#x27;、&#x27;):&#x27;无足移动&#x27;)+&#x27;。关节折线为示意。&#x27;);
+  }
+  let index=0,fraction=0,playing=false,lastTime=0,lastLabel=-1,raf=0;
+  const reduced=window.matchMedia(&#x27;(prefers-reduced-motion: reduce)&#x27;).matches;
+  function render(){drawStage(index,fraction);select.value=index;slider.value=Math.round((index+fraction)*1000);position.textContent=(index+1)+&#x27; / &#x27;+stages.length;previous.disabled=index===0&amp;&amp;fraction===0;next.disabled=index===stages.length-1&amp;&amp;fraction===1;
+    if(index!==lastLabel){title.textContent=stages[index].label;proof.textContent=stages[index].level;detail.textContent=stages[index].note;lastLabel=index;}
+  }
+  function pause(){playing=false;play.textContent=&#x27;播放&#x27;;cancelAnimationFrame(raf);lastTime=0;}
+  function seek(i,t=0){pause();index=Math.max(0,Math.min(stages.length-1,i));fraction=t;render();}
+  function tick(time){if(!playing)return;if(!lastTime)lastTime=time;const dt=Math.min(100,time-lastTime);lastTime=time;fraction+=dt/(stages[index].kind===&#x27;wall-walk&#x27;?7500:2600);if(fraction&gt;=1){if(index===stages.length-1){fraction=1;pause();render();return;}index++;fraction=0;}render();raf=requestAnimationFrame(tick);}
+  play.addEventListener(&#x27;click&#x27;,()=&gt;{if(playing){pause();return;}if(reduced){seek(index&lt;stages.length-1?index+1:0,1);return;}if(index===stages.length-1&amp;&amp;fraction===1){index=0;fraction=0;}playing=true;play.textContent=&#x27;暂停&#x27;;lastTime=0;raf=requestAnimationFrame(tick);});
+  previous.addEventListener(&#x27;click&#x27;,()=&gt;seek(index-1,1));next.addEventListener(&#x27;click&#x27;,()=&gt;seek(index+1,1));select.addEventListener(&#x27;change&#x27;,()=&gt;seek(Number(select.value),1));
+  slider.addEventListener(&#x27;input&#x27;,()=&gt;{const v=Number(slider.value)/1000;seek(Math.min(stages.length-1,Math.floor(v)),v&gt;=stages.length?1:v-Math.floor(v));});
+  function resize(){
+    width=scene.parentElement.clientWidth;height=width&lt;480?290:350;
+    scene.setAttribute(&#x27;viewBox&#x27;,&#x27;0 0 &#x27;+width+&#x27; &#x27;+height);scene.style.height=height+&#x27;px&#x27;;
+    scale=Math.min((width-64)/670,(height-65)/495);tx=30+scale*330;ty=height-46;
+    sideWidth=sideScene.parentElement.clientWidth;sideHeight=height;
+    sideScene.setAttribute(&#x27;viewBox&#x27;,&#x27;0 0 &#x27;+sideWidth+&#x27; &#x27;+sideHeight);sideScene.style.height=sideHeight+&#x27;px&#x27;;
+    sideScale=Math.min((sideWidth-90)/470,(sideHeight-65)/440);sideTx=60+225*sideScale;sideTy=sideHeight-46;render();
+  }
+  new ResizeObserver(resize).observe(root);document.addEventListener(&#x27;visibilitychange&#x27;,()=&gt;{if(document.hidden)pause();});resize();
+})();
+&lt;/script&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerdown&quot;, handlePointer);
+    document.removeEventListener(&quot;pointercancel&quot;, handlePointer);
+    document.removeEventListener(&quot;click&quot;, handleTouchClick);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerdown&quot;, handlePointer);
+  document.addEventListener(&quot;pointercancel&quot;, handlePointer);
+  document.addEventListener(&quot;click&quot;, handleTouchClick);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-tabs&quot;&gt;
+(() =&gt; {
+  const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
+  const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
+  const selectTab = (selected) =&gt; {
+    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+    for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
+      const active = tab === selected;
+      tab.classList.toggle(&quot;active&quot;, active);
+      tab.setAttribute(&quot;aria-selected&quot;, String(active));
+      const id = tab.getAttribute(&quot;aria-controls&quot;);
+      const panel = id &amp;&amp; document.getElementById(id);
+      if (panel != null) {
+        panel.hidden = id !== panelId;
+        if (!panel.hidden &amp;&amp; selected.id) {
+          panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
+        }
+      }
+    }
+  };
+  const interact = (event) =&gt; {
+    const tab = event.target?.closest?.(selector);
+    if (event.defaultPrevented || tab == null || tab.matches(disabled)) {
+      return;
+    }
+    if (event.type === &quot;click&quot;) {
+      selectTab(tab);
+      return;
+    }
+    const tabs = Array.from(
+      tab.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;),
+    ).filter((candidate) =&gt; !candidate.matches(disabled));
+    const current = tabs.indexOf(tab);
+    let next;
+    if (event.key === &quot;ArrowRight&quot; || event.key === &quot;ArrowDown&quot;) {
+      next = (current + 1) % tabs.length;
+    } else if (event.key === &quot;ArrowLeft&quot; || event.key === &quot;ArrowUp&quot;) {
+      next = (current + tabs.length - 1) % tabs.length;
+    } else if (event.key === &quot;Home&quot;) {
+      next = 0;
+    } else if (event.key === &quot;End&quot;) {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    tabs[next].focus();
+    selectTab(tabs[next]);
+  };
+
+  for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
+    const selected =
+      list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+    if (selected != null) {
+      selectTab(selected);
+    }
+  }
+  document.addEventListener(&quot;click&quot;, interact);
+  document.addEventListener(&quot;keydown&quot;, interact);
+  window.addEventListener(&quot;pagehide&quot;, () =&gt; {
+    document.removeEventListener(&quot;click&quot;, interact);
+    document.removeEventListener(&quot;keydown&quot;, interact);
+  }, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+</body>
+</html>

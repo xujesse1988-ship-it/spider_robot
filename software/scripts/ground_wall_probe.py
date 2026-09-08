@@ -25,6 +25,8 @@ from hexapod.config import LEG_NAMES
 
 HELP = """
 Every command needs Enter; wait for SEGMENT complete before the next command.
+Motion defaults to twice the original speed (--speed 20; use --speed 10 to restore).
+Pressure confirmation, hold and fault timers keep their original durations.
   start             supported: extend legs; --self-stand: crouch -> stand at target height
   prepare L1/R1     lift above floor anchor to wall-target height, then approach
                     to --approach-gap before wall (default 60 mm)
@@ -51,6 +53,18 @@ no floor press/attachment, two-front-foot transfer or pitch. Use sit then quit.
 With --self-stand --dual-front: attach first front foot before preparing second;
 use hold after both attach. Release/return one fully before releasing the other.
 Keep four middle/rear feet on floor. Use a catch tether/support.
+Dual-front setup from an unloaded floor crouch (enter one line at a time):
+  start             wait for SEGMENT complete
+  prepare L1        wait for SEGMENT complete; inspect clearance
+  touch L1          wait for SEGMENT complete; visually confirm wall contact
+  press L1 2        wait for SEGMENT complete; execute once (2 mm total)
+  attach L1         wait for ATTACH confirmed L1 before preparing R1
+  prepare R1        wait for SEGMENT complete; inspect sag and clearance
+  touch R1          wait for SEGMENT complete; visually confirm wall contact
+  press R1 2        wait for SEGMENT complete; execute once (2 mm total)
+  attach R1         wait for ATTACH confirmed R1
+  hold              wait for HOLD confirmed L1 R1
+  status            record baseline pressure, power and commanded pose
 Without --pitch-probe, dual-front mode has no pitch. With --pitch-probe:
 hold -> pitch 0.5 -> hold -> pitch 0 -> hold for the first experiment.
 Return to commanded pitch 0 before releasing either wall foot. No body translation.
@@ -184,7 +198,8 @@ def main(argv=None):
     ap.add_argument('--approach-gap', type=float, default=60,
                     help='prepared cup-centre gap before wall, mm (20..80, default 60); touch traverses this gap')
     ap.add_argument('--body-height', type=float, default=90)
-    ap.add_argument('--speed', type=float, default=10)
+    ap.add_argument('--speed', type=float, default=20,
+                    help='foot/body peak mm/s, also scales pitch rate (1..20, default 20; original speed 10)')
     ap.add_argument('--max-press', type=float,
                     help='total virtual overtravel limit, mm (default: 2 with --dual-front, otherwise 18)')
     ap.add_argument('--pitch-limit', type=float, default=5)

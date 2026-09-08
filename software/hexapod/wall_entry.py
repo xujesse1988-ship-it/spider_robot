@@ -23,7 +23,7 @@ class Settings:
     height: float = 224.0        # wall lip centre above floor
     approach_gap: float = 60.0   # lip-centre distance from wall at prepared hover
     body_height: float = 90.0
-    speed: float = 10.0          # virtual foot mm/s
+    speed: float = 20.0          # virtual foot mm/s; pitch rate scales from 10 mm/s baseline
     tilt_limit: float = 15.0
     max_press: float = 18.0
     pitch_limit: float = 5.0      # experimental envelope, not a validated limit
@@ -40,7 +40,7 @@ class Settings:
             raise EntryError('pitch_probe requires self_stand and dual_front')
         bounds = dict(distance=(120, 200), height=(150, 280),
                       approach_gap=(20, 80),
-                      body_height=(70, 100), speed=(1, 15),
+                      body_height=(70, 100), speed=(1, 20),
                       tilt_limit=(1, 15), max_press=(2, 18), pitch_limit=(1, 10))
         for name, (lo, hi) in bounds.items():
             v = getattr(self, name)
@@ -166,7 +166,7 @@ class Geometry:
         self.solve(start, surfaces)
         for goal in waypoints:
             distance = max(math.dist(prev.feet[n], goal.feet[n]) for n in LEG_NAMES)
-            pitch_speed = 0.25 if self.s.pitch_probe else 0.5
+            pitch_speed = (0.25 if self.s.pitch_probe else 0.5) * self.s.speed/10.0
             duration = max(distance/self.s.speed, abs(goal.pitch-prev.pitch)/pitch_speed,
                            abs(self.hip_height(goal)-self.hip_height(prev))/self.s.speed, dt)
             # smoothstep peak speed is 1.5 times mean

@@ -532,8 +532,8 @@ def test_pitch_probe_full_sweep_keeps_world_anchors_and_returns_original_pulses(
             samples.append(b.pose.pitch)
         assert samples == sorted(samples, reverse=angle < start)
         assert samples[-1] == angle
-        # 0.25 deg/s peak limit, including smoothstep ramp.
-        assert max(abs(y-x) for x, y in zip([start]+samples, samples)) <= 0.25*b.DT+1e-9
+        # Default doubled speed: 0.5 deg/s peak, including smoothstep ramp.
+        assert max(abs(y-x) for x, y in zip([start]+samples, samples)) <= 0.5*b.DT+1e-9
         if angle:
             assert b.drv.pulses != initial_pulses
         run(b, 'hold')
@@ -736,3 +736,40 @@ def test_new_hover_moves_knee_back_and_adds_cup_clearance(name):
 def test_invalid_approach_gap_is_rejected_before_hardware(gap):
     with pytest.raises(EntryError, match='approach_gap'):
         Geometry(Settings(approach_gap=gap))
+
+
+def test_double_speed_halves_motion_duration_preserving_targets_and_hold_time():
+    slow = Bench(MockDriver(), MockVacuumIO(),
+                 Settings(self_stand=True, dual_front=True, pitch_probe=True, max_press=2, speed=10))
+    fast = Bench(MockDriver(), MockVacuumIO(),
+                 Settings(self_stand=True, dual_front=True, pitch_probe=True, max_press=2))
+    for cmd in ('start', 'prepare L1', 'touch L1', 'press L1 2', 'attach L1',
+                'prepare R1', 'touch R1', 'press R1 2', 'attach R1', 'hold',
+                'pitch 0.5', 'pitch 0', 'release R1', 'return R1',
+                'release L1', 'return L1', 'sit'):
+        frames = []
+        elapsed = []
+        for b in (slow, fast):
+            b.command(cmd)
+            frames.append(len(b.frames))
+            ticks = 0
+            while b.busy and not b.frozen:
+                b.tick()
+                ticks += 1
+                assert ticks < 10000
+            assert not b.frozen
+            elapsed.append(ticks*b.DT)
+        if frames[0]:
+            # Up to three independently rounded waypoints per command.
+            assert frames[0]/2 <= frames[1] <= frames[0]/2+3
+        if cmd == 'hold':
+            assert elapsed == pytest.approx([10, 10])
+        assert fast.pose == slow.pose
+        assert fast.drv.pulses == pytest.approx(slow.drv.pulses)
+        assert fast.attached == slow.attached
+
+
+@pytest.mark.parametrize('speed', [0, 21, float('nan'), float('inf')])
+def test_invalid_motion_speed_rejected(speed):
+    with pytest.raises(EntryError, match='speed'):
+        Geometry(Settings(speed=speed))

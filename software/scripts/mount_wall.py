@@ -44,9 +44,12 @@
 用法:
   python mount_wall.py --mock                  # 无硬件干跑
   python mount_wall.py --dry                   # 真舵机 + 仿真气路（吸附确认是假的）；
-                                             # 六阀全程通电到排气位、退出断线圈——
+                                             # 真阀只在需要时通电排气：站起时六阀排气、
+                                             # 站定后全断；哪条腿要抬（进 VENT 相位）
+                                             # 就只给那一路通电，落回支撑后断电——
                                              # 09-08 实测：阀不通电时站起一压，吸盘经
-                                             # 单向阀被挤成被动真空锁脚，1 w 抬不起来
+                                             # 单向阀被挤成被动真空锁脚；六阀长通又
+                                             # 发热严重（≈25W）
   python mount_wall.py --no-tank --wall-dist 140
   python mount_wall.py --no-tank --wall-dist 140 --wall-height 230 --pitch-step 3
   善后（放气+回地面站姿）：python climb_walk.py --release
@@ -72,7 +75,7 @@ from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               GroundVent, Pi5VacuumIO,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.mount import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
-                           LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM)
+                           LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, SWING_PHASES)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
@@ -111,9 +114,10 @@ def main():
     ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--mock", action="store_true", help="无硬件干跑")
     ap.add_argument("--dry", action="store_true",
-                    help="真舵机 + 仿真气路：吸附确认是假的，纯排练动作；六阀全程通电"
-                         "到排气位（吸盘通大气），否则站起一压就被被动真空锁脚"
-                         "（09-08 实测）；泵不动，退出断线圈")
+                    help="真舵机 + 仿真气路：吸附确认是假的，纯排练动作；真阀按需排气："
+                         "站起时六阀通电排气、站定后全断，抬腿前只给那一路通电、落回"
+                         "支撑后断电（否则站起一压被被动真空锁脚；六阀长通又发热，"
+                         "09-08 实测）；泵不动，退出断线圈")
     ap.add_argument("--no-tank", action="store_true",
                     help="无罐：泵直抽歧管；没有储备真空（地面/上墙均已多次实测可用）")
     ap.add_argument("--wall-dist", type=float, default=140.0,
@@ -215,8 +219,8 @@ def main():
             vent = GroundVent(io_factory=lambda: Pi5VacuumIO(6, on_step=step))
             step("干跑：阀板初始化，六阀线圈按足串行通电（排气位，0.2s 间隔）")
             vent.set(True)
-            step("干跑：六阀已到排气位（吸盘通大气，全程保持，退出断线圈）")
-            log.note("dry=1 六阀排气位保持（GroundVent on）")
+            step("干跑：六阀已到排气位（站起期间吸盘通大气；站定后断电，抬腿前按路通电）")
+            log.note("dry=1 真阀按需排气：站起六阀通电→站定全断→抬腿那一路通电")
     else:
         step("阀板初始化：六阀线圈按足串行通电（排气位，0.2s 间隔）")
         io = Pi5VacuumIO(6, on_step=step)
@@ -257,6 +261,19 @@ def main():
     def say(msg, ev=None):
         print("\n" + msg)
         log.event(ev or msg)
+
+    def dry_valve_tick():
+        """干跑真阀按腿相位排气：摆动中（VENT→…→WAIT）线圈通电=排气，回 STANCE
+        或收在空中（AIR，吸盘悬空攒不出真空）断电。set_valve(False)=排气位=通电。"""
+        vio = vent.io
+        if vio is None:
+            return
+        for i, n in enumerate(LEG_NAMES):
+            want_open = eng.phase_of[n] in SWING_PHASES
+            if (not vio.valve[i]) != want_open:
+                vio.set_valve(i, not want_open)
+                log.event(f"干跑阀 {n} {'通电排气' if want_open else '断电'}"
+                          f"（{eng.phase_of[n].value}）")
 
     def io_freeze(e):
         if not eng.frozen:
@@ -310,8 +327,12 @@ def main():
         log.event(f"爬墙站位就位，进入就位暂停；{pose_txt()}")
         pwr.relax()
         if args.dry:
-            print("⚠ 干跑模式：吸附是仿真的、泵不动；真阀已拉到排气位并全程保持"
-                  "（吸盘通大气），退出时断线圈")
+            # 站起时六盘被压缩已排完气，站定不动攒不出真空：现在把六线圈断掉省热。
+            # 之后由 dry_valve_tick 按腿相位通电：进 VENT 起到回 STANCE 止
+            vent.set(False)
+            log.event("干跑：站定，六阀线圈断电；抬腿前按路自动通电排气")
+            print("⚠ 干跑模式：吸附是仿真的、泵不动。站起时六阀已排气、现已断电；"
+                  "哪条腿要抬就给那一路通电排气、落回支撑后断电（只热一路线圈）")
         if args.no_tank:
             print("⚠ 无罐模式：泵直抽歧管，没有储备真空——断电不保真空")
         print(f"起始位姿：{pose_txt()}（--wall-dist 量的是前腿 coxa 轴到墙面）")
@@ -538,6 +559,11 @@ def main():
             except OSError as e:
                 io_freeze(e)
             watch.poll()
+            if vent is not None:
+                try:
+                    dry_valve_tick()
+                except OSError as e:
+                    io_freeze(e)
 
             hover_now = eng.hover_leg
             if hover_now and hover_now != hover_was:

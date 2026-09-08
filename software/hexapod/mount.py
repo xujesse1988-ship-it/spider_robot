@@ -43,7 +43,8 @@ from .kinematics import leg_ik, WorkspaceError
 _EPS = 1e-6
 COXA_MAX_DEG = 60.0        # coxa 相对中性的最大偏摆（前腿指正前/后腿指正后需 55°）
 JOINT_MARGIN_DEG = 2.0     # 舵机电气行程（attach±90°）内缩量
-BELLY_MM = 40.0            # 髋平面以下机身/舱体厚度（假设，待量）
+BELLY_MM = 40.0            # 髋平面（femur 轴平面）以下舱体厚度：09-08 实测约 35，取 40 留余量；
+                           # 舱体前后不超出框架外廓（±BODY_HALF_MM 成立）
 BODY_HALF_MM = 100.0       # 机身外廓半长/半宽（frame 198×205）
 BODY_CLEAR_MM = 5.0        # 机身/腹面离任何面的最小净空
 KNEE_CLEAR_MM = 8.0        # 膝离任何面的最小净空

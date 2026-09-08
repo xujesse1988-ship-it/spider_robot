@@ -22,7 +22,7 @@ DELTA = CFG.cup_delta_deg          # -25.2
 TOL = 12.0                         # climb.py TILT_BAND_DEG
 IK_MARGIN = 3.0                    # climb.py D_SAFE_MARGIN
 COXA_MAX = 60.0                    # coxa 相对中性的最大偏摆（前腿指正前/后腿指正后需 55°，待实机核）
-BELLY = 40.0                       # 髋平面以下机身/舱体厚度（假设，待量）
+BELLY = 40.0                       # 髋平面以下舱体厚度：09-08 实测约 35，取 40 留余量
 X_WALL = 0.0
 d2r, r2d = math.radians, math.degrees
 

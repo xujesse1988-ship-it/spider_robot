@@ -278,6 +278,7 @@ for(const sg of P.segs){
     if(sg.dst==="air") legs[sg.leg]={surf:null,pb:sg.pb_to.slice()}; else legs[sg.leg]={surf:sg.dst,pw:sg.p_to.slice(),depth:sg.depth,n:sg.n_b};
     moves++;
   }
+  items.push(it);
   t+=it.dur;
 }
 const TOTAL=t;

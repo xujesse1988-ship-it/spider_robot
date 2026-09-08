@@ -11,8 +11,11 @@
 用卷尺量前腿 coxa 舵机轴到玻璃面的水平距离填 --wall-dist（默认 140）。
 全程安全绳，人在旁。
 
-流程与 body_lean 同口径：缓慢站起（爬墙站位）-> 就位暂停（p）-> 六足逐足
-压入吸附 -> 键盘实验。
+流程与 body_lean 同口径：缓慢站起（爬墙站位）-> 就位暂停（量距、p）-> 六足
+逐足压入吸附 -> 键盘实验。
+  就位暂停时：卷尺量前腿 coxa 舵机轴到玻璃面的水平距离（站起后才准——上电
+  瞬间机身可能挪几毫米），与 --wall-dist 不符就按 d 输入实测值回车，引擎把
+  参考位置改过来并重算可落足带，再按 p。启动后不能再改
   1~6  选腿（1=L1 2=L2 3=L3 4=R1 5=R2 6=R3）
   w    选中腿→墙面：抬起、coxa 摆到指正前（β=0，前腿 -55°）、弧线平移到墙前
        15mm 悬停（落点高 --wall-height，缺省取当前位姿可落足带中点；带由
@@ -317,9 +320,49 @@ def main():
             txt = (f"离地 {band[0]:.0f}~{band[1]:.0f}mm" if band else "无")
             print(f"  {n} 当前可落足带（墙面，倾角≤12°）：{txt}")
             log.note(f"{n} 可落足带={txt}")
-        print("就位暂停：确认无异常后按 p 开始全吸附启动序列（ESC×2 断电退出）")
+        print("就位暂停：量前腿 coxa 轴到玻璃面的水平距离，与 --wall-dist 不符按 d "
+              "输入实测值；确认无异常后按 p 开始全吸附启动序列（ESC×2 断电退出）")
         while True:
             k = read_key(0.1)
+            if k == "d":
+                print("\n输入前腿 coxa 轴到玻璃面的水平距离 mm（100~220，回车确认，ESC 取消）: ",
+                      end="", flush=True)
+                buf = ""
+                while True:
+                    c = read_key(0.5)
+                    if c is None:
+                        continue
+                    if c == "\x1b":
+                        buf = None
+                        break
+                    if c in ("\r", "\n"):
+                        break
+                    if c.isdigit() or (c == "." and "." not in buf):
+                        buf += c
+                        print(c, end="", flush=True)
+                    elif c in ("\x7f", "\b") and buf:
+                        buf = buf[:-1]
+                        print("\b \b", end="", flush=True)
+                try:
+                    dval = float(buf) if buf else None
+                except ValueError:
+                    dval = None
+                if dval is None or not 100.0 <= dval <= 220.0:
+                    print("\n未修改（取消或超出 100~220）")
+                    continue
+                deny = eng.set_wall_dist(dval)
+                if deny:
+                    print(f"\n改距拒绝：{deny}")
+                    continue
+                args.wall_dist = dval
+                print(f"\n前髋距墙改为 {dval:g}：{pose_txt()}")
+                log.note(f"就位暂停按 d 改前髋距墙={dval:g}")
+                for n in ("L1", "R1"):
+                    band = eng.wall_band(n)
+                    txt = (f"离地 {band[0]:.0f}~{band[1]:.0f}mm" if band else "无")
+                    print(f"  {n} 可落足带（墙面，倾角≤12°）：{txt}")
+                    log.note(f"{n} 可落足带={txt}")
+                continue
             if k == "p":
                 at_pause = False
                 last_esc = float("-inf")

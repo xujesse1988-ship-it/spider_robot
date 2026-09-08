@@ -199,3 +199,18 @@ def test_rear_leg_straight_back_on_floor():
     sol = eng.geom["L3"].solve(tuple(eng.foot["L3"]), (0.0, 0.0, -1.0))
     assert sol["tilt"] <= TILT_BAND_DEG and sol["gamma"] > 40   # coxa 后摆指正后
     assert eng.frozen is None
+
+
+def test_set_wall_dist_before_start_shifts_world_frame():
+    io, ctl, eng, bot = make(front_hip_to_wall=140.0)
+    d0 = eng.front_hip_to_wall()
+    band0 = eng.wall_band("L1")
+    assert eng.set_wall_dist(160.0) is None
+    assert math.isclose(eng.front_hip_to_wall(), 160.0, abs_tol=1e-9)
+    assert math.isclose(d0, 140.0, abs_tol=1e-9)
+    for n in LEG_NAMES:                                  # 接触点仍在地面、随身体平移
+        assert abs(eng.pw[n][2]) < 1e-9
+    assert eng.wall_band("L1") != band0
+    start(eng, bot)
+    assert ctl.attached_count() == 6
+    assert isinstance(eng.set_wall_dist(150.0), str)     # 启动后不许改

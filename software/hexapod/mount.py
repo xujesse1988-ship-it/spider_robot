@@ -241,8 +241,10 @@ class MountEngine:
                                            leg.mount_y + r0 * math.sin(a),
                                            self.z0)
         # 身体位姿：前髋距墙 front_hip_to_wall、平身、髋高 stand_height
-        front_x = max(l.mount_x for l in cfg.legs)
-        self.pose = (wall_x - front_hip_to_wall - front_x, cfg.stand_height, 0.0)
+        self.wall_x = float(wall_x)
+        self._front_x = max(l.mount_x for l in cfg.legs)
+        self.pose = (self.wall_x - front_hip_to_wall - self._front_x,
+                     cfg.stand_height, 0.0)
         self.pose0 = self.pose
         # 逐腿状态
         self.surf = {}        # 腿 -> Surface | None（None=空中）
@@ -317,6 +319,17 @@ class MountEngine:
     def front_hip_to_wall(self, pose=None):
         front = max(LEG_NAMES, key=lambda n: self.cfg.leg(n).mount_x)
         return self.wall.height(self.hip_world(front, pose))
+
+    def set_wall_dist(self, d):
+        """启动前改前髋距墙（就位暂停时按卷尺实测值修正）：整机世界系 x 平移，
+        六足地面接触点随之重投影。启动后（有足已吸附）不许改。返回 None=成功。"""
+        if self.started or self._attach_queue != list(self.slot_order):
+            return "启动序列已开始，不可改"
+        self.pose = (self.wall_x - float(d) - self._front_x, self.pose[1], 0.0)
+        self.pose0 = self.pose
+        for n, p in self.default_feet.items():
+            self.pw[n] = FLOOR.project(b2w(p, self.pose))
+        return None
 
     # ---------- 对外：几何工具（脚本层选落点用）----------
     def wall_target(self, name, height, y_w=None):

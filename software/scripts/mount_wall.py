@@ -40,7 +40,10 @@
 
 用法:
   python mount_wall.py --mock                  # 无硬件干跑
-  python mount_wall.py --dry                   # 真舵机 + 仿真气路（不碰阀泵）
+  python mount_wall.py --dry                   # 真舵机 + 仿真气路（吸附确认是假的）；
+                                             # 六阀全程通电到排气位、退出断线圈——
+                                             # 09-08 实测：阀不通电时站起一压，吸盘经
+                                             # 单向阀被挤成被动真空锁脚，1 w 抬不起来
   python mount_wall.py --no-tank --wall-dist 140
   python mount_wall.py --no-tank --wall-dist 140 --wall-height 230 --pitch-step 3
   善后（放气+回地面站姿）：python climb_walk.py --release
@@ -63,6 +66,7 @@ from dataclasses import replace
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
 from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
+                              GroundVent, Pi5VacuumIO,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.mount import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
                            LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM)
@@ -104,8 +108,9 @@ def main():
     ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--mock", action="store_true", help="无硬件干跑")
     ap.add_argument("--dry", action="store_true",
-                    help="真舵机 + 仿真气路：不碰气路 GPIO/I2C，吸附确认是假的"
-                         "——纯排练动作")
+                    help="真舵机 + 仿真气路：吸附确认是假的，纯排练动作；六阀全程通电"
+                         "到排气位（吸盘通大气），否则站起一压就被被动真空锁脚"
+                         "（09-08 实测）；泵不动，退出断线圈")
     ap.add_argument("--no-tank", action="store_true",
                     help="无罐：泵直抽歧管；没有储备真空（地面/上墙均已多次实测可用）")
     ap.add_argument("--wall-dist", type=float, default=140.0,
@@ -197,10 +202,19 @@ def main():
     drv = MockDriver() if args.mock else Servo2040Driver(args.port)
     if args.relay_first:
         servo_relay_close(drv, log, pwr)
+    vent = None
     if args.mock or args.dry:
         io = MockVacuumIO(6)
+        if args.dry:
+            # 干跑也要真阀排气（walk_teleop 同款 GroundVent）：阀断电=通罐位，
+            # 站起一压空气被挤过单向阀回不来，吸盘成被动真空把脚锁在地上，
+            # 1 w 抬不起来（09-08 实测）。阀先于舵机出力，全程保持排气位
+            vent = GroundVent(io_factory=lambda: Pi5VacuumIO(6, on_step=step))
+            step("干跑：阀板初始化，六阀线圈按足串行通电（排气位，0.2s 间隔）")
+            vent.set(True)
+            step("干跑：六阀已到排气位（吸盘通大气，全程保持，退出断线圈）")
+            log.note("dry=1 六阀排气位保持（GroundVent on）")
     else:
-        from hexapod.adhesion import Pi5VacuumIO
         step("阀板初始化：六阀线圈按足串行通电（排气位，0.2s 间隔）")
         io = Pi5VacuumIO(6, on_step=step)
         step("阀板/I2C 就绪")
@@ -293,7 +307,8 @@ def main():
         log.event(f"爬墙站位就位，进入就位暂停；{pose_txt()}")
         pwr.relax()
         if args.dry:
-            print("⚠ 干跑模式：气路是仿真的，阀泵不会动")
+            print("⚠ 干跑模式：吸附是仿真的、泵不动；真阀已拉到排气位并全程保持"
+                  "（吸盘通大气），退出时断线圈")
         if args.no_tank:
             print("⚠ 无罐模式：泵直抽歧管，没有储备真空——断电不保真空")
         print(f"起始位姿：{pose_txt()}（--wall-dist 量的是前腿 coxa 轴到墙面）")
@@ -612,6 +627,13 @@ def main():
             log.event(f"中断：不放气退出，冻结={eng.frozen or '无'}")
             print(f"\n中断：不放气退出。冻结: {eng.frozen or '无'}；"
                   "善后请跑 climb_walk --release。")
+        if vent is not None:
+            # 干跑的真阀：六线圈断电再释放，绝不拉高着退（阀一直通电发热，08-17）
+            try:
+                vent.close()
+                log.event("干跑：六阀线圈已断电（GroundVent.close）")
+            except Exception as e:
+                log.event(f"⚠ 干跑阀断电失败: {e}")
         pwr.stop()
         log.close("正常退出" if (clean_exit or aborted) else "中断退出")
 

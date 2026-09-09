@@ -26,6 +26,10 @@
   h    选中腿收起悬空（抬 15mm→缩到髋外 0.6 站位半径、站位面上 45mm，留在
        空中随身体动；不承载，互锁不算它）
   i    悬停腿落下压入吸附（DESCEND→PRESS→WAIT；FAULT 加深重试、耗尽冻结）
+  . ,  墙面目标修正 ±2mm（. 往墙里补、, 退回，范围 -20~+40）：悬停时目测吸盘离
+       玻璃不是 15mm 就按这个补到 15 再按 i。修正量作用于所有墙面目标（悬停点、
+       压入位、落点带），地面目标不动；用了多少记下来，下次 --wall-trim 直接给
+       （09-09 E1 实机：模型 15mm 目测 32mm，腿在前伸上举姿态实际到达比模型短）
   ↑/↓  俯仰 ±--pitch-step（抬头为正，上限 --pitch-max）
   ←/→  身体离墙/贴墙 5mm      [/]  身体降/升 5mm
        位姿改变按 2°/s、10mm/s 铺设；整段中间位姿逐个预检（接触足倾角≤15°、
@@ -130,6 +134,9 @@ def main():
     ap.add_argument("--rear-dist", type=float, default=None,
                     help="b 键：后足落到髋正后方多远的地面 mm（默认=该腿爬墙站位"
                          "半径 ≈176，吸盘轴 ⊥ 地面；范围 120~220，更近会带面内倾角）")
+    ap.add_argument("--wall-trim", type=float, default=0.0,
+                    help="墙面目标修正 mm（默认 0，范围 -20~40；正=再往墙里压）：上次"
+                         "实验用 . , 补到目测 15mm 的量。只作用于墙面目标")
     ap.add_argument("--pitch-step", type=float, default=5.0,
                     help="每按一次 ↑/↓ 的俯仰量°（默认 %(default)g，范围 1~10）")
     ap.add_argument("--pitch-max", type=float, default=30.0,
@@ -156,6 +163,8 @@ def main():
         ap.error(f"--wall-height {args.wall_height:g} 非法：范围 100~500mm")
     if args.rear_dist is not None and not 120.0 <= args.rear_dist <= 220.0:
         ap.error(f"--rear-dist {args.rear_dist:g} 非法：范围 120~220mm")
+    if not -20.0 <= args.wall_trim <= 40.0:
+        ap.error(f"--wall-trim {args.wall_trim:g} 非法：范围 -20~40mm")
     if not 1.0 <= args.pitch_step <= 10.0:
         ap.error(f"--pitch-step {args.pitch_step:g} 非法：范围 1~10°")
     if not 0.0 <= args.pitch_max <= 90.0:
@@ -232,6 +241,9 @@ def main():
     bot = Hexapod(drv, cfg)
     eng = MountEngine(cfg, ctl, front_hip_to_wall=args.wall_dist,
                       pitch_max_deg=args.pitch_max)
+    if args.wall_trim:
+        eng.set_wall_trim(args.wall_trim)
+        log.note(f"wall_trim={args.wall_trim:g}")
     watch = ClimbWatch(log, eng, ctl, io, cfg)
     log.note(f"阈值: ATTACH={ATTACH_KPA} PUMP_ON={PUMP_ON_KPA}"
              f" PUMP_OFF={PUMP_OFF_KPA} suck_timeout={ctl.suck_timeout_s}s")
@@ -419,7 +431,7 @@ def main():
                 last_esc = time.monotonic()
                 print("\n再按一次 ESC 确认退出（会放气——有足在墙上时先扶稳机身！）")
             elif k in ("UP", "DOWN", "LEFT", "RIGHT", "[", "]", "w", "g", "b",
-                       "h", "i") and released_hold:
+                       "h", "i", ".", ",") and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动——取下后 ESC×2 退出")
             elif k in LEG_KEYS:
                 sel = LEG_KEYS[k]
@@ -450,6 +462,23 @@ def main():
                     say(f"{sel} 收起悬空（抬 {cfg.lift_clearance:g}mm 后缩到髋旁；"
                         "不承载，互锁不算它；位姿改变时随身体）",
                         f"收腿受理：{sel} {pose_txt()}")
+            elif k in (".", ","):
+                new = eng.wall_trim + (2.0 if k == "." else -2.0)
+                if not -20.0 <= new <= 40.0:
+                    print(f"\n墙面修正 {new:+g} 超范围（-20~40）")
+                else:
+                    deny = eng.set_wall_trim(new)
+                    if deny:
+                        say(f"墙面修正 {new:+g} 拒绝：{deny}（腿够不到了——机器人离墙太远，"
+                            "或落点太高）", f"墙面修正拒绝 {new:+g}：{deny}")
+                    else:
+                        hov = eng.hover_leg
+                        where = (f"{hov} 悬停点随之{'贴近' if k == '.' else '远离'}墙 2mm"
+                                 if hov and eng.surf[hov] is eng.wall else "无墙面悬停腿，"
+                                 "对之后的墙面目标生效")
+                        say(f"墙面目标修正 {eng.wall_trim:+g}mm：{where}。目测到 15mm 再按 i；"
+                            f"下次启动用 --wall-trim {eng.wall_trim:g}",
+                            f"墙面修正={eng.wall_trim:+g} {pose_txt()}")
             elif k == "i":
                 hov = eng.hover_leg
                 deny = eng.land()
@@ -568,9 +597,12 @@ def main():
             hover_now = eng.hover_leg
             if hover_now and hover_now != hover_was:
                 fw = eng._foot_world(hover_now)
+                on_wall = eng.surf[hover_now] is eng.wall
                 print(f"\n{hover_now} 已悬停：世界 ({fw[0]:.0f},{fw[1]:.0f},"
-                      f"{fw[2]:.0f})，离面 {cfg.lift_clearance:g}mm——目视吸盘"
-                      "对正/间距，i 落下压入；不对就 g/h 挪走")
+                      f"{fw[2]:.0f})，离面 {cfg.lift_clearance:g}mm（墙面修正 "
+                      f"{eng.wall_trim:+g}）——目视吸盘对正/间距，i 落下压入；"
+                      + ("间距不是 15 就按 . ,（每次 2mm）补到 15 再 i；" if on_wall else "")
+                      + "不对就 g/h 挪走")
                 log.event(f"悬停：{hover_now} 世界 ({fw[0]:.0f},{fw[1]:.0f},{fw[2]:.0f})")
             hover_was = hover_now
             swing_now = eng.swing_leg

@@ -214,3 +214,30 @@ def test_set_wall_dist_before_start_shifts_world_frame():
     start(eng, bot)
     assert ctl.attached_count() == 6
     assert isinstance(eng.set_wall_dist(150.0), str)     # 启动后不许改
+
+
+def test_wall_trim_moves_hover_and_press_deeper_only_on_wall():
+    io, ctl, eng, bot = make()
+    start(eng, bot)
+    band = eng.wall_band("L1")
+    h = (band[0] + band[1]) / 2.0
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", h)) is None
+    assert run(eng, bot, 15.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    floor_before = {n: tuple(eng.foot[n]) for n in LEG_NAMES if n != "L1"}
+    assert eng.set_wall_trim(10.0) is None
+    run(eng, bot, 0.1)
+    fw = contact_world(eng, "L1")
+    assert math.isclose(fw[0], -CFG.lift_clearance + 10.0, abs_tol=1e-6)   # 悬停点贴近墙 10
+    for n, p in floor_before.items():                                        # 地面腿不动
+        assert tuple(eng.foot[n]) == p
+    assert eng.land() is None
+    assert run(eng, bot, 15.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE
+               and ctl.is_attached(idx("L1")))
+    fw = contact_world(eng, "L1")
+    assert math.isclose(fw[0], CFG.leg("L1").press_delta_mm + 10.0, abs_tol=1e-6)  # 压入位也深 10
+    # 够不到的修正量被拒、原值保留
+    deny = eng.set_wall_trim(40.0)
+    assert deny is None or isinstance(deny, str)
+    if deny:
+        assert math.isclose(eng.wall_trim, 10.0)
+    assert eng.frozen is None

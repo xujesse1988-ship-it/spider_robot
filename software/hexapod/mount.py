@@ -274,6 +274,11 @@ class MountEngine:
         self._pose_from = self._pose_to = None
         self._pose_s = 0.0
         self._pose_T = 0.0
+        # 墙面目标整体修正 mm（正=再往墙里压）：09-09 E1 实机悬停目测离玻璃 32mm
+        # 而模型 15mm——腿在"前伸上举"姿态的实际到达比模型短。一个总修正量兜住
+        # （标定残差/连杆/参考点量法分不清也不必分），只作用于墙面接触/悬停/
+        # 压入目标，地面不动；set_wall_trim 改，脚本键 . , 在线试
+        self.wall_trim = 0.0
 
     # ---------- 对外：查询 ----------
     def targets(self):
@@ -613,8 +618,9 @@ class MountEngine:
         leg = self.cfg.leg(name)
         deep = min(leg.press_delta_mm + self.cfg.max_attach_retry * self.cfg.retry_deeper_mm,
                    PRESS_DEPTH_MAX)
+        tr = self._trim(surf)
         for depth in (0.0, leg.press_delta_mm, deep):
-            why = self._check_contact(name, p_w, surf, pose, depth, TILT_BAND_DEG)
+            why = self._check_contact(name, p_w, surf, pose, depth + tr, TILT_BAND_DEG)
             if why:
                 return why
         return None
@@ -668,7 +674,8 @@ class MountEngine:
         for n in LEG_NAMES:
             if self.surf[n] is not None:
                 why = self._check_contact(n, self.pw[n], self.surf[n], pose,
-                                          self.depth[n], HOLD_TILT_DEG)
+                                          self.depth[n] + self._trim(self.surf[n]),
+                                          HOLD_TILT_DEG)
             else:
                 why = self._check_air(n, self.air_pb[n], pose)
             if why:
@@ -676,17 +683,41 @@ class MountEngine:
         return None
 
     # ---------- 内部：摆动 ----------
+    def _trim(self, surf):
+        """该面的目标修正量（只有墙面有）。"""
+        return self.wall_trim if surf is self.wall else 0.0
+
     def _foot_world(self, name):
         if self.surf[name] is not None:
-            return _add(self.pw[name], self.surf[name].n, -self.depth[name])
+            return _add(self.pw[name], self.surf[name].n,
+                        -(self.depth[name] + self._trim(self.surf[name])))
         return b2w(self.air_pb[name], self.pose)
 
     def _liftoff_world(self, name):
         """摆动路径起点：接触腿 = 面上方 lift_clearance 的抬离点（LIFT 段终点），
         悬停/空中腿 = 当前点。"""
         if self.surf[name] is not None:
-            return _add(self.pw[name], self.surf[name].n, self.cfg.lift_clearance)
+            return _add(self.pw[name], self.surf[name].n,
+                        self.cfg.lift_clearance - self._trim(self.surf[name]))
         return b2w(self.air_pb[name], self.pose)
+
+    def set_wall_trim(self, mm):
+        """改墙面目标修正量：现有墙面接触/悬停腿在新修正下须仍可行（悬停腿还
+        按落地压深复核，免得 i 落下时压出工作空间）。返回 None=成功；str=拒绝。"""
+        old = self.wall_trim
+        self.wall_trim = float(mm)
+        why = self._check_pose(self.pose)
+        if why is None:
+            for n in LEG_NAMES:
+                if self.surf[n] is self.wall and self.phase_of[n] == MountPhase.HOVER:
+                    why = self._check_landing(n, self.pw[n], self.wall, self.pose)
+                    if why:
+                        why = f"{n} 落地压深下 {why}"
+                        break
+        if why:
+            self.wall_trim = old
+            return why
+        return None
 
     def _path_point(self, a, b, n_a, n_b, s, arc):
         """世界系摆动弧线：直线 smoothstep + 沿两面法向均值的正弦抬弧（弧顶
@@ -814,7 +845,8 @@ class MountEngine:
     def _refresh_targets(self):
         for n in LEG_NAMES:
             if self.surf[n] is not None:
-                pb = w2b(_add(self.pw[n], self.surf[n].n, -self.depth[n]), self.pose)
+                pb = w2b(_add(self.pw[n], self.surf[n].n,
+                              -(self.depth[n] + self._trim(self.surf[n]))), self.pose)
             else:
                 pb = self.air_pb[n]
             self.foot[n] = list(pb)

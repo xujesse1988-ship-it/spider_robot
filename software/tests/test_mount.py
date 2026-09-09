@@ -347,7 +347,16 @@ def test_nudge_wall_target_moves_hover_height_only_while_hovering():
     assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
     z0 = contact_world(eng, "L1")[2]
     assert eng.nudge_wall_target("L1", dz=5.0) is None
-    run(eng, bot, 0.1)
+    assert isinstance(eng.land(), str)                             # 铺设未完不许落下
+    steps = []
+    for _ in range(int(2.0 / DT)):
+        bot.move_feet(eng.update(DT))
+        steps.append(contact_world(eng, "L1"))
+        if not eng.nudge_pending:
+            break
+    assert not eng.nudge_pending
+    gaps = [math.dist(a, b) for a, b in zip(steps, steps[1:])]
+    assert gaps and max(gaps) < 1.0                                # 匀速铺设，不跳变
     fw = contact_world(eng, "L1")
     assert math.isclose(fw[2], z0 + 5.0, abs_tol=1e-6)             # 只动高度
     assert math.isclose(fw[0], -CFG.lift_clearance, abs_tol=1e-6)
@@ -355,6 +364,7 @@ def test_nudge_wall_target_moves_hover_height_only_while_hovering():
     # 挪出可落足带被拒、落点不动
     far = eng.nudge_wall_target("L1", dz=400.0)
     assert isinstance(far, str) and math.isclose(eng.pw["L1"][2], h + 5.0, abs_tol=1e-6)
+    assert not eng.nudge_pending
     assert eng.land() is None
     assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE
                and ctl.is_attached(idx("L1")))

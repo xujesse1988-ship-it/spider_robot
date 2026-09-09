@@ -50,6 +50,8 @@ BODY_CLEAR_MM = 5.0        # 机身/腹面离任何面的最小净空
 KNEE_CLEAR_MM = 8.0        # 膝离任何面的最小净空
 FOOT_AIR_CLEAR_MM = 10.0   # 悬空足离任何面的最小净空（位姿铺设预检）
 HOLD_TILT_DEG = 15.0       # 已吸附足在位姿改变中允许的指令倾角（吸盘容差）
+NUDGE_SPEED_MMS = 20.0     # 悬停中挪落点的铺设速率 mm/s：盘离面只十几毫米时
+                           # 不能一步跳过去（步进指令会让腿冲一下蹭到面）
 PITCH_RATE_DPS = 2.0       # 位姿铺设：俯仰速率 °/s
 LIN_RATE_MMS = 10.0        # 位姿铺设：平移速率 mm/s（= body_lean LEAN_SPEED）
 TRANSFER_SPEED_MMS = 60.0  # 摆动平移速度 mm/s（过渡的挪腿动辄 150~250mm）
@@ -276,6 +278,9 @@ class MountEngine:
         self._attach_queue = list(self.attach_order)
         self._precharge_t = 0.0
         self._tankless_precharged = False
+        # 悬停落点挪动目标（腿名 -> 面上的目标点）：update() 按 NUDGE_SPEED_MMS
+        # 匀速把 pw 铺过去，离面这么近不许步进
+        self._pw_goal = {}
         # 位姿铺设
         self._pose_from = self._pose_to = None
         self._pose_s = 0.0
@@ -435,6 +440,9 @@ class MountEngine:
         h = self.hover_leg
         if h is None:
             return "没有悬停中的腿"
+        if h in self._pw_goal:
+            d = math.dist(self._pw_goal[h], self.pw[h])
+            return f"{h} 落点还在挪动（剩 {d:.0f}mm，约 {d / NUDGE_SPEED_MMS:.1f}s）"
         self.phase_of[h] = MountPhase.DESCEND
         return None
 
@@ -514,6 +522,7 @@ class MountEngine:
                 self.pose = self._pose_to
                 self._pose_from = self._pose_to = None
         self._run_machines(dt)
+        self._run_nudges(dt)
         self._refresh_targets()
         return self.targets()
 
@@ -739,28 +748,56 @@ class MountEngine:
         """悬停中沿墙面平移该腿落点（dz 上正、dy 左正 mm）：机身在抬腿时被腿链
         弹性压沉（08-19 实测 13~27mm），模型以为还在指令位姿上，按同一世界高度
         放第二只前足就会低一截——没有 IMU 只能悬停时按眼睛纠。新落点须过落点带
-        与压深复核，不过则回滚。返回 None=成功；str=拒绝原因。"""
+        与压深复核，不过则拒绝原地不动；受理后由 update() 按 NUDGE_SPEED_MMS
+        匀速铺过去（不步进：盘离面只十几毫米，跳变会让腿冲一下蹭到面）。
+        连按累加在上一次的目标上。返回 None=成功；str=拒绝原因。"""
         if self.frozen:
             return "冻结中"
         if self.phase_of[name] != MountPhase.HOVER:
             return f"{name} 不在悬停（只有悬停中才能挪落点）"
         if self.surf[name] is not self.wall:
             return f"{name} 悬停在{_cn(self.surf[name])}，本键只挪墙面落点"
-        old = self.pw[name]
-        p = self.wall.project((old[0], old[1] + dy, old[2] + dz))
+        base = self._pw_goal.get(name, self.pw[name])
+        p = self.wall.project((base[0], base[1] + dy, base[2] + dz))
         why = self._check_landing(name, p, self.wall, self.pose)
-        if why is None:
+        if why is None:                      # 悬停点自身也要可达/不撞面
+            old = self.pw[name]
             self.pw[name] = p
             why = self._check_air(name, w2b(self._foot_world(name), self.pose),
                                   self.pose)
+            self.pw[name] = old
             if why:
-                self.pw[name] = old
                 why = f"悬停点 {why}"
         if why:
             return why
-        self.landing[name] = w2b(p, self.pose)[:2]
-        self._refresh_targets()
+        self._pw_goal[name] = p
         return None
+
+    @property
+    def nudge_pending(self):
+        """仍在铺设的落点挪动（腿名元组）。"""
+        return tuple(self._pw_goal)
+
+    def target_height(self, name):
+        """该腿落点的离地高度（挪动中取目标值，显示用）。"""
+        return self._pw_goal.get(name, self.pw[name])[2]
+
+    def _run_nudges(self, dt):
+        """把 pw 沿面匀速铺向目标；腿离开悬停即作废（落地/改去别处）。"""
+        for n in list(self._pw_goal):
+            if self.phase_of[n] != MountPhase.HOVER or self.surf[n] is not self.wall:
+                del self._pw_goal[n]
+                continue
+            goal, cur = self._pw_goal[n], self.pw[n]
+            d = math.dist(goal, cur)
+            step = NUDGE_SPEED_MMS * dt
+            if d <= step + _EPS:
+                self.pw[n] = goal
+                del self._pw_goal[n]
+            else:
+                k = step / d
+                self.pw[n] = tuple(c + (g - c) * k for c, g in zip(cur, goal))
+            self.landing[n] = w2b(self.pw[n], self.pose)[:2]
 
     def trim_text(self):
         """逐腿修正量的紧凑文本（全 0 时返回 '0'）。"""

@@ -220,7 +220,7 @@ class MountEngine:
     （与 ClimbEngine 同序），全部 ATTACHED 后 started=True 才受理命令。"""
 
     def __init__(self, cfg: RobotConfig, ctl, wall_x=0.0, front_hip_to_wall=140.0,
-                 pitch_max_deg=90.0, ignore_tank_fault=False):
+                 pitch_max_deg=90.0, ignore_tank_fault=False, attach_order=None):
         self.cfg, self.ctl = cfg, ctl
         self.ignore_tank_fault = ignore_tank_fault
         self.wall = wall_at(wall_x)
@@ -229,6 +229,12 @@ class MountEngine:
         self.geom = {leg.name: LegGeom(cfg, leg) for leg in cfg.legs}
         self.slot_order = tuple(sorted(
             LEG_NAMES, key=lambda n: (CLIMB.duty - CLIMB.offsets[n]) % 1.0))
+        # 启动逐足压入的次序（默认=窗序）。诊断用：可疑的腿排最后，等其余五足
+        # 都吸牢当反力座再压它——启动早段只有一两足吸住，压入的反力会把机身
+        # 顶起/顶偏而不是把盘压进面里（08-19"六足同时压没有反力座"同源）
+        self.attach_order = tuple(attach_order) if attach_order else self.slot_order
+        if sorted(self.attach_order) != sorted(LEG_NAMES):
+            raise ValueError(f"attach_order 必须是六腿的一个排列，给了 {attach_order!r}")
         # 爬墙站位（与 ClimbEngine 同解：压入位吸盘轴 ⊥ 面）
         self.z0 = -cfg.stand_height
         self.default_feet = {}
@@ -267,7 +273,7 @@ class MountEngine:
         self.frozen = None
         self.started = False
         self.t = 0.0
-        self._attach_queue = list(self.slot_order)
+        self._attach_queue = list(self.attach_order)
         self._precharge_t = 0.0
         self._tankless_precharged = False
         # 位姿铺设
@@ -328,7 +334,7 @@ class MountEngine:
     def set_wall_dist(self, d):
         """启动前改前髋距墙（就位暂停时按卷尺实测值修正）：整机世界系 x 平移，
         六足地面接触点随之重投影。启动后（有足已吸附）不许改。返回 None=成功。"""
-        if self.started or self._attach_queue != list(self.slot_order):
+        if self.started or self._attach_queue != list(self.attach_order):
             return "启动序列已开始，不可改"
         self.pose = (self.wall_x - float(d) - self._front_x, self.pose[1], 0.0)
         self.pose0 = self.pose

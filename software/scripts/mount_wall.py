@@ -78,6 +78,7 @@ from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               GroundVent, Pi5VacuumIO,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
+from hexapod.climb import parse_leg_order
 from hexapod.mount import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
                            LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, SWING_PHASES)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
@@ -134,6 +135,12 @@ def main():
     ap.add_argument("--rear-dist", type=float, default=None,
                     help="b 键：后足落到髋正后方多远的地面 mm（默认=该腿爬墙站位"
                          "半径 ≈176，吸盘轴 ⊥ 地面；范围 120~220，更近会带面内倾角）")
+    ap.add_argument("--attach-order", default=None,
+                    help="启动逐足压入次序，六腿排列如 R3_R2_L3_R1_L2_L1（下划线或逗号"
+                         "分隔，不分大小写，不缺不重）。默认=窗序 R3_L1_R2_L3_R1_L2。"
+                         "诊断用：吸不上的腿排到最后，其余五足吸牢当反力座再压它——"
+                         "启动早段只有一两足吸住时，压入反力会把机身顶起而不是把盘"
+                         "压进地面")
     ap.add_argument("--wall-trim", type=float, default=0.0,
                     help="墙面目标修正 mm（默认 0，范围 -20~40；正=再往墙里压）：上次"
                          "实验用 . , 补到目测 15mm 的量。只作用于墙面目标")
@@ -163,6 +170,12 @@ def main():
         ap.error(f"--wall-height {args.wall_height:g} 非法：范围 100~500mm")
     if args.rear_dist is not None and not 120.0 <= args.rear_dist <= 220.0:
         ap.error(f"--rear-dist {args.rear_dist:g} 非法：范围 120~220mm")
+    attach_order = None
+    if args.attach_order is not None:
+        try:
+            attach_order = parse_leg_order(args.attach_order)
+        except ValueError as e:
+            ap.error(str(e).replace("--leg-order", "--attach-order"))
     if not -20.0 <= args.wall_trim <= 40.0:
         ap.error(f"--wall-trim {args.wall_trim:g} 非法：范围 -20~40mm")
     if not 1.0 <= args.pitch_step <= 10.0:
@@ -240,7 +253,8 @@ def main():
     ctl = AdhesionController(io, **ctl_kw)
     bot = Hexapod(drv, cfg)
     eng = MountEngine(cfg, ctl, front_hip_to_wall=args.wall_dist,
-                      pitch_max_deg=args.pitch_max)
+                      pitch_max_deg=args.pitch_max, attach_order=attach_order)
+    log.note("启动吸附序=" + "_".join(eng.attach_order))
     if args.wall_trim:
         eng.set_wall_trim(args.wall_trim)
         log.note(f"wall_trim={args.wall_trim:g}")
@@ -348,6 +362,8 @@ def main():
         if args.no_tank:
             print("⚠ 无罐模式：泵直抽歧管，没有储备真空——断电不保真空")
         print(f"起始位姿：{pose_txt()}（--wall-dist 量的是前腿 coxa 轴到墙面）")
+        print("启动吸附序：" + "→".join(eng.attach_order)
+              + ("（默认窗序）" if attach_order is None else "（--attach-order）"))
         for n in ("L1", "R1"):
             band = eng.wall_band(n)
             txt = (f"离地 {band[0]:.0f}~{band[1]:.0f}mm" if band else "无")

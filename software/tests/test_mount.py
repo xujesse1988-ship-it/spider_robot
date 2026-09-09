@@ -275,3 +275,34 @@ def test_wall_trim_allows_return_to_floor_and_no_jump_at_hover():
     assert run(eng, bot, 15.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE
                and eng.surf["L1"] is FLOOR and ctl.is_attached(idx("L1")))
     assert eng.frozen is None
+
+
+def test_attach_order_presses_legs_in_given_sequence():
+    """诊断用：可疑腿排最后，其余五足吸牢当反力座再压它（09-09 L1 吸不上）。"""
+    order = ("R3", "R2", "L3", "R1", "L2", "L1")
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = MountEngine(CFG, ctl, attach_order=order)
+    bot = Hexapod(MockDriver(), CFG)
+    assert eng.attach_order == order
+    seen = []
+    for _ in range(int(30 / DT)):
+        bot.move_feet(eng.update(DT))
+        for n in LEG_NAMES:
+            if eng.phase_of[n] == MountPhase.PRESS and n not in seen:
+                seen.append(n)
+        if eng.started:
+            break
+    assert eng.started and ctl.attached_count() == 6
+    assert tuple(seen) == order                      # 压入次序就是给的次序
+    assert eng.frozen is None
+
+
+def test_attach_order_rejects_bad_permutation():
+    io = MockVacuumIO(6)
+    for bad in (("L1",), ("L1", "L1", "L2", "L3", "R1", "R2"), ("L1", "X", "L2", "L3", "R1", "R2")):
+        try:
+            MountEngine(CFG, AdhesionController(io), attach_order=bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"{bad} 应被拒绝")

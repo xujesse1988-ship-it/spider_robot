@@ -23,6 +23,7 @@
   python3 scripts/p4_mosfet_check.py --ch 3     # 只测通道 3
   python3 scripts/p4_mosfet_check.py --sweep    # 不提问,1~7 连扫两轮,眼睛盯 LED 排
   python3 scripts/p4_mosfet_check.py --hold 7   # 通道 7 常开,配合万用表量,回车关断
+  python3 scripts/p4_mosfet_check.py --hold 1,3,5  # 多路一起常开(逐路串行上电)
   python3 scripts/p4_mosfet_check.py --list     # 只打印映射表,不碰硬件
 """
 import argparse
@@ -47,6 +48,7 @@ CHANNELS = [
 VALVE_ON_S = 0.40       # 阀点动:通电时长
 VALVE_OFF_S = 0.35      # 阀点动:两次之间的断电时长
 PUMP_ON_S = 0.8         # 泵点动时长(--pump-secs 可改)
+HOLD_STAGGER_S = 0.2    # --hold 多路时逐路上电的间隔(同 Pi5VacuumIO:12V 轨不吃同刻阶跃)
 
 
 class MosfetIO:
@@ -272,23 +274,53 @@ def run_sweep(io, rounds, pump_secs):
     print("\n扫完。哪路 LED 没闪、闪错位、或负载没跟着动,就单测那路:--ch N")
 
 
-def run_hold(io, chnum):
-    ch = next((c for c in CHANNELS if c[0] == chnum), None)
-    if ch is None or ch[6] == "spare":
-        sys.exit(f"通道 {chnum} 不可测(1~7;通道 8 V0 空置)。")
-    num, term, gpio, _p, name, _c, kind = ch
-    print(f"通道 {num}({name})常开。万用表预期:")
-    print(f"  · 黑笔功率地(DC−)、红笔 OUT{num}−:导通中 ≈0V,关断后经负载回到 ≈12V")
-    print(f"  · {term} 对 IN{num}−:≈3.3V")
-    if kind == "pump":
+def parse_hold(spec):
+    """--hold 参数:"7" 或 "1,3,5" → 通道元组列表(去重保序)。有错就退出,不碰硬件。"""
+    chans = []
+    for tok in spec.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            num = int(tok)
+        except ValueError:
+            sys.exit(f"--hold 只认通道号或它们的逗号列表(如 1,3,5),不认 {tok!r}。")
+        ch = next((c for c in CHANNELS if c[0] == num), None)
+        if ch is None or ch[6] == "spare":
+            sys.exit(f"通道 {num} 不可测(1~7;通道 8 V0 空置)。")
+        if ch not in chans:
+            chans.append(ch)
+    if not chans:
+        sys.exit("--hold 没给通道号。例:--hold 7 或 --hold 1,3,5")
+    return chans
+
+
+def run_hold(io, chans):
+    """选中的几路一起常开,回车全部关断。多路时逐路上电(HOLD_STAGGER_S)。"""
+    names = "、".join(f"{c[0]}({c[4]})" for c in chans)
+    n_valve = sum(1 for c in chans if c[6] == "valve")
+    print(f"通道 {names} 常开。万用表预期(n 取各路通道号):")
+    print("  · 黑笔功率地(DC−)、红笔 OUTn−:导通中 ≈0V,关断后经负载回到 ≈12V")
+    print("  · INn+ 对 INn−:≈3.3V")
+    print("    本次要量的点:" + "  ".join(f"OUT{c[0]}− / {c[1]}" for c in chans))
+    if any(c[6] == "pump" for c in chans):
         print("  · 泵持续转。别挂着不管,量完就关。")
-    else:
-        print("  · 阀保持通电(吸盘侧通大气)。线圈会发热,量完就关。")
-    io.write(gpio, 1)
+    if n_valve:
+        print(f"  · {n_valve} 路阀保持通电(对应吸盘侧通大气)。线圈发热,"
+              f"单路约 4W、六路全通约 25W,量完就关。")
+    powered = []
     try:
-        ask("\n[回车] 关断并退出 ")
+        for k, ch in enumerate(chans):
+            if k:
+                time.sleep(HOLD_STAGGER_S)   # 逐路上电,12V 轨不吃同刻阶跃
+            io.write(ch[2], 1)
+            powered.append(ch)
+            if len(chans) > 1:
+                print(f"     通道 {ch[0]} {ch[4]} 已通电")
+        ask("\n[回车] 全部关断并退出 ")
     finally:
-        io.write(gpio, 0)
+        for ch in powered:
+            io.write(ch[2], 0)
 
 
 def main():
@@ -296,7 +328,8 @@ def main():
     ap.add_argument("--ch", type=int, metavar="N", help="只测通道 N(1~7)")
     ap.add_argument("--sweep", action="store_true", help="不提问连扫两轮,肉眼看 LED")
     ap.add_argument("--rounds", type=int, default=2, help="--sweep 扫几轮(默认 2)")
-    ap.add_argument("--hold", type=int, metavar="N", help="通道 N 常开配合万用表,回车关断")
+    ap.add_argument("--hold", metavar="N[,N,…]",
+                    help="通道 N(或逗号列表 1,3,5)常开配合万用表,回车全部关断")
     ap.add_argument("--pump-secs", type=float, default=PUMP_ON_S,
                     help=f"泵每次点动秒数(默认 {PUMP_ON_S})")
     ap.add_argument("--list", action="store_true", help="只打印通道映射表,不碰硬件")
@@ -309,11 +342,13 @@ def main():
     if a.list:
         return 0
 
+    hold_chans = parse_hold(a.hold) if a.hold is not None else None
+
     io = MosfetIO()
     code = 0
     try:
-        if a.hold is not None:
-            run_hold(io, a.hold)
+        if hold_chans is not None:
+            run_hold(io, hold_chans)
         elif a.sweep:
             run_sweep(io, a.rounds, a.pump_secs)
         else:

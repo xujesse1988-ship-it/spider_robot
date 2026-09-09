@@ -24,12 +24,16 @@
   python3 scripts/p4_mosfet_check.py --sweep    # 不提问,1~7 连扫两轮,眼睛盯 LED 排
   python3 scripts/p4_mosfet_check.py --hold 7   # 通道 7 常开,配合万用表量,回车关断
   python3 scripts/p4_mosfet_check.py --hold 1,3,5  # 多路一起常开(逐路串行上电)
+      常开期间按通道号可单独掐掉/接回某一路,a=全开、0=全关、回车/ESC=关断退出
   python3 scripts/p4_mosfet_check.py --list     # 只打印映射表,不碰硬件
 """
 import argparse
+import os
 import subprocess
 import sys
+import termios
 import time
+import tty
 
 # ---- 通道映射:与 html/p4-pneumatic-electrical.html 速查表 12~15 行一致 ----
 # 改这里必须同步改 hexapod/adhesion.py 的 VALVE_PINS / PUMP_PIN(反之亦然)
@@ -295,8 +299,70 @@ def parse_hold(spec):
     return chans
 
 
+def _hold_status(chans, on):
+    return "  ".join(f"{c[0]} {c[4]} {'●通电' if on[c[0]] else '○断电'}" for c in chans)
+
+
+def _power_up(chans, set_ch):
+    """逐路上电,路间垫 HOLD_STAGGER_S(同 Pi5VacuumIO:12V 轨不吃同刻阶跃)。"""
+    for k, ch in enumerate(chans):
+        if k:
+            time.sleep(HOLD_STAGGER_S)
+        set_ch(ch, True)
+
+
+def _read_hold_key(raw):
+    """常开循环取一个键。raw=cbreak 单键;否则(管道/重定向)整行取首字符,空行=退出。"""
+    if not raw:
+        try:
+            line = input().strip().lower()
+        except EOFError:
+            return "q"
+        return line[:1] if line else "q"
+    data = os.read(sys.stdin.fileno(), 8)
+    if not data or data[0:1] in (b"\x1b", b"\r", b"\n", b"\x03", b"\x04"):
+        return "q"          # ESC / 回车 / Ctrl-C / Ctrl-D 一律关断退出
+    return data[0:1].decode("latin-1").lower()
+
+
+def _hold_loop(chans, on, set_ch):
+    """常开期间的按键循环:通道号=切换该路通断,a=全开,0=全关,回车/ESC=关断退出。"""
+    keys = {str(c[0]): c for c in chans}
+    raw = sys.stdin.isatty()
+    hint = "按通道号" if raw else "输入通道号回车"
+    print(f"\n  {hint}切换该路通断(本次 {'/'.join(keys)})、a=全开、0=全关、"
+          f"{'回车或 ESC' if raw else '空行'}=全部关断并退出")
+    old = termios.tcgetattr(sys.stdin) if raw else None
+    if raw:
+        tty.setcbreak(sys.stdin.fileno())
+    try:
+        while True:
+            k = _read_hold_key(raw)
+            if k == "q":
+                return
+            if k == "a":
+                _power_up([c for c in chans if not on[c[0]]], set_ch)
+            elif k == "0":
+                for ch in chans:
+                    if on[ch[0]]:
+                        set_ch(ch, False)
+            elif k in keys:
+                ch = keys[k]
+                set_ch(ch, not on[ch[0]])
+            elif k.isdigit():
+                print(f"     通道 {k} 不在本次 --hold 列表({'/'.join(keys)}),"
+                      "要它就退出重开")
+                continue
+            else:
+                continue
+            print("     " + _hold_status(chans, on))
+    finally:
+        if raw:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
+
+
 def run_hold(io, chans):
-    """选中的几路一起常开,回车全部关断。多路时逐路上电(HOLD_STAGGER_S)。"""
+    """选中的几路一起常开,期间可逐路通断,退出时全部关断。"""
     names = "、".join(f"{c[0]}({c[4]})" for c in chans)
     n_valve = sum(1 for c in chans if c[6] == "valve")
     print(f"通道 {names} 常开。万用表预期(n 取各路通道号):")
@@ -308,19 +374,20 @@ def run_hold(io, chans):
     if n_valve:
         print(f"  · {n_valve} 路阀保持通电(对应吸盘侧通大气)。线圈发热,"
               f"单路约 4W、六路全通约 25W,量完就关。")
-    powered = []
+    on = {c[0]: False for c in chans}
+
+    def set_ch(ch, level):
+        io.write(ch[2], 1 if level else 0)
+        on[ch[0]] = bool(level)
+
     try:
-        for k, ch in enumerate(chans):
-            if k:
-                time.sleep(HOLD_STAGGER_S)   # 逐路上电,12V 轨不吃同刻阶跃
-            io.write(ch[2], 1)
-            powered.append(ch)
-            if len(chans) > 1:
-                print(f"     通道 {ch[0]} {ch[4]} 已通电")
-        ask("\n[回车] 全部关断并退出 ")
+        _power_up(chans, set_ch)
+        print("     " + _hold_status(chans, on))
+        _hold_loop(chans, on, set_ch)
     finally:
-        for ch in powered:
-            io.write(ch[2], 0)
+        for ch in chans:            # 只关还通着的;异常/中断路径同样走这里
+            if on[ch[0]]:
+                set_ch(ch, False)
 
 
 def main():
@@ -329,7 +396,8 @@ def main():
     ap.add_argument("--sweep", action="store_true", help="不提问连扫两轮,肉眼看 LED")
     ap.add_argument("--rounds", type=int, default=2, help="--sweep 扫几轮(默认 2)")
     ap.add_argument("--hold", metavar="N[,N,…]",
-                    help="通道 N(或逗号列表 1,3,5)常开配合万用表,回车全部关断")
+                    help="通道 N(或逗号列表 1,3,5)常开配合万用表,"
+                         "期间可按通道号逐路通断,回车全部关断")
     ap.add_argument("--pump-secs", type=float, default=PUMP_ON_S,
                     help=f"泵每次点动秒数(默认 {PUMP_ON_S})")
     ap.add_argument("--list", action="store_true", help="只打印通道映射表,不碰硬件")

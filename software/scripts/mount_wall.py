@@ -23,6 +23,10 @@
        离墙多远，再按 i 沿墙法向（+x）压入 press_delta 抽气确认
   g    选中腿→地面回位（该腿爬墙站位在当前位姿下投影到地面的点）
   b    选中腿→地面正后方 --rear-dist（后腿 coxa 后摆指正后，β=180°）
+  t    选中腿→地面、站位前方 --fwd-dist（默认 85）：做前足上墙**之前**先把两条
+       中腿走到前髋底下。默认站位的中足在机身中心正下方，与重心几乎重合，抬起
+       第二只前足时前半机身成悬臂——09-09 实测前缘下沉 26mm 且吸住后不回弹
+       （L1 那次只沉 6mm，因为当时中腿还兜得住）
   h    选中腿收起悬空（抬 15mm→缩到髋外 0.6 站位半径、站位面上 45mm，留在
        空中随身体动；不承载，互锁不算它）
   i    悬停腿落下压入吸附（DESCEND→PRESS→WAIT；FAULT 加深重试、耗尽冻结）
@@ -192,6 +196,10 @@ def main():
                          "或逐腿 L1:16,R1:0（未给的腿 0）。上次实验用 . , 各腿补到目测"
                          "15mm 的量。只作用于墙面目标，且叠进压入深度——给大了=命令腿"
                          "往刚性玻璃里硬压，宁可给小的")
+    ap.add_argument("--fwd-dist", type=float, default=85.0,
+                    help="t 键：该腿落到地面站位前方多远 mm（默认 %(default)g，范围 "
+                         "0~160）。中腿 85 = 挪到前髋正下方（不改侧向时的可达上限）；"
+                         "更靠前要同时收侧向，本键不改侧向")
     ap.add_argument("--pitch-step", type=float, default=5.0,
                     help="每按一次 ↑/↓ 的俯仰量°（默认 %(default)g，范围 1~10）")
     ap.add_argument("--pitch-max", type=float, default=30.0,
@@ -230,6 +238,8 @@ def main():
             wall_trim = parse_wall_trim(args.wall_trim)
         except ValueError as e:
             ap.error(str(e))
+    if not 0.0 <= args.fwd_dist <= 160.0:
+        ap.error(f"--fwd-dist {args.fwd_dist:g} 非法：范围 0~160mm")
     if not 1.0 <= args.pitch_step <= 10.0:
         ap.error(f"--pitch-step {args.pitch_step:g} 非法：范围 1~10°")
     if not 0.0 <= args.pitch_max <= 90.0:
@@ -501,12 +511,12 @@ def main():
                 last_esc = time.monotonic()
                 print("\n再按一次 ESC 确认退出（会放气——有足在墙上时先扶稳机身！）")
             elif k in ("UP", "DOWN", "LEFT", "RIGHT", "[", "]", "w", "g", "b",
-                       "h", "i", ".", ",", "+", "=", "-") and released_hold:
+                       "t", "h", "i", ".", ",", "+", "=", "-") and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动——取下后 ESC×2 退出")
             elif k in LEG_KEYS:
                 sel = LEG_KEYS[k]
                 print(f"\n已选 {sel}（{eng.phase_of[sel].value}）："
-                      "w→墙 g→地面回位 b→正后方地面 h 收起 i 落下")
+                      "w→墙 g→地面回位 b→正后方地面 t→站位前方地面 h 收起 i 落下")
             elif k == "w":
                 band = eng.wall_band(sel)
                 if band is None:
@@ -524,6 +534,9 @@ def main():
                 rd = args.rear_dist if args.rear_dist is not None else eng.r0[sel]
                 do_move(sel, FLOOR, eng.floor_back(sel, rd),
                         f"正后方 {rd:.0f}mm 地面")
+            elif k == "t":
+                do_move(sel, FLOOR, eng.floor_forward(sel, args.fwd_dist),
+                        f"站位前方 {args.fwd_dist:.0f}mm 地面")
             elif k == "h":
                 deny = eng.request_tuck(sel)
                 if deny:
@@ -711,8 +724,9 @@ def main():
             if eng.started and not was_started:
                 was_started = True
                 print(f"\n✓ 六足吸附完成（{pose_txt()}）：1~6 选腿  w 上墙  g 回地  "
-                      "b 正后方  h 收起  i 落下  ↑/↓ 俯仰  ←/→ 离/贴墙  [/] 降/升"
-                      "  空格取消位姿  f 解冻  o×2 取机  ESC×2 退出")
+                      "b 正后方  t 站位前方  h 收起  i 落下  ./, 离墙  +/- 落点高低"
+                      "  ↑/↓ 俯仰  ←/→ 离/贴墙  [/] 降/升  空格取消位姿  f 解冻"
+                      "  o×2 取机  ESC×2 退出")
             if eng.frozen != last_frozen:
                 last_frozen = eng.frozen
                 if eng.frozen:

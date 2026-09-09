@@ -371,3 +371,26 @@ def test_nudge_wall_target_moves_hover_height_only_while_hovering():
     assert math.isclose(contact_world(eng, "L1")[2], h + 5.0, abs_tol=1e-6)
     assert isinstance(eng.nudge_wall_target("L1", dz=5.0), str)     # 已落地：拒
     assert eng.frozen is None
+
+
+def test_floor_forward_moves_middle_leg_under_front_hip():
+    """09-09 实机：默认站位中足在机身中心正下方、与重心几乎重合，抬第二只前足时
+    前半机身成悬臂，前缘沉 26mm 且吸住后不回弹。把中腿先走到前髋底下缓解。"""
+    io, ctl, eng, bot = make()
+    start(eng, bot)
+    home = eng.floor_home("L2")
+    tgt = eng.floor_forward("L2", 85.0)
+    assert math.isclose(tgt[0] - home[0], 85.0, abs_tol=1e-6)     # 只往前，不动侧向
+    assert math.isclose(tgt[1], home[1], abs_tol=1e-6)
+    assert abs(tgt[2]) < 1e-9
+    assert eng.request_move("L2", FLOOR, tgt) is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE
+               and ctl.is_attached(idx("L2")))
+    # 落到前髋（身体系 x=+83.5）正下方附近
+    pb = w2b(eng.pw["L2"], eng.pose)
+    assert 80.0 < pb[0] < 90.0
+    sol = eng.geom["L2"].solve(tuple(eng.foot["L2"]), (0.0, 0.0, -1.0))
+    assert sol["tilt"] <= TILT_BAND_DEG and abs(sol["gamma"]) <= COXA_MAX_DEG
+    assert eng.frozen is None

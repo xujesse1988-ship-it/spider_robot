@@ -367,6 +367,18 @@ class MountEngine:
         """该腿爬墙站位在当前位姿下投影到地面的点。"""
         return FLOOR.project(b2w(self.default_feet[name], self.pose))
 
+    def floor_forward(self, name, dist):
+        """该腿地面站位沿机身前进方向平移 dist（+ 朝墙）后的地面点。
+        用途：把中腿走到前髋底下再做前足上墙——默认站位下中足在机身中心正下方
+        （身体系 x=0），与重心几乎重合，抬起第二只前足时前半机身成悬臂，
+        09-09 实测机身前缘下沉 26mm 且吸住后不回弹。"""
+        home = self.floor_home(name)
+        fx, fy, _ = b2w_dir((1.0, 0.0, 0.0), self.pose)
+        k = math.hypot(fx, fy)
+        if k < 1e-9:
+            return home
+        return FLOOR.project((home[0] + fx / k * dist, home[1] + fy / k * dist, 0.0))
+
     def floor_back(self, name, dist=None):
         """后腿指正后：髋正后方 dist 处的地面点（世界 y=髋 y）。dist 缺省取该腿
         爬墙站位半径（压入位吸盘轴 ⊥ 面的解，≈176）——更近会带面内倾角。"""

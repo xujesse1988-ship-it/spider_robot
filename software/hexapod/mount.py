@@ -384,7 +384,9 @@ class MountEngine:
             return f"{name} 落点不可行：{why}"
         start_w = self._liftoff_world(name)
         n_a = self.surf[name].n if self.surf[name] else surf.n
-        end_w = _add(p_w, surf.n, self.cfg.lift_clearance)
+        # 悬停点带修正量：与 HOVER 相位的目标（pw − n·(depth+trim)，depth=−clearance）
+        # 一致，否则平移到位切 HOVER 瞬间足端会跳 trim 毫米
+        end_w = _add(p_w, surf.n, self.cfg.lift_clearance - self._trim(surf))
         arc, why = self._check_path(name, start_w, end_w, n_a, surf.n)
         if why:
             return f"{name} 路径不可行：{why}"
@@ -630,9 +632,12 @@ class MountEngine:
             sol = self.geom[name].solve(pb)
         except Infeasible as e:
             return str(e)
-        hit = self._clear_of_surfaces(b2w(pb, pose), FOOT_AIR_CLEAR_MM)
-        if hit:
-            return f"足端撞{_cn(hit)}"
+        # 足端离面净空：墙面按修正量放宽——指令点比真实到达深 trim（腿在这个姿态
+        # 够不到），指令点离模型墙面 15−trim 时物理上离玻璃仍约 15
+        p_w = b2w(pb, pose)
+        for sf in self.surfaces:
+            if sf.height(p_w) + self._trim(sf) < FOOT_AIR_CLEAR_MM:
+                return f"足端撞{_cn(sf)}"
         hit = self._clear_of_surfaces(b2w(sol["knee_b"], pose), KNEE_CLEAR_MM)
         if hit:
             return f"膝撞{_cn(hit)}"

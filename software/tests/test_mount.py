@@ -241,3 +241,37 @@ def test_wall_trim_moves_hover_and_press_deeper_only_on_wall():
     if deny:
         assert math.isclose(eng.wall_trim, 10.0)
     assert eng.frozen is None
+
+
+def test_wall_trim_allows_return_to_floor_and_no_jump_at_hover():
+    """09-09 实机：修正 +16 吸在墙上后按 g 被拒'第 0 点足端撞墙面'——抬离点离模型墙面
+    15−16<10；修正量应放宽墙面净空。且 --wall-trim 预置时 1 w 到位不能跳。"""
+    io, ctl, eng, bot = make()
+    start(eng, bot)
+    assert eng.set_wall_trim(16.0) is None
+    band = eng.wall_band("L1")
+    h = (band[0] + band[1]) / 2.0
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", h)) is None
+    prev = contact_world(eng, "L1")
+    max_step = 0.0
+    for _ in range(int(20 / DT)):
+        bot.move_feet(eng.update(DT))
+        cur = contact_world(eng, "L1")
+        max_step = max(max_step, math.dist(prev, cur))
+        prev = cur
+        if eng.phase_of["L1"] == MountPhase.HOVER:
+            break
+    assert eng.phase_of["L1"] == MountPhase.HOVER
+    assert max_step < 5.0                                     # 平移→悬停无跳变
+    fw = contact_world(eng, "L1")
+    assert math.isclose(fw[0], -CFG.lift_clearance + 16.0, abs_tol=1e-6)
+    assert eng.land() is None
+    assert run(eng, bot, 15.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE
+               and ctl.is_attached(idx("L1")))
+    # 吸在墙上后回地：抬离点离模型墙面只有 −1，按修正放宽后必须受理
+    assert eng.request_move("L1", FLOOR, eng.floor_home("L1")) is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 15.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE
+               and eng.surf["L1"] is FLOOR and ctl.is_attached(idx("L1")))
+    assert eng.frozen is None

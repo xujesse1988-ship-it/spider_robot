@@ -735,6 +735,33 @@ class MountEngine:
             return why
         return None
 
+    def nudge_wall_target(self, name, dz=0.0, dy=0.0):
+        """悬停中沿墙面平移该腿落点（dz 上正、dy 左正 mm）：机身在抬腿时被腿链
+        弹性压沉（08-19 实测 13~27mm），模型以为还在指令位姿上，按同一世界高度
+        放第二只前足就会低一截——没有 IMU 只能悬停时按眼睛纠。新落点须过落点带
+        与压深复核，不过则回滚。返回 None=成功；str=拒绝原因。"""
+        if self.frozen:
+            return "冻结中"
+        if self.phase_of[name] != MountPhase.HOVER:
+            return f"{name} 不在悬停（只有悬停中才能挪落点）"
+        if self.surf[name] is not self.wall:
+            return f"{name} 悬停在{_cn(self.surf[name])}，本键只挪墙面落点"
+        old = self.pw[name]
+        p = self.wall.project((old[0], old[1] + dy, old[2] + dz))
+        why = self._check_landing(name, p, self.wall, self.pose)
+        if why is None:
+            self.pw[name] = p
+            why = self._check_air(name, w2b(self._foot_world(name), self.pose),
+                                  self.pose)
+            if why:
+                self.pw[name] = old
+                why = f"悬停点 {why}"
+        if why:
+            return why
+        self.landing[name] = w2b(p, self.pose)[:2]
+        self._refresh_targets()
+        return None
+
     def trim_text(self):
         """逐腿修正量的紧凑文本（全 0 时返回 '0'）。"""
         if not any(self.wall_trim.values()):

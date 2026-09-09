@@ -333,3 +333,31 @@ def test_wall_trim_is_per_leg():
                         CFG.leg("R1").press_delta_mm, abs_tol=1e-6)
     assert eng.set_wall_trim(1.0, ["ZZ"]) is not None      # 未知腿名被拒
     assert eng.frozen is None
+
+
+def test_nudge_wall_target_moves_hover_height_only_while_hovering():
+    """09-09 实机：L1 上墙吸住后机身前部被压沉，R1 悬停时比 L1 低且贴到玻璃——
+    没有 IMU 只能悬停时按眼睛把落点挪齐平。"""
+    io, ctl, eng, bot = make()
+    start(eng, bot)
+    band = eng.wall_band("L1")
+    h = (band[0] + band[1]) / 2.0
+    assert isinstance(eng.nudge_wall_target("L1", dz=5.0), str)     # 不在悬停：拒
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", h)) is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    z0 = contact_world(eng, "L1")[2]
+    assert eng.nudge_wall_target("L1", dz=5.0) is None
+    run(eng, bot, 0.1)
+    fw = contact_world(eng, "L1")
+    assert math.isclose(fw[2], z0 + 5.0, abs_tol=1e-6)             # 只动高度
+    assert math.isclose(fw[0], -CFG.lift_clearance, abs_tol=1e-6)
+    assert math.isclose(eng.pw["L1"][2], h + 5.0, abs_tol=1e-6)
+    # 挪出可落足带被拒、落点不动
+    far = eng.nudge_wall_target("L1", dz=400.0)
+    assert isinstance(far, str) and math.isclose(eng.pw["L1"][2], h + 5.0, abs_tol=1e-6)
+    assert eng.land() is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE
+               and ctl.is_attached(idx("L1")))
+    assert math.isclose(contact_world(eng, "L1")[2], h + 5.0, abs_tol=1e-6)
+    assert isinstance(eng.nudge_wall_target("L1", dz=5.0), str)     # 已落地：拒
+    assert eng.frozen is None

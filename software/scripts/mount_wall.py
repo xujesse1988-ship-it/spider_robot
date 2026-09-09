@@ -34,6 +34,10 @@
        腿往刚性玻璃里多压这么多，吸不上还会自动加深——宁可先给小的
        （09-09 实机：wall_dist 155 修正 16 时 L1 停在玻璃外 15mm 而 R1 已贴上，
        两只前腿差 16mm，逐腿标才对）
+  +/-  悬停中把这条腿的落点沿墙上下挪 ±5mm（= 同 +）：抬一条前腿机身前部就被
+       腿链弹性压沉一截（08-19 实测 13~27mm），抬第二条再沉一截，模型以为机身
+       还在指令位姿上，按同一世界高度放 R1 就会比 L1 低——悬停时目测两盘高度，
+       用这个把后放的一只提到与先放的一只齐平。落点带与压深会复核，出带会拒
   ↑/↓  俯仰 ±--pitch-step（抬头为正，上限 --pitch-max）
   ←/→  身体离墙/贴墙 5mm      [/]  身体降/升 5mm
        位姿改变按 2°/s、10mm/s 铺设；整段中间位姿逐个预检（接触足倾角≤15°、
@@ -494,7 +498,7 @@ def main():
                 last_esc = time.monotonic()
                 print("\n再按一次 ESC 确认退出（会放气——有足在墙上时先扶稳机身！）")
             elif k in ("UP", "DOWN", "LEFT", "RIGHT", "[", "]", "w", "g", "b",
-                       "h", "i", ".", ",") and released_hold:
+                       "h", "i", ".", ",", "+", "=", "-") and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动——取下后 ESC×2 退出")
             elif k in LEG_KEYS:
                 sel = LEG_KEYS[k]
@@ -543,6 +547,22 @@ def main():
                         say(f"{tgt} 墙面修正 {new:+g}mm：{where}。目测到 15mm 再按 i；"
                             f"下次启动用 --wall-trim {eng.trim_text().replace(' ', ',')}",
                             f"墙面修正 {tgt}={new:+g}（全机 {eng.trim_text()}）{pose_txt()}")
+            elif k in ("+", "=", "-"):
+                hov = eng.hover_leg
+                if hov is None:
+                    print("\n没有悬停中的腿——落点高度只能在悬停时调（w 抬到悬停后）")
+                else:
+                    dz = 5.0 if k in ("+", "=") else -5.0
+                    deny = eng.nudge_wall_target(hov, dz=dz)
+                    if deny:
+                        say(f"{hov} 落点上下挪 {dz:+g} 拒绝：{deny}",
+                            f"落点挪动拒绝 {hov} dz={dz:+g}：{deny}")
+                    else:
+                        fw = eng._foot_world(hov)
+                        say(f"{hov} 落点{'升' if dz > 0 else '降'} {abs(dz):g}mm → 离地 "
+                            f"{eng.pw[hov][2]:.0f}（悬停世界 {fw[0]:.0f},{fw[1]:.0f},"
+                            f"{fw[2]:.0f}）。与先放的那只目测齐平再按 i",
+                            f"落点挪动 {hov} dz={dz:+g} → 离地 {eng.pw[hov][2]:.0f}")
             elif k == "i":
                 hov = eng.hover_leg
                 deny = eng.land()
@@ -665,7 +685,8 @@ def main():
                 print(f"\n{hover_now} 已悬停：世界 ({fw[0]:.0f},{fw[1]:.0f},"
                       f"{fw[2]:.0f})，离面 {cfg.lift_clearance:g}mm（{hover_now} 墙面修正 "
                       f"{eng.wall_trim[hover_now]:+g}）——目视吸盘对正/间距，i 落下压入；"
-                      + ("间距不是 15 就按 . ,（每次 2mm）补到 15 再 i；" if on_wall else "")
+                      + ("间距不是 15 就 . ,（每次 2mm）补到 15；与另一只前盘不齐平"
+                         "就 +/-（每次 5mm）挪落点高度；" if on_wall else "")
                       + "不对就 g/h 挪走")
                 log.event(f"悬停：{hover_now} 世界 ({fw[0]:.0f},{fw[1]:.0f},{fw[2]:.0f})")
             hover_was = hover_now

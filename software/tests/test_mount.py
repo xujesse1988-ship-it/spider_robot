@@ -401,3 +401,31 @@ def test_floor_forward_moves_middle_leg_under_front_hip():
     sol = eng.geom["L2"].solve(tuple(eng.foot["L2"]), (0.0, 0.0, -1.0))
     assert sol["tilt"] < 0.5 and abs(sol["gamma"]) <= COXA_MAX_DEG
     assert eng.frozen is None
+
+
+def test_floor_moves_lift_higher_than_wall_moves():
+    """09-09 实机：L2/R2 绕髋摆动时吸盘蹭到玻璃地板——地面抬离量要盖过抬腿时的
+    自重下垂，墙面（法向无重力分量）仍用 lift_clearance。"""
+    io, ctl, eng, bot = make(floor_clear_mm=45.0)
+    start(eng, bot)
+    tgt = eng.floor_forward("L2", 85.0)
+    assert eng.request_move("L2", FLOOR, tgt) is None
+    lo = 1e9
+    for _ in range(int(25 / DT)):
+        bot.move_feet(eng.update(DT))
+        if eng.phase_of["L2"] in (MountPhase.TRANSFER, MountPhase.HOVER):
+            lo = min(lo, contact_world(eng, "L2")[2])      # 平移全程离地最低点
+        if eng.phase_of["L2"] == MountPhase.HOVER:
+            break
+    assert eng.phase_of["L2"] == MountPhase.HOVER
+    assert lo > 40.0, f"地面摆动最低离地 {lo:.1f}mm，应 >40"
+    assert math.isclose(contact_world(eng, "L2")[2], 45.0, abs_tol=1e-6)   # 悬停高度
+    assert eng.land() is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE
+               and ctl.is_attached(idx("L2")))
+    # 墙面不受影响：悬停仍在墙前 lift_clearance
+    band = eng.wall_band("L1")
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", sum(band) / 2)) is None
+    assert run(eng, bot, 25.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    assert math.isclose(contact_world(eng, "L1")[0], -CFG.lift_clearance, abs_tol=1e-6)
+    assert eng.frozen is None

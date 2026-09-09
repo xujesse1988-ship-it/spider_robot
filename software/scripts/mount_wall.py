@@ -32,6 +32,9 @@
   h    选中腿收起悬空（抬 15mm→缩到髋外 0.6 站位半径、站位面上 45mm，留在
        空中随身体动；不承载，互锁不算它）
   i    悬停腿落下压入吸附（DESCEND→PRESS→WAIT；FAULT 加深重试、耗尽冻结）
+       抬离高度分面：墙面 15mm（吸盘回弹口径，也是悬停目测基准），地面
+       --floor-clear（默认 45）——地面上腿一抬因自重下垂十几到二十几毫米，
+       抬 15 会让盘在摆动全程蹭地板（09-09 实机 L2/R2 摆动碰玻璃）
   . ,  墙面目标修正 ±2mm（. 往墙里补、, 退回，范围 -20~+40），**只改当前那条腿**
        （有悬停腿就改它，否则改 1~6 选中的腿）：悬停时目测吸盘离玻璃不是 15mm
        就按这个补到 15 再按 i。修正量逐腿独立，作用于该腿的墙面目标（悬停点、
@@ -97,7 +100,8 @@ from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import parse_leg_order
 from hexapod.mount import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
-                           LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, SWING_PHASES)
+                           LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, SWING_PHASES,
+                           FLOOR_CLEAR_MM)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
@@ -198,6 +202,11 @@ def main():
                          "或逐腿 L1:16,R1:0（未给的腿 0）。上次实验用 . , 各腿补到目测"
                          "15mm 的量。只作用于墙面目标，且叠进压入深度——给大了=命令腿"
                          "往刚性玻璃里硬压，宁可给小的")
+    ap.add_argument("--floor-clear", type=float, default=FLOOR_CLEAR_MM,
+                    help="地面移动的抬离高度 mm（默认 %(default)g，范围 20~80）：墙面用"
+                         f"的 {DEFAULT_CONFIG.lift_clearance:g} 是按吸盘回弹定的，地面上"
+                         "腿一抬还会因自重下垂十几到二十几毫米，抬少了盘在摆动全程蹭"
+                         "地板（09-09 实机 L2/R2 摆动碰玻璃）。墙面抬离量不受影响")
     ap.add_argument("--fwd-dist", type=float, default=85.0,
                     help="t 键：该腿绕髋摆到地面站位前方多远 mm（默认 %(default)g，"
                          "范围 0~160）。中腿 85 = 摆到前髋正下方（coxa 偏 29°，"
@@ -240,6 +249,8 @@ def main():
             wall_trim = parse_wall_trim(args.wall_trim)
         except ValueError as e:
             ap.error(str(e))
+    if not 20.0 <= args.floor_clear <= 80.0:
+        ap.error(f"--floor-clear {args.floor_clear:g} 非法：范围 20~80mm")
     if not 0.0 <= args.fwd_dist <= 160.0:
         ap.error(f"--fwd-dist {args.fwd_dist:g} 非法：范围 0~160mm")
     if not 1.0 <= args.pitch_step <= 10.0:
@@ -317,7 +328,8 @@ def main():
     ctl = AdhesionController(io, **ctl_kw)
     bot = Hexapod(drv, cfg)
     eng = MountEngine(cfg, ctl, front_hip_to_wall=args.wall_dist,
-                      pitch_max_deg=args.pitch_max, attach_order=attach_order)
+                      pitch_max_deg=args.pitch_max, attach_order=attach_order,
+                      floor_clear_mm=args.floor_clear)
     log.note("启动吸附序=" + "_".join(eng.attach_order))
     for n, v in wall_trim.items():
         deny = eng.set_wall_trim(v, [n])

@@ -50,6 +50,12 @@ BODY_CLEAR_MM = 5.0        # 机身/腹面离任何面的最小净空
 KNEE_CLEAR_MM = 8.0        # 膝离任何面的最小净空
 FOOT_AIR_CLEAR_MM = 10.0   # 悬空足离任何面的最小净空（位姿铺设预检）
 HOLD_TILT_DEG = 15.0       # 已吸附足在位姿改变中允许的指令倾角（吸盘容差）
+FLOOR_CLEAR_MM = 45.0      # 地面移动的抬离高度 mm（默认，--floor-clear 可调）：
+                           # cfg.lift_clearance=15 是按吸盘回弹 11~13mm 定的、够墙面
+                           # 用（墙面法向上没有重力下垂），但地面上腿一抬就因自重
+                           # 下垂十几到二十几毫米（08-19 量化同源），15mm 的抬离量
+                           # 让盘在摆动全程蹭着玻璃地板——09-09 实机 L2/R2 摆动时
+                           # 吸盘碰到地板
 NUDGE_SPEED_MMS = 20.0     # 悬停中挪落点的铺设速率 mm/s：盘离面只十几毫米时
                            # 不能一步跳过去（步进指令会让腿冲一下蹭到面）
 PITCH_RATE_DPS = 2.0       # 位姿铺设：俯仰速率 °/s
@@ -222,12 +228,14 @@ class MountEngine:
     （与 ClimbEngine 同序），全部 ATTACHED 后 started=True 才受理命令。"""
 
     def __init__(self, cfg: RobotConfig, ctl, wall_x=0.0, front_hip_to_wall=140.0,
-                 pitch_max_deg=90.0, ignore_tank_fault=False, attach_order=None):
+                 pitch_max_deg=90.0, ignore_tank_fault=False, attach_order=None,
+                 floor_clear_mm=FLOOR_CLEAR_MM):
         self.cfg, self.ctl = cfg, ctl
         self.ignore_tank_fault = ignore_tank_fault
         self.wall = wall_at(wall_x)
         self.surfaces = (FLOOR, self.wall)
         self.pitch_max = d2r(pitch_max_deg)
+        self.floor_clear = float(floor_clear_mm)
         self.geom = {leg.name: LegGeom(cfg, leg) for leg in cfg.legs}
         self.slot_order = tuple(sorted(
             LEG_NAMES, key=lambda n: (CLIMB.duty - CLIMB.offsets[n]) % 1.0))
@@ -427,7 +435,7 @@ class MountEngine:
         n_a = self.surf[name].n if self.surf[name] else surf.n
         # 悬停点带修正量：与 HOVER 相位的目标（pw − n·(depth+trim)，depth=−clearance）
         # 一致，否则平移到位切 HOVER 瞬间足端会跳 trim 毫米
-        end_w = _add(p_w, surf.n, self.cfg.lift_clearance - self._trim(name, surf))
+        end_w = _add(p_w, surf.n, self._clear(surf) - self._trim(name, surf))
         arc, why = self._check_path(name, start_w, end_w, n_a, surf.n)
         if why:
             return f"{name} 路径不可行：{why}"
@@ -733,6 +741,11 @@ class MountEngine:
         return None
 
     # ---------- 内部：摆动 ----------
+    def _clear(self, surf):
+        """该面的抬离高度：墙面用 cfg.lift_clearance（吸盘回弹口径），地面用
+        floor_clear（还要盖过抬腿时的自重下垂，否则盘在摆动中蹭地）。"""
+        return self.floor_clear if surf is FLOOR else self.cfg.lift_clearance
+
     def _trim(self, name, surf):
         """该腿在该面的目标修正量（只有墙面有，逐腿）。"""
         return self.wall_trim[name] if surf is self.wall else 0.0
@@ -748,7 +761,7 @@ class MountEngine:
         悬停/空中腿 = 当前点。"""
         if self.surf[name] is not None:
             return _add(self.pw[name], self.surf[name].n,
-                        self.cfg.lift_clearance - self._trim(name, self.surf[name]))
+                        self._clear(self.surf[name]) - self._trim(name, self.surf[name]))
         return b2w(self.air_pb[name], self.pose)
 
     def set_wall_trim(self, mm, legs=None):
@@ -893,13 +906,13 @@ class MountEngine:
                     self.frozen = (f"{name} 放气未建立：盘压 {ks} 未回升到 "
                                    f"{cfg.lift_release_kpa:g}kPa，不抬")
         elif ph == MountPhase.LIFT:
-            top = -cfg.lift_clearance
+            top = -self._clear(self.surf[name])
             self.depth[name] = max(top, self.depth[name] - cfg.lift_speed * dt)
             if self.depth[name] <= top + _EPS:
                 if self.ctl.state[i] == FootState.RELEASED:
                     self._start_transfer(name)
                 else:
-                    lift_t = (cfg.lift_clearance + press_depth) / cfg.lift_speed
+                    lift_t = (-top + press_depth) / cfg.lift_speed
                     if self._seg_t[name] > lift_t + VENT_STALL_S:
                         self.frozen = f"{name} 放气确认超时（排气堵/传感器漂移？）"
         elif ph == MountPhase.TRANSFER:
@@ -919,7 +932,7 @@ class MountEngine:
                     # 悬停：挂到目标面上、深度 = -lift_clearance
                     self.surf[name] = sw["dst_surf"]
                     self.pw[name] = sw["dst_pw"]
-                    self.depth[name] = -cfg.lift_clearance
+                    self.depth[name] = -self._clear(sw["dst_surf"])
                     self.phase_of[name] = MountPhase.HOVER
         elif ph == MountPhase.HOVER:
             pass

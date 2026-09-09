@@ -239,7 +239,7 @@ def test_wall_trim_moves_hover_and_press_deeper_only_on_wall():
     deny = eng.set_wall_trim(40.0)
     assert deny is None or isinstance(deny, str)
     if deny:
-        assert math.isclose(eng.wall_trim, 10.0)
+        assert math.isclose(eng.wall_trim["L1"], 10.0)
     assert eng.frozen is None
 
 
@@ -306,3 +306,30 @@ def test_attach_order_rejects_bad_permutation():
         except ValueError:
             continue
         raise AssertionError(f"{bad} 应被拒绝")
+
+
+def test_wall_trim_is_per_leg():
+    """09-09 实机：wall_dist 155 修正 16 时 L1 停在玻璃外 15mm、R1 已贴上——两只
+    前腿的到达差 16mm，修正量必须逐腿，全局一个值会把 R1 按进玻璃。"""
+    io, ctl, eng, bot = make()
+    start(eng, bot)
+    assert eng.set_wall_trim(16.0, ["L1"]) is None
+    assert math.isclose(eng.wall_trim["L1"], 16.0)
+    assert all(math.isclose(eng.wall_trim[n], 0.0) for n in LEG_NAMES if n != "L1")
+    band = eng.wall_band("L1")
+    h = (band[0] + band[1]) / 2.0
+    for leg, want in (("L1", -CFG.lift_clearance + 16.0), ("R1", -CFG.lift_clearance)):
+        assert eng.request_move(leg, eng.wall, eng.wall_target(leg, h)) is None
+        assert run(eng, bot, 20.0, lambda: eng.phase_of[leg] == MountPhase.HOVER)
+        fw = contact_world(eng, leg)
+        assert math.isclose(fw[0], want, abs_tol=1e-6), f"{leg} 悬停 x={fw[0]}"
+        assert eng.land() is None
+        assert run(eng, bot, 20.0, lambda: eng.phase_of[leg] == MountPhase.STANCE
+                   and ctl.is_attached(idx(leg)))
+    # 压入位：L1 深 16、R1 不深
+    assert math.isclose(contact_world(eng, "L1")[0],
+                        CFG.leg("L1").press_delta_mm + 16.0, abs_tol=1e-6)
+    assert math.isclose(contact_world(eng, "R1")[0],
+                        CFG.leg("R1").press_delta_mm, abs_tol=1e-6)
+    assert eng.set_wall_trim(1.0, ["ZZ"]) is not None      # 未知腿名被拒
+    assert eng.frozen is None

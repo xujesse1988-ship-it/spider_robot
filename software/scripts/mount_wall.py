@@ -26,10 +26,14 @@
   h    选中腿收起悬空（抬 15mm→缩到髋外 0.6 站位半径、站位面上 45mm，留在
        空中随身体动；不承载，互锁不算它）
   i    悬停腿落下压入吸附（DESCEND→PRESS→WAIT；FAULT 加深重试、耗尽冻结）
-  . ,  墙面目标修正 ±2mm（. 往墙里补、, 退回，范围 -20~+40）：悬停时目测吸盘离
-       玻璃不是 15mm 就按这个补到 15 再按 i。修正量作用于所有墙面目标（悬停点、
-       压入位、落点带），地面目标不动；用了多少记下来，下次 --wall-trim 直接给
-       （09-09 E1 实机：模型 15mm 目测 32mm，腿在前伸上举姿态实际到达比模型短）
+  . ,  墙面目标修正 ±2mm（. 往墙里补、, 退回，范围 -20~+40），**只改当前那条腿**
+       （有悬停腿就改它，否则改 1~6 选中的腿）：悬停时目测吸盘离玻璃不是 15mm
+       就按这个补到 15 再按 i。修正量逐腿独立，作用于该腿的墙面目标（悬停点、
+       压入位、落点带），地面目标不动；每条腿标出来的值记下来，下次
+       --wall-trim L1:16,R1:0 直接给。⚠ 修正量直接叠进压入深度：给大了等于命令
+       腿往刚性玻璃里多压这么多，吸不上还会自动加深——宁可先给小的
+       （09-09 实机：wall_dist 155 修正 16 时 L1 停在玻璃外 15mm 而 R1 已贴上，
+       两只前腿差 16mm，逐腿标才对）
   ↑/↓  俯仰 ±--pitch-step（抬头为正，上限 --pitch-max）
   ←/→  身体离墙/贴墙 5mm      [/]  身体降/升 5mm
        位姿改变按 2°/s、10mm/s 铺设；整段中间位姿逐个预检（接触足倾角≤15°、
@@ -95,6 +99,41 @@ LIN_STEP_MM = 5.0
 ARROWS = {b"[A": "UP", b"[B": "DOWN", b"[C": "RIGHT", b"[D": "LEFT"}
 
 
+def parse_wall_trim(spec):
+    """解析 --wall-trim：'16'=全腿统一，'L1:16,R1:0'=逐腿（未给的腿 0）。
+    返回 {腿名: mm}；非法抛 ValueError（脚本层转 ap.error）。"""
+    spec = spec.strip()
+    if not spec:
+        raise ValueError("--wall-trim 不能为空")
+    def _v(t):
+        try:
+            v = float(t)
+        except ValueError:
+            raise ValueError(f"--wall-trim 修正量 {t!r} 不是数字")
+        if not -20.0 <= v <= 40.0:   # nan 比较为假一并拒
+            raise ValueError(f"--wall-trim {v:g} 非法：范围 -20~40mm")
+        return v
+    if ":" not in spec:
+        return {n: _v(spec) for n in LEG_NAMES}
+    out = {}
+    for part in spec.replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            raise ValueError(f"--wall-trim 逐腿格式为 L1:16,R1:0，看到 {part!r}")
+        name, _, val = part.partition(":")
+        name = name.strip().upper()
+        if name not in LEG_NAMES:
+            raise ValueError(f"--wall-trim 未知腿名 {name!r}（可选 {'/'.join(LEG_NAMES)}）")
+        if name in out:
+            raise ValueError(f"--wall-trim 腿 {name} 给了两次")
+        out[name] = _v(val.strip())
+    if not out:
+        raise ValueError("--wall-trim 没解析出任何腿")
+    return out
+
+
 def read_key(timeout):
     """body_lean.read_key 的四方向变体：↑/↓/←/→ 识别为 UP/DOWN/LEFT/RIGHT，
     其余转义序列整包丢弃，裸 ESC 语义不变（退出确认键）。"""
@@ -141,9 +180,11 @@ def main():
                          "诊断用：吸不上的腿排到最后，其余五足吸牢当反力座再压它——"
                          "启动早段只有一两足吸住时，压入反力会把机身顶起而不是把盘"
                          "压进地面")
-    ap.add_argument("--wall-trim", type=float, default=0.0,
-                    help="墙面目标修正 mm（默认 0，范围 -20~40；正=再往墙里压）：上次"
-                         "实验用 . , 补到目测 15mm 的量。只作用于墙面目标")
+    ap.add_argument("--wall-trim", default=None,
+                    help="墙面目标修正 mm（正=再往墙里压，范围 -20~40）：统一值如 16，"
+                         "或逐腿 L1:16,R1:0（未给的腿 0）。上次实验用 . , 各腿补到目测"
+                         "15mm 的量。只作用于墙面目标，且叠进压入深度——给大了=命令腿"
+                         "往刚性玻璃里硬压，宁可给小的")
     ap.add_argument("--pitch-step", type=float, default=5.0,
                     help="每按一次 ↑/↓ 的俯仰量°（默认 %(default)g，范围 1~10）")
     ap.add_argument("--pitch-max", type=float, default=30.0,
@@ -176,8 +217,12 @@ def main():
             attach_order = parse_leg_order(args.attach_order)
         except ValueError as e:
             ap.error(str(e).replace("--leg-order", "--attach-order"))
-    if not -20.0 <= args.wall_trim <= 40.0:
-        ap.error(f"--wall-trim {args.wall_trim:g} 非法：范围 -20~40mm")
+    wall_trim = {}
+    if args.wall_trim is not None:
+        try:
+            wall_trim = parse_wall_trim(args.wall_trim)
+        except ValueError as e:
+            ap.error(str(e))
     if not 1.0 <= args.pitch_step <= 10.0:
         ap.error(f"--pitch-step {args.pitch_step:g} 非法：范围 1~10°")
     if not 0.0 <= args.pitch_max <= 90.0:
@@ -255,9 +300,11 @@ def main():
     eng = MountEngine(cfg, ctl, front_hip_to_wall=args.wall_dist,
                       pitch_max_deg=args.pitch_max, attach_order=attach_order)
     log.note("启动吸附序=" + "_".join(eng.attach_order))
-    if args.wall_trim:
-        eng.set_wall_trim(args.wall_trim)
-        log.note(f"wall_trim={args.wall_trim:g}")
+    for n, v in wall_trim.items():
+        deny = eng.set_wall_trim(v, [n])
+        if deny:
+            ap.error(f"--wall-trim {n}:{v:g} 不可行：{deny}")
+    log.note("wall_trim=" + eng.trim_text())
     watch = ClimbWatch(log, eng, ctl, io, cfg)
     log.note(f"阈值: ATTACH={ATTACH_KPA} PUMP_ON={PUMP_ON_KPA}"
              f" PUMP_OFF={PUMP_OFF_KPA} suck_timeout={ctl.suck_timeout_s}s")
@@ -479,22 +526,23 @@ def main():
                         "不承载，互锁不算它；位姿改变时随身体）",
                         f"收腿受理：{sel} {pose_txt()}")
             elif k in (".", ","):
-                new = eng.wall_trim + (2.0 if k == "." else -2.0)
+                # 只改"当前那条腿"：有悬停腿就是它（正对着它目测），否则改选中的腿
+                tgt = eng.hover_leg or sel
+                new = eng.wall_trim[tgt] + (2.0 if k == "." else -2.0)
                 if not -20.0 <= new <= 40.0:
-                    print(f"\n墙面修正 {new:+g} 超范围（-20~40）")
+                    print(f"\n{tgt} 墙面修正 {new:+g} 超范围（-20~40）")
                 else:
-                    deny = eng.set_wall_trim(new)
+                    deny = eng.set_wall_trim(new, [tgt])
                     if deny:
-                        say(f"墙面修正 {new:+g} 拒绝：{deny}（腿够不到了——机器人离墙太远，"
-                            "或落点太高）", f"墙面修正拒绝 {new:+g}：{deny}")
+                        say(f"{tgt} 墙面修正 {new:+g} 拒绝：{deny}（腿够不到了——机器人"
+                            "离墙太远，或落点太高）", f"墙面修正拒绝 {tgt}:{new:+g}：{deny}")
                     else:
-                        hov = eng.hover_leg
-                        where = (f"{hov} 悬停点随之{'贴近' if k == '.' else '远离'}墙 2mm"
-                                 if hov and eng.surf[hov] is eng.wall else "无墙面悬停腿，"
-                                 "对之后的墙面目标生效")
-                        say(f"墙面目标修正 {eng.wall_trim:+g}mm：{where}。目测到 15mm 再按 i；"
-                            f"下次启动用 --wall-trim {eng.wall_trim:g}",
-                            f"墙面修正={eng.wall_trim:+g} {pose_txt()}")
+                        where = (f"悬停点随之{'贴近' if k == '.' else '远离'}墙 2mm"
+                                 if eng.hover_leg == tgt and eng.surf[tgt] is eng.wall
+                                 else "该腿不在墙面悬停，对它之后的墙面目标生效")
+                        say(f"{tgt} 墙面修正 {new:+g}mm：{where}。目测到 15mm 再按 i；"
+                            f"下次启动用 --wall-trim {eng.trim_text().replace(' ', ',')}",
+                            f"墙面修正 {tgt}={new:+g}（全机 {eng.trim_text()}）{pose_txt()}")
             elif k == "i":
                 hov = eng.hover_leg
                 deny = eng.land()
@@ -615,8 +663,8 @@ def main():
                 fw = eng._foot_world(hover_now)
                 on_wall = eng.surf[hover_now] is eng.wall
                 print(f"\n{hover_now} 已悬停：世界 ({fw[0]:.0f},{fw[1]:.0f},"
-                      f"{fw[2]:.0f})，离面 {cfg.lift_clearance:g}mm（墙面修正 "
-                      f"{eng.wall_trim:+g}）——目视吸盘对正/间距，i 落下压入；"
+                      f"{fw[2]:.0f})，离面 {cfg.lift_clearance:g}mm（{hover_now} 墙面修正 "
+                      f"{eng.wall_trim[hover_now]:+g}）——目视吸盘对正/间距，i 落下压入；"
                       + ("间距不是 15 就按 . ,（每次 2mm）补到 15 再 i；" if on_wall else "")
                       + "不对就 g/h 挪走")
                 log.event(f"悬停：{hover_now} 世界 ({fw[0]:.0f},{fw[1]:.0f},{fw[2]:.0f})")

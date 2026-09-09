@@ -202,6 +202,12 @@ def main():
                          "或逐腿 L1:16,R1:0（未给的腿 0）。上次实验用 . , 各腿补到目测"
                          "15mm 的量。只作用于墙面目标，且叠进压入深度——给大了=命令腿"
                          "往刚性玻璃里硬压，宁可给小的")
+    ap.add_argument("--support-legs", default=None,
+                    help="只承重不吸附的腿，如 L2,R2：压到位即回支撑、不抽气、不进"
+                         "放气段，也不参与互锁与漏气监护。用于 09-09 实机情形——上墙"
+                         "过程中中腿吸盘吸不住地面，但压着能靠摩擦当支撑；不设的话"
+                         "互锁会因'L2 未吸附'拒绝一切动作。⚠ 这些腿只能承压不能承拉，"
+                         "身体俯仰后扛不住剥离力矩，别把它们算成安全余量")
     ap.add_argument("--floor-clear", type=float, default=FLOOR_CLEAR_MM,
                     help="地面移动的抬离高度 mm（默认 %(default)g，范围 20~80）：墙面用"
                          f"的 {DEFAULT_CONFIG.lift_clearance:g} 是按吸盘回弹定的，地面上"
@@ -249,6 +255,14 @@ def main():
             wall_trim = parse_wall_trim(args.wall_trim)
         except ValueError as e:
             ap.error(str(e))
+    support_only = ()
+    if args.support_legs:
+        support_only = tuple(t.strip().upper()
+                             for t in args.support_legs.replace("_", ",").split(",")
+                             if t.strip())
+        bad = [n for n in support_only if n not in LEG_NAMES]
+        if bad:
+            ap.error(f"--support-legs 未知腿名 {bad}（可选 {'/'.join(LEG_NAMES)}）")
     if not 20.0 <= args.floor_clear <= 80.0:
         ap.error(f"--floor-clear {args.floor_clear:g} 非法：范围 20~80mm")
     if not 0.0 <= args.fwd_dist <= 160.0:
@@ -329,7 +343,9 @@ def main():
     bot = Hexapod(drv, cfg)
     eng = MountEngine(cfg, ctl, front_hip_to_wall=args.wall_dist,
                       pitch_max_deg=args.pitch_max, attach_order=attach_order,
-                      floor_clear_mm=args.floor_clear)
+                      floor_clear_mm=args.floor_clear, support_only=support_only)
+    if support_only:
+        log.note("support_only=" + ",".join(support_only))
     log.note("启动吸附序=" + "_".join(eng.attach_order))
     for n, v in wall_trim.items():
         deny = eng.set_wall_trim(v, [n])
@@ -442,6 +458,10 @@ def main():
         print(f"起始位姿：{pose_txt()}（--wall-dist 量的是前腿 coxa 轴到墙面）")
         print("启动吸附序：" + "→".join(eng.attach_order)
               + ("（默认窗序）" if attach_order is None else "（--attach-order）"))
+        if support_only:
+            print("只承重不吸附：" + "/".join(support_only)
+                  + "——压到位即回支撑，不抽气、不算进互锁；只能承压不能承拉，"
+                    "俯仰后别指望它们扛剥离力矩")
         for n in ("L1", "R1"):
             band = eng.wall_band(n)
             txt = (f"离地 {band[0]:.0f}~{band[1]:.0f}mm" if band else "无")
@@ -730,8 +750,9 @@ def main():
                 st = eng.surf[swing_was]
                 where = ("空中" if st is None else
                          {"floor": "地面", "wall": "墙面"}.get(st.name, st.name))
-                say(f"{swing_was} 收口：{where} "
-                    f"{'已吸附' if ctl.is_attached(LEG_NAMES.index(swing_was)) else ''}"
+                mark = ("只承重（不吸附）" if swing_was in support_only else
+                        "已吸附" if ctl.is_attached(LEG_NAMES.index(swing_was)) else "")
+                say(f"{swing_was} 收口：{where} {mark}"
                     f"；接触腿 {'/'.join(eng.contact_legs())}",
                     f"收口：{swing_was}→{where} 接触腿={'/'.join(eng.contact_legs())}")
             swing_was = swing_now

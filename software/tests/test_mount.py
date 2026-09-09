@@ -429,3 +429,35 @@ def test_floor_moves_lift_higher_than_wall_moves():
     assert run(eng, bot, 25.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
     assert math.isclose(contact_world(eng, "L1")[0], -CFG.lift_clearance, abs_tol=1e-6)
     assert eng.frozen is None
+
+
+def test_support_only_legs_bear_load_without_attaching():
+    """09-09 实机：上墙过程中中腿吸盘吸不住地面，但压着能靠摩擦当支撑。这些腿要
+    压到位即回支撑、不抽气、不进放气段，且不参与互锁——否则互锁会拒绝一切动作。"""
+    io = MockVacuumIO(6)
+    io.sealed[LEG_NAMES.index("L2")] = False          # 中腿吸不住（真机情形）
+    io.sealed[LEG_NAMES.index("R2")] = False
+    ctl = AdhesionController(io)
+    eng = MountEngine(CFG, ctl, support_only=("L2", "R2"))
+    bot = Hexapod(MockDriver(), CFG)
+    start(eng, bot)
+    assert eng.started and eng.frozen is None
+    assert ctl.attached_count() == 4                   # 四条吸住，中腿只压着
+    for n in ("L2", "R2"):
+        assert eng.phase_of[n] == MountPhase.STANCE and eng.surf[n] is FLOOR
+        assert not ctl.is_attached(idx(n))
+        assert math.isclose(eng.depth[n], CFG.leg(n).press_delta_mm, abs_tol=1e-6)
+    # 互锁不因中腿没吸住而拒绝
+    band = eng.wall_band("L1")
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", sum(band) / 2)) is None
+    assert run(eng, bot, 25.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE
+               and ctl.is_attached(idx("L1")))
+    # 只承重腿自己被挪走时不进放气段（没真空可放）
+    assert eng.request_move("L2", FLOOR, eng.floor_forward("L2", 60.0)) is None
+    assert eng.phase_of["L2"] == MountPhase.LIFT
+    assert run(eng, bot, 25.0, lambda: eng.phase_of["L2"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE)
+    assert not ctl.is_attached(idx("L2")) and eng.frozen is None

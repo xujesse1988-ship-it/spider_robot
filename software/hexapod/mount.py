@@ -229,13 +229,21 @@ class MountEngine:
 
     def __init__(self, cfg: RobotConfig, ctl, wall_x=0.0, front_hip_to_wall=140.0,
                  pitch_max_deg=90.0, ignore_tank_fault=False, attach_order=None,
-                 floor_clear_mm=FLOOR_CLEAR_MM):
+                 floor_clear_mm=FLOOR_CLEAR_MM, support_only=()):
         self.cfg, self.ctl = cfg, ctl
         self.ignore_tank_fault = ignore_tank_fault
         self.wall = wall_at(wall_x)
         self.surfaces = (FLOOR, self.wall)
         self.pitch_max = d2r(pitch_max_deg)
         self.floor_clear = float(floor_clear_mm)
+        # 只承重不吸附的腿（09-09 实机：上墙过程中中腿吸盘吸不住地面，但压着能靠
+        # 摩擦当支撑）。这些腿：压到位即回支撑不抽气、不进 VENT（无真空可放）、
+        # 不参与互锁与漏气监护。⚠ 只能承压不能承拉——身体俯仰后它们扛不住剥离
+        # 力矩，靠它们的支撑随俯仰增大而失效
+        self.support_only = set(support_only)
+        bad = self.support_only - set(LEG_NAMES)
+        if bad:
+            raise ValueError(f"support_only 含未知腿 {sorted(bad)}")
         self.geom = {leg.name: LegGeom(cfg, leg) for leg in cfg.legs}
         self.slot_order = tuple(sorted(
             LEG_NAMES, key=lambda n: (CLIMB.duty - CLIMB.offsets[n]) % 1.0))
@@ -622,7 +630,8 @@ class MountEngine:
         # 互锁：其余接触腿全 ATTACHED 且不漏且盘压过抬腿门槛（悬空腿豁免）
         for n in LEG_NAMES:
             if n == name or self.surf[n] is None \
-                    or self.phase_of[n] != MountPhase.STANCE:
+                    or self.phase_of[n] != MountPhase.STANCE \
+                    or n in self.support_only:
                 continue
             i = LEG_NAMES.index(n)
             if not self.ctl.is_attached(i):
@@ -637,13 +646,14 @@ class MountEngine:
 
     def _leaking_contact(self):
         return any(self.surf[n] is not None and self.phase_of[n] == MountPhase.STANCE
+                   and n not in self.support_only
                    and self.ctl.is_leaking(LEG_NAMES.index(n)) for n in LEG_NAMES)
 
     def _leak_watch(self):
         for n in LEG_NAMES:
             i = LEG_NAMES.index(n)
             if self.surf[n] is not None and self.phase_of[n] == MountPhase.STANCE \
-                    and self.ctl.is_leaking(i) \
+                    and n not in self.support_only and self.ctl.is_leaking(i) \
                     and self.ctl.leak_time(i) > self.cfg.leak_rescue_s:
                 self.frozen = (f"{n} 漏气挽救超 {self.cfg.leak_rescue_s}s"
                                f"（查 {n} 吸盘唇口/支路密封）")
@@ -863,6 +873,9 @@ class MountEngine:
 
     def _begin_swing(self, name):
         if self.surf[name] is not None and self.phase_of[name] == MountPhase.STANCE:
+            if name in self.support_only:
+                self.phase_of[name] = MountPhase.LIFT      # 没吸附，无真空可放
+                return
             self.ctl.request_release(LEG_NAMES.index(name))
             self.phase_of[name] = MountPhase.VENT
         else:
@@ -942,9 +955,15 @@ class MountEngine:
                 self.phase_of[name] = MountPhase.PRESS
         elif ph == MountPhase.PRESS:
             self.depth[name] = min(press_depth, self.depth[name] + cfg.press_speed * dt)
-            if self.depth[name] >= press_depth - _EPS and self._may_attach(name):
-                self.ctl.request_attach(i)
-                self.phase_of[name] = MountPhase.WAIT
+            if self.depth[name] >= press_depth - _EPS:
+                if name in self.support_only:             # 只承重：压到位即收口
+                    if self._attach_queue and self._attach_queue[0] == name:
+                        self._attach_queue.pop(0)
+                    self.phase_of[name] = MountPhase.STANCE
+                    self._sw.pop(name, None)
+                elif self._may_attach(name):
+                    self.ctl.request_attach(i)
+                    self.phase_of[name] = MountPhase.WAIT
         elif ph == MountPhase.RETRY_LIFT:
             top = press_depth - cfg.retry_deeper_mm - cfg.retry_lift_mm
             self.depth[name] = max(top, self.depth[name] - cfg.press_speed * dt)

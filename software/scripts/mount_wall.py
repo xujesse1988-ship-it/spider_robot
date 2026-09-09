@@ -23,10 +23,12 @@
        离墙多远，再按 i 沿墙法向（+x）压入 press_delta 抽气确认
   g    选中腿→地面回位（该腿爬墙站位在当前位姿下投影到地面的点）
   b    选中腿→地面正后方 --rear-dist（后腿 coxa 后摆指正后，β=180°）
-  t    选中腿→地面、站位前方 --fwd-dist（默认 85）：做前足上墙**之前**先把两条
-       中腿走到前髋底下。默认站位的中足在机身中心正下方，与重心几乎重合，抬起
-       第二只前足时前半机身成悬臂——09-09 实测前缘下沉 26mm 且吸住后不回弹
-       （L1 那次只沉 6mm，因为当时中腿还兜得住）
+  t    选中腿绕髋**摆**到地面站位前方 --fwd-dist（默认 85），髋足距离不变、吸盘
+       轴仍⊥地面：做前足上墙**之前**先把两条中腿摆到前髋底下。默认站位的中足在
+       机身中心正下方，与重心几乎重合，抬起第二只前足时前半机身成悬臂——09-09
+       实测前缘下沉 26mm 且吸住后不回弹（L1 那次只沉 6mm，因为当时中腿还兜得住）。
+       ⚠ 是摆不是平移：平移会把腿伸长（中腿前移 85 时髋足距 176.6→196.0），倾角
+       涨到 10.6°，虽在 12° 带内但目视明显斜（09-09 实机）；摆动时倾角恒 0
   h    选中腿收起悬空（抬 15mm→缩到髋外 0.6 站位半径、站位面上 45mm，留在
        空中随身体动；不承载，互锁不算它）
   i    悬停腿落下压入吸附（DESCEND→PRESS→WAIT；FAULT 加深重试、耗尽冻结）
@@ -197,9 +199,9 @@ def main():
                          "15mm 的量。只作用于墙面目标，且叠进压入深度——给大了=命令腿"
                          "往刚性玻璃里硬压，宁可给小的")
     ap.add_argument("--fwd-dist", type=float, default=85.0,
-                    help="t 键：该腿落到地面站位前方多远 mm（默认 %(default)g，范围 "
-                         "0~160）。中腿 85 = 挪到前髋正下方（不改侧向时的可达上限）；"
-                         "更靠前要同时收侧向，本键不改侧向")
+                    help="t 键：该腿绕髋摆到地面站位前方多远 mm（默认 %(default)g，"
+                         "范围 0~160）。中腿 85 = 摆到前髋正下方（coxa 偏 29°，"
+                         "髋足距离与吸盘垂直度都不变）")
     ap.add_argument("--pitch-step", type=float, default=5.0,
                     help="每按一次 ↑/↓ 的俯仰量°（默认 %(default)g，范围 1~10）")
     ap.add_argument("--pitch-max", type=float, default=30.0,
@@ -535,8 +537,13 @@ def main():
                 do_move(sel, FLOOR, eng.floor_back(sel, rd),
                         f"正后方 {rd:.0f}mm 地面")
             elif k == "t":
-                do_move(sel, FLOOR, eng.floor_forward(sel, args.fwd_dist),
-                        f"站位前方 {args.fwd_dist:.0f}mm 地面")
+                p = eng.floor_forward(sel, args.fwd_dist)
+                if p is None:
+                    say(f"{sel} 摆不到站位前方 {args.fwd_dist:g}mm（前向分量超过髋足"
+                        "距离）——减小 --fwd-dist",
+                        f"站位前方拒绝（{sel}）：超出髋足距离")
+                else:
+                    do_move(sel, FLOOR, p, f"站位前方 {args.fwd_dist:.0f}mm 地面")
             elif k == "h":
                 deny = eng.request_tuck(sel)
                 if deny:

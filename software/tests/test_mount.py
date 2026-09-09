@@ -378,11 +378,18 @@ def test_floor_forward_moves_middle_leg_under_front_hip():
     前半机身成悬臂，前缘沉 26mm 且吸住后不回弹。把中腿先走到前髋底下缓解。"""
     io, ctl, eng, bot = make()
     start(eng, bot)
+    hip = eng.hip_world("L2")
     home = eng.floor_home("L2")
+    r0 = math.hypot(home[0] - hip[0], home[1] - hip[1])
     tgt = eng.floor_forward("L2", 85.0)
-    assert math.isclose(tgt[0] - home[0], 85.0, abs_tol=1e-6)     # 只往前，不动侧向
-    assert math.isclose(tgt[1], home[1], abs_tol=1e-6)
+    assert math.isclose(tgt[0] - home[0], 85.0, abs_tol=1e-6)     # 前向分量就是 dist
     assert abs(tgt[2]) < 1e-9
+    # 关键：绕髋摆动，髋足距离不变 → 吸盘轴仍⊥地面（平移会拉长半径把倾角带到 10.6°）
+    assert math.isclose(math.hypot(tgt[0] - hip[0], tgt[1] - hip[1]), r0, abs_tol=1e-6)
+    assert abs(tgt[1] - home[1]) > 10.0                            # 侧向确实收了
+    pb0 = w2b((tgt[0], tgt[1], -CFG.leg("L2").press_delta_mm), eng.pose)
+    assert eng.geom["L2"].solve(pb0, (0.0, 0.0, -1.0))["tilt"] < 0.5
+    assert eng.floor_forward("L2", 500.0) is None                  # 摆不到：超髋足距离
     assert eng.request_move("L2", FLOOR, tgt) is None
     assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.HOVER)
     assert eng.land() is None
@@ -392,5 +399,5 @@ def test_floor_forward_moves_middle_leg_under_front_hip():
     pb = w2b(eng.pw["L2"], eng.pose)
     assert 80.0 < pb[0] < 90.0
     sol = eng.geom["L2"].solve(tuple(eng.foot["L2"]), (0.0, 0.0, -1.0))
-    assert sol["tilt"] <= TILT_BAND_DEG and abs(sol["gamma"]) <= COXA_MAX_DEG
+    assert sol["tilt"] < 0.5 and abs(sol["gamma"]) <= COXA_MAX_DEG
     assert eng.frozen is None

@@ -368,16 +368,33 @@ class MountEngine:
         return FLOOR.project(b2w(self.default_feet[name], self.pose))
 
     def floor_forward(self, name, dist):
-        """该腿地面站位沿机身前进方向平移 dist（+ 朝墙）后的地面点。
+        """该腿地面落点绕髋**摆**到站位前方 dist 处（+ 朝墙），**保持髋足距离不变**。
         用途：把中腿走到前髋底下再做前足上墙——默认站位下中足在机身中心正下方
         （身体系 x=0），与重心几乎重合，抬起第二只前足时前半机身成悬臂，
-        09-09 实测机身前缘下沉 26mm 且吸住后不回弹。"""
+        09-09 实测机身前缘下沉 26mm 且吸住后不回弹。
+        ⚠ 必须摆不能平移：吸盘轴对面的倾角只由髋足距离（与压深）决定，站位半径
+        是"轴⊥面"的解；平移会把半径拉长（中腿前移 85 时 176.6→196.0，倾角 10.6°，
+        卡在 12° 带内侧不被拒但目视明显斜，09-09 实机复现）。摆动下倾角恒 0。
+        超出该腿半径（|前向分量| > r）时返回 None，调用方按不可行处理。"""
+        hip = self.hip_world(name)
         home = self.floor_home(name)
+        ox, oy = home[0] - hip[0], home[1] - hip[1]
+        r = math.hypot(ox, oy)
         fx, fy, _ = b2w_dir((1.0, 0.0, 0.0), self.pose)
         k = math.hypot(fx, fy)
-        if k < 1e-9:
+        if k < 1e-9 or r < 1e-9:
             return home
-        return FLOOR.project((home[0] + fx / k * dist, home[1] + fy / k * dist, 0.0))
+        ux, uy = fx / k, fy / k          # 机身前进方向在地面上的投影
+        vx, vy = -uy, ux                 # 其左法向
+        a = ox * ux + oy * uy            # 站位落点相对髋的前向/侧向分量
+        b = ox * vx + oy * vy
+        a2 = a + float(dist)
+        if abs(a2) > r - 1e-9:
+            return None                  # 摆不到（前向分量超过髋足距离）
+        sgn = math.copysign(1.0, b if abs(b) > 1e-9 else self.cfg.leg(name).mount_y)
+        b2 = sgn * math.sqrt(r * r - a2 * a2)
+        return FLOOR.project((hip[0] + a2 * ux + b2 * vx,
+                              hip[1] + a2 * uy + b2 * vy, 0.0))
 
     def floor_back(self, name, dist=None):
         """后腿指正后：髋正后方 dist 处的地面点（世界 y=髋 y）。dist 缺省取该腿

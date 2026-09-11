@@ -11,6 +11,10 @@
 > 这份文档是给新会话的交接件：读它 + `tools/mount_analysis.py`、`tools/mount_plan.py`
 > 的文件头，就能接着做，不必回看旧对话。设计图解与动画见
 > [`html/wall-mount-20260906.html`](../html/wall-mount-20260906.html)。
+>
+> **实验的步骤与记录另开一份：[`WALL-MOUNT-LAB.md`](WALL-MOUNT-LAB.md)**（09-11 起）。
+> 分工：本文管**设计、几何、原因分析**（真源）；LAB 管**做什么、怎么做、量到了什么**。
+> 要上机跑实验，直接看 LAB。
 
 ---
 

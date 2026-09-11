@@ -778,3 +778,30 @@ def test_handover_phases_never_open_the_valve_and_block_other_commands():
     assert eng.pose == pose0
     assert run(eng, bot, 10.0, lambda: eng.phase_of["L1"] == MountPhase.VENT)
     assert eng.frozen is None
+
+
+def test_over_cap_leg_can_still_share_load_but_never_goes_deeper():
+    """压深上限要按**相对**判：只拦"把已经越界的量推得更糟"的动作。
+    09-11 仿真复现的真 bug——L1 带 --wall-trim 16 上墙后命令压深 18+16=34 本就超
+    28，而墙面腿的交接是沿墙切向（n_z=0）、压深一毫米都不动，绝对值判会拒掉一个
+    根本不改这个量的动作：L1 一上墙，抬 R1 的交接就被"L1 压入 34 超 28"整条拒绝，
+    B 组恰好死在要测的那一步。"""
+    io, ctl, eng, bot = make_ho()
+    assert eng.set_wall_trim(16.0, ["L1"]) is None
+    start(eng, bot)
+    to_wall(eng, bot, "L1", 208.0)
+    pen_wall = eng._pen("L1")
+    assert pen_wall > PRESS_DEPTH_MAX                      # 本就超上限（trim 叠进去）
+    # 抬 R1：L1 作为接载腿必须能参与分摊（它的压深根本不会变）
+    assert eng.request_move("R1", eng.wall, eng.wall_target("R1", 215.0)) is None
+    assert run(eng, bot, 10.0, lambda: eng.phase_of["R1"] == MountPhase.VENT)
+    assert math.isclose(eng._pen("L1"), pen_wall, abs_tol=1e-9)   # 切向，压深不动
+    assert eng.ho_off["L1"] < 0.0                                 # 确实接了份额
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["R1"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["R1"] == MountPhase.STANCE
+               and ctl.is_attached(idx("R1")))
+    # 但"往更深里推"照样拦：地面腿从 18 推过 28 仍然拒
+    deny = eng.request_takeover("L3", PRESS_DEPTH_MAX - CFG.leg("L3").press_delta_mm + 5.0)
+    assert isinstance(deny, str) and "压入" in deny
+    assert eng.frozen is None

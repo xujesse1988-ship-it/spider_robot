@@ -893,14 +893,20 @@ class MountEngine:
         for n, d in moves.items():
             if self.surf[n] is None or abs(d) <= _EPS:
                 continue
+            # 两条硬界都按**相对**判：只拦"把已经越界的量推得更糟"的动作。绝对值
+            # 判会把本来就超标的腿永久排除在载荷分摊之外——L1 带 wall_trim 16 时
+            # 命令压深 18+16=34 本就超 28，而墙面腿的交接是沿墙切向（n_z=0）、
+            # 压深一毫米都不动，绝对值判会拒掉一个根本不改这个量的动作，B 组
+            # 一上墙就寸步难行（09-11 仿真复现）
+            pen0 = self._pen(n)
             k = max(1, int(math.ceil(abs(d) / HO_SAMPLE_MM)))
             for j in range(1, k + 1):
                 off = self.ho_off[n] + d * j / k
                 pen = self._pen(n, off)
-                if pen > PRESS_DEPTH_MAX + _EPS:
+                if pen > PRESS_DEPTH_MAX + _EPS and pen > pen0 + _EPS:
                     return (f"{n} 压入 {pen:.0f}mm 超上限 {PRESS_DEPTH_MAX:g}"
                             "（再深就是命令腿顶着刚性面堵转）")
-                if n != lift and pen < -_EPS:
+                if n != lift and pen < -_EPS and pen < pen0 - _EPS:
                     return (f"{n} 指令已抬到{_cn(self.surf[n])}以上 "
                             f"{-pen:.0f}mm（再卸就成往外拔"
                             + ("/失去摩擦支撑" if n in self.support_only else "")

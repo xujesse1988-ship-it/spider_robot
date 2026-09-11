@@ -106,6 +106,7 @@
 | [P3-GUIDE.md](docs/P3-GUIDE.md) · [P4-GUIDE.md](docs/P4-GUIDE.md) | 整机：装配、标定、地面行走、气路上机、爬墙步态、启动死机排查 |
 | [BOM.md](docs/BOM.md) | 分批采购清单，含淘宝搜索关键词与价格区间 |
 | [CLIMBING-DESIGN.md](docs/CLIMBING-DESIGN.md) | 吸附方式选型（为什么不用涵道风扇）、力学预算、气路图、电气架构 |
+| [WALL-MOUNT-OPEN.md](docs/WALL-MOUNT-OPEN.md) | 地-墙过渡（P5，进行中）：几何规律定顺序、规划器序列、实机已确认事实、三个待测数、未解决清单 |
 | [HANDOVER-DESIGN.md](docs/HANDOVER-DESIGN.md) · [HANDOVER-AB-PROTOCOL.md](docs/HANDOVER-AB-PROTOCOL.md) | 零力交接的设计与实机 A/B 实验方案 |
 | [DUAL-SWING-DESIGN.md](docs/DUAL-SWING-DESIGN.md) | 双足同时摆动的升级设计 |
 | [P4-BAY-DESIGN.md](docs/P4-BAY-DESIGN.md) | 电气与气动舱固定件设计 |

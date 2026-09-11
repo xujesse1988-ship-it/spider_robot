@@ -870,11 +870,18 @@ def main():
             if hover_now and hover_now != hover_was:
                 fw = eng._foot_world(hover_now)
                 on_wall = eng.surf[hover_now] is eng.wall
+                # 离面距离**按面取**：墙面 lift_clearance（15），地面 --floor-clear
+                # （默认 45，腿一抬还会自重下垂十几到二十几毫米）。09-11 实机这行
+                # 对地面悬停印的是 15 而实际 45——操作者拿它当目测基准，不能印错
+                clr = cfg.lift_clearance if on_wall else eng.floor_clear
                 print(f"\n{hover_now} 已悬停：世界 ({fw[0]:.0f},{fw[1]:.0f},"
-                      f"{fw[2]:.0f})，离面 {cfg.lift_clearance:g}mm（{hover_now} 墙面修正 "
-                      f"{eng.wall_trim[hover_now]:+g}）——目视吸盘对正/间距，i 落下压入；"
-                      + ("间距不是 15 就 . ,（每次 2mm）补到 15；与另一只前盘不齐平"
-                         "就 +/-（每次 5mm）挪落点高度；" if on_wall else "")
+                      f"{fw[2]:.0f})，离{'墙' if on_wall else '地'} {clr:g}mm"
+                      + (f"（{hover_now} 墙面修正 {eng.wall_trim[hover_now]:+g}）"
+                         if on_wall else "")
+                      + "——目视吸盘对正/间距，i 落下压入；"
+                      + (f"间距不是 {clr:g} 就 . ,（每次 2mm）补到 {clr:g}；"
+                         "与另一只前盘不齐平就 +/-（每次 5mm）挪落点高度；"
+                         if on_wall else "")
                       + "不对就 g/h 挪走")
                 log.event(f"悬停：{hover_now} 世界 ({fw[0]:.0f},{fw[1]:.0f},{fw[2]:.0f})")
             hover_was = hover_now

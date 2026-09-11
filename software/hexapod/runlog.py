@@ -35,6 +35,8 @@ FSYNC_S = 1.0   # 强制落盘周期：死机/断电最多丢这么久
 PHASE_CH = {"stance": "·", "vent": "V", "lift": "L", "transfer": "T",
             "hover": "H", "descend": "D", "press": "P", "retry": "R",
             "wait": "W", "handover": "Z",   # Z=零力交接（vent 前卸载）
+            "takeover": "z",                # z=接管（落地吸住后把载荷接过来，
+                                            #   mount.MountEngine 的反向交接）
             "air": "^"}                     # ^=收在空中（mount.MountEngine）
 ADH_CH = {"released": "r", "pressing": "p", "sucking": "s",
           "attached": "A", "venting": "v", "fault": "F"}

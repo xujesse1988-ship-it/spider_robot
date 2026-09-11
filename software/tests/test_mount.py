@@ -1,12 +1,15 @@
 """MountEngine（地-墙过渡引擎）测试：启动六足吸附 / 前腿上墙悬停-落下 /
-俯仰铺设接触足钉死 / 不可行请求拒绝 / 收腿豁免互锁 / 吸附失败加深重试。
+俯仰铺设接触足钉死 / 不可行请求拒绝 / 收腿豁免互锁 / 吸附失败加深重试 /
+零力交接与接管。
 全部跑在 MockVacuumIO + MockDriver 上；每拍都过 Hexapod.move_feet 的真 IK，
 足端目标出工作空间会当场抛 WorkspaceError。"""
 import math
+from dataclasses import replace
 
 from hexapod.adhesion import AdhesionController, MockVacuumIO, FootState
 from hexapod.mount import (MountEngine, MountPhase, FLOOR, b2w, w2b, _add,
-                           TILT_BAND_DEG, HOLD_TILT_DEG, COXA_MAX_DEG)
+                           TILT_BAND_DEG, HOLD_TILT_DEG, COXA_MAX_DEG,
+                           PRESS_DEPTH_MAX)
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
 from hexapod.driver import MockDriver
 from hexapod.robot import Hexapod
@@ -461,3 +464,317 @@ def test_support_only_legs_bear_load_without_attaching():
     assert eng.land() is None
     assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE)
     assert not ctl.is_attached(idx("L2")) and eng.frozen is None
+
+
+# ---------------------------------------------------------------- 零力交接
+HO_DELTA = 12.0          # 测试用的统一 δ（实机起标表见 HANDOVER-DESIGN §5）
+
+
+def make_ho(delta=HO_DELTA, cfg=CFG, **kw):
+    """开了零力交接的引擎（δ 逐腿统一）。"""
+    cfg = replace(cfg, legs=tuple(replace(l, handover_mm=delta) for l in cfg.legs))
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    eng = MountEngine(cfg, ctl, **kw)
+    bot = Hexapod(MockDriver(), cfg)
+    return io, ctl, eng, bot
+
+
+def to_wall(eng, bot, name, h=None):
+    """把 name 送上墙并吸住（可落足带中点）。"""
+    band = eng.wall_band(name)
+    assert band is not None
+    h = sum(band) / 2.0 if h is None else h
+    assert eng.request_move(name, eng.wall, eng.wall_target(name, h)) is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of[name] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of[name] == MountPhase.STANCE
+               and eng.ctl.is_attached(idx(name)))
+
+
+def test_handover_unloads_lifted_leg_and_others_take_the_share():
+    """08-20 量化：83% 的下滑发生在放气密封破裂一瞬（被抬腿攒的弹性势能一步
+    释放）。抬腿前先把这条腿的指令竖直还 δ（力卸到 ~0）、其余接触腿各接 δ/n，
+    六腿偏移代数和恒 0 = 身体指令不动；铺完才放气。"""
+    io, ctl, eng, bot = make_ho()
+    start(eng, bot)
+    w0 = {n: contact_world(eng, n) for n in LEG_NAMES}
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", 220.0)) is None
+    assert eng.phase_of["L1"] == MountPhase.HANDOVER      # 先交接，不放气
+    t0 = eng.t
+    worst = 0.0
+    while True:
+        bot.move_feet(eng.update(DT))
+        assert eng.t - t0 < 10.0, "交接没在 10s 内铺完"
+        if eng.phase_of["L1"] != MountPhase.HANDOVER:
+            break
+        # 铺设的每一拍都守恒：Σ偏移=0（各腿按同一进度成比例走）
+        worst = max(worst, abs(sum(eng.ho_off.values())))
+        assert ctl.state[idx("L1")] == FootState.ATTACHED   # 全程仍吸附密封
+    assert worst < 1e-9, f"铺设期 Σ偏移 最大 {worst:.3g}mm，应恒 0"
+    assert math.isclose(eng.t - t0, HO_DELTA / CFG.handover_rate_mms, abs_tol=3 * DT)
+    assert eng.phase_of["L1"] == MountPhase.VENT          # 铺完才放气
+    # 位移账：被抬腿竖直 +δ（卸载），其余五条各 −δ/5（接载）
+    assert math.isclose(eng.ho_off["L1"], HO_DELTA, abs_tol=1e-9)
+    for n in LEG_NAMES:
+        if n == "L1":
+            continue
+        assert math.isclose(eng.ho_off[n], -HO_DELTA / 5.0, abs_tol=1e-9)
+        a, b = w0[n], contact_world(eng, n)
+        assert math.isclose(b[0], a[0], abs_tol=1e-9)     # 只沿竖直动
+        assert math.isclose(b[1], a[1], abs_tol=1e-9)
+        assert math.isclose(b[2] - a[2], -HO_DELTA / 5.0, abs_tol=1e-9)
+    assert math.isclose(contact_world(eng, "L1")[2] - w0["L1"][2], HO_DELTA,
+                        abs_tol=1e-9)
+    assert eng.frozen is None
+
+
+def test_handover_share_is_press_on_floor_and_shear_on_wall():
+    """竖直口径的分面后果（WALL-MOUNT-OPEN §7 原写的"沿法向"对墙面足是错的）：
+    地面足的竖直=法向，接载=多压 δ/n；墙面足的竖直=切向，接载=沿墙下滑、
+    压深一毫米不变——往墙里压根本接不了体重。"""
+    io, ctl, eng, bot = make_ho()
+    start(eng, bot)
+    to_wall(eng, bot, "L1")                      # L1 先上墙吸住
+    pen0 = {n: eng._pen(n) for n in LEG_NAMES}
+    wall_w0 = contact_world(eng, "L1")
+    assert eng.request_move("R1", eng.wall, eng.wall_target("R1", 220.0)) is None
+    assert run(eng, bot, 10.0, lambda: eng.phase_of["R1"] == MountPhase.VENT)
+    share = HO_DELTA / 5.0                       # R1 之外还有 5 条接触腿
+    for n in ("L2", "L3", "R2", "R3"):           # 地面足：份额全变成压深
+        assert math.isclose(eng._pen(n), pen0[n] + share, abs_tol=1e-9)
+    assert math.isclose(eng._pen("L1"), pen0["L1"], abs_tol=1e-9)   # 墙面足压深不动
+    a, b = wall_w0, contact_world(eng, "L1")
+    assert math.isclose(b[0], a[0], abs_tol=1e-9)                   # 离墙距离不动
+    assert math.isclose(b[2] - a[2], -share, abs_tol=1e-9)          # 沿墙下滑=吃剪切
+    assert eng.frozen is None
+
+
+def test_takeover_after_landing_returns_the_share_and_zeroes_offsets():
+    """落地吸住后自动做反向交接（接管）：把其余腿替它接的载荷还回去——不还的话
+    份额会一次次往下累积，34 个单腿动作的序列几次就把压深余量吃穿。还完全机
+    偏移归零（除了新腿自己），指令回到纯几何。"""
+    io, ctl, eng, bot = make_ho()
+    start(eng, bot)
+    pen0 = {n: eng._pen(n) for n in LEG_NAMES}
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", 220.0)) is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    assert eng._ho_debt["L1"] == HO_DELTA                  # 欠账 = 其余腿接走的总量
+    assert eng.ho_off["L1"] == 0.0                         # 离面即清自己的偏移
+    assert eng.land() is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L1"] == MountPhase.TAKEOVER)
+    assert ctl.is_attached(idx("L1"))                      # 先吸住，再接管
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE)
+    assert "L1" not in eng._ho_debt
+    for n in LEG_NAMES:                                    # 五条地面腿全部还清
+        if n == "L1":
+            continue
+        assert abs(eng.ho_off[n]) < 1e-9
+        assert math.isclose(eng._pen(n), pen0[n], abs_tol=1e-9)
+    # 新腿自己吃下这份载荷：墙面腿的接管是沿墙下滑，压深仍是名义值
+    assert math.isclose(eng.ho_off["L1"], -HO_DELTA, abs_tol=1e-9)
+    assert math.isclose(eng._pen("L1"), CFG.leg("L1").press_delta_mm, abs_tol=1e-9)
+    assert eng.frozen is None
+
+
+def test_takeover_mm_moves_more_load_onto_the_fresh_wall_leg():
+    """用户 09-11：L1 抬上墙后应尽量把势能转移给它。--takeover 让新腿落地后
+    接管 max(欠账, 设定值)——其余腿（还压着弹性变形的那几条）被松回去，下一条
+    腿再抬时储能就小了。零和仍然成立：身体指令不动。"""
+    io, ctl, eng, bot = make_ho(takeover_mm={"L1": 18.0})
+    start(eng, bot)
+    pen0 = {n: eng._pen(n) for n in LEG_NAMES}
+    to_wall(eng, bot, "L1")
+    assert math.isclose(eng.ho_off["L1"], -18.0, abs_tol=1e-9)     # 接管 18 > 欠账 12
+    # 抬 L1 时五条腿各接了 δ/5=2.4，接管又各还 18/5=3.6 ⇒ 净松 1.2mm（压深跟着松）
+    for n in ("L2", "L3", "R1", "R2", "R3"):
+        assert math.isclose(eng.ho_off[n], 3.6 - HO_DELTA / 5.0, abs_tol=1e-9)
+        assert math.isclose(eng._pen(n), pen0[n] - 1.2, abs_tol=1e-9)
+    # 每一笔铺设各自零和；累计和 = −δ，正是 L1 离面时作废掉的那份卸载量
+    assert math.isclose(sum(eng.ho_off.values()), -HO_DELTA, abs_tol=1e-9)
+    # 手动追加（脚本 z 键）：可连按累加，直到吸盘倾角/压深咬住为止
+    assert eng.request_takeover("L1", 3.0) is None
+    assert eng.phase_of["L1"] == MountPhase.TAKEOVER
+    assert run(eng, bot, 10.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE)
+    assert math.isclose(eng.ho_off["L1"], -21.0, abs_tol=1e-9)
+    for n in ("L2", "L3", "R1", "R2", "R3"):
+        assert math.isclose(eng.ho_off[n], 4.2 - HO_DELTA / 5.0, abs_tol=1e-9)
+    # 墙面腿吃的是剪切：接管 21mm 一毫米也没进到压深里
+    assert math.isclose(eng._pen("L1"), CFG.leg("L1").press_delta_mm, abs_tol=1e-9)
+    # 加到吸盘倾角咬住为止（墙面腿的真正上界），拒绝时原地不动
+    off0 = dict(eng.ho_off)
+    for _ in range(20):
+        deny = eng.request_takeover("L1", 3.0)
+        if deny:
+            break
+        assert run(eng, bot, 10.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE)
+        off0 = dict(eng.ho_off)
+    assert isinstance(deny, str) and "倾角" in deny
+    assert eng.ho_off == off0 and eng.frozen is None
+
+
+def test_takeover_refused_when_it_would_stall_or_unload_support_legs():
+    """接管的两条硬界：接载的腿压入 ≤ PRESS_DEPTH_MAX（再深=顶着刚性玻璃堵转）、
+    还载的腿指令不许抬到面以上（吸附腿会变成往外拔，只承重腿直接失去摩擦支撑）。
+    不过则拒绝、原地不动。"""
+    io, ctl, eng, bot = make_ho(delta=0.0)
+    start(eng, bot)
+    off0, feet0 = dict(eng.ho_off), {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    room = PRESS_DEPTH_MAX - CFG.leg("L3").press_delta_mm          # 只剩 10mm
+    deny = eng.request_takeover("L3", room + 4.0)                  # 自己压穿
+    assert isinstance(deny, str) and "压入" in deny and "上限" in deny
+    assert eng.phase_of["L3"] == MountPhase.STANCE
+    assert eng.ho_off == off0
+    assert all(tuple(eng.foot[n]) == feet0[n] for n in LEG_NAMES)
+    # 反过来：份额把其余腿抬到地面以上（press_delta=18，每条最多松 18）
+    deny = eng.request_takeover("L1", 5.0 * CFG.leg("L2").press_delta_mm + 10.0)
+    assert isinstance(deny, str) and ("以上" in deny or "越界" in deny)
+    assert eng.ho_off == off0
+    assert eng.request_takeover("L3", 0.0) is not None              # 量非法
+    assert eng.frozen is None
+
+
+def test_handover_refused_whole_command_when_share_does_not_fit():
+    """交接不可行就**拒绝整条挪腿命令**（半截交接比不交接更糟：载荷挪了一半就
+    放气）。δ=45 分给 5 条腿还塞得下，收起一条中腿后只剩 4 条分母就塞不下了。"""
+    io, ctl, eng, bot = make_ho(delta=45.0)
+    start(eng, bot)
+    assert eng.request_tuck("L2") is None                  # 交接后收起中腿
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.AIR)
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.AIR
+               and eng.swing_leg is None)
+    off0, feet0 = dict(eng.ho_off), {n: tuple(eng.foot[n]) for n in LEG_NAMES}
+    deny = eng.request_move("L1", eng.wall, eng.wall_target("L1", 220.0))
+    assert isinstance(deny, str) and "零力交接不可行" in deny and "--handover" in deny
+    assert eng.phase_of["L1"] == MountPhase.STANCE         # 原地不动
+    assert eng.ho_off == off0
+    assert all(tuple(eng.foot[n]) == feet0[n] for n in LEG_NAMES)
+    assert eng.frozen is None
+
+
+def test_handover_pauses_on_leak_and_resumes_without_venting():
+    """漏气挽救期暂停（漏着的盘摩擦余量低，不该被推）：铺设量不丢、不放气；
+    挽救成功后续铺完成。交接腿自己漏气同样算（climb 审核 §10.1 同口径）。"""
+    io, ctl, eng, bot = make_ho(delta=20.0)
+    start(eng, bot)
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", 220.0)) is None
+    run(eng, bot, 0.4)                                     # 先铺一小段
+    ri = idx("R3")
+    io.sealed[ri] = False
+    assert run(eng, bot, 3.0, lambda: ctl.is_leaking(ri))
+    off_paused = dict(eng.ho_off)
+    assert 0.0 < off_paused["L1"] < 20.0
+    run(eng, bot, CFG.leak_rescue_s * 0.5)                 # 挽救窗内
+    assert eng.frozen is None
+    assert eng.ho_off == off_paused                        # 冻住不推进
+    assert eng.phase_of["L1"] == MountPhase.HANDOVER
+    assert ctl.state[idx("L1")] == FootState.ATTACHED      # 没放气
+    io.sealed[ri] = True
+    assert run(eng, bot, 3.0, lambda: not ctl.is_leaking(ri))
+    assert run(eng, bot, 10.0, lambda: eng.phase_of["L1"] == MountPhase.VENT)
+    assert math.isclose(eng.ho_off["L1"], 20.0, abs_tol=1e-9)
+    assert eng.frozen is None
+
+
+def test_handover_rechecks_lift_gate_before_venting():
+    """放气前复检门槛（climb 审核 §10.3 同款）：窗头那次判定距此已过 δ/速率 秒，
+    期间支撑盘可能漏到"深于漏气绊线、浅于抬腿门槛"的监护盲区——带着软肩膀放气
+    正是 08-19 事故类。复检不过就保持密封等泵，超时冻结点名。"""
+    cfg = replace(CFG, lift_gate_timeout_s=1.0)
+    io, ctl, eng, bot = make_ho(cfg=cfg)
+    start(eng, bot)
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", 220.0)) is None
+    real, ri = io.read_foot_kpa, idx("R3")
+    io.read_foot_kpa = lambda i: -35.0 if i == ri else real(i)   # 吸着但浅于门槛
+    assert run(eng, bot, 6.0, lambda: eng.frozen is not None)    # 铺 1.2s + 等 1s
+    assert not ctl.is_leaking(ri)                          # 不是漏气，是盘压浅
+    assert eng.phase_of["L1"] == MountPhase.HANDOVER       # 卡在交接尾，没放气
+    assert ctl.state[idx("L1")] == FootState.ATTACHED
+    assert "门槛" in eng.frozen and "R3" in eng.frozen
+    io.read_foot_kpa = real                                # 泵把它拽深了
+    eng.clear_freeze()                                     # 解冻不取消在途交接
+    assert run(eng, bot, 10.0, lambda: eng.phase_of["L1"] == MountPhase.VENT)
+    assert math.isclose(eng.ho_off["L1"], HO_DELTA, abs_tol=1e-9)
+
+
+def test_support_only_leg_hands_over_then_lifts_without_vent():
+    """只承重腿（中腿靠摩擦支撑）也承载，抬它之前一样要交接——但它没真空可放，
+    铺完直接进 LIFT；它也照样接别人的份额（多压一点=多一点正压力）。"""
+    io = MockVacuumIO(6)
+    for n in ("L2", "R2"):
+        io.sealed[idx(n)] = False
+    ctl = AdhesionController(io)
+    cfg = replace(CFG, legs=tuple(replace(l, handover_mm=HO_DELTA) for l in CFG.legs))
+    eng = MountEngine(cfg, ctl, support_only=("L2", "R2"))
+    bot = Hexapod(MockDriver(), cfg)
+    start(eng, bot)
+    pen0 = eng._pen("R2")
+    assert eng.request_move("L2", FLOOR, eng.floor_forward("L2", 60.0)) is None
+    assert eng.phase_of["L2"] == MountPhase.HANDOVER
+    assert run(eng, bot, 10.0, lambda: eng.phase_of["L2"] != MountPhase.HANDOVER)
+    assert eng.phase_of["L2"] == MountPhase.LIFT           # 没真空可放，不进 VENT
+    assert math.isclose(eng.ho_off["L2"], HO_DELTA, abs_tol=1e-9)
+    assert math.isclose(eng._pen("R2"), pen0 + HO_DELTA / 5.0, abs_tol=1e-9)
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE)
+    # 压到位即接管还账。但地面腿的接管量直接变成自己的压深，余量只有
+    # PRESS_DEPTH_MAX−press_delta=10mm < 欠账 12 ⇒ 截断，其余腿只松回大半
+    room = PRESS_DEPTH_MAX - CFG.leg("L2").press_delta_mm
+    assert -HO_DELTA / 5.0 < eng.ho_off["R2"] < -(HO_DELTA - room) / 5.0 + 0.1
+    assert eng._pen("L2") <= PRESS_DEPTH_MAX + 1e-9
+    assert "截到" in (eng.handover_note or "")
+    assert not ctl.is_attached(idx("L2")) and eng.frozen is None
+
+
+def test_tuck_keeps_the_debt_until_the_leg_comes_back_down():
+    """收到空中的腿不还账：载荷确实还在其余腿身上（它们真压着变形）。等它落回
+    面上吸住，才把这笔还回去——偏移随之归零。"""
+    io, ctl, eng, bot = make_ho()
+    start(eng, bot)
+    pen0 = {n: eng._pen(n) for n in LEG_NAMES}
+    assert eng.request_tuck("L2") is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.AIR)
+    assert eng._ho_debt["L2"] == HO_DELTA                  # 欠账挂着
+    for n in ("L1", "L3", "R1", "R2", "R3"):
+        assert math.isclose(eng._pen(n), pen0[n] + HO_DELTA / 5.0, abs_tol=1e-9)
+    assert eng.request_move("L2", FLOOR, eng.floor_home("L2")) is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE)
+    assert "L2" not in eng._ho_debt
+    room = PRESS_DEPTH_MAX - CFG.leg("L2").press_delta_mm       # 地面腿只有 10mm 余量
+    assert math.isclose(eng._pen("L2"), pen0["L2"] + min(HO_DELTA, room),
+                        abs_tol=0.1)
+    for n in ("L1", "L3", "R1", "R2", "R3"):                    # 其余腿松回大半
+        assert math.isclose(eng._pen(n), pen0[n] + max(0.0, HO_DELTA - room) / 5.0,
+                            abs_tol=0.05)
+    assert eng.frozen is None
+
+
+def test_handover_phases_never_open_the_valve_and_block_other_commands():
+    """两条硬约束：①干跑真阀按 SWING_PHASES 通电排气，交接/接管两段必须在它之外
+    ——否则交接期间就把盘放了，整件事的前提没了；②交接在途时全机不受理别的命令
+    （位姿铺设会横拖正在加减载的接触足）。"""
+    from hexapod.mount import SWING_PHASES, HO_PHASES, BUSY_PHASES
+    assert MountPhase.HANDOVER not in SWING_PHASES
+    assert MountPhase.TAKEOVER not in SWING_PHASES
+    assert set(BUSY_PHASES) == set(SWING_PHASES) | set(HO_PHASES)
+    io, ctl, eng, bot = make_ho(delta=20.0)
+    start(eng, bot)
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", 220.0)) is None
+    run(eng, bot, 0.4)
+    assert eng.phase_of["L1"] == MountPhase.HANDOVER
+    assert eng.swing_leg == "L1" and eng.ho_leg == "L1"
+    # 阀还在通罐位（valve=True=接通真空）、盘压还在深处：一点没放气
+    assert io.valve[idx("L1")] is True
+    assert ctl.state[idx("L1")] == FootState.ATTACHED
+    assert ctl.last_kpa[idx("L1")] <= CFG.lift_gate_kpa
+    pose0 = eng.pose
+    assert isinstance(eng.request_pose(dpitch_deg=3.0), str)
+    assert isinstance(eng.request_move("R1", FLOOR, eng.floor_home("R1")), str)
+    assert isinstance(eng.request_takeover("L3", 3.0), str)
+    assert eng.land() is not None                          # 没有悬停腿
+    assert eng.pose == pose0
+    assert run(eng, bot, 10.0, lambda: eng.phase_of["L1"] == MountPhase.VENT)
+    assert eng.frozen is None

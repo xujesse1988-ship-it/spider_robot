@@ -31,6 +31,13 @@
        涨到 10.6°，虽在 12° 带内但目视明显斜（09-09 实机）；摆动时倾角恒 0
   h    选中腿收起悬空（抬 15mm→缩到髋外 0.6 站位半径、站位面上 45mm，留在
        空中随身体动；不承载，互锁不算它）
+  z    把载荷**接管**到选中的这条接触腿身上（--takeover-step，默认 3mm，可连按）：
+       该腿足端指令沿世界竖直压下 3mm、其余接触腿各松 3/n，六腿偏移和仍为 0 ⇒
+       身体指令不动，但载荷（=其余腿攒着的弹性势能）转到这条腿。L1 抬上墙吸住
+       后尤其该做：那时 L1 是零预载的新腿，机身重量还压在被压弯的地面腿里，
+       转过去就等于就地把势能卸掉，下一条腿（R1）再抬时储能小、下沉也小。
+       盯着盘压/电流/机身高度一次 3mm 地加；墙面腿吃的是剪切（实测容量 15N），
+       地面腿吃的是压深（余量 = 28−press_delta，默认只有 10mm）
   i    悬停腿落下压入吸附（DESCEND→PRESS→WAIT；FAULT 加深重试、耗尽冻结）
        抬离高度分面：墙面 15mm（吸盘回弹口径，也是悬停目测基准），地面
        --floor-clear（默认 45）——地面上腿一抬因自重下垂十几到二十几毫米，
@@ -56,6 +63,16 @@
        IK 余量、膝/机身腹面不撞地不撞墙），任一不过整段拒绝、原地不动
   空格 取消位姿铺设（停在当前位姿）   f 解冻   o×2 取机   ESC×2 退出
 
+零力交接（--handover δ，默认关）：w/g/b/t/h 抬腿之前，先把这条腿的足端指令沿
+世界竖直还 δ（把它的力卸到 ~0）、其余接触腿各压 δ/n 接住载荷，六腿偏移代数和
+恒为 0 ⇒ 身体指令不动；铺完（δ/rate 秒）才放气。08-20 量化：83% 的下滑发生在
+放气密封破裂一瞬——被抬腿吸附期间攒的弹性势能一步释放；09-09 在过渡实验上
+复现为"抬一只前足机身沉 26mm 且吸住后不回弹"。落地吸住后自动反向做一次
+（接管）把借来的份额还回去，不还的话份额会一次次往下累积把压深吃穿。
+⚠ 方向是竖直不是面法向：地面足竖直=法向（等价于改压深），墙面足竖直=切向
+（沿墙剪切，往墙里压根本接不了体重）。⚠ 地面足的卸载方向就是把盘往上拔的
+方向——δ 给过头会把盘直接拔下来（表现为盘压回升→漏气挽救），宁欠勿过。
+
 首批实验（依据 tools/mount_analysis.py，09-06 评估）：
   E1  地面六足吸住 → 1 w 悬停看对正 → i 吸附 → g 回地。验证：coxa 内摆 55°
       不撞、压入方向改为 +x 后的吸附确认、可落足带与实机对得上
@@ -76,6 +93,10 @@
                                              # 发热严重（≈25W）
   python mount_wall.py --no-tank --wall-dist 140
   python mount_wall.py --no-tank --wall-dist 140 --wall-height 230 --pitch-step 3
+  # 治下沉：开零力交接 + L1 上墙后主动接管（起标值宁欠勿过，逐次加）
+  python mount_wall.py --no-tank --wall-dist 155 --support-legs L2,R2 \
+      --wall-trim L1:16,R1:0 --handover L1:10,R1:10,L2:5,R2:5,L3:8,R3:8 \
+      --takeover L1:10,R1:10
   善后（放气+回地面站姿）：python climb_walk.py --release
 
 黑匣子：software/logs/mount_YYYYmmdd_HHMMSS.log（与 climb_walk 同机制；
@@ -98,10 +119,10 @@ from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               GroundVent, Pi5VacuumIO,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
-from hexapod.climb import parse_leg_order
+from hexapod.climb import parse_leg_order, parse_handover, PRESS_DEPTH_MAX
 from hexapod.mount import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
                            LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, SWING_PHASES,
-                           FLOOR_CLEAR_MM)
+                           FLOOR_CLEAR_MM, TAKEOVER_STEP_MM, TAKEOVER_MAX_MM)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
@@ -116,19 +137,19 @@ LIN_STEP_MM = 5.0
 ARROWS = {b"[A": "UP", b"[B": "DOWN", b"[C": "RIGHT", b"[D": "LEFT"}
 
 
-def parse_wall_trim(spec):
-    """解析 --wall-trim：'16'=全腿统一，'L1:16,R1:0'=逐腿（未给的腿 0）。
+def parse_per_leg(spec, flag, lo, hi, what="值", sample="L1:16,R1:0"):
+    """逐腿参数解析：'16'=全腿统一，'L1:16,R1:0'=逐腿（未给的腿 0）。
     返回 {腿名: mm}；非法抛 ValueError（脚本层转 ap.error）。"""
     spec = spec.strip()
     if not spec:
-        raise ValueError("--wall-trim 不能为空")
+        raise ValueError(f"{flag} 不能为空")
     def _v(t):
         try:
             v = float(t)
         except ValueError:
-            raise ValueError(f"--wall-trim 修正量 {t!r} 不是数字")
-        if not -20.0 <= v <= 40.0:   # nan 比较为假一并拒
-            raise ValueError(f"--wall-trim {v:g} 非法：范围 -20~40mm")
+            raise ValueError(f"{flag} {what} {t!r} 不是数字")
+        if not lo <= v <= hi:        # nan 比较为假一并拒
+            raise ValueError(f"{flag} {v:g} 非法：范围 {lo:g}~{hi:g}mm")
         return v
     if ":" not in spec:
         return {n: _v(spec) for n in LEG_NAMES}
@@ -138,17 +159,28 @@ def parse_wall_trim(spec):
         if not part:
             continue
         if ":" not in part:
-            raise ValueError(f"--wall-trim 逐腿格式为 L1:16,R1:0，看到 {part!r}")
+            raise ValueError(f"{flag} 逐腿格式为 {sample}，看到 {part!r}")
         name, _, val = part.partition(":")
         name = name.strip().upper()
         if name not in LEG_NAMES:
-            raise ValueError(f"--wall-trim 未知腿名 {name!r}（可选 {'/'.join(LEG_NAMES)}）")
+            raise ValueError(f"{flag} 未知腿名 {name!r}（可选 {'/'.join(LEG_NAMES)}）")
         if name in out:
-            raise ValueError(f"--wall-trim 腿 {name} 给了两次")
+            raise ValueError(f"{flag} 腿 {name} 给了两次")
         out[name] = _v(val.strip())
     if not out:
-        raise ValueError("--wall-trim 没解析出任何腿")
+        raise ValueError(f"{flag} 没解析出任何腿")
     return out
+
+
+def parse_wall_trim(spec):
+    """--wall-trim：墙面目标修正 mm，逐腿。"""
+    return parse_per_leg(spec, "--wall-trim", -20.0, 40.0, "修正量")
+
+
+def parse_takeover(spec):
+    """--takeover：新腿落地吸住后主动接管的载荷 mm，逐腿。"""
+    return parse_per_leg(spec, "--takeover", 0.0, TAKEOVER_MAX_MM, "接管量",
+                         "L1:12,R1:12")
 
 
 def read_key(timeout):
@@ -217,6 +249,28 @@ def main():
                     help="t 键：该腿绕髋摆到地面站位前方多远 mm（默认 %(default)g，"
                          "范围 0~160）。中腿 85 = 摆到前髋正下方（coxa 偏 29°，"
                          "髋足距离与吸盘垂直度都不变）")
+    ap.add_argument("--handover", default=None,
+                    help="零力交接量 δ mm（抬腿前先把这条腿的力卸到零）：统一值如 12，"
+                         "或逐腿 L1:17,R1:15（未给的腿 0=关，默认全关）。抬腿前该腿"
+                         "足端指令**竖直**抬 δ、其余接触腿各压 δ/n，六腿偏移和为 0 ⇒ "
+                         "身体指令不动，铺完才放气——治 09-09 实测'抬一只前足机身沉 "
+                         "26mm 且不回弹'（08-20 量化：83%% 的下滑发生在放气密封破裂一"
+                         "瞬）。⚠ 地面足的卸载方向就是把盘往上拔的方向，δ 给过头会把"
+                         "盘直接拔下来（墙面足是沿墙剪切，过头只是反向预载）——宁欠"
+                         "勿过，从实测弹跳×0.8 起标、逐次加。范围 0~45")
+    ap.add_argument("--handover-rate", type=float, default=None,
+                    help=f"交接/接管的铺设速率 mm/s（默认 "
+                         f"{DEFAULT_CONFIG.handover_rate_mms:g}，范围 0~50）："
+                         "吸住的脚改指令=改力，载荷重分配要留准静态时间")
+    ap.add_argument("--takeover", default=None,
+                    help="新腿落地吸住后主动接管的载荷 mm（逐腿，如 L1:12 或统一值）："
+                         "L1 抬上墙吸住时它是零预载的新腿，机身重量还压在被压弯的地面"
+                         "腿里——把载荷转到它身上=就地卸掉那些腿攒的弹性势能，下一条腿"
+                         "（R1）再抬时储能就小了。不给也会自动把抬它时借走的份额还回去"
+                         f"（接管量取 max(欠账, 本值)）。范围 0~{TAKEOVER_MAX_MM:g}；"
+                         "⚠ 墙面腿接的是剪切（实测容量 15N），逐次加、盯盘压电流")
+    ap.add_argument("--takeover-step", type=float, default=TAKEOVER_STEP_MM,
+                    help="z 键每按一次手动接管的量 mm（默认 %(default)g，范围 1~10）")
     ap.add_argument("--pitch-step", type=float, default=5.0,
                     help="每按一次 ↑/↓ 的俯仰量°（默认 %(default)g，范围 1~10）")
     ap.add_argument("--pitch-max", type=float, default=30.0,
@@ -267,6 +321,22 @@ def main():
         ap.error(f"--floor-clear {args.floor_clear:g} 非法：范围 20~80mm")
     if not 0.0 <= args.fwd_dist <= 160.0:
         ap.error(f"--fwd-dist {args.fwd_dist:g} 非法：范围 0~160mm")
+    handover = {}
+    if args.handover is not None:
+        try:
+            handover = parse_handover(args.handover)
+        except ValueError as e:
+            ap.error(str(e))
+    takeover = {}
+    if args.takeover is not None:
+        try:
+            takeover = parse_takeover(args.takeover)
+        except ValueError as e:
+            ap.error(str(e))
+    if args.handover_rate is not None and not 0.0 < args.handover_rate <= 50.0:
+        ap.error(f"--handover-rate {args.handover_rate:g} 非法：范围 0~50mm/s")
+    if not 1.0 <= args.takeover_step <= 10.0:
+        ap.error(f"--takeover-step {args.takeover_step:g} 非法：范围 1~10mm")
     if not 1.0 <= args.pitch_step <= 10.0:
         ap.error(f"--pitch-step {args.pitch_step:g} 非法：范围 1~10°")
     if not 0.0 <= args.pitch_max <= 90.0:
@@ -280,6 +350,11 @@ def main():
 
     cfg = replace(DEFAULT_CONFIG, stand_height=args.stand_height,
                   cup_tilt_trim_deg=args.tilt_trim)
+    if handover:
+        cfg = replace(cfg, legs=tuple(
+            replace(l, handover_mm=handover.get(l.name, 0.0)) for l in cfg.legs))
+    if args.handover_rate is not None:
+        cfg = replace(cfg, handover_rate_mms=args.handover_rate)
     if args.press_delta is not None:
         if not 8.0 <= args.press_delta <= 20.0:
             ap.error(f"--press-delta {args.press_delta} 非法：范围 8~20mm")
@@ -343,7 +418,13 @@ def main():
     bot = Hexapod(drv, cfg)
     eng = MountEngine(cfg, ctl, front_hip_to_wall=args.wall_dist,
                       pitch_max_deg=args.pitch_max, attach_order=attach_order,
-                      floor_clear_mm=args.floor_clear, support_only=support_only)
+                      floor_clear_mm=args.floor_clear, support_only=support_only,
+                      takeover_mm=takeover)
+    ho_txt = " ".join(f"{l.name}{l.handover_mm:g}" for l in cfg.legs
+                      if l.handover_mm) or "关"
+    tk_txt = " ".join(f"{n}{v:g}" for n, v in takeover.items() if v) or "只还欠账"
+    log.note(f"handover={ho_txt} rate={cfg.handover_rate_mms:g}mm/s "
+             f"takeover={tk_txt} step={args.takeover_step:g}")
     if support_only:
         log.note("support_only=" + ",".join(support_only))
     log.note("启动吸附序=" + "_".join(eng.attach_order))
@@ -369,6 +450,8 @@ def main():
     sel = "L1"
     hover_was = None
     swing_was = None
+    ho_was = (None, None)
+    ho_note = None
     pose_was = False
     was_started = False
     at_pause = True
@@ -462,6 +545,20 @@ def main():
             print("只承重不吸附：" + "/".join(support_only)
                   + "——压到位即回支撑，不抽气、不算进互锁；只能承压不能承拉，"
                     "俯仰后别指望它们扛剥离力矩")
+        if handover or takeover:
+            dmax = max((l.handover_mm for l in cfg.legs), default=0.0)
+            print(f"零力交接：δ={ho_txt}（{cfg.handover_rate_mms:g}mm/s，最长一段约 "
+                  f"{dmax / cfg.handover_rate_mms:.1f}s）——抬腿前先把这条腿的力卸到零、"
+                  "其余接触腿按份额接住，铺完才放气；落地吸住后反向做一次把载荷"
+                  f"转给新腿（接管 {tk_txt}）")
+            room = min(PRESS_DEPTH_MAX - l.press_delta_mm for l in cfg.legs)
+            print(f"  ⚠ 地面腿的份额/接管量直接变成压深，余量只有 {room:.0f}mm"
+                  "（PRESS_DEPTH_MAX−press_delta，要更大就调小 --press-delta）；"
+                  "墙面腿是沿墙剪切、不吃压深，但吃剪切容量（15N）")
+            print("  ⚠ 地面足的卸载方向就是把盘往上拔的方向：δ 给过头会把盘拔下来"
+                  "（盘压一涨就是漏气挽救）——宁欠勿过，从实测弹跳×0.8 起标")
+        else:
+            print("零力交接：关（--handover 开；09-09 实测抬一只前足机身沉 26mm 不回弹）")
         for n in ("L1", "R1"):
             band = eng.wall_band(n)
             txt = (f"离地 {band[0]:.0f}~{band[1]:.0f}mm" if band else "无")
@@ -545,12 +642,13 @@ def main():
                 last_esc = time.monotonic()
                 print("\n再按一次 ESC 确认退出（会放气——有足在墙上时先扶稳机身！）")
             elif k in ("UP", "DOWN", "LEFT", "RIGHT", "[", "]", "w", "g", "b",
-                       "t", "h", "i", ".", ",", "+", "=", "-") and released_hold:
+                       "t", "h", "i", "z", ".", ",", "+", "=", "-") and released_hold:
                 print("\n吸盘已放开（取机窗口），不可再动——取下后 ESC×2 退出")
             elif k in LEG_KEYS:
                 sel = LEG_KEYS[k]
                 print(f"\n已选 {sel}（{eng.phase_of[sel].value}）："
-                      "w→墙 g→地面回位 b→正后方地面 t→站位前方地面 h 收起 i 落下")
+                      "w→墙 g→地面回位 b→正后方地面 t→站位前方地面 h 收起 i 落下"
+                      " z 把载荷接管过来")
             elif k == "w":
                 band = eng.wall_band(sel)
                 if band is None:
@@ -627,6 +725,18 @@ def main():
                     say(f"{hov} 落下：沿面法向下探→压入 "
                         f"{cfg.leg(hov).press_delta_mm:g}mm→抽气确认",
                         f"落下：{hov} {pose_txt()}")
+            elif k == "z":
+                # 把载荷往选中的这条腿上转（连按累加）：L1 上墙吸住后，机身重量
+                # 还压在被压弯的地面腿里，转过去=就地把它们攒的势能卸掉
+                deny = eng.request_takeover(sel, args.takeover_step)
+                if deny:
+                    say(f"接管拒绝：{deny}", f"接管拒绝（{sel}）：{deny}")
+                else:
+                    surf_txt = ("墙面：吃的是剪切（实测容量 15N），盯盘压和电流"
+                                if eng.surf[sel] is eng.wall
+                                else f"地面：吃的是压深（余量到 {PRESS_DEPTH_MAX:g}mm 为止）")
+                    say(f"{sel} 接管受理（{surf_txt}）",
+                        f"接管受理：{sel} {args.takeover_step:g}mm 偏移={eng.ho_text()}")
             elif k == "UP":
                 do_pose(dp=+args.pitch_step, what=f"抬头 {args.pitch_step:g}°")
             elif k == "DOWN":
@@ -733,6 +843,29 @@ def main():
                 except OSError as e:
                     io_freeze(e)
 
+            ho_now = eng.ho_leg
+            ho_ph = eng.phase_of[ho_now] if ho_now else None
+            if ho_now and (ho_now, ho_ph) != ho_was:
+                sup = [n for n in eng.contact_legs() if n != ho_now]
+                if ho_ph == MountPhase.HANDOVER:
+                    d = cfg.leg(ho_now).handover_mm
+                    say(f"{ho_now} 零力交接：竖直卸载 {d:g}mm、"
+                        f"{'/'.join(sup)} 各接 {d / max(1, len(sup)):.1f}mm"
+                        f"（约 {d / cfg.handover_rate_mms:.1f}s，仍吸附不放气）",
+                        f"交接开始：{ho_now} δ={d:g} 支撑={'/'.join(sup)}")
+                else:
+                    d = eng.ho_span
+                    say(f"{ho_now} 接管载荷 {d:.1f}mm：{'/'.join(sup)} 各松 "
+                        f"{d / max(1, len(sup)):.1f}mm，身体指令不动"
+                        f"（约 {d / cfg.handover_rate_mms:.1f}s）；累计偏移 "
+                        f"{eng.ho_text()}",
+                        f"接管开始：{ho_now} {d:.1f}mm 支撑={'/'.join(sup)}")
+            ho_was = (ho_now, ho_ph)
+            if eng.handover_note != ho_note:
+                ho_note = eng.handover_note
+                if ho_note:
+                    print(f"\n⚠ {ho_note}")
+                    log.event(f"⚠ 交接留痕：{ho_note}")
             hover_now = eng.hover_leg
             if hover_now and hover_now != hover_was:
                 fw = eng._foot_world(hover_now)
@@ -764,9 +897,9 @@ def main():
             if eng.started and not was_started:
                 was_started = True
                 print(f"\n✓ 六足吸附完成（{pose_txt()}）：1~6 选腿  w 上墙  g 回地  "
-                      "b 正后方  t 站位前方  h 收起  i 落下  ./, 离墙  +/- 落点高低"
-                      "  ↑/↓ 俯仰  ←/→ 离/贴墙  [/] 降/升  空格取消位姿  f 解冻"
-                      "  o×2 取机  ESC×2 退出")
+                      "b 正后方  t 站位前方  h 收起  i 落下  z 接管载荷  ./, 离墙"
+                      "  +/- 落点高低  ↑/↓ 俯仰  ←/→ 离/贴墙  [/] 降/升"
+                      "  空格取消位姿  f 解冻  o×2 取机  ESC×2 退出")
             if eng.frozen != last_frozen:
                 last_frozen = eng.frozen
                 if eng.frozen:
@@ -785,6 +918,7 @@ def main():
                     tag = (f" {pose_txt()} 选{sel}"
                            + (f" 空中{'/'.join(n for n in LEG_NAMES if eng.surf[n] is None and eng.phase_of[n] == MountPhase.AIR)}"
                               if any(eng.phase_of[n] == MountPhase.AIR for n in LEG_NAMES) else "")
+                           + (f" 交接{eng.ho_text()}" if eng.ho_text() != "0" else "")
                            + (" 已放开" if released_hold else ""))
                     print("\r" + status_line(eng, ctl, v, c, peak_a,
                                              (0.0, 0.0, 0.0), tag) + "  ",

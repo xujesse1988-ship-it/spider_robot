@@ -21,10 +21,19 @@
   3. 身体位姿 (xb, zb, pitch) 慢速改变：接触足世界系不动、悬空足随身体。
      body_lean 倾身的三维推广。请求按 1°/5mm 采样整段中间位姿逐个预检
      （IK 余量/行程/倾角/膝不撞面/腹面不触面）才受理，不受理就不动。
+  4. 零力交接（HANDOVER）与接管（TAKEOVER）：抬腿前把该腿的力卸到零、其余
+     接触腿按份额接住；落地吸住后反向做一次，把载荷（也就是其余腿攒着的
+     弹性势能）转移到刚吸上的新腿。docs/HANDOVER-DESIGN.md 的三维推广，
+     治 09-09 实测的"抬一只前足机身下沉 26mm 且不回弹"。
+
+⚠ 交接方向是**世界竖直**，不是接触面法向（WALL-MOUNT-OPEN §7 原先写的）：
+载荷是重力，地面足的竖直恰好=法向（等价于改压深），墙面足的竖直是**切向**
+（沿墙下滑方向=剪切，正是 climb.py 4.7 步"沿下坡"的那个方向）。往墙里压
+一点并不接体重，按法向卸载墙面足会一点力都卸不掉。竖直口径同时退化成两者。
 
 坐标：世界系 地面 z=0、墙面 x=0（机器人在 x<0 侧，头朝墙 +x）、y 左；
 身体系 x 前 y 左 z 上；身体位姿 (xb, zb, pitch)，抬头为正（绕 y）。
-不做：步态/连续行走、零力交接、下滑补偿、双足。
+不做：步态/连续行走、下滑补偿、双足。
 
 假设（待实机核，见 tools/mount_analysis.py）：coxa 相对中性最多摆 COXA_MAX_DEG；
 髋平面以下舱体厚 BELLY_MM；机身外廓 ±BODY_HALF_MM；重心不参与（纯运动学）。
@@ -66,6 +75,9 @@ TUCK_RISE_MM = 45.0        # 收腿点：站位平面以上高度
 POSE_SAMPLE_DEG = 1.0      # 位姿预检采样粒度
 POSE_SAMPLE_MM = 5.0
 PATH_SAMPLES = 12          # 摆动路径预检采样点数
+HO_SAMPLE_MM = 2.0         # 交接/接管铺设的预检采样粒度 mm（逐点过 IK/倾角/膝）
+TAKEOVER_STEP_MM = 3.0     # 手动接管（脚本 z 键）每按一次转移的量 mm
+TAKEOVER_MAX_MM = 40.0     # 单次接管请求上限 mm（预检另有压深/包络/面上三重硬界）
 
 d2r, r2d = math.radians, math.degrees
 
@@ -207,6 +219,8 @@ class LegGeom:
 class MountPhase(Enum):
     STANCE = "stance"     # 接触面上（吸附中或启动前等待压入）
     AIR = "air"           # 收在空中（不承载，位姿改变时随身体）
+    HANDOVER = "handover"  # 抬腿前零力交接：本腿指令竖直还 δ、其余接触腿各接 δ/n
+    TAKEOVER = "takeover"  # 接管（反向交接）：本腿指令竖直压 T、其余各还 T/n
     VENT = "vent"
     LIFT = "lift"
     TRANSFER = "transfer"
@@ -220,6 +234,11 @@ class MountPhase(Enum):
 SWING_PHASES = (MountPhase.VENT, MountPhase.LIFT, MountPhase.TRANSFER,
                 MountPhase.HOVER, MountPhase.DESCEND, MountPhase.PRESS,
                 MountPhase.RETRY_LIFT, MountPhase.WAIT)
+# 交接/接管：脚还吸在面上（密封、承载），只是指令在被慢慢加减载——阀绝不能动
+# （干跑真阀按 SWING_PHASES 通电排气，把这两段算进去等于交接期间就把盘放了）
+HO_PHASES = (MountPhase.HANDOVER, MountPhase.TAKEOVER)
+# "这条腿正忙"：互锁与位姿铺设看这个，比 SWING_PHASES 多两段交接
+BUSY_PHASES = SWING_PHASES + HO_PHASES
 
 
 class MountEngine:
@@ -229,7 +248,7 @@ class MountEngine:
 
     def __init__(self, cfg: RobotConfig, ctl, wall_x=0.0, front_hip_to_wall=140.0,
                  pitch_max_deg=90.0, ignore_tank_fault=False, attach_order=None,
-                 floor_clear_mm=FLOOR_CLEAR_MM, support_only=()):
+                 floor_clear_mm=FLOOR_CLEAR_MM, support_only=(), takeover_mm=None):
         self.cfg, self.ctl = cfg, ctl
         self.ignore_tank_fault = ignore_tank_fault
         self.wall = wall_at(wall_x)
@@ -301,6 +320,38 @@ class MountEngine:
         self._pose_from = self._pose_to = None
         self._pose_s = 0.0
         self._pose_T = 0.0
+        # 零力交接（docs/HANDOVER-DESIGN.md，本引擎 §4）。ho_off = 该腿足端指令在
+        # **世界竖直**方向上的附加偏移 mm（+ 上 = 卸载自己，− 下 = 多接载荷）；
+        # 六腿偏移的代数和恒为 0 = 身体指令不动（吸住的脚不能滑 ⇒ 改指令=改力）。
+        # 偏移只加在指令上，pw（吸盘真实钉在面上的点）始终是物理真值
+        self.ho_off = {n: 0.0 for n in LEG_NAMES}
+        self._ho_goal = {n: 0.0 for n in LEG_NAMES}
+        self._ho_start = {n: 0.0 for n in LEG_NAMES}   # 本次铺设起点（记欠账用）
+        self._ho_move = {}        # 本次铺设各腿的总位移（世界竖直 mm）
+        self._ho_s = 1.0          # 铺设进度 0~1（全体腿共用，保住"和为 0"）
+        self.ho_span = 0.0        # 本次铺设里位移最大的那条腿的量 mm（限速基准
+                                  # 兼显示：卸载量 δ 或接管量 T）
+        # 欠账：腿 -> 其余腿一共替它接走了多少 mm（按实际铺进去的量记，可能被
+        # 截断过）。该腿落地吸住后由 TAKEOVER 还回去——不还的话份额会在支撑腿
+        # 上只进不出，34 个单腿动作的序列几次就把压深余量吃穿。只记总量不记
+        # 债主：还的时候按**当时**的接触腿均摊（中间可能有腿换过面），零和照旧
+        self._ho_debt = {}
+        self.handover_note = None      # 截断/退化留痕（脚本打印+落黑匣子）
+        r = cfg.handover_rate_mms
+        if not (0.0 < r <= 50.0) or r != r:
+            raise ValueError(f"handover_rate_mms 非法（{r!r}）：须有限且 0<r≤50")
+        self._ho_rate = float(r)
+        # 落地后主动接管的量 mm（逐腿，0=只把欠账还回去）：L1 上墙吸住后其余腿
+        # 还攒着弹性势能，往新腿身上转载荷=就地把势能卸掉，下一条腿再抬时储能
+        # 已经小了。墙面腿接的是剪切（实测容量 15N），宁欠勿过、逐次加
+        self.takeover = {n: 0.0 for n in LEG_NAMES}
+        for n, v in (takeover_mm or {}).items():
+            if n not in LEG_NAMES:
+                raise ValueError(f"takeover_mm 含未知腿 {n!r}")
+            if not 0.0 <= float(v) <= TAKEOVER_MAX_MM:
+                raise ValueError(f"takeover_mm {n}={v} 越界：0~{TAKEOVER_MAX_MM:g}mm")
+            self.takeover[n] = float(v)
+        self._gate_t = 0.0             # 交接铺完后卡在放气门槛的等待计时
         # 墙面目标修正 mm，**逐腿**（正=再往墙里压）：腿在"前伸上举"姿态的实际
         # 到达比模型短，且逐腿不同——09-09 实机 wall_dist=155、修正 16 时 L1 停在
         # 玻璃外 15mm（短 16）而 R1 已贴上（几乎不差）；全局一个值按 L1 标好会把
@@ -324,9 +375,17 @@ class MountEngine:
 
     @property
     def swing_leg(self):
-        """摆动在途的腿名（含悬停），无则 None。"""
+        """动作在途的腿名（含悬停、交接、接管），无则 None。一次只许一条。"""
         for n in LEG_NAMES:
-            if self.phase_of[n] in SWING_PHASES:
+            if self.phase_of[n] in BUSY_PHASES:
+                return n
+        return None
+
+    @property
+    def ho_leg(self):
+        """正在交接/接管的腿名，无则 None。"""
+        for n in LEG_NAMES:
+            if self.phase_of[n] in HO_PHASES:
                 return n
         return None
 
@@ -342,8 +401,21 @@ class MountEngine:
         return self._pose_to is not None
 
     def contact_legs(self):
+        """踩在面上承载的腿（交接/接管中的腿仍然踩着，算在内）。"""
         return tuple(n for n in LEG_NAMES if self.surf[n] is not None
-                     and self.phase_of[n] == MountPhase.STANCE)
+                     and self.phase_of[n] in (MountPhase.STANCE,) + HO_PHASES)
+
+    def _bearing(self, name):
+        """吸附口径的承载腿：在面上、STANCE/交接中、且不是只承重腿（那些没真空，
+        互锁与漏气监护都不看它们）。"""
+        return (self.surf[name] is not None and name not in self.support_only
+                and self.phase_of[name] in (MountPhase.STANCE,) + HO_PHASES)
+
+    def _share_legs(self, name):
+        """接/还载荷的腿：除 name 外所有踩在面上且已收口（STANCE）的腿。只承重腿
+        算在内——它们靠摩擦支撑，多压一点就是多一点正压力；悬空/悬停腿不算。"""
+        return [n for n in LEG_NAMES if n != name and self.surf[n] is not None
+                and self.phase_of[n] == MountPhase.STANCE]
 
     def hip_world(self, name, pose=None):
         leg = self.cfg.leg(name)
@@ -439,7 +511,11 @@ class MountEngine:
         why = self._check_landing(name, p_w, surf, self.pose)
         if why:
             return f"{name} 落点不可行：{why}"
-        start_w = self._liftoff_world(name)
+        plan, why = self._plan_handover(name)
+        if why:
+            return why
+        # 抬离点含卸载量：交接把这条腿的指令先竖直抬 δ，摆动就是从那里起步
+        start_w = self._liftoff_world(name, up=plan[0] if plan else 0.0)
         n_a = self.surf[name].n if self.surf[name] else surf.n
         # 悬停点带修正量：与 HOVER 相位的目标（pw − n·(depth+trim)，depth=−clearance）
         # 一致，否则平移到位切 HOVER 瞬间足端会跳 trim 毫米
@@ -450,7 +526,7 @@ class MountEngine:
         self.landing[name] = w2b(p_w, self.pose)[:2]
         self._sw[name] = dict(dst_surf=surf, dst_pw=p_w, n_a=n_a,
                               end_w=end_w, air=False, arc=arc)
-        self._begin_swing(name)
+        self._begin_swing(name, plan)
         return None
 
     def request_tuck(self, name):
@@ -464,7 +540,10 @@ class MountEngine:
         why = self._check_air(name, pb, self.pose)
         if why:
             return f"{name} 收腿点不可行：{why}"
-        start_w = self._liftoff_world(name)
+        plan, why = self._plan_handover(name)
+        if why:
+            return why
+        start_w = self._liftoff_world(name, up=plan[0] if plan else 0.0)
         n_a = self.surf[name].n if self.surf[name] else (0.0, 0.0, 1.0)
         end_w = b2w(pb, self.pose)
         # 收腿不落面，无需抬弧：LIFT 已离面 lift_clearance，直线过去即可
@@ -475,7 +554,35 @@ class MountEngine:
         self.landing[name] = pb[:2]
         self._sw[name] = dict(dst_surf=None, dst_pb=pb, n_a=n_a,
                               end_w=end_w, air=True, arc=arc)
-        self._begin_swing(name)
+        self._begin_swing(name, plan)
+        return None
+
+    def request_takeover(self, name, mm):
+        """把 mm 毫米的载荷**转移到** name 身上（接管 / 反向零力交接）：该腿足端
+        指令沿世界竖直向下 mm、其余接触腿各向上 mm/n，六腿偏移和仍为 0 ⇒ 身体
+        指令不动，但载荷（= 其余腿攒着的弹性势能）挪到这条腿身上。
+
+        用途（09-09 实机 32mm 不回弹的系统性治法的另一半）：L1 抬上墙吸住时它
+        是零预载的新腿，机身的重量还全压在被压弯的地面腿里；把势能就地转给
+        L1，地面腿松回来，下一条腿（R1）再抬时储能已经小了、下沉也就小了。
+        落地后引擎自动接管 max(欠账, self.takeover[name])，本方法是手动追加。
+
+        ⚠ 墙面腿接的是**剪切**（吸盘实测剪切容量 15N，换前足时本来就顶着上界），
+        地面腿松回去太多会从"压住"变成"被往外拔"（只承重腿直接失去摩擦支撑）
+        ——所以逐次小量加，盯盘压/电流/机身高度。预检：其余腿指令不许抬到面
+        以上、本腿压深不许超 PRESS_DEPTH_MAX、全程 IK/行程/倾角/膝净空。
+        返回 None=受理；str=拒绝原因。"""
+        deny = self._may_command(name)
+        if deny:
+            return deny
+        if self.surf[name] is None or self.phase_of[name] != MountPhase.STANCE:
+            return f"{name} 不在面上（{self.phase_of[name].value}），无处接管"
+        mm = float(mm)
+        if not 0.0 < mm <= TAKEOVER_MAX_MM:
+            return f"接管量 {mm:g} 越界：0~{TAKEOVER_MAX_MM:g}mm"
+        why = self._start_takeover(name, mm)
+        if why:
+            return f"{name} 接管 {mm:g}mm 不可行：{why}"
         return None
 
     def land(self):
@@ -530,7 +637,10 @@ class MountEngine:
         self._pose_from = self._pose_to = None
 
     def clear_freeze(self):
-        """人工处理后解冻：挂 FAULT 的腿自动重新压附（加深从上次深度续）。"""
+        """人工处理后解冻：挂 FAULT 的腿自动重新压附（加深从上次深度续）。
+        在途的交接/接管**不取消**（与 climb 同口径）：这条腿已经过了抬腿决策、
+        载荷挪了一半，半途丢掉等于带着不对称的内应力放气；交接本身是慢速可逆
+        动作，续铺无害。位姿铺设照旧取消（那是纯人工请求，可弃）。"""
         self.frozen = None
         self._precharge_t = 0.0
         self._pose_from = self._pose_to = None
@@ -566,6 +676,7 @@ class MountEngine:
             if self._pose_s >= 1.0:
                 self.pose = self._pose_to
                 self._pose_from = self._pose_to = None
+        self._run_handover(dt)
         self._run_machines(dt)
         self._run_nudges(dt)
         self._refresh_targets()
@@ -623,15 +734,19 @@ class MountEngine:
             return "位姿铺设未完成（空格取消或等它铺完）"
         sw = self.swing_leg
         if sw and sw != name:
-            return f"{sw} 摆动在途"
+            return (f"{sw} 在{'交接' if self.phase_of[sw] in HO_PHASES else '摆动'}"
+                    f"在途（{self.phase_of[sw].value}）")
         if self.phase_of[name] not in (MountPhase.STANCE, MountPhase.AIR,
                                        MountPhase.HOVER):
             return f"{name} 在 {self.phase_of[name].value}，不可改目标"
-        # 互锁：其余接触腿全 ATTACHED 且不漏且盘压过抬腿门槛（悬空腿豁免）
+        return self._interlock_why(name)
+
+    def _interlock_why(self, name):
+        """互锁：其余接触腿全 ATTACHED 且不漏且盘压过抬腿门槛（悬空腿、只承重腿
+        豁免）。None=过。放气前还要复检一次（交接铺设期间盘压可能漏软）。"""
         for n in LEG_NAMES:
-            if n == name or self.surf[n] is None \
-                    or self.phase_of[n] != MountPhase.STANCE \
-                    or n in self.support_only:
+            if n == name or not self._bearing(n) \
+                    or self.phase_of[n] != MountPhase.STANCE:
                 continue
             i = LEG_NAMES.index(n)
             if not self.ctl.is_attached(i):
@@ -645,15 +760,13 @@ class MountEngine:
         return None
 
     def _leaking_contact(self):
-        return any(self.surf[n] is not None and self.phase_of[n] == MountPhase.STANCE
-                   and n not in self.support_only
-                   and self.ctl.is_leaking(LEG_NAMES.index(n)) for n in LEG_NAMES)
+        return any(self._bearing(n) and self.ctl.is_leaking(LEG_NAMES.index(n))
+                   for n in LEG_NAMES)
 
     def _leak_watch(self):
         for n in LEG_NAMES:
             i = LEG_NAMES.index(n)
-            if self.surf[n] is not None and self.phase_of[n] == MountPhase.STANCE \
-                    and n not in self.support_only and self.ctl.is_leaking(i) \
+            if self._bearing(n) and self.ctl.is_leaking(i) \
                     and self.ctl.leak_time(i) > self.cfg.leak_rescue_s:
                 self.frozen = (f"{n} 漏气挽救超 {self.cfg.leak_rescue_s}s"
                                f"（查 {n} 吸盘唇口/支路密封）")
@@ -664,9 +777,11 @@ class MountEngine:
                 return s
         return None
 
-    def _check_contact(self, name, p_w, surf, pose, depth, tol):
-        """接触足在 pose 下的可行性；None=可行，否则原因。"""
-        pb = w2b(_add(p_w, surf.n, -depth), pose)
+    def _check_contact(self, name, p_w, surf, pose, depth, tol, off=0.0):
+        """接触足在 pose 下的可行性；None=可行，否则原因。off=该腿的交接偏移
+        （世界竖直 mm，+ 上）——指令点带着它算，吸盘物理位置不变。"""
+        q = _add(p_w, surf.n, -depth)
+        pb = w2b((q[0], q[1], q[2] + off), pose)
         try:
             sol = self.geom[name].solve(pb, w2b_dir(_scale(surf.n, -1.0), pose))
         except Infeasible as e:
@@ -743,12 +858,238 @@ class MountEngine:
             if self.surf[n] is not None:
                 why = self._check_contact(n, self.pw[n], self.surf[n], pose,
                                           self.depth[n] + self._trim(n, self.surf[n]),
-                                          HOLD_TILT_DEG)
+                                          HOLD_TILT_DEG, self.ho_off[n])
             else:
                 why = self._check_air(n, self.air_pb[n], pose)
             if why:
                 return f"{n} {why}"
         return None
+
+    # ---------- 内部：零力交接 / 接管 ----------
+    # 一维弹簧账（docs/HANDOVER-DESIGN.md §2）：吸住的脚不能滑 ⇒ 改指令=改力、
+    # 不改位。身体的实际高度 X = mean(各腿指令隐含的身体位置) − mg/(nk)，所以
+    # 只要六腿指令偏移的代数和为 0，身体指令就没动；单独把一条腿的偏移往上还
+    # δ，它的力就降到 ~0。放气那一瞬没有储能可释放 = 不再有"下坠-重吸附"棘轮。
+    # 本引擎的方向是**世界竖直**（见模块 docstring 的 ⚠）：地面足竖直=法向
+    # （= 改压深），墙面足竖直=切向（= 沿墙剪切，climb 的"下坡"）。
+    def _pen(self, name, off=None):
+        """该腿沿接触面法向的实际指令压入量 mm（含墙面修正与交接偏移）。
+        偏移是世界竖直的，投影到法向只取 n_z 分量——墙面足 n_z=0，所以接/还
+        载荷完全不改它的压深，只沿墙上下滑。"""
+        surf = self.surf[name]
+        o = self.ho_off[name] if off is None else off
+        return self.depth[name] + self._trim(name, surf) - o * surf.n[2]
+
+    def _ho_check(self, moves, lift=None):
+        """交接位移预检：moves = {腿名: 相对当前偏移的世界竖直位移 mm（+上）}，
+        按 HO_SAMPLE_MM 逐点过 IK 余量/关节行程/coxa 偏摆/倾角/膝净空，另加
+        两条硬界：
+          · 接载的腿压入总量 ≤ PRESS_DEPTH_MAX——再深就是命令腿往刚性玻璃里
+            顶（舵机堵转），与 wall_trim 叠进压深是同一笔账；
+          · 还载的腿指令不许抬到面以上（压入量 ≥0）——吸附腿会从"压住"变成
+            "往外拔"（法向剥离），只承重腿直接失去摩擦支撑。被抬腿（lift）
+            例外：它正要离面，卸载方向就是抬离方向。
+        None=可行，否则原因文本。"""
+        for n, d in moves.items():
+            if self.surf[n] is None or abs(d) <= _EPS:
+                continue
+            k = max(1, int(math.ceil(abs(d) / HO_SAMPLE_MM)))
+            for j in range(1, k + 1):
+                off = self.ho_off[n] + d * j / k
+                pen = self._pen(n, off)
+                if pen > PRESS_DEPTH_MAX + _EPS:
+                    return (f"{n} 压入 {pen:.0f}mm 超上限 {PRESS_DEPTH_MAX:g}"
+                            "（再深就是命令腿顶着刚性面堵转）")
+                if n != lift and pen < -_EPS:
+                    return (f"{n} 指令已抬到{_cn(self.surf[n])}以上 "
+                            f"{-pen:.0f}mm（再卸就成往外拔"
+                            + ("/失去摩擦支撑" if n in self.support_only else "")
+                            + "）")
+                why = self._check_contact(
+                    n, self.pw[n], self.surf[n], self.pose,
+                    self.depth[n] + self._trim(n, self.surf[n]),
+                    HOLD_TILT_DEG, off)
+                if why:
+                    return f"{n} {why}"
+        return None
+
+    def _plan_handover(self, name):
+        """抬 name 之前的零力交接计划。返回 (plan, why)：plan=(δ, {支撑腿: 份额})
+        或 None（关着/无处卸）；why 非 None 时调用方**拒绝整条命令**——半截交接
+        比不交接更糟（载荷挪了一半就放气）。"""
+        delta = self.cfg.leg(name).handover_mm
+        if delta <= 0.0 or self.surf[name] is None \
+                or self.phase_of[name] != MountPhase.STANCE:
+            return None, None          # 关着，或这条腿本来就悬着（无力可卸）
+        sup = self._share_legs(name)
+        if not sup:
+            self.handover_note = (f"{name} 交接跳过：没有别的接触腿接载荷"
+                                  "（它是唯一支撑）")
+            return None, None
+        # 份额按条数均分：这是"各腿刚度相同"的近似。实测逐腿刚度差 4 倍
+        # （08-24 三组 A/B 的 δ-弹跳斜率），严格的均分应按刚度加权——没有力
+        # 传感器，先均分，A/B 里看机身高度残差再说（climb 的窗序权重在这里
+        # 用不上：过渡不是轮转步态，没有"下一个轮到谁"）
+        share = {n: delta / len(sup) for n in sup}
+        moves = {name: +delta}
+        moves.update({n: -v for n, v in share.items()})
+        why = self._ho_check(moves, lift=name)
+        if why:
+            return None, (f"{name} 零力交接不可行：{why}；δ={delta:g}mm 分给 "
+                          f"{len(sup)} 条腿——减小 --handover 或先调位姿/压深")
+        return (delta, share), None
+
+    def _takeover_moves(self, name, mm):
+        sup = self._share_legs(name)
+        if not sup:
+            return None
+        moves = {name: -float(mm)}
+        moves.update({n: +float(mm) / len(sup) for n in sup})
+        return moves
+
+    def _start_takeover(self, name, mm):
+        """接管：name 沿竖直向下 mm、其余接触腿各向上 mm/n。返回 None=已启动。"""
+        moves = self._takeover_moves(name, mm)
+        if moves is None:
+            return "没有别的接触腿可以卸载"
+        why = self._ho_check(moves)
+        if why:
+            return why
+        self._begin_ramp(name, MountPhase.TAKEOVER, moves)
+        return None
+
+    def _fit_takeover(self, name, want):
+        """能塞得下的最大接管量（二分，0.1mm 粒度）：还一部分远好过一点不还。
+        地面腿尤其要截——它的接管量直接变成压深，余量只有
+        PRESS_DEPTH_MAX − press_delta（默认 28−18 = 10mm，要更大就调小
+        --press-delta）；墙面腿的接管是沿墙剪切，不吃压深，能到吸盘倾角为止。"""
+        if self._takeover_moves(name, want) is None:
+            return 0.0
+        if self._ho_check(self._takeover_moves(name, want)) is None:
+            return want
+        lo, hi = 0.0, want
+        while hi - lo > 0.1:
+            mid = (lo + hi) / 2.0
+            if self._ho_check(self._takeover_moves(name, mid)) is None:
+                lo = mid
+            else:
+                hi = mid
+        return lo
+
+    def _begin_ramp(self, name, phase, moves):
+        """按真实时间匀速铺（载荷重分配是准静态过程）。全体腿由**同一个进度
+        变量**驱动、按各自的总位移成比例走——这样"偏移代数和 = 0"在铺设的每
+        一拍都成立（各腿各自限速的话，份额小的腿会先到位，中途身体指令要漂
+        一下）。限速看位移最大的那条腿：速率 = handover_rate_mms。
+        铺设期间该腿相位=HANDOVER/TAKEOVER：吸盘照常密封吸附，互锁与漏气监护
+        对它照常成立，阀绝不动。"""
+        self._ho_start = dict(self.ho_off)
+        self._ho_move = {n: d for n, d in moves.items() if abs(d) > _EPS}
+        self._ho_s = 0.0
+        self.ho_span = max((abs(d) for d in self._ho_move.values()), default=0.0)
+        for n, d in moves.items():
+            self._ho_goal[n] = self.ho_off[n] + d
+        self._gate_t = 0.0
+        self.phase_of[name] = phase
+
+    def _run_handover(self, dt):
+        """交接/接管的铺设步（update() 内，位姿铺设之后、分段状态机之前）。"""
+        cur = self.ho_leg
+        if cur is None:
+            return
+        if self._leaking_contact():
+            return      # 漏气挽救期暂停：漏着的盘摩擦余量低，不该被推；量不丢
+        if self._ho_s < 1.0 and self.ho_span > _EPS:
+            s = min(1.0, self._ho_s + self._ho_rate * dt / self.ho_span)
+            # 逐 tick 包络复检后才落位：铺设期间压深/位姿可能已变（重试加深、
+            # wall_trim），任一腿越界就**整笔停在当前进度**并留痕（停在同一个
+            # s 上才保得住"和为 0"），绝不走到冻结——半截卸载=弹跳打折但安全
+            # （climb 审核 §10.2 同款口径）
+            step = {n: d * (s - self._ho_s) for n, d in self._ho_move.items()}
+            why = self._ho_check(step, lift=cur)
+            if why:
+                self.handover_note = (
+                    f"{cur} {'交接' if self.phase_of[cur] == MountPhase.HANDOVER else '接管'}"
+                    f"截断：{why}；铺到 {self._ho_s * self.ho_span:.1f}/"
+                    f"{self.ho_span:.1f}mm 即收口（量偏大，或支撑腿压深已到底）")
+                self._ho_s = 1.0
+                self._ho_move = {}
+            else:
+                self._ho_s = s
+                for n, d in self._ho_move.items():
+                    self.ho_off[n] = self._ho_start[n] + d * s
+        if self._ho_s < 1.0:
+            return
+        if self.phase_of[cur] == MountPhase.TAKEOVER:
+            self.phase_of[cur] = MountPhase.STANCE
+            return
+        # 卸载铺完，放气前复检门槛/互锁：窗头那次判定距现在已过 δ/速率 秒
+        # （漏气暂停/冻结更久），期间支撑盘可能漏到监护盲区——带着软肩膀放气
+        # 正是 08-19 事故类。不过则保持密封等泵拽深，超时冻结点名
+        why = self._interlock_why(cur)
+        if why:
+            self._gate_t += dt
+            if self._gate_t > self.cfg.lift_gate_timeout_s:
+                self.frozen = (f"交接后放气门槛超时：{why}，等 "
+                               f"{self.cfg.lift_gate_timeout_s:.0f}s 未恢复，"
+                               f"{cur} 拒放气（交接期间支撑盘漏软？）")
+            return
+        self._gate_t = 0.0
+        # 欠账按**实际铺进去**的量记（可能被截断过）：其余腿一共替它接了多少，
+        # 它落地吸住后就还多少
+        self._ho_debt[cur] = sum(
+            max(0.0, self._ho_start[n] - self.ho_off[n])
+            for n in LEG_NAMES if n != cur)
+        self._release_and_lift(cur)
+
+    def _release_and_lift(self, name):
+        """交接完成（或没开交接）后的放气抬离：只承重腿没真空可放，直接抬。"""
+        if name in self.support_only:
+            self.phase_of[name] = MountPhase.LIFT
+        else:
+            self.ctl.request_release(LEG_NAMES.index(name))
+            self.phase_of[name] = MountPhase.VENT
+
+    def _settle(self, name):
+        """落地吸住（或只承重腿压到位）后的收口：先把载荷接到这条新腿身上
+        （接管量 = max(交接欠账, 逐腿 takeover)），再回 STANCE。
+
+        为什么落地后一定要还：份额不还，支撑腿的偏移会一次次往下累积——序列
+        里 34 个单腿动作，几次就把 PRESS_DEPTH_MAX 的余量（press 18 时只剩
+        10mm）吃穿。还回去之后全机偏移回到 0，指令=纯几何。
+        为什么值得多还（takeover > 欠账）：刚吸上的腿是零预载的，机身重量还
+        压在被压弯的其余腿里；主动往新腿身上转载荷 = 就地把那些腿攒的弹性
+        势能卸掉，下一条腿再抬时储能小、下沉也小。L1 上墙后尤其值得——它是
+        接下来整条扶梯路线的主力（用户 09-11 指出）。"""
+        self._sw.pop(name, None)
+        want = max(self._ho_debt.pop(name, 0.0), self.takeover[name])
+        if not self.started:
+            # 启动逐足压入：六腿还在一条条吸上，没有"新腿 vs 压弯的老腿"这回事
+            self.phase_of[name] = MountPhase.STANCE
+            return
+        take = self._fit_takeover(name, want)
+        if take <= _EPS:
+            if want > _EPS:
+                moves = self._takeover_moves(name, want)
+                why = self._ho_check(moves) if moves else "没有别的接触腿可以卸载"
+                self.handover_note = (
+                    f"{name} 接管 {want:.1f}mm 一点也塞不下（{why}）"
+                    "——载荷留在其余腿上，它们还压着弹性变形")
+            self.phase_of[name] = MountPhase.STANCE
+            return
+        if take < want - 0.1:
+            self.handover_note = (
+                f"{name} 接管截到 {take:.1f}/{want:.1f}mm（余下的塞不下："
+                f"{self._ho_check(self._takeover_moves(name, want))}）"
+                "——其余腿只松回一部分，压深余量不够就调小 --press-delta")
+        self._start_takeover(name, take)
+
+    def ho_text(self):
+        """逐腿交接偏移的紧凑文本（全 0 返回 '0'），+ 上（已卸载）/ − 下（接了载荷）。"""
+        if not any(abs(v) > _EPS for v in self.ho_off.values()):
+            return "0"
+        return " ".join(f"{n}{self.ho_off[n]:+.1f}" for n in LEG_NAMES
+                        if abs(self.ho_off[n]) > _EPS)
 
     # ---------- 内部：摆动 ----------
     def _clear(self, surf):
@@ -761,17 +1102,21 @@ class MountEngine:
         return self.wall_trim[name] if surf is self.wall else 0.0
 
     def _foot_world(self, name):
+        """该腿的足端**指令**点（世界系）：面上点 − 法向(压深+修正) + 交接偏移。
+        ⚠ 与吸盘的物理位置差一个 ho_off——吸住的脚不能滑，改指令改的是力。"""
         if self.surf[name] is not None:
-            return _add(self.pw[name], self.surf[name].n,
-                        -(self.depth[name] + self._trim(name, self.surf[name])))
+            p = _add(self.pw[name], self.surf[name].n,
+                     -(self.depth[name] + self._trim(name, self.surf[name])))
+            return (p[0], p[1], p[2] + self.ho_off[name])
         return b2w(self.air_pb[name], self.pose)
 
-    def _liftoff_world(self, name):
+    def _liftoff_world(self, name, up=0.0):
         """摆动路径起点：接触腿 = 面上方 lift_clearance 的抬离点（LIFT 段终点），
-        悬停/空中腿 = 当前点。"""
+        悬停/空中腿 = 当前点。up = 摆动前还要竖直卸载掉的交接量（含已有偏移）。"""
         if self.surf[name] is not None:
-            return _add(self.pw[name], self.surf[name].n,
-                        self._clear(self.surf[name]) - self._trim(name, self.surf[name]))
+            p = _add(self.pw[name], self.surf[name].n,
+                     self._clear(self.surf[name]) - self._trim(name, self.surf[name]))
+            return (p[0], p[1], p[2] + self.ho_off[name] + up)
         return b2w(self.air_pb[name], self.pose)
 
     def set_wall_trim(self, mm, legs=None):
@@ -871,20 +1216,23 @@ class MountEngine:
             u = n_b
         return _add(p, _norm(u), arc * math.sin(math.pi * s))
 
-    def _begin_swing(self, name):
+    def _begin_swing(self, name, plan=None):
         if self.surf[name] is not None and self.phase_of[name] == MountPhase.STANCE:
-            if name in self.support_only:
-                self.phase_of[name] = MountPhase.LIFT      # 没吸附，无真空可放
+            if plan:
+                # 先零力交接（仍吸附、不放气）：铺完由 _run_handover 接着走
+                delta, share = plan
+                moves = {name: +delta}
+                moves.update({n: -v for n, v in share.items()})
+                self._begin_ramp(name, MountPhase.HANDOVER, moves)
                 return
-            self.ctl.request_release(LEG_NAMES.index(name))
-            self.phase_of[name] = MountPhase.VENT
+            self._release_and_lift(name)
         else:
             # 已在空中/悬停：直接从当前点平移
             self._start_transfer(name)
 
     def _start_transfer(self, name):
         sw = self._sw[name]
-        start = self._foot_world(name)
+        start = self._foot_world(name)          # 含卸载量：从抬高后的点起步
         sw["start_w"] = start
         d = math.sqrt(sum((a - b) ** 2 for a, b in zip(start, sw["end_w"])))
         sw["T"] = max(self.cfg.transfer_time, d / TRANSFER_SPEED_MMS)
@@ -892,6 +1240,10 @@ class MountEngine:
         # 平移期间足端按世界系轨迹走，与面脱钩
         self.surf[name] = None
         self.air_pb[name] = w2b(start, self.pose)
+        # 离面即清掉自己的交接偏移（起点已经把它吃进去了，所以指令不跳）：脚在
+        # 空中，"改指令=改力"的前提不成立，偏移没有意义。欠账留着——那是**其余
+        # 腿**替它接的载荷，等它落地吸住再还
+        self.ho_off[name] = self._ho_goal[name] = 0.0
         self.phase_of[name] = MountPhase.TRANSFER
 
     def _run_machines(self, dt):
@@ -959,8 +1311,7 @@ class MountEngine:
                 if name in self.support_only:             # 只承重：压到位即收口
                     if self._attach_queue and self._attach_queue[0] == name:
                         self._attach_queue.pop(0)
-                    self.phase_of[name] = MountPhase.STANCE
-                    self._sw.pop(name, None)
+                    self._settle(name)
                 elif self._may_attach(name):
                     self.ctl.request_attach(i)
                     self.phase_of[name] = MountPhase.WAIT
@@ -975,8 +1326,7 @@ class MountEngine:
                 self.retries[name] = 0
                 if self._attach_queue and self._attach_queue[0] == name:
                     self._attach_queue.pop(0)
-                self.phase_of[name] = MountPhase.STANCE
-                self._sw.pop(name, None)
+                self._settle(name)
             elif st == FootState.FAULT:
                 self.retries[name] += 1
                 if self.retries[name] > cfg.max_attach_retry:
@@ -992,11 +1342,8 @@ class MountEngine:
 
     def _refresh_targets(self):
         for n in LEG_NAMES:
-            if self.surf[n] is not None:
-                pb = w2b(_add(self.pw[n], self.surf[n].n,
-                              -(self.depth[n] + self._trim(n, self.surf[n]))), self.pose)
-            else:
-                pb = self.air_pb[n]
+            pb = (w2b(self._foot_world(n), self.pose)      # 含压深/修正/交接偏移
+                  if self.surf[n] is not None else self.air_pb[n])
             self.foot[n] = list(pb)
 
 

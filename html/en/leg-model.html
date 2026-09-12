@@ -253,7 +253,14 @@ At γ≠0 the leg is <b>still planar</b>; that plane has merely turned by γ abo
 <br><br>⚠ That is the <b>model</b>. The physical parts are not symmetric about that plane — servo cases and forks stick out tens of mm to one side,
 and <b>the §2 side view is a projection, not a section</b>. Whether <b>the foot itself lies in that plane</b> is open item
 <b>e, "coxa lateral-offset check"</b>, in <code>docs/L3-DISPUTE-OPEN.md</code> (hold the coxa still, project the cup lip at two extensions, draw the line through them,
-and measure the perpendicular distance from the projected hip to it) — <b>never done</b>. Any real offset would be absorbed by the model as a small γ zero bias.</div>
+and measure the perpendicular distance from the projected hip to it) — <b>never done</b>.
+<br><br><b>Ruling of 2026-09-12: δ ≤ 3mm can simply be ignored; the check is deferred.</b> A lateral offset δ produces a γ error of atan(δ/r),
+whose <b>constant part is absorbed by the <code>attach_deg</code> calibration</b>; all that survives is the part that varies with extension:
+at δ=3mm it runs from 1.01° at r=170 to 1.91° at r=90 — <b>0.9° of wobble across the whole travel</b>, below the 14.4° spline pitch,
+on a par with the ~0.5° calibration residual, while one walking step swings γ by 26.7°.
+The lateral error of the foot itself is just δ, small against a 60mm ground stride or a ~30mm wall landing band.
+<b>What would bring it back</b>: ① chasing a systematic heading drift or left-right asymmetry in the gait (a lateral offset is sign-flipped left to right,
+which is exactly the shape of such an artefact — see <code>html/walk-symmetry-20260902/</code>); ② needing mm-level stance accuracy on the wall.</div>
 <div class="tblwrap"><table>
 <thead><tr><th style="width:5em">Point</th><th>Leg frame (X, Y, Z) — varies with γ</th>
 <th>Leg plane (r, z) — independent of γ</th><th>Computed at γ=30°<br>(α=24.05°, θ=72°)</th></tr></thead>
@@ -473,10 +480,10 @@ and the cup would jab the ground at 38°, clearly wrong.</div>
 <tr><td>Hip spacing L1–L3</td><td class="n hl">measured 165</td>
   <td><b>Measured on the machine 2026-09-12 = 165</b>; the same method on <code>frame.stl</code> gives <b>165.53</b>, meeting within 0.5mm.
   The official <code>L1_TO_L3 167</code> and <code>mount_x=±83.5</code> are <b>2mm too large</b>; not yet changed</td></tr>
-<tr><td>Hip spacing L2–R2</td><td class="n hlw">not measured</td>
+<tr><td>Hip spacing L2–R2</td><td class="n">not measured again</td>
   <td>Official <code>L2_TO_R2 163</code> (<code>mount_y=±81.5</code>); <code>frame.stl</code> gives
-  <b>162.50</b>. Both measurements so far show the official integers running large, so this one is <b>expected to be ≈162.5 on the same trend; still to be measured</b>.
-  Changing two of the three would leave the body layout inconsistent, so config is left untouched for now</td></tr>
+  <b>162.50</b>, and on the trend of the other two the measurement should come out ≈162.5. <b>On 2026-09-12 it was decided to leave config alone</b> (the deviation is
+  far smaller than the elastic give of the leg chain, see §7), so this one need not be measured either</td></tr>
 <tr><td>Leg neutral direction</td><td class="n hlw">±55 / ±90 / ±125°</td>
   <td>"Corner leg angle 55" on the official <code>MODE_STANDARD</code> line; the middle legs' 90 follows from symmetry.
   <b>Not measured.</b> A corner leg's neutral direction splays 18° further out than the "body centre → hip" radial (37.0° vs 55°)</td></tr>
@@ -494,11 +501,13 @@ and the cup would jab the ground at 38°, clearly wrong.</div>
 <li><b>The cup has two states.</b> This figure draws the free state (h_cup=19, l3=123.7). Once gripping, the bellows compacts,
   h_cup ≈ 7.5~8, effective l3 ≈ 113.8, and δ becomes 27.6°. P4 keeps its books as "free-state model throughout + press_delta";
   do not mix the two conventions (P4-GUIDE §4.2).</li>
-<li><b>The hip spacings in config are not yet aligned with measurement.</b> L1–R1 measures 125 (config 126) and L1–L3 measures 165 (config 167),
-  with <code>frame.stl</code> giving 125.27 / 165.53 in agreement — those three official integers are rounded design intent, running 1~2mm large.
-  Changing config means changing all three together (L2–R2 is not measured yet; expected ≈162.5), so <code>mount_x/mount_y</code> stay at
-  83.5 / 63.0 / 81.5 for now. Impact: each hip is off by 0.5~1mm, which ground gaits will never feel; wall stances are budgeted in mm,
-  but this is far smaller than the elastic give of the leg chain (13~27mm), so it is not urgent.</li>
+<li><b>The hip spacings in config run 1~2mm large; <span class="num">decided on 2026-09-12 not to change them</span>.</b>
+  L1–R1 measures 125 (config 126) and L1–L3 measures 165 (config 167), with <code>frame.stl</code> giving
+  125.27 / 165.53 in agreement — those three official integers are rounded design intent.
+  <b>Why not change them</b>: each hip is off by only 0.5~1mm, which ground gaits will never feel; wall stances are budgeted in mm,
+  but this is far smaller than the elastic give of the leg chain (13~27mm under press reaction, 32mm of sink after mounting the wall), so the fix would drown in noise.
+  <code>mount_x/mount_y</code> therefore stay at 83.5 / 63.0 / 81.5, and <b>L2–R2 need not be measured</b>.
+  <b>What would reopen it</b>: a future mm-level whole-robot calibration, or a systematic gait offset that nothing else explains.</li>
 <li><b>This figure is geometry, not mechanics.</b> Under load the real leg chain gives elastically — press reaction can bend the diagonal front legs down by
   13~27mm, and after mounting the wall the body sinks 6mm+26mm. To compute landing bands and stance margins, subtract the give after the geometry is done.</li>
 </ol>

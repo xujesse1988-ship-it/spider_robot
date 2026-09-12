@@ -271,7 +271,8 @@ coxa yaw axis. The figure below looks down from above the body (body <b>+X forwa
   <div class="fig-scroll"><svg id="fTop" viewBox="-118 -118 346 326" aria-label="Top view"></svg></div>
   <figcaption><b>How to read it:</b> the solid grey shape is the <b>real body outline</b> from <code>frame.stl</code> (not a bounding rectangle —
   its six arms each reach out to one hip); the dashed teal hexagon joins the six coxa yaw axes (<code>mount_x/mount_y</code> in config),
-  and the dimensions <b>126.0</b> and <b>167.0</b> are the lateral / longitudinal spacing between the front and rear pairs of hip axes — <b>official design values, not measured</b> (provenance in the table below and in §6). Every leg is drawn with its coxa2 top outline
+  and the dimensions are the lateral / longitudinal spacing between the front and rear pairs of hip axes, <b>quoting the 2026-09-12 measured values 125 / 165</b>;
+  config still holds the official 126 / 167 (1~2mm too large, see §6). The drawing itself is built from config — at this scale 1mm is invisible. Every leg is drawn with its coxa2 top outline
   and its horizontally projected skeleton H–F–K–C; the highlighted one additionally shows the neutral direction (grey dashed, the γ=0 direction) and leg-frame <b>+Y</b> (purple arrow),
   the side view looking along exactly the opposite of +Y. <b>The leg-plane side view is identical for all six legs</b> — a left-leg part is just a right-leg part mirrored about its joint axis,
   which leaves the in-plane outline unchanged and the assembly chain identically signed, so the figure in §2 holds for all six; only the horn direction of §3 flips left to right.</figcaption>
@@ -384,13 +385,18 @@ and the cup would jab the ground at 38°, clearly wrong.</div>
 <tr><td>cup_delta</td><td class="n hl">−25.24°</td><td>Square-shaft direction −90° minus K→C direction −115.238°, then negated by the assembly mirror. config stores −25.2</td></tr>
 <tr><td>DS3235 case</td><td class="n">40 × 20 × 40.5</td><td>Flange hole spacing: 10 × 48 on the official parts (both coxa2 and tibia use 48), 10 × 49.5 on the real servo;
   axis ~10 from the case end (the <code>ped_cut_y0</code> measured convention)</td></tr>
-<tr><td>Hip positions and spacings</td><td class="n hlw">126 / 167 / 163</td>
-  <td><code>L1_TO_R1 / L1_TO_L3 / L2_TO_R2</code> in the official <code>chica-config-2040.txt</code>;
-  <code>mount_x/mount_y</code> in <code>config.py</code> are exactly half of them (63 / 83.5 / 81.5),
-  unchanged since the initial commit <code>60b6bbb</code>. <b>Neither measured nor calibrated</b> — calibration only ever covered <code>ServoCal</code>.
-  Independent cross-check: fitting the six coxa flange hole groups (10×48) in <code>frame.stl</code> and applying the 9.75 shaft-from-centroid offset gives
-  <b>125.27 / 165.53 / 162.50</b>, each leg sitting 0.25 (middle) to 0.84mm (corner) further in than config, consistently in the same direction on all six.
-  Those three official integers are rounded design intent; the real machine has <b>never been measured with a caliper</b></td></tr>
+<tr><td>Hip spacing L1–R1</td><td class="n hl">measured 125</td>
+  <td><b>Measured on the machine 2026-09-12 = 125</b>; fitting the six coxa flange hole groups (10×48) in <code>frame.stl</code>
+  and applying the 9.75 shaft-from-centroid offset gives <b>125.27</b> — two independent paths meeting within 0.3mm.
+  The official <code>L1_TO_R1 126</code> in <code>chica-config-2040.txt</code> and <code>mount_y=±63.0</code> in <code>config.py</code>
+  are <b>1mm too large</b>; not yet changed</td></tr>
+<tr><td>Hip spacing L1–L3</td><td class="n hl">measured 165</td>
+  <td><b>Measured on the machine 2026-09-12 = 165</b>; the same method on <code>frame.stl</code> gives <b>165.53</b>, meeting within 0.5mm.
+  The official <code>L1_TO_L3 167</code> and <code>mount_x=±83.5</code> are <b>2mm too large</b>; not yet changed</td></tr>
+<tr><td>Hip spacing L2–R2</td><td class="n hlw">not measured</td>
+  <td>Official <code>L2_TO_R2 163</code> (<code>mount_y=±81.5</code>); <code>frame.stl</code> gives
+  <b>162.50</b>. Both measurements so far show the official integers running large, so this one is <b>expected to be ≈162.5 on the same trend; still to be measured</b>.
+  Changing two of the three would leave the body layout inconsistent, so config is left untouched for now</td></tr>
 <tr><td>Leg neutral direction</td><td class="n hlw">±55 / ±90 / ±125°</td>
   <td>"Corner leg angle 55" on the official <code>MODE_STANDARD</code> line; the middle legs' 90 follows from symmetry.
   <b>Not measured.</b> A corner leg's neutral direction splays 18° further out than the "body centre → hip" radial (37.0° vs 55°)</td></tr>
@@ -408,6 +414,11 @@ and the cup would jab the ground at 38°, clearly wrong.</div>
 <li><b>The cup has two states.</b> This figure draws the free state (h_cup=19, l3=123.7). Once gripping, the bellows compacts,
   h_cup ≈ 7.5~8, effective l3 ≈ 113.8, and δ becomes 27.6°. P4 keeps its books as "free-state model throughout + press_delta";
   do not mix the two conventions (P4-GUIDE §4.2).</li>
+<li><b>The hip spacings in config are not yet aligned with measurement.</b> L1–R1 measures 125 (config 126) and L1–L3 measures 165 (config 167),
+  with <code>frame.stl</code> giving 125.27 / 165.53 in agreement — those three official integers are rounded design intent, running 1~2mm large.
+  Changing config means changing all three together (L2–R2 is not measured yet; expected ≈162.5), so <code>mount_x/mount_y</code> stay at
+  83.5 / 63.0 / 81.5 for now. Impact: each hip is off by 0.5~1mm, which ground gaits will never feel; wall stances are budgeted in mm,
+  but this is far smaller than the elastic give of the leg chain (13~27mm), so it is not urgent.</li>
 <li><b>This figure is geometry, not mechanics.</b> Under load the real leg chain gives elastically — press reaction can bend the diagonal front legs down by
   13~27mm, and after mounting the wall the body sinks 6mm+26mm. To compute landing bands and stance margins, subtract the give after the geometry is done.</li>
 </ol>
@@ -644,11 +655,11 @@ function drawTop(){
   s+=`<line class="dim" x1="${l1[0]}" y1="${l1[1]}" x2="${l1[0]}" y2="${yD-4}"/>`;
   s+=`<line class="dim" x1="${r1[0]}" y1="${r1[1]}" x2="${r1[0]}" y2="${yD-4}"/>`;
   s+=`<line class="dim" x1="${l1[0]}" y1="${yD}" x2="${r1[0]}" y2="${yD}"/>`;
-  s+=`<text class="dimt acct cjk" text-anchor="middle" x="0" y="${yD-4}">L1–R1 hip spacing 126.0</text>`;
+  s+=`<text class="dimt acct cjk" text-anchor="middle" x="0" y="${yD-4}">L1–R1 measured 125 (config 126)</text>`;
   s+=`<line class="dim" x1="${l1[0]}" y1="${l1[1]}" x2="${xD-4}" y2="${l1[1]}"/>`;
   s+=`<line class="dim" x1="${l3[0]}" y1="${l3[1]}" x2="${xD-4}" y2="${l3[1]}"/>`;
   s+=`<line class="dim" x1="${xD}" y1="${l1[1]}" x2="${xD}" y2="${l3[1]}"/>`;
-  s+=`<text class="dimt acct cjk" text-anchor="middle" transform="rotate(-90 ${xD-5} 0)" x="${xD-5}" y="0">L1–L3 hip spacing 167.0</text>`;
+  s+=`<text class="dimt acct cjk" text-anchor="middle" transform="rotate(-90 ${xD-5} 0)" x="${xD-5}" y="0">L1–L3 measured 165 (config 167)</text>`;
   /* body axis */
   s+=`<line class="axline" x1="0" y1="30" x2="0" y2="${yD+14}"/>`;
   s+=`<text class="lbl-s cjk" x="4" y="${yD+22}">body +X (front)</text>`;

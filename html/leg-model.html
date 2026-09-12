@@ -271,7 +271,8 @@ coxa 偏航轴转一个角。下图从机体上方往下看（机体 <b>+X 前</
   <div class="fig-scroll"><svg id="fTop" viewBox="-118 -118 346 326" aria-label="俯视图"></svg></div>
   <figcaption><b>读图：</b>灰色实心块 = <code>frame.stl</code> 的<b>真实机身外廓</b>（不是包络矩形，
   六条臂各自伸向一个髋位）；青色虚线六边形连的是六个 coxa 偏航轴（config 的 <code>mount_x/mount_y</code>），
-  标注的 <b>126.0</b> 与 <b>167.0</b> 是前后两对髋轴的横向／纵向间距——<b>官方设计值，不是实测</b>（出处见下表与 §6）。每条腿都画了 coxa2 俯视轮廓
+  标注的是前后两对髋轴的横向／纵向间距，<b>取 2026-09-12 实测值 125 / 165</b>；
+  config 里仍是官方的 126 / 167（偏大 1~2mm，见 §6）。图形按 config 画，差 1mm 这个尺度上看不出来。每条腿都画了 coxa2 俯视轮廓
   和水平投影骨架 H–F–K–C；高亮那条另外给出中性朝向（灰虚线，γ=0 的方向）和腿坐标系 <b>+Y</b>（紫箭头），
   侧视图的视线正好是 +Y 的反向。<b>六条腿的腿平面侧视图完全一样</b>——左腿件只是右腿件绕关节轴的镜像，
   腿平面内的轮廓不变、装配链同号，所以 §2 那张图对六条腿都成立，只是 §3 说的舵盘朝向左右相反。</figcaption>
@@ -384,13 +385,18 @@ tibia 这次翻转正是 <code>cup_delta_deg = −25.2</code> 取负号的几何
 <tr><td>cup_delta</td><td class="n hl">−25.24°</td><td>方轴方向 −90° 减 K→C 方向 −115.238°，再经装配镜像取负。config 存 −25.2</td></tr>
 <tr><td>DS3235 壳体</td><td class="n">40 × 20 × 40.5</td><td>法兰孔距：官方件 10 × 48（coxa2 与 tibia 都是 48），真实舵机 10 × 49.5；
   轴距壳端 ~10（<code>ped_cut_y0</code> 实测口径）</td></tr>
-<tr><td>髋位与髋距</td><td class="n hlw">126 / 167 / 163</td>
-  <td>官方 <code>chica-config-2040.txt</code> 的 <code>L1_TO_R1 / L1_TO_L3 / L2_TO_R2</code>；
-  <code>config.py</code> 的 <code>mount_x/mount_y</code> 正好是它们的一半（63 / 83.5 / 81.5），
-  初始提交 <code>60b6bbb</code> 至今未改。<b>非实测、非标定</b>——标定只覆盖 <code>ServoCal</code>。
-  独立核对：<code>frame.stl</code> 六组 coxa 法兰孔（10×48）拟合 + 轴距形心 9.75 反推为
-  <b>125.27 / 165.53 / 162.50</b>，逐腿比 config 内收 0.25（中腿）~0.84mm（角腿），六腿方向一致。
-  官方那三个整数是取整过的设计意图，实机<b>没有用卡尺量过</b></td></tr>
+<tr><td>髋距 L1–R1</td><td class="n hl">实测 125</td>
+  <td><b>2026-09-12 实机实测 = 125</b>；<code>frame.stl</code> 六组 coxa 法兰孔（10×48）拟合形心
+  + 轴距形心 9.75 反推 = <b>125.27</b>，两条独立路径咬合 0.3mm。
+  官方 <code>chica-config-2040.txt</code> 的 <code>L1_TO_R1 126</code> 与 <code>config.py</code> 的
+  <code>mount_y=±63.0</code> <b>偏大 1mm</b>，尚未改</td></tr>
+<tr><td>髋距 L1–L3</td><td class="n hl">实测 165</td>
+  <td><b>2026-09-12 实机实测 = 165</b>；<code>frame.stl</code> 同法反推 = <b>165.53</b>，咬合 0.5mm。
+  官方 <code>L1_TO_L3 167</code> 与 <code>mount_x=±83.5</code> <b>偏大 2mm</b>，尚未改</td></tr>
+<tr><td>髋距 L2–R2</td><td class="n hlw">未实测</td>
+  <td>官方 <code>L2_TO_R2 163</code>（<code>mount_y=±81.5</code>）；<code>frame.stl</code> 反推
+  <b>162.50</b>。另两条实测都证明官方整数偏大，这条<b>按同一趋势预计 ≈162.5，待量</b>。
+  三条里只改两条会让机身布局不自洽，所以 config 暂时整体不动</td></tr>
 <tr><td>腿中性朝向</td><td class="n hlw">±55 / ±90 / ±125°</td>
   <td>官方 <code>MODE_STANDARD</code> 行的「Corner leg angle 55」，中腿 90 由对称性补。
   <b>非实测</b>。角腿中性朝向比"机体中心→髋位"的径向再外撇 18°（37.0° vs 55°）</td></tr>
@@ -408,6 +414,11 @@ tibia 这次翻转正是 <code>cup_delta_deg = −25.2</code> 取负号的几何
 <li><b>吸盘是两态的。</b>本图画的是自由态（h_cup=19、l3=123.7）。吸住以后波纹压实，
   h_cup ≈ 7.5~8、等效 l3 ≈ 113.8、δ 也变成 27.6°。P4 的记账口径是"全程自由态模型 + press_delta"，
   不要把两套口径混着用（P4-GUIDE §4.2）。</li>
+<li><b>config 的髋距还没跟实测对齐。</b>L1–R1 实测 125（config 126）、L1–L3 实测 165（config 167），
+  <code>frame.stl</code> 反推 125.27 / 165.53 与实测咬合——官方那三个整数是取整过的设计意图，偏大 1~2mm。
+  改 config 要三条一起改（L2–R2 还没量，预计 ≈162.5），所以现在 <code>mount_x/mount_y</code> 保持
+  83.5 / 63.0 / 81.5 不动。影响面：每个髋位偏 0.5~1mm，地面步态无感；爬墙站位按 mm 算裕度，
+  但远小于腿链弹性让位（13~27mm），不急。</li>
 <li><b>这张图是几何，不是力学。</b>实机带载时腿链会弹性让位——press 反力能把对角前腿压弯
   13~27mm、上墙后机身下沉 6mm+26mm。要算落足带和站位裕度，几何算完还得扣让位量。</li>
 </ol>
@@ -644,11 +655,11 @@ function drawTop(){
   s+=`<line class="dim" x1="${l1[0]}" y1="${l1[1]}" x2="${l1[0]}" y2="${yD-4}"/>`;
   s+=`<line class="dim" x1="${r1[0]}" y1="${r1[1]}" x2="${r1[0]}" y2="${yD-4}"/>`;
   s+=`<line class="dim" x1="${l1[0]}" y1="${yD}" x2="${r1[0]}" y2="${yD}"/>`;
-  s+=`<text class="dimt acct cjk" text-anchor="middle" x="0" y="${yD-4}">L1–R1 髋距 126.0</text>`;
+  s+=`<text class="dimt acct cjk" text-anchor="middle" x="0" y="${yD-4}">L1–R1 实测 125（config 126）</text>`;
   s+=`<line class="dim" x1="${l1[0]}" y1="${l1[1]}" x2="${xD-4}" y2="${l1[1]}"/>`;
   s+=`<line class="dim" x1="${l3[0]}" y1="${l3[1]}" x2="${xD-4}" y2="${l3[1]}"/>`;
   s+=`<line class="dim" x1="${xD}" y1="${l1[1]}" x2="${xD}" y2="${l3[1]}"/>`;
-  s+=`<text class="dimt acct cjk" text-anchor="middle" transform="rotate(-90 ${xD-5} 0)" x="${xD-5}" y="0">L1–L3 髋距 167.0</text>`;
+  s+=`<text class="dimt acct cjk" text-anchor="middle" transform="rotate(-90 ${xD-5} 0)" x="${xD-5}" y="0">L1–L3 实测 165（config 167）</text>`;
   /* 机体轴 */
   s+=`<line class="axline" x1="0" y1="30" x2="0" y2="${yD+14}"/>`;
   s+=`<text class="lbl-s cjk" x="4" y="${yD+22}">机体 +X（前）</text>`;

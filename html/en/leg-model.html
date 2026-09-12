@@ -271,11 +271,32 @@ coxa yaw axis. The figure below looks down from above the body (body <b>+X forwa
   <div class="fig-scroll"><svg id="fTop" viewBox="-118 -118 346 326" aria-label="Top view"></svg></div>
   <figcaption><b>How to read it:</b> the solid grey shape is the <b>real body outline</b> from <code>frame.stl</code> (not a bounding rectangle —
   its six arms each reach out to one hip); the dashed teal hexagon joins the six coxa yaw axes (<code>mount_x/mount_y</code> in config),
-  and the dimensions <b>126.0</b> and <b>167.0</b> are the lateral / longitudinal spacing between the front and rear pairs of hip axes. Every leg is drawn with its coxa2 top outline
+  and the dimensions <b>126.0</b> and <b>167.0</b> are the lateral / longitudinal spacing between the front and rear pairs of hip axes — <b>official design values, not measured</b> (provenance in the table below and in §6). Every leg is drawn with its coxa2 top outline
   and its horizontally projected skeleton H–F–K–C; the highlighted one additionally shows the neutral direction (grey dashed, the γ=0 direction) and leg-frame <b>+Y</b> (purple arrow),
   the side view looking along exactly the opposite of +Y. <b>The leg-plane side view is identical for all six legs</b> — a left-leg part is just a right-leg part mirrored about its joint axis,
   which leaves the in-plane outline unchanged and the assembly chain identically signed, so the figure in §2 holds for all six; only the horn direction of §3 flips left to right.</figcaption>
 </figure>
+
+
+<p>The "neutral direction" that γ=0 refers to is <code>mount_angle_deg</code> in config, <b>measured from body +X (forward), counter-clockwise positive</b>.
+It comes from the second number on the <code>MODE_STANDARD</code> line of the official <code>chica-config-2040.txt</code>,
+"Corner leg angle <b>55</b>"; the middle legs' 90° follows from symmetry. Note that <b>the L1–R1 line is lateral (along body ±Y), not the X axis</b>;
+it is the L1–L3 line that runs longitudinally (along body ±X).</p>
+<div class="tblwrap"><table>
+<thead><tr><th style="width:5em">Leg</th><th>mount_angle<br>(from body +X, forward)</th>
+<th>Angle to the lateral L1–R1 line</th><th>Angle to the longitudinal L1–L3 line</th><th>Polar angle of the hip about the body centre</th></tr></thead>
+<tbody>
+<tr><td class="n hl">L1</td><td class="n">+55°</td><td class="n">35°</td><td class="n">55°</td><td class="n">37.0°</td></tr>
+<tr><td class="n">L2</td><td class="n">+90°</td><td class="n">0° (parallel)</td><td class="n">90°</td><td class="n">90.0°</td></tr>
+<tr><td class="n">L3</td><td class="n">+125°</td><td class="n">35°</td><td class="n">55°</td><td class="n">143.0°</td></tr>
+<tr><td class="n">R1</td><td class="n">−55°</td><td class="n">35°</td><td class="n">55°</td><td class="n">−37.0°</td></tr>
+<tr><td class="n">R2</td><td class="n">−90°</td><td class="n">0° (parallel)</td><td class="n">90°</td><td class="n">−90.0°</td></tr>
+<tr><td class="n">R3</td><td class="n">−125°</td><td class="n">35°</td><td class="n">55°</td><td class="n">−143.0°</td></tr>
+</tbody></table></div>
+<div class="callout"><b>A corner leg's neutral direction is not "radially outward from the body centre".</b> The L1 hip (83.5, 63) sits at a polar angle of
+<b>37.0°</b> about the body centre, while its neutral direction is <b>55°</b> — the leg splays <b>18° further out</b> than radial, which widens the stance and makes it laterally steadier.
+The middle legs have no such offset (both are 90°). Adjacent legs' neutral directions are 35° apart (55→90→125), front and rear legs on the same side 70° apart,
+and mirror-image legs (L1–R1) 110° apart.</div>
 
 <h2><span class="no">§3</span>What the four photo annotations are in the model</h2>
 <p>The four annotations on <code>images/leg_2.jpg</code>, one by one:</p>
@@ -363,6 +384,16 @@ and the cup would jab the ground at 38°, clearly wrong.</div>
 <tr><td>cup_delta</td><td class="n hl">−25.24°</td><td>Square-shaft direction −90° minus K→C direction −115.238°, then negated by the assembly mirror. config stores −25.2</td></tr>
 <tr><td>DS3235 case</td><td class="n">40 × 20 × 40.5</td><td>Flange hole spacing: 10 × 48 on the official parts (both coxa2 and tibia use 48), 10 × 49.5 on the real servo;
   axis ~10 from the case end (the <code>ped_cut_y0</code> measured convention)</td></tr>
+<tr><td>Hip positions and spacings</td><td class="n hlw">126 / 167 / 163</td>
+  <td><code>L1_TO_R1 / L1_TO_L3 / L2_TO_R2</code> in the official <code>chica-config-2040.txt</code>;
+  <code>mount_x/mount_y</code> in <code>config.py</code> are exactly half of them (63 / 83.5 / 81.5),
+  unchanged since the initial commit <code>60b6bbb</code>. <b>Neither measured nor calibrated</b> — calibration only ever covered <code>ServoCal</code>.
+  Independent cross-check: fitting the six coxa flange hole groups (10×48) in <code>frame.stl</code> and applying the 9.75 shaft-from-centroid offset gives
+  <b>125.27 / 165.53 / 162.50</b>, each leg sitting 0.25 (middle) to 0.84mm (corner) further in than config, consistently in the same direction on all six.
+  Those three official integers are rounded design intent; the real machine has <b>never been measured with a caliper</b></td></tr>
+<tr><td>Leg neutral direction</td><td class="n hlw">±55 / ±90 / ±125°</td>
+  <td>"Corner leg angle 55" on the official <code>MODE_STANDARD</code> line; the middle legs' 90 follows from symmetry.
+  <b>Not measured.</b> A corner leg's neutral direction splays 18° further out than the "body centre → hip" radial (37.0° vs 55°)</td></tr>
 <tr><td>coxa horn seating face</td><td class="n hlw">Z = −16.2</td><td>coxa2 counterbore floor z_part = −13.4 minus 2.75; the counterbore opens towards −z and the part bottom face is at Z = −19.8. <b>Hard</b> (conditional on the z=2.75 entry)</td></tr>
 </tbody></table></div>
 
@@ -643,8 +674,8 @@ function drawTop(){
       s+=`<line class="yarrow" x1="${Y1[0]}" y1="${Y1[1]}" x2="${Y2[0]}" y2="${Y2[1]}"/>`;
       s+=`<path class="yarrow" d="M${Y2[0]} ${Y2[1]} l${-ux*9-uy*5} ${-uy*9+ux*5} M${Y2[0]} ${Y2[1]} l${-ux*9+uy*5} ${-uy*9-ux*5}"/>`;
       s+=`<text class="kt cjk" x="${Y2[0]+4}" y="${Y2[1]-3}">leg +Y</text>`;
-      const gl=pt(rF+30,22);
-      s+=`<text class="lbl-s cjk acct" text-anchor="middle" x="${gl[0]}" y="${gl[1]}">γ = ${f(g,0)}°</text>`;
+      const gl=pt(rF+62,26);
+      s+=`<text class="lbl-s cjk acct" text-anchor="middle" x="${gl[0]}" y="${gl[1]}">γ = ${f(g,0)}°  neutral ${L[3]>0?'+':''}${L[3]}°</text>`;
     }
   });
   /* adaptive view box, fixed aspect ratio */

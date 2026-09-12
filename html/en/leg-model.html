@@ -96,7 +96,8 @@ li{margin:5px 0}
 footer{margin-top:60px;border-top:1px solid var(--line);padding-top:14px;
   font-size:12.5px;color:var(--muted);font-family:var(--mono);line-height:1.9}
 
-/* ---- control bar ---- */
+/*---- control bar ----
+*/
 .ctl{background:var(--surface);border:1px solid var(--line);padding:12px 14px;margin:0 0 12px;
   display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 22px}
 .ctl .row{display:flex;align-items:center;gap:10px;font-size:13.5px}
@@ -141,7 +142,8 @@ svg .cjk{font-family:var(--sans)}
 .acct{fill:var(--accent);font-size:3.4px}
 .warnt{fill:var(--warn);font-size:3.4px}
 
-/* ---- top view only (its view box is twice the main figure, so strokes and fonts scale up) ---- */
+/*---- top view only (its view box is twice the main figure, so strokes and fonts scale up) ----
+*/
 .framep{fill:var(--steel-fill);stroke:var(--muted);stroke-width:1.1;fill-rule:evenodd}
 .hipoly{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:7 5;stroke-opacity:.55}
 .partdim{fill:none;stroke:var(--steel);stroke-width:1;stroke-opacity:.5}
@@ -163,6 +165,14 @@ svg .cjk{font-family:var(--sans)}
   border:1px solid var(--line);border-radius:3px;cursor:pointer;font-family:var(--mono)}
 #legpick button:hover{border-color:var(--accent)}
 #legpick button.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);font-weight:700}
+.bodyax{stroke:var(--muted);stroke-width:1.1;fill:none}
+.legax{stroke:var(--accent);stroke-width:1.6;fill:none}
+.garc{stroke:var(--accent);stroke-width:1.1;fill:none}
+#fFrameA .lbl{font-size:9px} #fFrameA .lbl-s{font-size:7.4px} #fFrameA .gridl{stroke-width:.6}
+#fFrameB .lbl{font-size:6px} #fFrameB .lbl-s{font-size:5px} #fFrameB .dimt{font-size:5px}
+#fFrameB .kt{font-size:5px} #fFrameB .gridl{stroke-width:.3} #fFrameB .dim{stroke-width:.4}
+#fFrameB .legax{stroke-width:1.1} #fFrameB .axline{stroke-width:.6} #fFrameB .datum{stroke-width:.5}
+#fFrameB .ann-red{stroke-width:2} #fFrameB .skeldim{stroke-width:1.4}
 .hover-xy{font-size:3.4px;fill:var(--muted)}
 </style>
 
@@ -202,6 +212,30 @@ and name the part, e.g. "tibia part (54.0, −7.2)".</p>
 <tr><td class="n">γ / α / θ</td><td>coxa horizontal swing / femur elevation above horizontal / <b>knee interior angle</b> (angle between femur and tibia; straight = 180°).</td><td class="n">0 / 24.1° / 72.0°</td></tr>
 <tr><td class="n">a<sub>t</sub></td><td>Absolute angle of the tibia above horizontal = α + θ − 180°. The direction of the K→C line.</td><td class="n">−83.9°</td></tr>
 </tbody></table></div>
+
+
+<h3>What the leg frame actually looks like</h3>
+<p>Three things about this frame tend to trip people up. One at a time.</p>
+<ol>
+<li><b>There is one frame per leg, not one for the whole machine.</b> All six legs have their own origin and their own +X.
+  A leg's <b>+X is that leg's neutral direction</b> (for R3, −125° in the body frame), which is a completely different thing from the body's +X (straight ahead).</li>
+<li><b>The origin is not on any part you can point at.</b> First find the coxa yaw axis — the <b>vertical</b> axis line through the centre of the coxa servo horn;
+  then travel 16.2mm up along it, to the <b>height</b> of the femur servo shaft. That point is the origin <b>H</b>. It is defined this way so that l1
+  is a purely horizontal 43mm (H→F has no vertical component), which keeps the kinematics as simple as possible.</li>
+<li><b>You do not have to memorise +Y.</b> Remembering +X and +Z is enough; +Y = Z×X merely completes the right-handed set.
+  For a right leg it points towards the front-outboard side of the body; in the side view of §2 it <b>points into the page</b> (because the viewpoint is at −Y).</li>
+</ol>
+<div class="pair">
+<figure><div class="fig-scroll"><svg id="fFrameA" viewBox="-140 -130 375 345"></svg></div>
+<figcaption><b>Top view: where +X and +Y come from.</b> A leg's +X = that leg's neutral direction (<code>mount_angle_deg</code>
+in config); +Y is that turned 90° counter-clockwise in the horizontal plane. <b>γ is the azimuth of the foot in this plane relative to leg +X</b>
+— when the leg swings, <b>the frame does not move</b>; the foot moves inside it.</figcaption></figure>
+
+<figure><div class="fig-scroll"><svg id="fFrameB" viewBox="-60 -58 245 122"></svg></div>
+<figcaption><b>Side view (leg plane): where the origin and +Z are.</b> The origin H sits where the yaw axis meets the height of the femur axis,
+<b>16.2mm above</b> the coxa horn face — <b>the horn face is not the origin</b>. +Y points into the page (⊗).
+Note that this figure's horizontal axis is strictly <b>r</b> (horizontal distance from the yaw axis within the leg plane); only at γ=0 does r = X.</figcaption></figure>
+</div>
 
 <div class="callout acc"><b>A few counter-intuitive points, up front.</b>
 ① <b>H is not on the servo-horn face</b> — the z=0 plane of the leg frame passes through the femur axis, and the coxa horn seating face is <b>16.2mm below</b> it.
@@ -464,7 +498,8 @@ const CFG = {
 };
 const D2R=Math.PI/180, f=(n,d=1)=>n.toFixed(d);
 
-/* ---- view coordinates: X right, Z up ⇒ svg y = −Z ---- */
+/*---- view coordinates: X right, Z up ⇒ svg y = −Z ----
+*/
 const V = (X,Z)=>[X,-Z];
 
 function pathOf(polys, tr){
@@ -494,7 +529,7 @@ function grid(x0,x1,z0,z1,step){
   return s;
 }
 
-/* =========================== main figure =========================== */
+/* ========================*/
 const el=id=>document.getElementById(id);
 function pose(aDeg,tDeg){
   const a=aDeg*D2R, at=(aDeg+tDeg-180)*D2R;
@@ -510,7 +545,8 @@ function drawMain(){
   if(show('cGrid')) s+=grid(-50,250,-155,100,10);
   s+=`<line class="gridl maj" x1="-50" y1="0" x2="250" y2="0"/>`;
 
-  /* --- servo cases --- */
+  /*--- servo cases ---
+*/
   if(show('cServo')){
     const [sx0,sx1,sz0,sz1]=CFG.CX_SERVO;
     s+=`<path class="servo" d="${rectPath(sx0,sx1,sz0,sz1,(p)=>[p[0],-p[1]])}"/>`;
@@ -520,22 +556,26 @@ function drawMain(){
     const corn=[[20,10],[20,-10],[-20,-10],[-20,10]].map(([p1,p2])=>[c[0]+p1*u[0]+p2*w[0], c[1]+p1*u[1]+p2*w[1]]);
     s+=`<path class="servo" d="${pathOf([[corn]],trTibia(phi,K))}"/>`;
   }
-  /* --- printed parts --- */
+  /*--- printed parts ---
+*/
   if(show('cParts')){
     s+=`<path class="part" d="${pathOf(GEOM.coxa2_xz,trCoxa)}"/>`;
     s+=`<path class="part" d="${pathOf(GEOM.femur_xy,trFemur(a,F))}"/>`;
     s+=`<path class="part" d="${pathOf(GEOM.tibia_xz,trTibia(phi,K))}"/>`;
     s+=`<path class="doorp" d="${pathOf(GEOM.door_xz,trTibia(phi,K))}"/>`;
-    /* rubber suction cup (not a printed part, schematic)*/
+    /*rubber suction cup (not a printed part, schematic)
+*/
     const cup=[[CFG.SHAFTX-13.5,CFG.CREASE],[CFG.SHAFTX+13.5,CFG.CREASE],
                [CFG.SHAFTX+15,CFG.CREASE-CFG.HCUP],[CFG.SHAFTX-15,CFG.CREASE-CFG.HCUP]];
     s+=`<path class="cuprub" d="${pathOf([[cup]],trTibia(phi,K))}"/>`;
-    /* servo horns */
+    /*servo horns
+*/
     s+=`<path class="hornd" d="${rectPath(-10.75,10.75,-19.75,-16.15,p=>[p[0],-p[1]])}"/>`;
     s+=`<circle class="hornd" cx="${F[0]}" cy="${-F[1]}" r="10.75"/>`;
     s+=`<circle class="hornd" cx="${K[0]}" cy="${-K[1]}" r="10.75"/>`;
   }
-  /* --- skeleton --- */
+  /*--- skeleton ---
+*/
   if(show('cSkel')){
     s+=`<path class="skel" d="M0 0 L${F[0]} ${-F[1]} L${K[0]} ${-K[1]} L${C[0]} ${-C[1]}"/>`;
     [[0,0,'H'],[F[0],F[1],'F'],[K[0],K[1],'K'],[C[0],C[1],'C']].forEach(([x,z])=>{
@@ -546,7 +586,8 @@ function drawMain(){
     const kd=[Math.cos(at),Math.sin(at)];
     s+=`<line class="axline" x1="${C[0]}" y1="${-C[1]}" x2="${C[0]+26*kd[0]}" y2="${-(C[1]+26*kd[1])}"/>`;
   }
-  /* --- photo annotation layer --- */
+  /*--- photo annotation layer ---
+*/
   if(show('cAnn')){
     s+=`<line class="ann-red" x1="-13" y1="16.15" x2="13" y2="16.15"/>`;
     s+=`<circle class="ann-red-c" cx="${F[0]}" cy="${-F[1]}" r="12.5"/>`;
@@ -554,7 +595,8 @@ function drawMain(){
     const g=[-17,17].map(t=>[C[0]-t*Math.sin(cup), C[1]+t*Math.cos(cup)]);
     s+=`<line class="ann-green" x1="${g[0][0]}" y1="${-g[0][1]}" x2="${g[1][0]}" y2="${-g[1][1]}"/>`;
   }
-  /* --- labels --- */
+  /*--- labels ---
+*/
   if(show('cLbl')){
     s+=`<text class="lbl acct" x="-16" y="-4">H</text>`;
     s+=`<text class="lbl acct" x="${F[0]-2}" y="${-F[1]-14}">F</text>`;
@@ -570,7 +612,8 @@ function drawMain(){
     s+=`<text class="dimt acct" x="${m2[0]-16}" y="${-m2[1]-4}">l2=81.0</text>`;
     s+=`<text class="dimt acct" x="${m3[0]-32}" y="${-m3[1]}">l3=123.7</text>`;
   }
-  /* view box: always contains the skeleton + parts, at a fixed aspect ratio, so the figure keeps its height while dragging */
+  /*view box: always contains the skeleton + parts, at a fixed aspect ratio, so the figure keeps its height while dragging
+*/
   const PAD=46, ASP=304/240, MINW=300;
   let x0=Math.min(0,F[0],K[0],C[0])-PAD, x1=Math.max(0,F[0],K[0],C[0])+PAD;
   let z0=Math.min(0,F[1],K[1],C[1])-PAD, z1=Math.max(0,F[1],K[1],C[1])+PAD;
@@ -581,7 +624,8 @@ function drawMain(){
   el('main').setAttribute('viewBox',`${(cx-w/2).toFixed(1)} ${(-cz-h/2).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
   el('main').innerHTML=s;
 
-  /* --- readout --- */
+  /*--- readout ---
+*/
   el('vA').textContent=f(aDeg)+'°'; el('vT').textContent=f(tDeg)+'°';
   el('ro').innerHTML=
     `<div>α <b>${f(aDeg)}°</b></div><div>θ <b>${f(tDeg)}°</b></div>`+
@@ -591,7 +635,7 @@ function drawMain(){
     `<div id="mxy">cursor <b>—</b></div>`;
 }
 
-/* =========================== part-frame figures =========================== */
+/* ========================*/
 function partFig(id, polys, opts){
   let s=grid(opts.gx[0],opts.gx[1],opts.gz[0],opts.gz[1],10);
   s+=`<line class="gridl maj" x1="${opts.gx[0]}" y1="0" x2="${opts.gx[1]}" y2="0"/>`;
@@ -643,11 +687,13 @@ function drawParts(){
 }
 
 
-/* =========================== top view (six legs) =========================== */
+/* ========================*/
 const LEGS=[['L1',83.5,63.0,55],['L2',0,81.5,90],['L3',-83.5,63.0,125],
             ['R1',83.5,-63.0,-55],['R2',0,-81.5,-90],['R3',-83.5,-63.0,-125]];
-let SEL=5;                              // highlighted leg, default R3
-const TV=(bx,by)=>[-by,-bx];            // body +X up the page, +Y to the left
+let SEL=5;                              //highlighted leg, default R3
+
+const TV=(bx,by)=>[-by,-bx];            //body +X up the page, +Y to the left
+
 function drawTop(){
   const g=+el('sG').value; el('vG').textContent=f(g,0)+'°';
   const P=pose(+el('sA').value,+el('sT').value);
@@ -656,12 +702,15 @@ function drawTop(){
   for(let v=-250;v<=250;v+=50){
     s+=`<line class="gridl" x1="${v}" y1="-250" x2="${v}" y2="250"/>`;
     s+=`<line class="gridl" x1="-250" y1="${v}" x2="250" y2="${v}"/>`;}
-  /* body: the real frame.stl outline (not a bounding rectangle) */
+  /*body: the real frame.stl outline (not a bounding rectangle)
+*/
   s+=`<path class="framep" d="${pathOf(GEOM.frame_xy,trIdent)}"/>`;
-  /* polygon through the six yaw axes */
+  /*polygon through the six yaw axes
+*/
   const hex=[0,1,2,5,4,3].map(i=>TV(LEGS[i][1],LEGS[i][2]));
   s+=`<path class="hipoly" d="M${hex.map(q=>q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' L')} Z"/>`;
-  /* hip-spacing dimensions: L1–R1 across 126.0, L1–L3 along 167.0 */
+  /*hip-spacing dimensions: L1–R1 across 126.0, L1–L3 along 167.0
+*/
   const l1=TV(83.5,63), r1=TV(83.5,-63), l3=TV(-83.5,63);
   const yD=-124, xD=-124;
   s+=`<line class="dim" x1="${l1[0]}" y1="${l1[1]}" x2="${l1[0]}" y2="${yD-4}"/>`;
@@ -672,10 +721,12 @@ function drawTop(){
   s+=`<line class="dim" x1="${l3[0]}" y1="${l3[1]}" x2="${xD-4}" y2="${l3[1]}"/>`;
   s+=`<line class="dim" x1="${xD}" y1="${l1[1]}" x2="${xD}" y2="${l3[1]}"/>`;
   s+=`<text class="dimt acct cjk" text-anchor="middle" transform="rotate(-90 ${xD-5} 0)" x="${xD-5}" y="0">L1–L3 measured 165 (config 167)</text>`;
-  /* body axis */
+  /*body axis
+*/
   s+=`<line class="axline" x1="0" y1="30" x2="0" y2="${yD+14}"/>`;
   s+=`<text class="lbl-s cjk" x="4" y="${yD+22}">body +X (front)</text>`;
-  /* the six legs */
+  /*the six legs
+*/
   let bx=[-140,140], by=[-140,140];
   LEGS.forEach((L,i)=>{
     const sel=(i===SEL), gg=sel?g:0;
@@ -701,7 +752,8 @@ function drawTop(){
       s+=`<text class="lbl-s cjk acct" text-anchor="middle" x="${gl[0]}" y="${gl[1]}">γ = ${f(g,0)}°  neutral ${L[3]>0?'+':''}${L[3]}°</text>`;
     }
   });
-  /* adaptive view box, fixed aspect ratio */
+  /*adaptive view box, fixed aspect ratio
+*/
   const PAD=26, ASP=1.28;
   let x0=Math.min(bx[0],xD-26)-PAD, x1=Math.max(bx[1],130)+PAD;
   let y0=Math.min(by[0],yD-16)-PAD, y1=Math.max(by[1],130)+PAD;
@@ -716,7 +768,84 @@ document.querySelectorAll('#legpick button').forEach(b=>b.addEventListener('clic
   document.querySelectorAll('#legpick button').forEach(x=>x.classList.toggle('on',x===b));
   drawTop();}));
 
-/* =========================== interaction ===========================*/
+
+/* ========================*/
+function arrow(x1,y1,x2,y2,cls,head){
+  const dx=x2-x1, dy=y2-y1, L=Math.hypot(dx,dy), ux=dx/L, uy=dy/L, h=head||7;
+  return `<line class="${cls}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`+
+    `<path class="${cls}" d="M${x2} ${y2} l${-ux*h-uy*h*0.42} ${-uy*h+ux*h*0.42} M${x2} ${y2} l${-ux*h+uy*h*0.42} ${-uy*h-ux*h*0.42}"/>`;
+}
+function drawFrameA(){
+  const L=LEGS[5], G=25;                              // R3, example γ=+25°
+
+  const o=TV(L[1],L[2]);
+  let s='';
+  for(let v=-250;v<=250;v+=50){
+    s+=`<line class="gridl" x1="${v}" y1="-250" x2="${v}" y2="250"/>`;
+    s+=`<line class="gridl" x1="-250" y1="${v}" x2="250" y2="${v}"/>`;}
+  s+=`<path class="framep" d="${pathOf(GEOM.frame_xy,trIdent)}"/>`;
+  s+=arrow(0,0,0,-112,'bodyax')+`<text class="lbl-s cjk" text-anchor="middle" x="0" y="-116">body +X (front)</text>`;
+  s+=arrow(0,0,-112,0,'bodyax')+`<text class="lbl-s cjk" x="-137" y="-14">body +Y (left)</text>`;
+  LEGS.forEach((l,i)=>{const q=TV(l[1],l[2]);
+    s+=`<circle cx="${q[0]}" cy="${q[1]}" r="${i===5?3.8:2.4}" fill="${i===5?'var(--accent)':'var(--muted)'}"/>`;
+    if(i!==5) s+=`<text class="lbl-s" text-anchor="middle" x="${q[0]}" y="${q[1]-7}">${l[0]}</text>`;});
+  const th=L[3]*D2R, dx=Math.cos(th), dy=Math.sin(th), ax=[-dy,dx];
+  const P=(r,yy)=>TV(L[1]+r*dx+(yy||0)*ax[0], L[2]+r*dy+(yy||0)*ax[1]);
+  const xEnd=P(110,0), yEnd=P(0,52);
+  s+=arrow(o[0],o[1],xEnd[0],xEnd[1],'legax',9);
+  s+=`<text class="lbl acct cjk" text-anchor="middle" x="${P(126,17)[0]}" y="${P(126,17)[1]}">leg +X</text>`;
+  s+=`<text class="lbl-s cjk" text-anchor="middle" x="${P(132,-14)[0]}" y="${P(132,-14)[1]}">= neutral direction, γ=0</text>`;
+  s+=arrow(o[0],o[1],yEnd[0],yEnd[1],'legax',9);
+  s+=`<text class="lbl acct cjk" text-anchor="middle" x="${P(-6,70)[0]}" y="${P(-6,70)[1]}">leg +Y</text>`;
+  const thg=(L[3]+G)*D2R, fo=TV(L[1]+110*Math.cos(thg), L[2]+110*Math.sin(thg));
+  s+=`<line class="neut" x1="${o[0]}" y1="${o[1]}" x2="${fo[0]}" y2="${fo[1]}"/>`;
+  s+=`<circle class="jdot" cx="${fo[0]}" cy="${fo[1]}" r="4.2"/>`;
+  s+=`<text class="lbl acct cjk" x="${fo[0]+7}" y="${fo[1]+4}">foot</text>`;
+  const a0=P(42,0), a1=TV(L[1]+42*Math.cos(thg), L[2]+42*Math.sin(thg));
+  s+=`<path class="garc" d="M${a0[0]} ${a0[1]} A 42 42 0 0 0 ${a1[0]} ${a1[1]}"/>`;
+  const am=TV(L[1]+55*Math.cos((L[3]+G/2)*D2R), L[2]+55*Math.sin((L[3]+G/2)*D2R));
+  s+=`<text class="lbl acct" text-anchor="middle" x="${am[0]}" y="${am[1]}">γ</text>`;
+  s+=`<text class="lbl acct" text-anchor="end" x="${o[0]-6}" y="${o[1]-7}">H</text>`;
+  s+=`<text class="lbl-s cjk" x="-137" y="205">H = R3's coxa yaw axis (vertical, normal to the page)</text>`;
+  el('fFrameA').innerHTML=s;
+}
+function drawFrameB(){
+  const P=pose(24.08,72.0), F=P.F, K=P.K;
+  let s='';
+  for(let x=-50;x<=180;x+=10) s+=`<line class="gridl" x1="${x}" y1="-55" x2="${x}" y2="70"/>`;
+  for(let y=-50;y<=70;y+=10) s+=`<line class="gridl" x1="-55" y1="${y}" x2="180" y2="${y}"/>`;
+  /* thigh and shank (faint, drawn only as far as the knee) */
+  s+=`<path class="skeldim" d="M${F[0]} 0 L${K[0]} ${-K[1]}"/>`;
+  s+=`<circle class="jdotdim" cx="${K[0]}" cy="${-K[1]}" r="3"/>`;
+  s+=`<text class="lbl-s cjk" x="${K[0]+4}" y="${-K[1]-3}">→ knee, shank</text>`;
+  /* yaw axis */
+  s+=`<line class="axline" x1="0" y1="-44" x2="0" y2="56"/>`;
+  s+=`<text class="lbl-s cjk" x="3" y="53">coxa yaw axis (vertical)</text>`;
+  /* z=0 plane */
+  s+=`<line class="datum" x1="-48" y1="0" x2="172" y2="0"/>`;
+  s+=`<text class="lbl-s cjk" x="88" y="9">z = 0 plane (femur axis)</text>`;
+  /* the three axes */
+  s+=arrow(0,0,60,0,'legax',7)+`<text class="lbl acct cjk" x="64" y="-3">+X radially outward (= r)</text>`;
+  s+=arrow(0,0,0,-38,'legax',7)+`<text class="lbl acct cjk" x="3" y="-33">+Z up</text>`;
+  s+=`<circle cx="-42" cy="-28" r="4.6" fill="none" stroke="var(--k)" stroke-width=".9"/>`;
+  s+=`<path d="M-45.3 -31.3 L-38.7 -24.7 M-45.3 -24.7 L-38.7 -31.3" stroke="var(--k)" stroke-width=".9"/>`;
+  s+=`<text class="kt cjk" text-anchor="middle" x="-42" y="-19">+Y into page</text>`;
+  /* origin and F */
+  s+=`<circle class="jdot" cx="0" cy="0" r="3.6"/><text class="lbl acct" text-anchor="end" x="-3" y="-5">H</text>`;
+  s+=`<circle class="jdot" cx="${F[0]}" cy="0" r="3.6"/><text class="lbl acct" text-anchor="middle" x="${F[0]}" y="-6">F</text>`;
+  s+=`<line class="dim" x1="0" y1="-16" x2="${F[0]}" y2="-16"/>`;
+  s+=`<line class="dim" x1="0" y1="-13" x2="0" y2="-19"/><line class="dim" x1="${F[0]}" y1="-13" x2="${F[0]}" y2="-19"/>`;
+  s+=`<text class="dimt acct cjk" text-anchor="middle" x="${F[0]/2}" y="-18">l1 = 43 (purely horizontal)</text>`;
+  /* coxa horn face */
+  s+=`<line class="ann-red" x1="-13" y1="16.15" x2="13" y2="16.15"/>`;
+  s+=`<line class="dim" x1="-26" y1="0" x2="-26" y2="16.15"/>`;
+  s+=`<line class="dim" x1="-29" y1="0" x2="-23" y2="0"/><line class="dim" x1="-29" y1="16.15" x2="-23" y2="16.15"/>`;
+  s+=`<text class="dimt warnt" text-anchor="end" x="-29" y="11">16.2</text>`;
+  s+=`<text class="lbl-s warnt cjk" x="16" y="19">coxa horn face ≠ origin</text>`;
+  el('fFrameB').innerHTML=s;
+}
+
+/* ========================*/
 ['sA','sT','cParts','cServo','cSkel','cAnn','cLbl','cGrid'].forEach(id=>
   el(id).addEventListener('input',()=>{drawMain();drawTop();}));
 el('sG').addEventListener('input',drawTop);
@@ -727,5 +856,5 @@ el('main').addEventListener('mousemove',ev=>{
   const X=vb.x+(ev.clientX-r.left)/r.width*vb.width, Y=vb.y+(ev.clientY-r.top)/r.height*vb.height;
   const m=el('mxy'); if(m) m.innerHTML=`cursor <b>(${f(X)}, ${f(-Y)})</b>`;
 });
-drawMain(); drawParts(); drawTop();
+drawMain(); drawParts(); drawTop(); drawFrameA(); drawFrameB();
 </script>

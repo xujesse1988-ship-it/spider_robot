@@ -196,7 +196,7 @@ svg .cjk{font-family:var(--sans)}
 并且带上件名，例如「tibia 件 (54.0, −7.2)」。</p>
 
 <div class="tblwrap"><table>
-<thead><tr><th style="width:7em">名字</th><th>定义</th><th style="width:12em">腿坐标系（站立姿态）</th></tr></thead>
+<thead><tr><th style="width:7em">名字</th><th>定义</th><th style="width:12em">腿平面 (r, z)<br>（站立姿态）</th></tr></thead>
 <tbody>
 <tr><td class="n"><b>腿坐标系</b></td><td>原点在 coxa 偏航轴上、取 femur 轴那个高度；<b>+X</b> = 腿中性朝向（水平向外），
   <b>+Z</b> = 上，<b>+Y</b> = Z×X（右腿指向机体前外侧）。与 <code>kinematics.py</code> 完全一致。</td><td class="n">—</td></tr>
@@ -235,6 +235,30 @@ svg .cjk{font-family:var(--sans)}
 注意这张图的横轴严格说是 <b>r</b>（腿平面内到偏航轴的水平距离），只有 γ=0 时 r = X。</figcaption></figure>
 </div>
 
+
+<div class="callout acc"><b>自测题：coxa 转了 γ，femur / tibia 不动，F 在腿坐标系里的 X 变不变？</b>
+<br><b>变。</b>腿坐标系是<b>钉在机体上的</b>，不跟着 γ 转。γ 一动，整条腿（F、K、足端）都在这套坐标里
+绕 Z 轴划圆：<code>F = (l1·cosγ, l1·sinγ, 0)</code>——γ=30° 时 F 的 X 从 43.00 缩到 <b>37.24</b>，
+同时多出 <b>21.50</b> 的 Y 分量。
+<br><br>但是：<b>它们到 Z 轴的水平距离 r 和高度 z 一点没变。</b>
+<code>r<sub>F</sub>=l1</code>、<code>r<sub>K</sub>=l1+l2·cosα</code>、
+<code>z<sub>K</sub>=l2·sinα</code>……<b>只跟 α、θ 有关，与 γ 无关</b>。
+所以 <b>§2 那张侧视图跟 γ 完全无关</b>——那也是它没有 γ 滑块的原因。
+一句话：<b>γ 转的是"腿平面"这个平面本身，平面里的形状一动不动。</b></div>
+<div class="tblwrap"><table>
+<thead><tr><th style="width:5em">点</th><th>腿坐标系 (X, Y, Z)——随 γ 变</th>
+<th>腿平面 (r, z)——与 γ 无关</th><th>γ=30° 实算<br>（α=24.08°, θ=72°）</th></tr></thead>
+<tbody>
+<tr><td class="n">H</td><td class="n">(0, 0, 0)</td><td class="n">(0, 0)</td><td class="n">(0, 0, 0)</td></tr>
+<tr><td class="n">F</td><td class="n">(l1·cosγ, l1·sinγ, 0)</td><td class="n hl">(43.00, 0)</td><td class="n">(37.24, 21.50, 0)</td></tr>
+<tr><td class="n">K</td><td class="n">(r<sub>K</sub>·cosγ, r<sub>K</sub>·sinγ, l2·sinα)</td>
+  <td class="n hl">(116.95, 33.05)</td><td class="n">(101.28, 58.48, 33.05)</td></tr>
+<tr><td class="n">C</td><td class="n">(r<sub>C</sub>·cosγ, r<sub>C</sub>·sinγ, z<sub>C</sub>)</td>
+  <td class="n hl">(130.06, −90.00)</td><td class="n">(112.63, 65.03, −90.00)</td></tr>
+</tbody></table></div>
+<p class="sub">（这就是 <code>kinematics.py</code> 的 <code>leg_joint_points</code> 在算的东西：
+先在腿平面里用 α、θ 定出 r 和 z，最后乘 cosγ / sinγ 摊到 X、Y 上。）</p>
+
 <div class="callout acc"><b>几个反直觉的点，先说在前面。</b>
 ① <b>H 不在舵盘面上</b>——腿坐标系的 z=0 平面过 femur 轴，coxa 舵盘座面在它<b>下方 16.2mm</b>。
 ② <b>K 不在 tibia 件的原点</b>，在 (54.0, −7.2)，这是 2026-08-07 结的案。
@@ -272,7 +296,8 @@ svg .cjk{font-family:var(--sans)}
   <figcaption><b>读图：</b>浅灰实线 = 打印件（coxa2 / femur / tibia-suction），虚线金色 = 舵机壳体，
   虚线红 = 橡胶吸盘（非打印件，示意），青色折线 = 运动学骨架 H–F–K–C，红点划线 = 吸盘轴。
   照片标注层把 <code>images/leg_2.jpg</code> 上的红横线／两个红圈／绿线画在模型对应位置上。
-  鼠标在图上移动会显示腿坐标系读数。</figcaption>
+  鼠标在图上移动会显示读数。<b>横轴是 r（腿平面内到偏航轴的水平距离），不是腿坐标系的 X</b>——
+  所以<b>这张图与 γ 无关</b>，γ 只把整个平面绕 Z 轴转，平面里的形状不变（见 §1 自测题）。</figcaption>
 </figure>
 
 <div class="legend">
@@ -618,9 +643,9 @@ function drawMain(){
   el('ro').innerHTML=
     `<div>α <b>${f(aDeg)}°</b></div><div>θ <b>${f(tDeg)}°</b></div>`+
     `<div>a_t <b>${f(at/D2R)}°</b></div><div>吸盘轴 <b>${f(cup/D2R)}°</b></div>`+
-    `<div>F <b>(${f(F[0])}, ${f(F[1])})</b></div><div>K <b>(${f(K[0])}, ${f(K[1])})</b></div>`+
-    `<div>C <b>(${f(C[0])}, ${f(C[1])})</b></div><div>膝内角余量 <b>${f(176-tDeg)}°</b></div>`+
-    `<div id="mxy">指针 <b>—</b></div>`;
+    `<div>F (r,z) <b>(${f(F[0])}, ${f(F[1])})</b></div><div>K (r,z) <b>(${f(K[0])}, ${f(K[1])})</b></div>`+
+    `<div>C (r,z) <b>(${f(C[0])}, ${f(C[1])})</b></div><div>膝内角余量 <b>${f(176-tDeg)}°</b></div>`+
+    `<div id="mxy">指针 (r,z) <b>—</b></div>`;
 }
 
 /* =========================== 零件自身坐标图 =========================== */

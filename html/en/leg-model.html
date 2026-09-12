@@ -205,11 +205,11 @@ and name the part, e.g. "tibia part (54.0, −7.2)".</p>
 <tr><td class="n"><b>Leg plane</b></td><td>The vertical plane through the X and Z axes. femur and tibia move only inside it; γ rotates the whole plane about Z.</td><td class="n">Y = 0</td></tr>
 <tr><td class="n hl"><b>H</b> hip point</td><td>coxa yaw axis × leg-plane origin. <b>Not</b> the servo-horn face — that sits 16mm below it.</td><td class="n">(0, 0)</td></tr>
 <tr><td class="n hl"><b>F</b> femur axis</td><td>Thigh pitch axis (horizontal, ⊥ leg plane). The centre of the <b>lower red circle</b> in the photo.</td><td class="n">(43.0, 0)</td></tr>
-<tr><td class="n hl"><b>K</b> knee axis</td><td>tibia servo output shaft. The centre of the <b>upper red circle</b> in the photo.</td><td class="n">(116.9, 33.1)</td></tr>
+<tr><td class="n hl"><b>K</b> knee axis</td><td>tibia servo output shaft. The centre of the <b>upper red circle</b> in the photo.</td><td class="n">(117.0, 33.0)</td></tr>
 <tr><td class="n hl"><b>C</b> lip centre</td><td>Centre of the suction-cup lip circle (<b>free state</b>, 19mm below the crease plane). The "foot" of the kinematics.</td><td class="n">(130.1, −90.0)</td></tr>
 <tr><td class="n"><b>G</b> crease-plane centre</td><td>Bottom face of the printed part = where the wrapped section of the cup starts; centre of the tibia-part plane z = −100.</td><td class="n">C backed off 19 along the cup axis</td></tr>
 <tr><td class="n"><b>Cup axis</b></td><td>Axis of revolution of the cup cavity = centreline of the square shaft. <b>Not</b> the K→C line; the two differ by 25.2°.</td><td class="n">direction a<sub>t</sub> − 25.2°</td></tr>
-<tr><td class="n">γ / α / θ</td><td>coxa horizontal swing / femur elevation above horizontal / <b>knee interior angle</b> (angle between femur and tibia; straight = 180°).</td><td class="n">0 / 24.1° / 72.0°</td></tr>
+<tr><td class="n">γ / α / θ</td><td>coxa horizontal swing / femur elevation above horizontal / <b>knee interior angle</b> (angle between femur and tibia; straight = 180°).</td><td class="n">0 / 24.05° / 72.00°</td></tr>
 <tr><td class="n">a<sub>t</sub></td><td>Absolute angle of the tibia above horizontal = α + θ − 180°. The direction of the K→C line.</td><td class="n">−83.9°</td></tr>
 </tbody></table></div>
 
@@ -256,14 +256,14 @@ and <b>the §2 side view is a projection, not a section</b>. Whether <b>the foot
 and measure the perpendicular distance from the projected hip to it) — <b>never done</b>. Any real offset would be absorbed by the model as a small γ zero bias.</div>
 <div class="tblwrap"><table>
 <thead><tr><th style="width:5em">Point</th><th>Leg frame (X, Y, Z) — varies with γ</th>
-<th>Leg plane (r, z) — independent of γ</th><th>Computed at γ=30°<br>(α=24.08°, θ=72°)</th></tr></thead>
+<th>Leg plane (r, z) — independent of γ</th><th>Computed at γ=30°<br>(α=24.05°, θ=72°)</th></tr></thead>
 <tbody>
 <tr><td class="n">H</td><td class="n">(0, 0, 0)</td><td class="n">(0, 0)</td><td class="n">(0, 0, 0)</td></tr>
 <tr><td class="n">F</td><td class="n">(l1·cosγ, l1·sinγ, 0)</td><td class="n hl">(43.00, 0)</td><td class="n">(37.24, 21.50, 0)</td></tr>
 <tr><td class="n">K</td><td class="n">(r<sub>K</sub>·cosγ, r<sub>K</sub>·sinγ, l2·sinα)</td>
-  <td class="n hl">(116.95, 33.05)</td><td class="n">(101.28, 58.48, 33.05)</td></tr>
+  <td class="n hl">(116.97, 33.01)</td><td class="n">(101.30, 58.48, 33.01)</td></tr>
 <tr><td class="n">C</td><td class="n">(r<sub>C</sub>·cosγ, r<sub>C</sub>·sinγ, z<sub>C</sub>)</td>
-  <td class="n hl">(130.06, −90.00)</td><td class="n">(112.63, 65.03, −90.00)</td></tr>
+  <td class="n hl">(130.00, −90.00)</td><td class="n">(112.58, 65.00, −90.00)</td></tr>
 </tbody></table></div>
 <p class="sub">(This is exactly what <code>leg_joint_points</code> in <code>kinematics.py</code> computes:
 first r and z from α and θ inside the leg plane, then multiply by cosγ / sinγ to spread them over X and Y.)</p>
@@ -279,11 +279,11 @@ first r and z from α and θ inside the leg plane, then multiply by cosγ / sin�
 servos = the 40×20×40.5 case envelope computed from the flange hole positions. Drag the sliders to see how the pose moves.</p>
 
 <div class="ctl">
-  <div class="row"><label>α femur</label><input id="sA" type="range" min="-40" max="140" step="0.5" value="24.1"><span class="val" id="vA">24.1°</span></div>
+  <div class="row"><label>α femur</label><input id="sA" type="range" min="-40" max="140" step="0.5" value="24.05"><span class="val" id="vA">24.1°</span></div>
   <div class="row"><label>θ knee angle</label><input id="sT" type="range" min="10" max="176" step="0.5" value="72.0"><span class="val" id="vT">72.0°</span></div>
   <div class="row" style="grid-column:1/-1"><label>Presets</label>
     <span class="btns">
-      <button data-p="24.08,72.00">Standing (90/130)</button>
+      <button data-p="24.05,72.00">Standing = walk_teleop start pose</button>
       <button data-p="47.26,79.96">R3 servos centred ≈ photo pose</button>
       <button data-p="0,90">α=0 θ=90</button>
       <button data-p="0,180">Fully extended</button>
@@ -306,7 +306,9 @@ servos = the 40×20×40.5 case envelope computed from the flange hole positions.
   red dashed = the rubber suction cup (not a printed part, schematic), teal polyline = the kinematic skeleton H–F–K–C, red dash-dot = the cup axis.
   The photo-annotation layer draws the red horizontal line / two red circles / green line from <code>images/leg_2.jpg</code> at their model positions.
   Moving the mouse over the figure shows a readout. <b>The horizontal axis is r (horizontal distance from the yaw axis within the leg plane), not the leg frame's X</b> —
-  so <b>this figure is independent of γ</b>; γ only turns the whole plane about Z, leaving the shape inside it unchanged (see the self-test in §1).</figcaption>
+  so <b>this figure is independent of γ</b>; γ only turns the whole plane about Z, leaving the shape inside it unchanged (see the self-test in §1).
+  <br>The "standing" preset is the pose <code>scripts/walk_teleop.py</code> starts from (<code>stand_height=90</code>,
+  <code>foot_reach=130</code>), computed as <b>γ=0.0000°, α=24.0511°, θ=71.9965°</b>, identical on all six legs.</figcaption>
 </figure>
 
 <div class="legend">
@@ -388,7 +390,7 @@ both rear legs sit 14.4° and 20.4° further back, in fact closer to the radial 
 <tr><td class="n hlw">Lower red circle</td><td><b>F</b>, the femur servo output shaft = thigh pitch axis. What is circled is the horn and its 4 M2 screws
   (bolt circle Ø14.3).</td><td class="n">(43.0, 0), constant</td></tr>
 <tr><td class="n hlw">Upper red circle</td><td><b>K</b>, the knee axis. Here the horn is bolted to the end of the femur rail, while the servo case is mounted the other way round, inside the tibia hub
-  — which is why the DS3235 lettering in the photo turns with the shank.</td><td class="n">varies with α; (116.9, 33.1) when standing</td></tr>
+  — which is why the DS3235 lettering in the photo turns with the shank.</td><td class="n">varies with α; (117.0, 33.0) when standing</td></tr>
 <tr><td class="n" style="background:color-mix(in srgb,var(--green) 12%,transparent)">Green horizontal line</td>
   <td><b>Lip plane</b>: the plane of the suction-cup lip, ⊥ the cup axis, its circle centre being <b>C</b>. In the free state it is 19mm below the crease plane;
   once the cup grips it compresses to 7.5~8mm (the leg shortens by about 10mm).</td><td class="n">passes through (130.1, −90.0) when standing</td></tr>
@@ -848,7 +850,7 @@ function drawFrameA(){
   el('fFrameA').innerHTML=s;
 }
 function drawFrameB(){
-  const P=pose(24.08,72.0), F=P.F, K=P.K;
+  const P=pose(24.05,72.0), F=P.F, K=P.K;
   let s='';
   for(let x=-50;x<=180;x+=10) s+=`<line class="gridl" x1="${x}" y1="-55" x2="${x}" y2="70"/>`;
   for(let y=-50;y<=70;y+=10) s+=`<line class="gridl" x1="-55" y1="${y}" x2="180" y2="${y}"/>`;

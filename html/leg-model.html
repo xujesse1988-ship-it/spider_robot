@@ -203,11 +203,11 @@ svg .cjk{font-family:var(--sans)}
 <tr><td class="n"><b>腿平面</b></td><td>过 X 轴与 Z 轴的竖直平面。femur 与 tibia 只在这个平面里动；γ 把整个平面绕 Z 转。</td><td class="n">Y = 0</td></tr>
 <tr><td class="n hl"><b>H</b> 髋点</td><td>coxa 偏航轴 × 腿平面原点。<b>不是</b>舵盘面，舵盘面在它下方 16mm。</td><td class="n">(0, 0)</td></tr>
 <tr><td class="n hl"><b>F</b> femur 轴</td><td>大腿俯仰轴（水平、⊥腿平面）。照片上<b>下面那个红圈</b>的中心。</td><td class="n">(43.0, 0)</td></tr>
-<tr><td class="n hl"><b>K</b> 膝轴</td><td>tibia 舵机输出轴。照片上<b>上面那个红圈</b>的中心。</td><td class="n">(116.9, 33.1)</td></tr>
+<tr><td class="n hl"><b>K</b> 膝轴</td><td>tibia 舵机输出轴。照片上<b>上面那个红圈</b>的中心。</td><td class="n">(117.0, 33.0)</td></tr>
 <tr><td class="n hl"><b>C</b> 唇心</td><td>吸盘唇口圆心（<b>自由态</b>，折痕面下 19mm）。运动学里的「足端」。</td><td class="n">(130.1, −90.0)</td></tr>
 <tr><td class="n"><b>G</b> 折痕面心</td><td>打印件底面 = 吸盘被包住那一圈的起点；tibia 件 z = −100 的平面中心。</td><td class="n">C 沿吸盘轴回退 19</td></tr>
 <tr><td class="n"><b>吸盘轴</b></td><td>吸盘腔回转轴 = 方轴轴心线。<b>不等于</b> K→C 连线，两者夹 25.2°。</td><td class="n">方向 a<sub>t</sub> − 25.2°</td></tr>
-<tr><td class="n">γ / α / θ</td><td>coxa 水平摆角 / femur 相对水平面仰角 / <b>膝内角</b>（femur 与 tibia 的夹角，伸直 = 180°）。</td><td class="n">0 / 24.1° / 72.0°</td></tr>
+<tr><td class="n">γ / α / θ</td><td>coxa 水平摆角 / femur 相对水平面仰角 / <b>膝内角</b>（femur 与 tibia 的夹角，伸直 = 180°）。</td><td class="n">0 / 24.05° / 72.00°</td></tr>
 <tr><td class="n">a<sub>t</sub></td><td>tibia 相对水平面的绝对角 = α + θ − 180°。K→C 连线的方向。</td><td class="n">−83.9°</td></tr>
 </tbody></table></div>
 
@@ -254,14 +254,14 @@ svg .cjk{font-family:var(--sans)}
 量 hip 投点到该线的垂距），至今<b>没做</b>。真有侧偏的话，模型会把它当成一点 γ 零位偏差吸收掉。</div>
 <div class="tblwrap"><table>
 <thead><tr><th style="width:5em">点</th><th>腿坐标系 (X, Y, Z)——随 γ 变</th>
-<th>腿平面 (r, z)——与 γ 无关</th><th>γ=30° 实算<br>（α=24.08°, θ=72°）</th></tr></thead>
+<th>腿平面 (r, z)——与 γ 无关</th><th>γ=30° 实算<br>（α=24.05°, θ=72°）</th></tr></thead>
 <tbody>
 <tr><td class="n">H</td><td class="n">(0, 0, 0)</td><td class="n">(0, 0)</td><td class="n">(0, 0, 0)</td></tr>
 <tr><td class="n">F</td><td class="n">(l1·cosγ, l1·sinγ, 0)</td><td class="n hl">(43.00, 0)</td><td class="n">(37.24, 21.50, 0)</td></tr>
 <tr><td class="n">K</td><td class="n">(r<sub>K</sub>·cosγ, r<sub>K</sub>·sinγ, l2·sinα)</td>
-  <td class="n hl">(116.95, 33.05)</td><td class="n">(101.28, 58.48, 33.05)</td></tr>
+  <td class="n hl">(116.97, 33.01)</td><td class="n">(101.30, 58.48, 33.01)</td></tr>
 <tr><td class="n">C</td><td class="n">(r<sub>C</sub>·cosγ, r<sub>C</sub>·sinγ, z<sub>C</sub>)</td>
-  <td class="n hl">(130.06, −90.00)</td><td class="n">(112.63, 65.03, −90.00)</td></tr>
+  <td class="n hl">(130.00, −90.00)</td><td class="n">(112.58, 65.00, −90.00)</td></tr>
 </tbody></table></div>
 <p class="sub">（这就是 <code>kinematics.py</code> 的 <code>leg_joint_points</code> 在算的东西：
 先在腿平面里用 α、θ 定出 r 和 z，最后乘 cosγ / sinγ 摊到 X、Y 上。）</p>
@@ -277,11 +277,11 @@ svg .cjk{font-family:var(--sans)}
 舵机 = 按法兰孔位算出的 40×20×40.5 壳体外框。拖滑块看姿态怎么动。</p>
 
 <div class="ctl">
-  <div class="row"><label>α femur</label><input id="sA" type="range" min="-40" max="140" step="0.5" value="24.1"><span class="val" id="vA">24.1°</span></div>
+  <div class="row"><label>α femur</label><input id="sA" type="range" min="-40" max="140" step="0.5" value="24.05"><span class="val" id="vA">24.1°</span></div>
   <div class="row"><label>θ 膝内角</label><input id="sT" type="range" min="10" max="176" step="0.5" value="72.0"><span class="val" id="vT">72.0°</span></div>
   <div class="row" style="grid-column:1/-1"><label>预设</label>
     <span class="btns">
-      <button data-p="24.08,72.00">站立 (90/130)</button>
+      <button data-p="24.05,72.00">站立 = walk_teleop 起手姿</button>
       <button data-p="47.26,79.96">R3 舵机回中 ≈ 照片姿态</button>
       <button data-p="0,90">α=0 θ=90</button>
       <button data-p="0,180">全伸直</button>
@@ -304,7 +304,9 @@ svg .cjk{font-family:var(--sans)}
   虚线红 = 橡胶吸盘（非打印件，示意），青色折线 = 运动学骨架 H–F–K–C，红点划线 = 吸盘轴。
   照片标注层把 <code>images/leg_2.jpg</code> 上的红横线／两个红圈／绿线画在模型对应位置上。
   鼠标在图上移动会显示读数。<b>横轴是 r（腿平面内到偏航轴的水平距离），不是腿坐标系的 X</b>——
-  所以<b>这张图与 γ 无关</b>，γ 只把整个平面绕 Z 轴转，平面里的形状不变（见 §1 自测题）。</figcaption>
+  所以<b>这张图与 γ 无关</b>，γ 只把整个平面绕 Z 轴转，平面里的形状不变（见 §1 自测题）。
+  <br>「站立」预设 = <code>scripts/walk_teleop.py</code> 起手那个姿态（<code>stand_height=90</code>、
+  <code>foot_reach=130</code>），实算 <b>γ=0.0000°、α=24.0511°、θ=71.9965°</b>，六条腿完全一样。</figcaption>
 </figure>
 
 <div class="legend">
@@ -386,7 +388,7 @@ R2 −90.2° 都在标称 ±4° 内，但 <b>L3 是 139.4°（标称 125）、R3
 <tr><td class="n hlw">下面的红圈</td><td><b>F</b>，femur 舵机输出轴 = 大腿俯仰轴。圈住的就是舵盘和它的 4 颗 M2 螺丝
   （分布圆 Ø14.3）。</td><td class="n">(43.0, 0) 恒定</td></tr>
 <tr><td class="n hlw">上面的红圈</td><td><b>K</b>，膝轴。这里的舵盘锁在 femur 杆端上，舵机壳体反过来装在 tibia 的盘毂里
-  ——所以照片上 DS3235 的字是跟着小腿转的。</td><td class="n">随 α 变，站立时 (116.9, 33.1)</td></tr>
+  ——所以照片上 DS3235 的字是跟着小腿转的。</td><td class="n">随 α 变，站立时 (117.0, 33.0)</td></tr>
 <tr><td class="n" style="background:color-mix(in srgb,var(--green) 12%,transparent)">绿色横线</td>
   <td><b>唇面</b>：吸盘唇口所在的平面，⊥吸盘轴，圆心即 <b>C</b>。自由态在折痕面下 19mm，
   吸住以后压到 7.5~8mm（腿等效缩短约 10mm）。</td><td class="n">站立时过 (130.1, −90.0)</td></tr>
@@ -821,7 +823,7 @@ function drawFrameA(){
   el('fFrameA').innerHTML=s;
 }
 function drawFrameB(){
-  const P=pose(24.08,72.0), F=P.F, K=P.K;
+  const P=pose(24.05,72.0), F=P.F, K=P.K;
   let s='';
   for(let x=-50;x<=180;x+=10) s+=`<line class="gridl" x1="${x}" y1="-55" x2="${x}" y2="70"/>`;
   for(let y=-50;y<=70;y+=10) s+=`<line class="gridl" x1="-55" y1="${y}" x2="180" y2="${y}"/>`;

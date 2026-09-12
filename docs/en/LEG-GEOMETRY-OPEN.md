@@ -105,8 +105,14 @@ EOF
 - The link line runs along the STL's X axis (the two axes at x=0 and x=80, matching `FEMUR_LEN 80`).
 - Long straight edges **exactly parallel (0.00°)** to the link line do exist (XY projection: y=+9, length 80.4mm; y=-7, length 82.2mm).
 
-⚠️ The femur axis's **exact coordinates in the STL were never verified by hole fitting the way §2.4 was**; they were only inferred from the x span and FEMUR_LEN=80.
-The direction is trustworthy, the **position is doubtful** — it needs the same hole-circle fit.
+> ✅ **Verified 2026-09-12**: fitting the bolt circle through the 3 Ø1.5 horn screw holes at each end of
+> `right-femur.stl` (the 4th falls outside the part) gives radius 7.15 with residual 0 →
+> **proximal axis (3, 1), distal axis (83, 1), spacing exactly 80.000**. The "position is doubtful" note above is void.
+> The same method fixes coxa2: yaw axis (3, −1)∥z, femur axis (46, 2.75)∥y, common-perpendicular distance 43.0 = COXA_LEN.
+> Axis positions of all three parts, the assembly chain and the leg-plane side view are in
+> `html/en/leg-model.html` (draggable pose, with the photo annotations mapped onto it).
+> ⚠ One thing is still open: STL design value 80.000 vs the measured 81.0 in config — 1mm apart
+> (print tolerance + horn/spline clearance).
 
 ### 2.6 tibia_len = 134 is the untouched official value
 

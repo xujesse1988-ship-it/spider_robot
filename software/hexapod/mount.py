@@ -59,6 +59,13 @@ BODY_CLEAR_MM = 5.0        # 机身/腹面离任何面的最小净空
 KNEE_CLEAR_MM = 8.0        # 膝离任何面的最小净空
 FOOT_AIR_CLEAR_MM = 10.0   # 悬空足离任何面的最小净空（位姿铺设预检）
 HOLD_TILT_DEG = 15.0       # 已吸附足在位姿改变中允许的指令倾角（吸盘容差）
+SUPPORT_TILT_DEG = 35.0    # **只承重腿**（support_only，只压不吸）的倾角容差：盘面对不对正
+                           # 不影响它传正压力，15° 那条是吸盘**密封**的容差，套在它头上是
+                           # 错的——按此中腿在俯仰 >30° 就被拒，而几何上它能撑到 90°。
+                           # 09-12 台架实测（LAB E4a）：盘面斜 35° 时接触仍在盘面、仍压得住；
+                           # 35° 也正是中腿在俯仰 90° 时盘面最多斜到的角度（coxa ±55° 口径，
+                           # OPEN §1.1），所以这个值等于"倾角这条永远不卡中腿"。
+                           # 再大没有意义（几何到不了），要改用 --support-tilt
 FLOOR_CLEAR_MM = 45.0      # 地面移动的抬离高度 mm（默认，--floor-clear 可调）：
                            # cfg.lift_clearance=15 是按吸盘回弹 11~13mm 定的、够墙面
                            # 用（墙面法向上没有重力下垂），但地面上腿一抬就因自重
@@ -248,7 +255,8 @@ class MountEngine:
 
     def __init__(self, cfg: RobotConfig, ctl, wall_x=0.0, front_hip_to_wall=140.0,
                  pitch_max_deg=90.0, ignore_tank_fault=False, attach_order=None,
-                 floor_clear_mm=FLOOR_CLEAR_MM, support_only=(), takeover_mm=None):
+                 floor_clear_mm=FLOOR_CLEAR_MM, support_only=(), takeover_mm=None,
+                 support_tilt_deg=SUPPORT_TILT_DEG):
         self.cfg, self.ctl = cfg, ctl
         self.ignore_tank_fault = ignore_tank_fault
         self.wall = wall_at(wall_x)
@@ -263,6 +271,9 @@ class MountEngine:
         bad = self.support_only - set(LEG_NAMES)
         if bad:
             raise ValueError(f"support_only 含未知腿 {sorted(bad)}")
+        if not (0.0 < float(support_tilt_deg) <= 60.0):
+            raise ValueError(f"support_tilt_deg {support_tilt_deg!r} 非法：0~60°")
+        self.support_tilt = float(support_tilt_deg)
         self.geom = {leg.name: LegGeom(cfg, leg) for leg in cfg.legs}
         self.slot_order = tuple(sorted(
             LEG_NAMES, key=lambda n: (CLIMB.duty - CLIMB.offsets[n]) % 1.0))
@@ -777,6 +788,14 @@ class MountEngine:
                 return s
         return None
 
+    def _tilt_lim(self, name, band=False):
+        """该腿的倾角容差。吸附腿按吸盘**密封**容差（落点 TILT_BAND_DEG、保持
+        HOLD_TILT_DEG）；**只承重腿按 support_tilt**——它只压不吸，盘面对不对正不影响
+        传正压力，拿密封容差卡它是错的（SUPPORT_TILT_DEG 的注释里有账）。"""
+        if name in self.support_only:
+            return self.support_tilt
+        return TILT_BAND_DEG if band else HOLD_TILT_DEG
+
     def _check_contact(self, name, p_w, surf, pose, depth, tol, off=0.0):
         """接触足在 pose 下的可行性；None=可行，否则原因。off=该腿的交接偏移
         （世界竖直 mm，+ 上）——指令点带着它算，吸盘物理位置不变。"""
@@ -800,7 +819,8 @@ class MountEngine:
                    PRESS_DEPTH_MAX)
         tr = self._trim(name, surf)
         for depth in (0.0, leg.press_delta_mm, deep):
-            why = self._check_contact(name, p_w, surf, pose, depth + tr, TILT_BAND_DEG)
+            why = self._check_contact(name, p_w, surf, pose, depth + tr,
+                                      self._tilt_lim(name, band=True))
             if why:
                 return why
         return None
@@ -858,7 +878,7 @@ class MountEngine:
             if self.surf[n] is not None:
                 why = self._check_contact(n, self.pw[n], self.surf[n], pose,
                                           self.depth[n] + self._trim(n, self.surf[n]),
-                                          HOLD_TILT_DEG, self.ho_off[n])
+                                          self._tilt_lim(n), self.ho_off[n])
             else:
                 why = self._check_air(n, self.air_pb[n], pose)
             if why:
@@ -914,7 +934,7 @@ class MountEngine:
                 why = self._check_contact(
                     n, self.pw[n], self.surf[n], self.pose,
                     self.depth[n] + self._trim(n, self.surf[n]),
-                    HOLD_TILT_DEG, off)
+                    self._tilt_lim(n), off)
                 if why:
                     return f"{n} {why}"
         return None

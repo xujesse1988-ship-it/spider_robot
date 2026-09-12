@@ -805,3 +805,38 @@ def test_over_cap_leg_can_still_share_load_but_never_goes_deeper():
     deny = eng.request_takeover("L3", PRESS_DEPTH_MAX - CFG.leg("L3").press_delta_mm + 5.0)
     assert isinstance(deny, str) and "压入" in deny
     assert eng.frozen is None
+
+
+def test_support_only_legs_use_a_looser_tilt_bound_than_sealing_legs():
+    """只承重腿（support_only）只压不吸，盘面对不对正不影响它传正压力——`HOLD_TILT_DEG`
+    是吸盘**密封**的容差，套在它头上是错的：按 15° 卡，中腿在俯仰 >30° 就被拒，而几何上
+    它能撑到 90°（OPEN §1.1）。09-12 台架实测（LAB E4a）盘面斜 35° 时接触仍在盘面、
+    仍压得住，所以默认放宽到 35°。默认站位下中腿 β=90° ⇒ 倾角恰好 = 俯仰角，
+    抬到 16° 就能把两套口径分开。"""
+    from hexapod.mount import SUPPORT_TILT_DEG
+    io, ctl, eng, bot = make()                       # 没有 support_only：全按 15° 卡
+    start(eng, bot)
+    assert eng._tilt_lim("L2") == HOLD_TILT_DEG
+    deny = eng.request_pose(dpitch_deg=16.0)
+    assert isinstance(deny, str) and "L2" in deny and "倾角" in deny
+    # 同样的位姿，中腿改成只承重腿就该放行
+    io2 = MockVacuumIO(6)
+    for n in ("L2", "R2"):
+        io2.sealed[LEG_NAMES.index(n)] = False       # 中腿吸不住（真机情形）
+    ctl2 = AdhesionController(io2)
+    eng2 = MountEngine(CFG, ctl2, support_only=("L2", "R2"))
+    bot2 = Hexapod(MockDriver(), CFG)
+    start(eng2, bot2)
+    assert eng2._tilt_lim("L2") == SUPPORT_TILT_DEG and eng2._tilt_lim("L1") == HOLD_TILT_DEG
+    assert eng2.request_pose(dpitch_deg=16.0) is None
+    assert run(eng2, bot2, 30.0, lambda: not eng2.pose_pending)
+    assert math.isclose(eng2.pitch_deg, 16.0, abs_tol=1e-6)
+    # 但放宽是有限的：把容差调回 15° 就又该拒
+    eng3 = MountEngine(CFG, AdhesionController(MockVacuumIO(6)),
+                       support_only=("L2", "R2"), support_tilt_deg=15.0)
+    bot3 = Hexapod(MockDriver(), CFG)
+    start(eng3, bot3)
+    assert isinstance(eng3.request_pose(dpitch_deg=16.0), str)
+    # 吸附腿不受影响：落点带仍按 12° 密封口径
+    assert eng2._tilt_lim("L1", band=True) == TILT_BAND_DEG
+    assert eng2.frozen is None and eng.frozen is None

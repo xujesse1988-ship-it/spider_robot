@@ -122,7 +122,8 @@ from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
 from hexapod.climb import parse_leg_order, parse_handover, PRESS_DEPTH_MAX
 from hexapod.mount import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
                            LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, SWING_PHASES,
-                           FLOOR_CLEAR_MM, TAKEOVER_STEP_MM, TAKEOVER_MAX_MM)
+                           FLOOR_CLEAR_MM, TAKEOVER_STEP_MM, TAKEOVER_MAX_MM,
+                           SUPPORT_TILT_DEG)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
@@ -269,6 +270,12 @@ def main():
                          "（R1）再抬时储能就小了。不给也会自动把抬它时借走的份额还回去"
                          f"（接管量取 max(欠账, 本值)）。范围 0~{TAKEOVER_MAX_MM:g}；"
                          "⚠ 墙面腿接的是剪切（实测容量 15N），逐次加、盯盘压电流")
+    ap.add_argument("--support-tilt", type=float, default=SUPPORT_TILT_DEG,
+                    help="只承重腿（--support-legs）的吸盘倾角容差°（默认 %(default)g，"
+                         "范围 0~60）：它只压不吸，盘面对不对正不影响传正压力，所以不该"
+                         "用吸附腿那条 15°（密封容差）卡它。09-12 台架实测盘面斜 35° 时"
+                         "接触仍在盘面、仍压得住；35° 也正是中腿在俯仰 90° 时盘面最多"
+                         "斜到的角度，所以默认值等于'倾角这条永远不卡中腿'")
     ap.add_argument("--takeover-step", type=float, default=TAKEOVER_STEP_MM,
                     help="z 键每按一次手动接管的量 mm（默认 %(default)g，范围 1~10）")
     ap.add_argument("--pitch-step", type=float, default=5.0,
@@ -335,6 +342,8 @@ def main():
             ap.error(str(e))
     if args.handover_rate is not None and not 0.0 < args.handover_rate <= 50.0:
         ap.error(f"--handover-rate {args.handover_rate:g} 非法：范围 0~50mm/s")
+    if not 0.0 < args.support_tilt <= 60.0:
+        ap.error(f"--support-tilt {args.support_tilt:g} 非法：范围 0~60°")
     if not 1.0 <= args.takeover_step <= 10.0:
         ap.error(f"--takeover-step {args.takeover_step:g} 非法：范围 1~10mm")
     if not 1.0 <= args.pitch_step <= 10.0:
@@ -419,7 +428,7 @@ def main():
     eng = MountEngine(cfg, ctl, front_hip_to_wall=args.wall_dist,
                       pitch_max_deg=args.pitch_max, attach_order=attach_order,
                       floor_clear_mm=args.floor_clear, support_only=support_only,
-                      takeover_mm=takeover)
+                      takeover_mm=takeover, support_tilt_deg=args.support_tilt)
     ho_txt = " ".join(f"{l.name}{l.handover_mm:g}" for l in cfg.legs
                       if l.handover_mm) or "关"
     tk_txt = " ".join(f"{n}{v:g}" for n, v in takeover.items() if v) or "只还欠账"
@@ -543,8 +552,9 @@ def main():
               + ("（默认窗序）" if attach_order is None else "（--attach-order）"))
         if support_only:
             print("只承重不吸附：" + "/".join(support_only)
-                  + "——压到位即回支撑，不抽气、不算进互锁；只能承压不能承拉，"
-                    "俯仰后别指望它们扛剥离力矩")
+                  + f"——压到位即回支撑，不抽气、不算进互锁；倾角容差按 "
+                    f"{args.support_tilt:g}°（只压不吸，不受吸盘密封的 15° 限制）。"
+                    "⚠ 只能承压不能承拉，俯仰后别指望它们扛剥离力矩")
         if handover or takeover:
             dmax = max((l.handover_mm for l in cfg.legs), default=0.0)
             print(f"零力交接：δ={ho_txt}（{cfg.handover_rate_mms:g}mm/s，最长一段约 "

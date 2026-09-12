@@ -295,9 +295,21 @@ it is the L1–L3 line that runs longitudinally (along body ±X).</p>
 <tr><td class="n">R3</td><td class="n">−125°</td><td class="n">35°</td><td class="n">55°</td><td class="n">−143.0°</td></tr>
 </tbody></table></div>
 <div class="callout"><b>A corner leg's neutral direction is not "radially outward from the body centre".</b> The L1 hip (83.5, 63) sits at a polar angle of
-<b>37.0°</b> about the body centre, while its neutral direction is <b>55°</b> — the leg splays <b>18° further out</b> than radial, which widens the stance and makes it laterally steadier.
-The middle legs have no such offset (both are 90°). Adjacent legs' neutral directions are 35° apart (55→90→125), front and rear legs on the same side 70° apart,
-and mirror-image legs (L1–R1) 110° apart.</div>
+<b>37.0°</b> about the body centre, while its neutral direction is <b>55°</b> — the leg splays <b>18° further out</b> than radial. The middle legs have no such offset (both are 90°).
+Adjacent legs' neutral directions are 35° apart (55→90→125), and mirror-image legs (L1–R1) 110° apart.
+<br><br>The consequence (default stance at <code>foot_reach=130</code>, computed): the L1 foot lands at <b>(158.1, 169.5)</b>,
+which is <b>29mm further back and 28mm further out</b> than the radial placement at (187.3, 141.3) — <b>40.6mm between the two points</b>. Across the whole footprint,
+<b>the front pair spans 339 laterally (radial: 283) while the front-to-back span is 316 (radial: 375)</b> — <b>wider but shorter</b>,
+and the support polygon is in fact <b>9% smaller</b> (1204 vs 1322 cm²). Nor do the six feet lie on one circle:
+<b>corner feet sit 231.8 from the body centre, middle feet 211.5 — 20mm apart</b>. So "stance radius" is not a meaningful single number for this machine;
+wall stances have to be worked out per leg.</div>
+<div class="callout warn"><b>⚠ <code>mount_angle_deg</code> is this package's definition, not a mechanical fact.</b>
+The real mechanical direction depends on which spline tooth the horn was fitted to, and the difference is absorbed by the coxa's <code>attach_deg</code> —
+so it does not affect where the foot actually lands; what it does govern is <b>the shape of the default stance and how well-centred the γ travel is</b>.
+Measured (real direction at servo centre = mount_angle + attach_deg): L1 50.7°, R1 −54.6°, L2 91.5°,
+R2 −90.2° are all within ±4° of nominal, but <b>L3 is 139.4° (nominal 125) and R3 is −145.4° (nominal −125)</b> —
+both rear legs sit 14.4° and 20.4° further back, in fact closer to the radial ±143°. The consequence is that <b>the rear legs' coxa travel is not centred</b>
+(14~20° short on one side); worth checking the margin on those two legs before any large-sweep move.</div>
 
 <h2><span class="no">§3</span>What the four photo annotations are in the model</h2>
 <p>The four annotations on <code>images/leg_2.jpg</code>, one by one:</p>

@@ -140,6 +140,29 @@ svg .cjk{font-family:var(--sans)}
 .kt{fill:var(--k);font-size:3.4px}
 .acct{fill:var(--accent);font-size:3.4px}
 .warnt{fill:var(--warn);font-size:3.4px}
+
+/* ---- top view only (its view box is twice the main figure, so strokes and fonts scale up) ---- */
+.framep{fill:var(--steel-fill);stroke:var(--muted);stroke-width:1.1;fill-rule:evenodd}
+.hipoly{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:7 5;stroke-opacity:.55}
+.partdim{fill:none;stroke:var(--steel);stroke-width:1;stroke-opacity:.5}
+.skeldim{stroke:var(--accent);stroke-width:1.8;stroke-opacity:.35;fill:none;stroke-linejoin:round}
+.jdotdim{fill:var(--accent);fill-opacity:.4}
+.neut{stroke:var(--muted);stroke-width:1.2;stroke-dasharray:8 5;fill:none}
+.yarrow{stroke:var(--k);stroke-width:1.8;fill:none}
+#fTop .part{stroke-width:1.1}
+#fTop .skel{stroke-width:2.2}
+#fTop .axline{stroke-width:1.1;stroke-dasharray:12 3 2.4 3}
+#fTop .dim{stroke-width:.8}
+#fTop .gridl{stroke-width:.6}
+#fTop .lbl{font-size:9px}
+#fTop .lbl-s{font-size:7.4px}
+#fTop .kt{font-size:7.4px}
+#fTop .dimt{font-size:8px}
+#legpick{display:flex;flex-wrap:wrap;gap:6px}
+#legpick button{font:inherit;font-size:12.8px;padding:3px 12px;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:3px;cursor:pointer;font-family:var(--mono)}
+#legpick button:hover{border-color:var(--accent)}
+#legpick button.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);font-weight:700}
 .hover-xy{font-size:3.4px;fill:var(--muted)}
 </style>
 
@@ -234,17 +257,24 @@ servos = the 40×20×40.5 case envelope computed from the flange hole positions.
 
 <h3>Top view: γ, the leg plane, and "which side are we looking from"</h3>
 <p>The side view above draws shapes <b>inside the leg plane</b>. γ changes nothing inside that plane; it only rotates the whole leg plane about the
-coxa yaw axis. The figure below looks down from above the body (body <b>+X forward</b> up the page, <b>+Y left</b> to the left),
-marking the hip positions and neutral directions of all six legs and showing where the R3 leg plane falls.</p>
+coxa yaw axis. The figure below looks down from above the body (body <b>+X forward</b> up the page, <b>+Y left</b> to the left) and
+<b>draws all six legs</b>, every one of them in the same pose given by the current α/θ. Click a button to change the highlighted leg; the γ slider acts on that leg only.</p>
 <div class="ctl" style="grid-template-columns:1fr">
-  <div class="row"><label>γ R3</label><input id="sG" type="range" min="-60" max="60" step="1" value="0"><span class="val" id="vG">0°</span></div>
+  <div class="row" style="grid-column:1/-1"><label>Highlight leg</label>
+    <span id="legpick">
+      <button data-i="0">L1</button><button data-i="1">L2</button><button data-i="2">L3</button>
+      <button data-i="3">R1</button><button data-i="4">R2</button><button data-i="5" class="on">R3</button>
+    </span></div>
+  <div class="row"><label>γ highlighted leg</label><input id="sG" type="range" min="-60" max="60" step="1" value="0"><span class="val" id="vG">0°</span></div>
 </div>
 <figure style="padding-top:0;margin-top:0">
   <div class="fig-scroll"><svg id="fTop" viewBox="-118 -118 346 326" aria-label="Top view"></svg></div>
-  <figcaption><b>How to read it:</b> six dots = the coxa yaw axes of the six legs (<code>mount_x/mount_y</code> in config),
-  short lines = each leg's neutral direction <code>mount_angle_deg</code>. R3 is drawn in full horizontal projection: the teal line is where the leg plane cuts the page,
-  and γ is how far it has turned from the neutral direction. Purple arrow = leg-frame <b>+Y</b> (for a right leg, towards the front-outboard side of the body);
-  the side view looks along exactly the opposite direction, which is why it shows the servo-horn face.</figcaption>
+  <figcaption><b>How to read it:</b> the solid grey shape is the <b>real body outline</b> from <code>frame.stl</code> (not a bounding rectangle —
+  its six arms each reach out to one hip); the dashed teal hexagon joins the six coxa yaw axes (<code>mount_x/mount_y</code> in config),
+  and the dimensions <b>126.0</b> and <b>167.0</b> are the lateral / longitudinal spacing between the front and rear pairs of hip axes. Every leg is drawn with its coxa2 top outline
+  and its horizontally projected skeleton H–F–K–C; the highlighted one additionally shows the neutral direction (grey dashed, the γ=0 direction) and leg-frame <b>+Y</b> (purple arrow),
+  the side view looking along exactly the opposite of +Y. <b>The leg-plane side view is identical for all six legs</b> — a left-leg part is just a right-leg part mirrored about its joint axis,
+  which leaves the in-plane outline unchanged and the assembly chain identically signed, so the figure in §2 holds for all six; only the horn direction of §3 flips left to right.</figcaption>
 </figure>
 
 <h2><span class="no">§3</span>What the four photo annotations are in the model</h2>
@@ -367,7 +397,7 @@ Photos: images/leg.jpg, images/leg_2.jpg (R3 leg, shot from the −Y side)
    each entry = [ polygon, ... ], each polygon = [ outer ring, inner rings... ], ring = [[x,y],...]
    coordinates = that STL's own millimetre frame (subscripts: see §4)
    --------------------------------------------------------------- */
-const GEOM = {"coxa2_xz":[[[[-2.98,36.27],[-3.0,38.5],[-2.65,40.02],[-1.68,41.24],[-1.02,41.65],[0.5,42.0],[32.2,42.0],[33.66,41.71],[35.7,40.61],[37.21,40.15],[52.0,40.0],[53.73,39.6],[54.49,39.13],[55.6,37.74],[56.0,36.0],[55.79,34.73],[54.88,34.05],[36.0,34.0],[34.76,33.57],[34.2,32.87],[34.0,32.0],[34.0,-7.0],[34.44,-8.25],[35.13,-8.8],[36.0,-9.0],[54.88,-9.05],[55.79,-9.73],[56.0,-10.5],[55.9,-11.89],[55.13,-13.49],[53.74,-14.6],[52.0,-15.0],[37.21,-15.15],[35.7,-15.61],[33.66,-16.71],[32.2,-17.0],[15.06,-17.0],[13.78,-16.6],[12.08,-15.16],[11.42,-14.26],[11.05,-13.0],[-2.0,-13.0],[-1.96,-10.17],[-1.53,-9.41],[-0.83,-9.04],[24.0,-9.0],[25.35,-8.66],[26.58,-7.49],[27.0,-6.0],[27.0,32.0],[26.73,33.22],[26.31,33.89],[25.35,34.66],[24.59,34.93],[9.75,35.0],[8.85,34.43],[8.73,31.78],[8.37,31.22],[7.75,31.0],[4.02,31.0],[3.66,30.2],[2.7,30.02],[2.2,30.34],[1.98,31.0],[-1.75,31.0],[-2.53,31.38],[-2.75,32.0],[-2.75,35.4],[-2.98,36.27]]]],"coxa2_xy":[[[[-2.0,-6.7],[-1.33,-6.01],[-2.23,-4.58],[-2.8,-2.94],[-3.0,-0.8],[-2.8,0.94],[-2.23,2.58],[-1.33,4.01],[-2.0,4.7],[-1.97,6.22],[-1.76,6.65],[-1.22,6.98],[54.5,7.0],[55.44,6.67],[55.96,5.83],[55.99,-7.71],[55.55,-8.57],[54.83,-8.96],[15.4,-9.0],[14.8,-9.2],[12.71,-11.16],[10.9,-11.9],[3.07,-12.0],[2.09,-11.9],[0.29,-11.16],[-1.56,-9.44],[-1.97,-8.67],[-2.0,-6.7]]]],"femur_xy":[[[[-2.0,6.7],[-1.92,8.38],[-1.62,8.78],[-1.0,9.0],[85.19,9.0],[85.38,8.43],[84.89,8.05],[86.06,7.3],[87.3,6.06],[88.23,4.58],[88.8,2.94],[89.0,0.8],[88.8,-0.94],[88.0,-2.95],[87.98,-6.22],[87.62,-6.78],[87.0,-7.0],[-1.0,-7.0],[-1.62,-6.78],[-1.97,-6.23],[-2.0,-4.7],[-1.33,-4.01],[-2.23,-2.58],[-2.8,-0.94],[-3.0,0.8],[-2.8,2.94],[-2.23,4.58],[-1.33,6.01],[-2.0,6.7]],[[86.36,-5.19],[86.84,-5.6],[87.4,-5.53],[87.74,-5.15],[87.73,-4.6],[87.21,-4.15],[86.36,-5.19]]]],"femur_xz":[[[[-2.98,36.27],[-2.9,38.89],[-2.13,40.49],[-0.74,41.6],[1.0,42.0],[85.0,42.0],[86.74,41.6],[88.13,40.49],[88.9,38.89],[89.0,36.5],[88.75,35.4],[88.72,31.78],[87.97,31.02],[84.02,31.0],[83.8,30.34],[83.3,30.02],[82.34,30.2],[81.98,31.0],[78.25,31.0],[77.63,31.22],[77.27,31.78],[77.15,34.43],[76.25,35.0],[43.0,35.0],[41.8,34.74],[40.75,33.97],[40.28,33.25],[40.0,32.0],[40.0,-6.0],[40.28,-7.25],[40.75,-7.97],[41.8,-8.74],[43.0,-9.0],[86.69,-9.01],[87.52,-9.4],[87.93,-10.05],[88.0,-13.0],[74.9,-13.01],[74.44,-14.25],[73.73,-15.15],[72.05,-16.61],[70.8,-17.0],[15.2,-17.0],[13.95,-16.61],[12.27,-15.15],[11.56,-14.25],[11.1,-13.01],[-2.0,-13.0],[-1.96,-10.17],[-1.46,-9.35],[-0.83,-9.04],[22.0,-9.0],[23.3,-8.7],[24.7,-7.3],[25.0,-6.0],[25.0,32.0],[24.35,33.87],[22.67,34.92],[9.75,35.0],[8.85,34.43],[8.73,31.78],[8.37,31.22],[7.75,31.0],[4.02,31.0],[3.66,30.2],[2.7,30.02],[2.2,30.34],[1.98,31.0],[-1.75,31.0],[-2.53,31.38],[-2.75,32.0],[-2.75,35.4],[-2.98,36.27]]]],"tibia_xz":[[[[-15.7,-100.0],[-15.7,-53.0],[-4.01,-52.99],[-4.0,-42.0],[1.21,-41.99],[11.9,-18.84],[13.24,-16.27],[16.63,-11.57],[20.86,-7.62],[37.71,3.07],[47.53,14.37],[48.88,15.17],[50.37,15.65],[51.93,15.78],[53.48,15.57],[54.95,15.02],[56.26,14.15],[70.05,2.58],[70.66,1.93],[71.39,0.31],[71.35,-1.47],[71.03,-2.31],[70.07,-3.59],[69.18,-3.97],[68.43,-3.83],[53.93,8.27],[52.7,8.73],[51.82,8.56],[51.11,8.02],[25.8,-22.23],[25.62,-23.54],[26.29,-24.67],[40.46,-36.56],[40.91,-37.19],[40.98,-37.95],[40.33,-39.06],[38.91,-40.14],[38.05,-40.41],[36.28,-40.37],[34.69,-39.55],[28.58,-34.42],[27.89,-34.07],[27.09,-34.04],[26.04,-34.65],[18.0,-44.23],[18.0,-52.97],[18.3,-53.0],[18.3,-100.0],[-15.7,-100.0]],[[67.39,1.88],[66.32,1.74],[65.67,0.89],[65.81,-0.17],[66.66,-0.82],[67.72,-0.68],[68.37,0.17],[68.23,1.23],[67.39,1.88]],[[59.01,8.33],[58.16,7.68],[58.02,6.62],[58.67,5.77],[59.73,5.63],[60.58,6.28],[60.72,7.34],[60.07,8.19],[59.01,8.33]],[[36.17,-34.82],[35.18,-35.23],[34.77,-36.22],[35.18,-37.21],[36.17,-37.62],[37.16,-37.21],[37.57,-36.22],[37.16,-35.23],[36.17,-34.82]],[[27.3,-29.12],[27.16,-30.18],[27.81,-31.03],[28.87,-31.17],[29.72,-30.52],[29.86,-29.46],[29.21,-28.61],[28.15,-28.47],[27.3,-29.12]],[[15.41,-27.85],[14.16,-28.44],[13.3,-29.52],[7.49,-42.0],[12.68,-41.99],[19.84,-33.13],[20.1,-31.21],[19.58,-30.01],[17.43,-28.14],[16.78,-27.89],[15.41,-27.85]]]],"tibia_xy":[[[[-15.7,-12.5],[-15.7,12.5],[18.3,12.5],[18.33,10.39],[18.73,11.94],[19.91,12.5],[69.97,12.5],[70.91,12.17],[71.44,11.33],[71.47,1.5],[71.15,0.56],[70.31,0.04],[18.33,-0.0],[18.3,-12.5],[-15.7,-12.5]]]],"door_xz":[[[[-15.7,-100.0],[-15.7,-70.5],[18.3,-70.5],[18.3,-100.0],[-15.7,-100.0]],[[9.26,-79.95],[9.05,-81.0],[9.26,-82.05],[9.86,-82.94],[10.75,-83.54],[11.8,-83.75],[12.85,-83.54],[13.74,-82.94],[14.34,-82.05],[14.55,-81.0],[14.34,-79.95],[13.74,-79.06],[12.85,-78.46],[11.8,-78.25],[10.75,-78.46],[9.86,-79.06],[9.26,-79.95]],[[-10.25,-78.46],[-11.14,-79.06],[-11.74,-79.95],[-11.95,-81.0],[-11.74,-82.05],[-11.14,-82.94],[-10.25,-83.54],[-9.2,-83.75],[-8.15,-83.54],[-7.26,-82.94],[-6.66,-82.05],[-6.45,-81.0],[-6.66,-79.95],[-7.26,-79.06],[-8.15,-78.46],[-9.2,-78.25],[-10.25,-78.46]]]]};
+const GEOM = {"frame_xy":[[[[-98.1,8.5],[-95.0,10.0],[-93.0,8.9],[-93.0,-10.0],[-91.9,-11.8],[-52.0,-12.0],[-50.2,-10.8],[-50.0,31.4],[-71.1,52.7],[-73.2,57.9],[-73.4,68.1],[-82.3,76.9],[-84.4,81.0],[-84.4,84.2],[-83.3,87.0],[-70.2,100.1],[-68.6,100.7],[-66.0,100.1],[-64.7,98.9],[-64.7,97.4],[-78.0,84.0],[-78.5,81.9],[-49.2,53.0],[-48.0,53.3],[-32.3,69.0],[-29.8,70.0],[30.5,69.9],[32.3,69.0],[48.0,53.3],[49.7,53.1],[78.5,81.9],[78.0,84.0],[64.7,97.4],[64.7,98.9],[66.0,100.1],[68.6,100.7],[70.2,100.1],[83.3,87.0],[84.4,84.2],[84.4,81.0],[82.3,76.9],[73.4,68.1],[73.2,57.9],[71.1,52.7],[50.0,31.4],[50.1,-10.4],[52.0,-12.0],[91.9,-11.8],[93.0,-10.0],[93.0,8.9],[95.0,10.0],[97.5,9.1],[98.9,6.9],[98.8,-11.6],[97.7,-14.4],[95.4,-16.7],[91.0,-18.0],[81.2,-18.0],[73.6,-25.4],[70.3,-27.1],[50.0,-27.7],[49.7,-51.2],[33.4,-67.9],[33.0,-69.3],[61.9,-98.6],[64.0,-98.1],[77.3,-84.8],[78.8,-84.8],[80.1,-86.1],[80.7,-88.7],[80.1,-90.3],[67.0,-103.3],[64.1,-104.5],[61.0,-104.5],[56.9,-102.3],[47.7,-93.1],[37.4,-93.0],[32.2,-90.9],[11.1,-70.0],[-11.1,-70.0],[-30.8,-89.6],[-33.8,-91.8],[-37.4,-93.0],[-47.7,-93.1],[-59.5,-104.1],[-63.4,-104.6],[-67.0,-103.3],[-80.1,-90.3],[-80.7,-87.8],[-79.5,-85.4],[-77.3,-84.8],[-64.0,-98.1],[-61.9,-98.6],[-33.6,-70.5],[-33.1,-68.5],[-49.7,-51.2],[-50.0,-27.7],[-70.3,-27.1],[-73.6,-25.4],[-81.2,-18.0],[-92.6,-17.8],[-96.7,-15.7],[-98.4,-13.1],[-99.0,-10.0],[-99.0,6.0],[-98.1,8.5]]]],"coxa2_xz":[[[[-2.98,36.27],[-3.0,38.5],[-2.65,40.02],[-1.68,41.24],[-1.02,41.65],[0.5,42.0],[32.2,42.0],[33.66,41.71],[35.7,40.61],[37.21,40.15],[52.0,40.0],[53.73,39.6],[54.49,39.13],[55.6,37.74],[56.0,36.0],[55.79,34.73],[54.88,34.05],[36.0,34.0],[34.76,33.57],[34.2,32.87],[34.0,32.0],[34.0,-7.0],[34.44,-8.25],[35.13,-8.8],[36.0,-9.0],[54.88,-9.05],[55.79,-9.73],[56.0,-10.5],[55.9,-11.89],[55.13,-13.49],[53.74,-14.6],[52.0,-15.0],[37.21,-15.15],[35.7,-15.61],[33.66,-16.71],[32.2,-17.0],[15.06,-17.0],[13.78,-16.6],[12.08,-15.16],[11.42,-14.26],[11.05,-13.0],[-2.0,-13.0],[-1.96,-10.17],[-1.53,-9.41],[-0.83,-9.04],[24.0,-9.0],[25.35,-8.66],[26.58,-7.49],[27.0,-6.0],[27.0,32.0],[26.73,33.22],[26.31,33.89],[25.35,34.66],[24.59,34.93],[9.75,35.0],[8.85,34.43],[8.73,31.78],[8.37,31.22],[7.75,31.0],[4.02,31.0],[3.66,30.2],[2.7,30.02],[2.2,30.34],[1.98,31.0],[-1.75,31.0],[-2.53,31.38],[-2.75,32.0],[-2.75,35.4],[-2.98,36.27]]]],"coxa2_xy":[[[[-2.0,-6.7],[-1.33,-6.01],[-2.23,-4.58],[-2.8,-2.94],[-3.0,-0.8],[-2.8,0.94],[-2.23,2.58],[-1.33,4.01],[-2.0,4.7],[-1.97,6.22],[-1.76,6.65],[-1.22,6.98],[54.5,7.0],[55.44,6.67],[55.96,5.83],[55.99,-7.71],[55.55,-8.57],[54.83,-8.96],[15.4,-9.0],[14.8,-9.2],[12.71,-11.16],[10.9,-11.9],[3.07,-12.0],[2.09,-11.9],[0.29,-11.16],[-1.56,-9.44],[-1.97,-8.67],[-2.0,-6.7]]]],"femur_xy":[[[[-2.0,6.7],[-1.92,8.38],[-1.62,8.78],[-1.0,9.0],[85.19,9.0],[85.38,8.43],[84.89,8.05],[86.06,7.3],[87.3,6.06],[88.23,4.58],[88.8,2.94],[89.0,0.8],[88.8,-0.94],[88.0,-2.95],[87.98,-6.22],[87.62,-6.78],[87.0,-7.0],[-1.0,-7.0],[-1.62,-6.78],[-1.97,-6.23],[-2.0,-4.7],[-1.33,-4.01],[-2.23,-2.58],[-2.8,-0.94],[-3.0,0.8],[-2.8,2.94],[-2.23,4.58],[-1.33,6.01],[-2.0,6.7]],[[86.36,-5.19],[86.84,-5.6],[87.4,-5.53],[87.74,-5.15],[87.73,-4.6],[87.21,-4.15],[86.36,-5.19]]]],"femur_xz":[[[[-2.98,36.27],[-2.9,38.89],[-2.13,40.49],[-0.74,41.6],[1.0,42.0],[85.0,42.0],[86.74,41.6],[88.13,40.49],[88.9,38.89],[89.0,36.5],[88.75,35.4],[88.72,31.78],[87.97,31.02],[84.02,31.0],[83.8,30.34],[83.3,30.02],[82.34,30.2],[81.98,31.0],[78.25,31.0],[77.63,31.22],[77.27,31.78],[77.15,34.43],[76.25,35.0],[43.0,35.0],[41.8,34.74],[40.75,33.97],[40.28,33.25],[40.0,32.0],[40.0,-6.0],[40.28,-7.25],[40.75,-7.97],[41.8,-8.74],[43.0,-9.0],[86.69,-9.01],[87.52,-9.4],[87.93,-10.05],[88.0,-13.0],[74.9,-13.01],[74.44,-14.25],[73.73,-15.15],[72.05,-16.61],[70.8,-17.0],[15.2,-17.0],[13.95,-16.61],[12.27,-15.15],[11.56,-14.25],[11.1,-13.01],[-2.0,-13.0],[-1.96,-10.17],[-1.46,-9.35],[-0.83,-9.04],[22.0,-9.0],[23.3,-8.7],[24.7,-7.3],[25.0,-6.0],[25.0,32.0],[24.35,33.87],[22.67,34.92],[9.75,35.0],[8.85,34.43],[8.73,31.78],[8.37,31.22],[7.75,31.0],[4.02,31.0],[3.66,30.2],[2.7,30.02],[2.2,30.34],[1.98,31.0],[-1.75,31.0],[-2.53,31.38],[-2.75,32.0],[-2.75,35.4],[-2.98,36.27]]]],"tibia_xz":[[[[-15.7,-100.0],[-15.7,-53.0],[-4.01,-52.99],[-4.0,-42.0],[1.21,-41.99],[11.9,-18.84],[13.24,-16.27],[16.63,-11.57],[20.86,-7.62],[37.71,3.07],[47.53,14.37],[48.88,15.17],[50.37,15.65],[51.93,15.78],[53.48,15.57],[54.95,15.02],[56.26,14.15],[70.05,2.58],[70.66,1.93],[71.39,0.31],[71.35,-1.47],[71.03,-2.31],[70.07,-3.59],[69.18,-3.97],[68.43,-3.83],[53.93,8.27],[52.7,8.73],[51.82,8.56],[51.11,8.02],[25.8,-22.23],[25.62,-23.54],[26.29,-24.67],[40.46,-36.56],[40.91,-37.19],[40.98,-37.95],[40.33,-39.06],[38.91,-40.14],[38.05,-40.41],[36.28,-40.37],[34.69,-39.55],[28.58,-34.42],[27.89,-34.07],[27.09,-34.04],[26.04,-34.65],[18.0,-44.23],[18.0,-52.97],[18.3,-53.0],[18.3,-100.0],[-15.7,-100.0]],[[67.39,1.88],[66.32,1.74],[65.67,0.89],[65.81,-0.17],[66.66,-0.82],[67.72,-0.68],[68.37,0.17],[68.23,1.23],[67.39,1.88]],[[59.01,8.33],[58.16,7.68],[58.02,6.62],[58.67,5.77],[59.73,5.63],[60.58,6.28],[60.72,7.34],[60.07,8.19],[59.01,8.33]],[[36.17,-34.82],[35.18,-35.23],[34.77,-36.22],[35.18,-37.21],[36.17,-37.62],[37.16,-37.21],[37.57,-36.22],[37.16,-35.23],[36.17,-34.82]],[[27.3,-29.12],[27.16,-30.18],[27.81,-31.03],[28.87,-31.17],[29.72,-30.52],[29.86,-29.46],[29.21,-28.61],[28.15,-28.47],[27.3,-29.12]],[[15.41,-27.85],[14.16,-28.44],[13.3,-29.52],[7.49,-42.0],[12.68,-41.99],[19.84,-33.13],[20.1,-31.21],[19.58,-30.01],[17.43,-28.14],[16.78,-27.89],[15.41,-27.85]]]],"tibia_xy":[[[[-15.7,-12.5],[-15.7,12.5],[18.3,12.5],[18.33,10.39],[18.73,11.94],[19.91,12.5],[69.97,12.5],[70.91,12.17],[71.44,11.33],[71.47,1.5],[71.15,0.56],[70.31,0.04],[18.33,-0.0],[18.3,-12.5],[-15.7,-12.5]]]],"door_xz":[[[[-15.7,-100.0],[-15.7,-70.5],[18.3,-70.5],[18.3,-100.0],[-15.7,-100.0]],[[9.26,-79.95],[9.05,-81.0],[9.26,-82.05],[9.86,-82.94],[10.75,-83.54],[11.8,-83.75],[12.85,-83.54],[13.74,-82.94],[14.34,-82.05],[14.55,-81.0],[14.34,-79.95],[13.74,-79.06],[12.85,-78.46],[11.8,-78.25],[10.75,-78.46],[9.86,-79.06],[9.26,-79.95]],[[-10.25,-78.46],[-11.14,-79.06],[-11.74,-79.95],[-11.95,-81.0],[-11.74,-82.05],[-11.14,-82.94],[-10.25,-83.54],[-9.2,-83.75],[-8.15,-83.54],[-7.26,-82.94],[-6.66,-82.05],[-6.45,-81.0],[-6.66,-79.95],[-7.26,-79.06],[-8.15,-78.46],[-9.2,-78.25],[-10.25,-78.46]]]]};
 
 const CFG = {
   L1:43.0, L2:81.0, L3:123.7, CUPD:-25.24,
@@ -486,7 +516,7 @@ function drawMain(){
     s+=`<text class="dimt acct" x="${m2[0]-16}" y="${-m2[1]-4}">l2=81.0</text>`;
     s+=`<text class="dimt acct" x="${m3[0]-32}" y="${-m3[1]}">l3=123.7</text>`;
   }
-  /* 视框：始终包住骨架 + 零件，且保持固定长宽比，拖滑块时图不变高 */
+  /* view box: always contains the skeleton + parts, at a fixed aspect ratio, so the figure keeps its height while dragging */
   const PAD=46, ASP=304/240, MINW=300;
   let x0=Math.min(0,F[0],K[0],C[0])-PAD, x1=Math.max(0,F[0],K[0],C[0])+PAD;
   let z0=Math.min(0,F[1],K[1],C[1])-PAD, z1=Math.max(0,F[1],K[1],C[1])+PAD;
@@ -559,53 +589,78 @@ function drawParts(){
 }
 
 
-/* =========================== top view =========================== */
+/* =========================== top view (six legs) =========================== */
 const LEGS=[['L1',83.5,63.0,55],['L2',0,81.5,90],['L3',-83.5,63.0,125],
             ['R1',83.5,-63.0,-55],['R2',0,-81.5,-90],['R3',-83.5,-63.0,-125]];
+let SEL=5;                              // highlighted leg, default R3
 const TV=(bx,by)=>[-by,-bx];            // body +X up the page, +Y to the left
 function drawTop(){
   const g=+el('sG').value; el('vG').textContent=f(g,0)+'°';
-  const aDeg=+el('sA').value, tDeg=+el('sT').value, P=pose(aDeg,tDeg);
-  const rF=CFG.L1, rK=CFG.L1+CFG.L2*Math.cos(P.a),
-        rC=rK+CFG.L3*Math.cos(P.at);
+  const P=pose(+el('sA').value,+el('sT').value);
+  const rF=CFG.L1, rK=CFG.L1+CFG.L2*Math.cos(P.a), rC=rK+CFG.L3*Math.cos(P.at);
   let s='';
-  for(let x=-100;x<=200;x+=50) s+=`<line class="gridl" x1="${-x}" y1="-115" x2="${-x}" y2="205"/>`;
-  for(let y=-100;y<=200;y+=50) s+=`<line class="gridl" x1="-115" y1="${-y}" x2="205" y2="${-y}"/>`;
-  /* body outline (frame.stl envelope, approx. rectangle 198×205) */
-  s+=`<rect x="-99" y="-104.7" width="198" height="205.4" rx="16" fill="none" stroke="var(--muted)" stroke-width=".8" stroke-dasharray="6 4"/>`;
-  s+=`<text class="lbl-s cjk" x="-90" y="-90">body outline envelope 198×205 (frame.stl)</text>`;
-  s+=`<line class="axline" x1="0" y1="20" x2="0" y2="-118"/>`;
-  s+=`<text class="lbl-s cjk" x="3" y="-110">body +X (front)</text>`;
-  s+=`<line class="axline" x1="0" y1="0" x2="-118" y2="0"/>`;
-  s+=`<text class="lbl-s cjk" x="-115" y="-4">body +Y (left)</text>`;
-  for(const [nm,mx,my,ang] of LEGS){
-    const o=TV(mx,my), th=ang*Math.PI/180, d=TV(Math.cos(th),Math.sin(th));
-    s+=`<line class="gridl maj" x1="${o[0]}" y1="${o[1]}" x2="${o[0]+d[0]*46}" y2="${o[1]+d[1]*46}"/>`;
-    s+=`<circle cx="${o[0]}" cy="${o[1]}" r="2.4" fill="${nm==='R3'?'var(--accent)':'var(--muted)'}"/>`;
-    s+=`<text class="lbl-s" x="${o[0]+(mx<0?-13:5)}" y="${o[1]-5}">${nm}</text>`;
-  }
-  /* R3 */
-  const [nm,mx,my,ang]=LEGS[5], o=TV(mx,my);
-  const th=(ang+g)*Math.PI/180, dx=Math.cos(th), dy=Math.sin(th);
-  const at=[-dy,dx];                       // direction of leg +Y in the body frame
-  const pt=(r,yy=0)=>TV(mx+r*dx+yy*at[0], my+r*dy+yy*at[1]);
-  const th0=ang*Math.PI/180, ndir=[Math.cos(th0),Math.sin(th0)];
-  const n0=TV(mx+185*ndir[0], my+185*ndir[1]), n1=TV(mx+150*ndir[0], my+150*ndir[1]);
-  s+=`<line x1="${o[0]}" y1="${o[1]}" x2="${n0[0]}" y2="${n0[1]}" stroke="var(--muted)" stroke-width=".7" stroke-dasharray="5 3"/>`;
-  s+=`<text class="lbl-s cjk" x="${n1[0]+5}" y="${n1[1]+9}">neutral direction (γ=0)</text>`;
-  s+=`<path class="part" d="${pathOf(GEOM.coxa2_xy, q=>pt(q[0]-3, q[1]+1))}"/>`;
-  const A=pt(0),B=pt(rF),Cc=pt(rK),D=pt(rC);
-  s+=`<path class="skel" d="M${A[0]} ${A[1]} L${B[0]} ${B[1]} L${Cc[0]} ${Cc[1]} L${D[0]} ${D[1]}"/>`;
-  [A,B,Cc,D].forEach(q=>{s+=`<circle class="jdot" cx="${q[0]}" cy="${q[1]}" r="2"/>`;});
-  s+=`<text class="lbl acct" x="${D[0]+4}" y="${D[1]+4}">C</text>`;
-  const Y1=pt(24,0), Y2=pt(24,42);
-  s+=`<line x1="${Y1[0]}" y1="${Y1[1]}" x2="${Y2[0]}" y2="${Y2[1]}" stroke="var(--k)" stroke-width="1.1"/>`;
-  s+=`<path d="M${Y2[0]} ${Y2[1]} l${(Y2[0]-Y1[0])*0.13-(Y2[1]-Y1[1])*0.09} ${(Y2[1]-Y1[1])*0.13+(Y2[0]-Y1[0])*0.09} M${Y2[0]} ${Y2[1]} l${(Y2[0]-Y1[0])*0.13+(Y2[1]-Y1[1])*0.09} ${(Y2[1]-Y1[1])*0.13-(Y2[0]-Y1[0])*0.09}" stroke="var(--k)" stroke-width="1.1" fill="none"/>`;
-  s+=`<text class="kt cjk" x="${Y2[0]+3}" y="${Y2[1]-2}">leg +Y (opposite the side-view line of sight)</text>`;
-  const gl=pt(96,-26);
-  s+=`<text class="lbl-s cjk" x="${gl[0]-16}" y="${gl[1]}">γ = ${f(g,0)}°</text>`;
+  for(let v=-250;v<=250;v+=50){
+    s+=`<line class="gridl" x1="${v}" y1="-250" x2="${v}" y2="250"/>`;
+    s+=`<line class="gridl" x1="-250" y1="${v}" x2="250" y2="${v}"/>`;}
+  /* body: the real frame.stl outline (not a bounding rectangle) */
+  s+=`<path class="framep" d="${pathOf(GEOM.frame_xy,trIdent)}"/>`;
+  /* polygon through the six yaw axes */
+  const hex=[0,1,2,5,4,3].map(i=>TV(LEGS[i][1],LEGS[i][2]));
+  s+=`<path class="hipoly" d="M${hex.map(q=>q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' L')} Z"/>`;
+  /* hip-spacing dimensions: L1–R1 across 126.0, L1–L3 along 167.0 */
+  const l1=TV(83.5,63), r1=TV(83.5,-63), l3=TV(-83.5,63);
+  const yD=-124, xD=-124;
+  s+=`<line class="dim" x1="${l1[0]}" y1="${l1[1]}" x2="${l1[0]}" y2="${yD-4}"/>`;
+  s+=`<line class="dim" x1="${r1[0]}" y1="${r1[1]}" x2="${r1[0]}" y2="${yD-4}"/>`;
+  s+=`<line class="dim" x1="${l1[0]}" y1="${yD}" x2="${r1[0]}" y2="${yD}"/>`;
+  s+=`<text class="dimt acct cjk" text-anchor="middle" x="0" y="${yD-4}">L1–R1 hip spacing 126.0</text>`;
+  s+=`<line class="dim" x1="${l1[0]}" y1="${l1[1]}" x2="${xD-4}" y2="${l1[1]}"/>`;
+  s+=`<line class="dim" x1="${l3[0]}" y1="${l3[1]}" x2="${xD-4}" y2="${l3[1]}"/>`;
+  s+=`<line class="dim" x1="${xD}" y1="${l1[1]}" x2="${xD}" y2="${l3[1]}"/>`;
+  s+=`<text class="dimt acct cjk" text-anchor="middle" transform="rotate(-90 ${xD-5} 0)" x="${xD-5}" y="0">L1–L3 hip spacing 167.0</text>`;
+  /* body axis */
+  s+=`<line class="axline" x1="0" y1="30" x2="0" y2="${yD+14}"/>`;
+  s+=`<text class="lbl-s cjk" x="4" y="${yD+22}">body +X (front)</text>`;
+  /* the six legs */
+  let bx=[-140,140], by=[-140,140];
+  LEGS.forEach((L,i)=>{
+    const sel=(i===SEL), gg=sel?g:0;
+    const th=(L[3]+gg)*D2R, dx=Math.cos(th), dy=Math.sin(th), ax=[-dy,dx];
+    const pt=(r,yy)=>TV(L[1]+r*dx+(yy||0)*ax[0], L[2]+r*dy+(yy||0)*ax[1]);
+    s+=`<path class="${sel?'part':'partdim'}" d="${pathOf(GEOM.coxa2_xy, q=>pt(q[0]-3,q[1]+1))}"/>`;
+    const A=pt(0),B=pt(rF),K2=pt(rK),D=pt(rC);
+    s+=`<path class="${sel?'skel':'skeldim'}" d="M${A[0]} ${A[1]} L${B[0]} ${B[1]} L${K2[0]} ${K2[1]} L${D[0]} ${D[1]}"/>`;
+    [A,B,K2,D].forEach(q=>{s+=`<circle class="${sel?'jdot':'jdotdim'}" cx="${q[0]}" cy="${q[1]}" r="${sel?3.4:2.4}"/>`;});
+    bx=[Math.min(bx[0],D[0]),Math.max(bx[1],D[0])]; by=[Math.min(by[0],D[1]),Math.max(by[1],D[1])];
+    const lo=TV(L[1]*1.34, L[2]*1.34);
+    s+=`<text class="lbl ${sel?'acct':''}" text-anchor="middle" x="${lo[0]}" y="${lo[1]}">${L[0]}</text>`;
+    if(sel){
+      const th0=L[3]*D2R, n0=TV(L[1]+(rC+14)*Math.cos(th0), L[2]+(rC+14)*Math.sin(th0)),
+            n1=TV(L[1]+rC*0.88*Math.cos(th0)+21*Math.sin(th0), L[2]+rC*0.88*Math.sin(th0)-21*Math.cos(th0));
+      s+=`<line class="neut" x1="${A[0]}" y1="${A[1]}" x2="${n0[0]}" y2="${n0[1]}"/>`;
+      s+=`<text class="lbl-s cjk" text-anchor="middle" x="${n1[0]}" y="${n1[1]}">neutral direction γ=0</text>`;
+      const Y1=pt(30,0), Y2=pt(30,52), ux=(Y2[0]-Y1[0])/52, uy=(Y2[1]-Y1[1])/52;
+      s+=`<line class="yarrow" x1="${Y1[0]}" y1="${Y1[1]}" x2="${Y2[0]}" y2="${Y2[1]}"/>`;
+      s+=`<path class="yarrow" d="M${Y2[0]} ${Y2[1]} l${-ux*9-uy*5} ${-uy*9+ux*5} M${Y2[0]} ${Y2[1]} l${-ux*9+uy*5} ${-uy*9-ux*5}"/>`;
+      s+=`<text class="kt cjk" x="${Y2[0]+4}" y="${Y2[1]-3}">leg +Y</text>`;
+      const gl=pt(rF+30,22);
+      s+=`<text class="lbl-s cjk acct" text-anchor="middle" x="${gl[0]}" y="${gl[1]}">γ = ${f(g,0)}°</text>`;
+    }
+  });
+  /* adaptive view box, fixed aspect ratio */
+  const PAD=26, ASP=1.28;
+  let x0=Math.min(bx[0],xD-26)-PAD, x1=Math.max(bx[1],130)+PAD;
+  let y0=Math.min(by[0],yD-16)-PAD, y1=Math.max(by[1],130)+PAD;
+  let w=Math.max(x1-x0,430), h=Math.max(y1-y0,430/ASP);
+  if(w/h<ASP) w=h*ASP; else h=w/ASP;
+  const cx=(x0+x1)/2, cy=(y0+y1)/2;
+  el('fTop').setAttribute('viewBox',`${(cx-w/2).toFixed(1)} ${(cy-h/2).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
   el('fTop').innerHTML=s;
 }
+document.querySelectorAll('#legpick button').forEach(b=>b.addEventListener('click',()=>{
+  SEL=+b.dataset.i;
+  document.querySelectorAll('#legpick button').forEach(x=>x.classList.toggle('on',x===b));
+  drawTop();}));
 
 /* =========================== interaction ===========================*/
 ['sA','sT','cParts','cServo','cSkel','cAnn','cLbl','cGrid'].forEach(id=>

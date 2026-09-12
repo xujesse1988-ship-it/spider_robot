@@ -1,0 +1,622 @@
+<title>R3 Leg Model · Joint Axes and Assembly Chain of the Three Printed Parts</title>
+<style>
+:root{
+  --bg:#f4f6f6; --surface:#ffffff; --ink:#20282b; --muted:#5c6b71;
+  --line:#d5dcdf; --grid:#20282b14;
+  --steel:#46565e; --steel-fill:#64757c1c;
+  --door:#7d95a1; --door-fill:#7d95a133;
+  --accent:#0d7a8f; --accent-dim:#0d7a8f22;
+  --warn:#bf4a35; --warn-dim:#bf4a3518;
+  --schem:#96702a; --schem-fill:#96702a14;
+  --k:#7b5ea8; --k-dim:#7b5ea81f;
+  --green:#3f8a4f;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Consolas,monospace;
+  --sans:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141819; --surface:#1c2224; --ink:#e2e8e9; --muted:#93a2a8;
+    --line:#333d41; --grid:#e2e8e912;
+    --steel:#9fb1b9; --steel-fill:#9fb1b91f;
+    --door:#8fa9b5; --door-fill:#8fa9b52e;
+    --accent:#4cbacd; --accent-dim:#4cbacd26;
+    --warn:#e37b64; --warn-dim:#e37b6422;
+    --schem:#c99e52; --schem-fill:#c99e5219;
+    --k:#b39ddb; --k-dim:#b39ddb26;
+    --green:#7bb98a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141819; --surface:#1c2224; --ink:#e2e8e9; --muted:#93a2a8;
+  --line:#333d41; --grid:#e2e8e912;
+  --steel:#9fb1b9; --steel-fill:#9fb1b91f;
+  --door:#8fa9b5; --door-fill:#8fa9b52e;
+  --accent:#4cbacd; --accent-dim:#4cbacd26;
+  --warn:#e37b64; --warn-dim:#e37b6422;
+  --schem:#c99e52; --schem-fill:#c99e5219;
+  --k:#b39ddb; --k-dim:#b39ddb26;
+  --green:#7bb98a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15.5px;line-height:1.75;-webkit-font-smoothing:antialiased}
+main{max-width:1100px;margin:0 auto;padding:28px 20px 80px}
+header.page{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:10px}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;color:var(--muted);
+  text-transform:uppercase;margin-bottom:10px}
+h1{font-size:clamp(22px,3.4vw,30px);line-height:1.3;margin:0 0 10px;font-weight:700;text-wrap:balance}
+.verdict{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 0}
+.verdict .card{flex:1 1 240px;background:var(--surface);border:1px solid var(--line);
+  border-left:3px solid var(--accent);padding:10px 14px;font-size:14px;line-height:1.6}
+.verdict .card.kk{border-left-color:var(--k)}
+.verdict .card.bad{border-left-color:var(--warn)}
+.verdict .card b{font-family:var(--mono);font-size:15px}
+h2{font-size:19px;margin:54px 0 6px;font-weight:700}
+h2 .no{font-family:var(--mono);color:var(--accent);margin-right:8px;font-size:16px}
+h3{font-size:16px;margin:26px 0 6px}
+p{max-width:72ch;margin:10px 0}
+.sub{color:var(--muted);font-size:14px;max-width:78ch}
+.num,td.n,code{font-family:var(--mono);font-variant-numeric:tabular-nums}
+code{font-size:.92em;background:var(--surface);border:1px solid var(--line);padding:0 5px;border-radius:3px}
+a{color:var(--accent)}
+figure{margin:18px 0;background:var(--surface);border:1px solid var(--line);padding:14px 14px 8px}
+.fig-scroll{overflow-x:auto}
+.fig-scroll svg{min-width:640px;display:block;width:100%;height:auto}
+figcaption{font-size:13.5px;color:var(--muted);line-height:1.65;margin:8px 4px 6px;
+  border-top:1px solid var(--line);padding-top:8px}
+figcaption b{color:var(--ink)}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);
+  margin:14px 0 4px;padding:10px 14px;background:var(--surface);border:1px solid var(--line)}
+.legend span{white-space:nowrap}
+.sw{display:inline-block;width:26px;height:0;border-top:3px solid;vertical-align:middle;margin-right:6px}
+.sw.f{height:12px;border:1px solid var(--steel);background:var(--steel-fill)}
+.sw.d{height:12px;border:1px dashed var(--door);background:var(--door-fill)}
+.sw.ph{height:12px;border:1px dashed var(--schem);background:var(--schem-fill)}
+.sw.k{height:12px;border:1px dashed var(--k);background:var(--k-dim)}
+.sw.ax{border-top:2.5px solid var(--accent)}
+.sw.cup{border-top:2.5px dashed var(--warn)}
+.sw.grn{border-top:3px solid var(--green)}
+.sw.red{border-top:3px solid var(--warn)}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface);border:1px solid var(--line)}
+th,td{border:1px solid var(--line);padding:7px 11px;text-align:left;vertical-align:top}
+th{font-size:12.5px;letter-spacing:.06em;color:var(--muted);font-weight:600;
+  background:color-mix(in srgb,var(--surface) 60%,var(--bg))}
+td.n{white-space:nowrap}
+.tblwrap{overflow-x:auto;margin:14px 0}
+.hl{background:var(--accent-dim)}
+.hlw{background:var(--warn-dim)}
+.hlk{background:var(--k-dim)}
+.callout{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--schem);
+  padding:12px 16px;margin:16px 0;font-size:14.5px}
+.callout.warn{border-left-color:var(--warn)}
+.callout.acc{border-left-color:var(--accent)}
+ol,ul{max-width:78ch}
+li{margin:5px 0}
+footer{margin-top:60px;border-top:1px solid var(--line);padding-top:14px;
+  font-size:12.5px;color:var(--muted);font-family:var(--mono);line-height:1.9}
+
+/* ---- control bar ---- */
+.ctl{background:var(--surface);border:1px solid var(--line);padding:12px 14px;margin:0 0 12px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 22px}
+.ctl .row{display:flex;align-items:center;gap:10px;font-size:13.5px}
+.ctl .row label{min-width:5.6em;color:var(--muted);font-size:13px}
+.ctl input[type=range]{flex:1;min-width:110px;accent-color:var(--accent)}
+.ctl .val{font-family:var(--mono);font-variant-numeric:tabular-nums;min-width:5.6em;text-align:right}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 0}
+.btns button{font:inherit;font-size:12.8px;padding:3px 10px;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:3px;cursor:pointer}
+.btns button:hover{border-color:var(--accent);color:var(--accent)}
+.toggles{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--muted)}
+.toggles label{display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:2px 14px;
+  font-family:var(--mono);font-size:12.6px;font-variant-numeric:tabular-nums;
+  background:var(--surface);border:1px solid var(--line);border-top:none;padding:10px 14px;color:var(--muted)}
+.readout b{color:var(--ink);font-weight:600}
+
+/* ---- SVG ---- */
+svg text{font-family:var(--mono);fill:var(--ink)}
+svg .cjk{font-family:var(--sans)}
+.part{fill:var(--steel-fill);stroke:var(--steel);stroke-width:.6;fill-rule:evenodd}
+.doorp{fill:var(--door-fill);stroke:var(--door);stroke-width:.5;stroke-dasharray:2.4 1.5;fill-rule:evenodd}
+.servo{fill:var(--schem-fill);stroke:var(--schem);stroke-width:.5;stroke-dasharray:2.6 1.6}
+.servo.solid{stroke-dasharray:none}
+.cuprub{fill:var(--warn-dim);stroke:var(--warn);stroke-width:.5;stroke-dasharray:2.2 1.4}
+.skel{stroke:var(--accent);stroke-width:1.1;fill:none;stroke-linejoin:round}
+.jdot{fill:var(--accent)}
+.cupax{stroke:var(--warn);stroke-width:.7;stroke-dasharray:5 2 1.2 2;fill:none}
+.axline{stroke:var(--accent);stroke-width:.5;stroke-dasharray:6 1.6 1.2 1.6;fill:none}
+.gridl{stroke:var(--ink);stroke-opacity:.10;stroke-width:.25}
+.gridl.maj{stroke-opacity:.20;stroke-width:.4}
+.dim{stroke:var(--ink);stroke-width:.35;fill:none}
+.dimt{font-size:3.4px;fill:var(--ink)}
+.lbl{font-size:4px;font-weight:700}
+.lbl-s{font-size:3.3px;fill:var(--muted)}
+.lead{stroke:var(--muted);stroke-width:.3;fill:none}
+.ann-red{stroke:var(--warn);stroke-width:1.6;fill:none;stroke-linecap:round}
+.ann-red-c{stroke:var(--warn);stroke-width:1.2;fill:none}
+.ann-green{stroke:var(--green);stroke-width:1.8;fill:none;stroke-linecap:round}
+.hornd{fill:var(--k-dim);stroke:var(--k);stroke-width:.5}
+.kt{fill:var(--k);font-size:3.4px}
+.acct{fill:var(--accent);font-size:3.4px}
+.warnt{fill:var(--warn);font-size:3.4px}
+.hover-xy{font-size:3.4px;fill:var(--muted)}
+</style>
+
+<main>
+<header class="page">
+  <div class="kicker">P3 · SINGLE-LEG GEOMETRY · 2026-09-12</div>
+  <h1>R3 leg model: joint axes of the three printed parts, the assembly chain, and the leg-plane side view</h1>
+  <p class="sub">This page has one purpose — <b>to give "a spot on the leg" one unambiguous name</b>. From now on, "20mm outboard of the knee axis" or "tibia part coordinates
+  (54, −7.2)" means the same point to both of us. Every outline comes from an STL mesh projection, every joint axis from a circle fit to the STL hole walls,
+  and the pose is driven by (γ, α, θ) from <code>software/hexapod/kinematics.py</code>.</p>
+  <div class="verdict">
+    <div class="card">All three axes are pinned down in their own part frames: coxa2 <b>(3, −1)∥z</b> and <b>(46, 2.75)∥y</b>,
+      spacing <b>43.0</b> = coxa_len; femur <b>(3,1)</b>→<b>(83,1)</b>, spacing <b>80.0</b>.</div>
+    <div class="card kk">Knee axis K = tibia part <b>(54.0, −7.2)</b> (centroid of the four flange holes, shifted 9.75 along the long axis);
+      lip centre C = <b>(1.3, −119)</b>, |K→C| = <b>123.6</b>.</div>
+    <div class="card">The side view is <b>seen from the −Y side</b>, i.e. the face the servo horns point towards — which is exactly the face
+      <code>images/leg.jpg</code> was shot from. Every red line, red circle and green line in the photo has a counterpart in the drawing.</div>
+  </div>
+</header>
+
+<h2><span class="no">§1</span>First, how to name a position</h2>
+<p>Two coordinate systems; always say which one. For everyday discussion use the <b>leg frame</b>; for printed-part detail (a particular hole, a particular face) use the <b>part frame</b>
+and name the part, e.g. "tibia part (54.0, −7.2)".</p>
+
+<div class="tblwrap"><table>
+<thead><tr><th style="width:7em">Name</th><th>Definition</th><th style="width:12em">Leg frame (standing pose)</th></tr></thead>
+<tbody>
+<tr><td class="n"><b>Leg frame</b></td><td>Origin on the coxa yaw axis, at the height of the femur axis; <b>+X</b> = leg neutral direction (horizontal, outboard),
+  <b>+Z</b> = up, <b>+Y</b> = Z×X (for a right leg, towards the front-outboard side of the body). Identical to <code>kinematics.py</code>.</td><td class="n">—</td></tr>
+<tr><td class="n"><b>Leg plane</b></td><td>The vertical plane through the X and Z axes. femur and tibia move only inside it; γ rotates the whole plane about Z.</td><td class="n">Y = 0</td></tr>
+<tr><td class="n hl"><b>H</b> hip point</td><td>coxa yaw axis × leg-plane origin. <b>Not</b> the servo-horn face — that sits 16mm below it.</td><td class="n">(0, 0)</td></tr>
+<tr><td class="n hl"><b>F</b> femur axis</td><td>Thigh pitch axis (horizontal, ⊥ leg plane). The centre of the <b>lower red circle</b> in the photo.</td><td class="n">(43.0, 0)</td></tr>
+<tr><td class="n hl"><b>K</b> knee axis</td><td>tibia servo output shaft. The centre of the <b>upper red circle</b> in the photo.</td><td class="n">(116.9, 33.1)</td></tr>
+<tr><td class="n hl"><b>C</b> lip centre</td><td>Centre of the suction-cup lip circle (<b>free state</b>, 19mm below the crease plane). The "foot" of the kinematics.</td><td class="n">(130.1, −90.0)</td></tr>
+<tr><td class="n"><b>G</b> crease-plane centre</td><td>Bottom face of the printed part = where the wrapped section of the cup starts; centre of the tibia-part plane z = −100.</td><td class="n">C backed off 19 along the cup axis</td></tr>
+<tr><td class="n"><b>Cup axis</b></td><td>Axis of revolution of the cup cavity = centreline of the square shaft. <b>Not</b> the K→C line; the two differ by 25.2°.</td><td class="n">direction a<sub>t</sub> − 25.2°</td></tr>
+<tr><td class="n">γ / α / θ</td><td>coxa horizontal swing / femur elevation above horizontal / <b>knee interior angle</b> (angle between femur and tibia; straight = 180°).</td><td class="n">0 / 24.1° / 72.0°</td></tr>
+<tr><td class="n">a<sub>t</sub></td><td>Absolute angle of the tibia above horizontal = α + θ − 180°. The direction of the K→C line.</td><td class="n">−83.9°</td></tr>
+</tbody></table></div>
+
+<div class="callout acc"><b>A few counter-intuitive points, up front.</b>
+① <b>H is not on the servo-horn face</b> — the z=0 plane of the leg frame passes through the femur axis, and the coxa horn seating face is <b>16.2mm below</b> it.
+② <b>K is not at the tibia part origin</b>; it is at (54.0, −7.2), settled on 2026-08-07.
+③ <b>The cup axis is not K→C</b>; they differ by 25.2° — treating a<sub>t</sub> as the cup direction is the old trap that biased CLIMBING-DESIGN by 22.7° across the board.
+④ The two femur axes are <b>exactly 80.0</b> apart in the STL, while config uses the measured 81.0 — a 1mm difference (see §6).</div>
+
+<h2><span class="no">§2</span>Leg-plane side view (draggable)</h2>
+<p>Seen from the −Y side; X to the right, Z up, units mm, grid 10mm. Part outlines = union of the STL projection along each part's own joint axis;
+servos = the 40×20×40.5 case envelope computed from the flange hole positions. Drag the sliders to see how the pose moves.</p>
+
+<div class="ctl">
+  <div class="row"><label>α femur</label><input id="sA" type="range" min="-40" max="140" step="0.5" value="24.1"><span class="val" id="vA">24.1°</span></div>
+  <div class="row"><label>θ knee angle</label><input id="sT" type="range" min="10" max="176" step="0.5" value="72.0"><span class="val" id="vT">72.0°</span></div>
+  <div class="row" style="grid-column:1/-1"><label>Presets</label>
+    <span class="btns">
+      <button data-p="24.08,72.00">Standing (90/130)</button>
+      <button data-p="47.26,79.96">R3 servos centred ≈ photo pose</button>
+      <button data-p="0,90">α=0 θ=90</button>
+      <button data-p="0,180">Fully extended</button>
+      <button data-p="90,60">Leg lifted to the top</button>
+    </span></div>
+  <div class="row" style="grid-column:1/-1"><label>Show</label>
+    <span class="toggles">
+      <label><input type="checkbox" id="cParts" checked>part outlines</label>
+      <label><input type="checkbox" id="cServo" checked>servo cases</label>
+      <label><input type="checkbox" id="cSkel" checked>skeleton l1/l2/l3</label>
+      <label><input type="checkbox" id="cAnn" checked>photo annotations</label>
+      <label><input type="checkbox" id="cLbl" checked>point names and dimensions</label>
+      <label><input type="checkbox" id="cGrid" checked>grid</label>
+    </span></div>
+</div>
+<figure style="padding-top:0;border-top:none;margin-top:0">
+  <div class="fig-scroll"><svg id="main" viewBox="-54 -95 304 240" aria-label="Leg-plane side view"></svg></div>
+  <div class="readout" id="ro"></div>
+  <figcaption><b>How to read it:</b> light grey solid = printed parts (coxa2 / femur / tibia-suction), gold dashed = servo cases,
+  red dashed = the rubber suction cup (not a printed part, schematic), teal polyline = the kinematic skeleton H–F–K–C, red dash-dot = the cup axis.
+  The photo-annotation layer draws the red horizontal line / two red circles / green line from <code>images/leg_2.jpg</code> at their model positions.
+  Moving the mouse over the figure shows the leg-frame readout.</figcaption>
+</figure>
+
+<div class="legend">
+  <span><i class="sw f"></i>printed part (STL projection)</span>
+  <span><i class="sw ph"></i>servo case DS3235</span>
+  <span><i class="sw k"></i>servo horn Ø21.5</span>
+  <span><i class="sw d"></i>cup door cover</span>
+  <span><i class="sw ax"></i>skeleton / joint axis</span>
+  <span><i class="sw cup"></i>cup axis (≠K→C)</span>
+  <span><i class="sw red"></i>red photo annotation</span>
+  <span><i class="sw grn"></i>green photo annotation (lip plane)</span>
+</div>
+
+
+<h3>Top view: γ, the leg plane, and "which side are we looking from"</h3>
+<p>The side view above draws shapes <b>inside the leg plane</b>. γ changes nothing inside that plane; it only rotates the whole leg plane about the
+coxa yaw axis. The figure below looks down from above the body (body <b>+X forward</b> up the page, <b>+Y left</b> to the left),
+marking the hip positions and neutral directions of all six legs and showing where the R3 leg plane falls.</p>
+<div class="ctl" style="grid-template-columns:1fr">
+  <div class="row"><label>γ R3</label><input id="sG" type="range" min="-60" max="60" step="1" value="0"><span class="val" id="vG">0°</span></div>
+</div>
+<figure style="padding-top:0;margin-top:0">
+  <div class="fig-scroll"><svg id="fTop" viewBox="-118 -118 346 326" aria-label="Top view"></svg></div>
+  <figcaption><b>How to read it:</b> six dots = the coxa yaw axes of the six legs (<code>mount_x/mount_y</code> in config),
+  short lines = each leg's neutral direction <code>mount_angle_deg</code>. R3 is drawn in full horizontal projection: the teal line is where the leg plane cuts the page,
+  and γ is how far it has turned from the neutral direction. Purple arrow = leg-frame <b>+Y</b> (for a right leg, towards the front-outboard side of the body);
+  the side view looks along exactly the opposite direction, which is why it shows the servo-horn face.</figcaption>
+</figure>
+
+<h2><span class="no">§3</span>What the four photo annotations are in the model</h2>
+<p>The four annotations on <code>images/leg_2.jpg</code>, one by one:</p>
+<div class="tblwrap"><table>
+<thead><tr><th style="width:8em">Photo annotation</th><th>Object in the model</th><th style="width:15em">Position (leg frame)</th></tr></thead>
+<tbody>
+<tr><td class="n hlw">Red horizontal line</td><td>The <b>seating face</b> of the coxa servo horn (a metal disc). It faces down, so from the side it is just a line. It sits in the Ø21.5
+  counterbore in the lower jaw of coxa2; the counterbore opens towards −Z, and the servo above it sends its shaft down through the Ø9.6 through-hole.</td>
+  <td class="n">Z = −16.2 (seating face)<br>Z = −19.8 (part bottom face)</td></tr>
+<tr><td class="n hlw">Lower red circle</td><td><b>F</b>, the femur servo output shaft = thigh pitch axis. What is circled is the horn and its 4 M2 screws
+  (bolt circle Ø14.3).</td><td class="n">(43.0, 0), constant</td></tr>
+<tr><td class="n hlw">Upper red circle</td><td><b>K</b>, the knee axis. Here the horn is bolted to the end of the femur rail, while the servo case is mounted the other way round, inside the tibia hub
+  — which is why the DS3235 lettering in the photo turns with the shank.</td><td class="n">varies with α; (116.9, 33.1) when standing</td></tr>
+<tr><td class="n" style="background:color-mix(in srgb,var(--green) 12%,transparent)">Green horizontal line</td>
+  <td><b>Lip plane</b>: the plane of the suction-cup lip, ⊥ the cup axis, its circle centre being <b>C</b>. In the free state it is 19mm below the crease plane;
+  once the cup grips it compresses to 7.5~8mm (the leg shortens by about 10mm).</td><td class="n">passes through (130.1, −90.0) when standing</td></tr>
+</tbody></table></div>
+<div class="callout"><b>Why the photo happens to show this face.</b> On a right leg all three parts have their horns facing −Y: the coxa2 horn counterbore is in the lower jaw,
+both femur horn counterbores are on the −z<sub>part</sub> side, and the tibia horn is on the +y<sub>part</sub> side — once assembled they all
+face the same way, which is −Y. A side view drawn "X right, Z up" must be viewed from −Y, so the face it draws
+is the face where the horn screws are visible in the photo. Left-leg parts are mirrored and their horns face +Y.</div>
+
+<h2><span class="no">§4</span>Each part in its own coordinate frame</h2>
+<p>The three figures below show each part in <b>its own STL frame</b> (the coordinates are the raw numbers measured off the STL file; grid 10mm).
+When pointing at a particular hole or face, these are the coordinates least likely to be misread.</p>
+
+<div class="pair">
+<figure><div class="fig-scroll"><svg id="fCoxa" viewBox="-15 -52 92 84"></svg></div>
+<figcaption><b>right-coxa2.stl</b> (projected along −y, x–z). Lower jaw = the horn end (mates with the coxa servo);
+the femur servo is clamped between the two plates at the right end. The <b>yaw axis</b> is at x=3 (a vertical line here; the y=−1 is not visible);
+the <b>femur axis</b> is at (46, 2.75), ⊥ the page. Common-perpendicular distance between the two axes = 43.0.</figcaption></figure>
+
+<figure><div class="fig-scroll"><svg id="fFemur" viewBox="-14 -24 122 50"></svg></div>
+<figcaption><b>right-femur.stl</b> (projected along +z, x–y, i.e. as seen inside the leg plane). The two ends are structurally identical:
+a Ø21.5 horn counterbore on the −z face, four Ø1.5 horn screw holes on a Ø14.3 bolt circle, and a Ø11.5 pivot boss on the +z face.
+<b>The two axes (3,1) and (83,1) are exactly 80.000 apart.</b> The distal four holes are rotated +34.9° about the axis relative to the proximal ones.</figcaption></figure>
+</div>
+
+<figure><div class="fig-scroll"><svg id="fTibia" viewBox="-32 -20 128 152"></svg></div>
+<figcaption><b>right-tibia-suction.stl</b> (projected along −y, x–z). The "7"-shaped hook at the top is the hub;
+the DS3235 <b>case</b> mounts inside it (the four Ø2.8 holes are the flange screw holes, spacing 10.00×48.00, long axis at 50.0°);
+the upper part of the shaft passes through the femur rail end, and <b>the horn is bolted to the femur</b>.
+<b>K = the four-hole centroid (47.77, −14.63) shifted 9.75 along the long axis towards the hip = (54.04, −7.16) ≈ (54.0, −7.2)</b>.
+The box at the bottom is the cup cavity; its axis of revolution is x = 1.30 ∥ z (right-hand part: y = +4.5), the crease plane z = −100 is the bottom of the printed part,
+and the free-state lip centre is C = (1.3, −119). <b>Note that the square shaft is not parallel to K→C; they differ by 25.24°.</b></figcaption></figure>
+
+<h2><span class="no">§5</span>Assembly chain: part coordinates → leg coordinates</h2>
+<p>Every point in the side view is computed this way. With a<sub>t</sub> = α + θ − 180° and
+F = (l1 + 0, 0) + …, in detail:</p>
+<div class="tblwrap"><table>
+<thead><tr><th style="width:7em">Part</th><th>(X, Z)<sub>leg</sub> = </th><th style="width:13em">Y direction</th></tr></thead>
+<tbody>
+<tr><td class="n">coxa2</td><td><code>(x_part − 3, z_part − 2.75)</code> — pure translation, no rotation, no mirror</td>
+  <td class="n">y_part → +Y</td></tr>
+<tr><td class="n">femur</td><td><code>F + (x_part−3)·(cosα, sinα) + (y_part−1)·(sinα, −cosα)</code><br>
+  F = (radial component of l1·cosγ, 0) = (43, 0)</td><td class="n">z_part → +Y (mirrored)</td></tr>
+<tr><td class="n">tibia</td><td><code>K + (x_part−54.0)·(cosφ, sinφ) + (z_part+7.2)·(sinφ, −cosφ)</code><br>
+  φ = a<sub>t</sub> − 115.238°,  K = F + l2·(cosα, sinα)</td><td class="n">y_part → −Y (mirrored)</td></tr>
+</tbody></table></div>
+<p class="sub">The two "mirrors" are not typos: those two STLs are laid out in print orientation, so once fitted to the leg,
+looking from −Y you see their back side, and the planar mapping therefore carries one flip (determinant −1).
+For the tibia this flip is exactly where the minus sign in <code>cup_delta_deg = −25.2</code> comes from —
+in part coordinates the square shaft is +25.24° counter-clockwise from K→C, and after assembly it becomes −25.24° clockwise.</p>
+<div class="callout acc"><b>Self-check:</b> substitute α=35°, θ=68° (the official centred convention) and the cup axis comes out at a<sub>t</sub> − 25.2° = −102.2°,
+only 12.2° off plumb — the cup lies almost flat on the ground, exactly what "a suction foot that walks on the floor" was designed to do. With the sign flipped it would be −51.8°,
+and the cup would jab the ground at 38°, clearly wrong.</div>
+
+<h2><span class="no">§6</span>Summary of numbers and evidence grade</h2>
+<div class="tblwrap"><table>
+<thead><tr><th style="width:13em">Quantity</th><th style="width:8em">Value</th><th>Source and confidence</th></tr></thead>
+<tbody>
+<tr><td>coxa2 yaw axis</td><td class="n hl">(3.000, −1.000) ∥ z</td><td>Circle fitted to 3 of the Ø1.5 horn screw holes (the 4th falls outside the part), residual 0; concentric with the Ø21.5 counterbore. <b>Hard</b></td></tr>
+<tr><td>coxa2 femur axis</td><td class="n hl">(46.000, 2.75) ∥ y</td><td>x=46 = centroid of the four flange holes, <b>hard</b>; z=2.75 = centroid 12.5 shifted 9.75 along the long axis towards the horn side,
+  the direction confirmed twice — by the official exploded view (servo 2's horn is at the lower end) and by <code>images/leg.jpg</code> (one flange screw at the top, one at the bottom, horn close to the bottom). <b>Value ±1</b></td></tr>
+<tr><td>coxa_len l1</td><td class="n hl">43.0</td><td>|46 − 3|, agrees with config and with the official COXA_LEN 43. <b>Hard</b></td></tr>
+<tr><td>femur, both axes</td><td class="n hl">(3,1) → (83,1)</td><td>Fitted to 3 Ø1.5 holes at each end, bolt-circle radius 7.15, residual 0. <b>Hard</b> (this supplies the hole-fit check that LEG-GEOMETRY-OPEN §2.5 still owed)</td></tr>
+<tr><td>femur_len l2</td><td class="n hlw">STL 80.000 / config 81.0</td><td>The STL carries the design value (official FEMUR_LEN 80); 81.0 is the horn screw centre distance measured on 2026-08-06.
+  <b>The 1mm gap is not closed</b>; this figure draws the parts at 80 and computes the skeleton at 81, leaving roughly 1mm of visual slack at the knee</td></tr>
+<tr><td>Knee axis K (tibia part)</td><td class="n hlk">(54.0, −7.2) ±1</td><td>Centroid of the four flange holes (67.02,0.53)(59.37,6.98)(36.17,−36.22)(28.51,−29.82) + 9.75·(cos50°,sin50°);
+  double-adjudicated on hardware 2026-08-07 (horn centre offset towards the hip ~10 ✓; K→crease drop measured with a tape at 92 vs 92.8 predicted ✓)</td></tr>
+<tr><td>Cup cavity / square-shaft axis</td><td class="n">x = 1.30, ∥ z</td><td>Generator parameter <code>shaft_cx=1.3</code> in <code>tools/generate_climbing_parts.py</code>; STL x_min = −15.70 = 1.3−17 matches. <b>Hard</b></td></tr>
+<tr><td>Crease plane</td><td class="n">z = −100.0</td><td>Generator parameter <code>crease_z</code>, = the bottom face of the printed part. <b>Hard</b></td></tr>
+<tr><td>h_cup, free state</td><td class="n hl">19</td><td>Re-measured 2026-08-07; gripped state 7.5~8 (2026-07-18 §4.4)</td></tr>
+<tr><td>tibia_len l3</td><td class="n hl">123.7</td><td>|K→C| by geometric chain = √(52.7² + 111.8²) = 123.60, meshing with the 123.7 obtained by Pythagoras from the sticker method. <b>Closed</b></td></tr>
+<tr><td>cup_delta</td><td class="n hl">−25.24°</td><td>Square-shaft direction −90° minus K→C direction −115.238°, then negated by the assembly mirror. config stores −25.2</td></tr>
+<tr><td>DS3235 case</td><td class="n">40 × 20 × 40.5</td><td>Flange hole spacing: 10 × 48 on the official parts (both coxa2 and tibia use 48), 10 × 49.5 on the real servo;
+  axis ~10 from the case end (the <code>ped_cut_y0</code> measured convention)</td></tr>
+<tr><td>coxa horn seating face</td><td class="n hlw">Z = −16.2</td><td>coxa2 counterbore floor z_part = −13.4 minus 2.75; the counterbore opens towards −z and the part bottom face is at Z = −19.8. <b>Hard</b> (conditional on the z=2.75 entry)</td></tr>
+</tbody></table></div>
+
+<h2><span class="no">§7</span>Four things to know before using this</h2>
+<ol>
+<li><b>81 or 80.</b> The design value of the part is 80.000 (the STL hole positions leave no room for doubt); config's 81.0 is the measured horn screw centre distance —
+  the extra 1mm is the real stack-up of print tolerance plus horn/spline clearance. Using 81 in the kinematics is correct (it wants the actual axis distance),
+  but do not mix the two when running interference checks against the STL.</li>
+<li><b>The z = 2.75 entry still carries ±1 of uncertainty.</b> What it fixes is "the height of hip point H above the coxa horn face" (16.2mm).
+  To close it: measure the vertical distance from the coxa horn seating face to the femur servo shaft centre; the prediction is 16.2±1.
+  <b>It affects neither l1/l2/l3 nor any kinematic number</b> — the z=0 plane of the leg frame is defined on the femur axis in the first place.</li>
+<li><b>The cup has two states.</b> This figure draws the free state (h_cup=19, l3=123.7). Once gripping, the bellows compacts,
+  h_cup ≈ 7.5~8, effective l3 ≈ 113.8, and δ becomes 27.6°. P4 keeps its books as "free-state model throughout + press_delta";
+  do not mix the two conventions (P4-GUIDE §4.2).</li>
+<li><b>This figure is geometry, not mechanics.</b> Under load the real leg chain gives elastically — press reaction can bend the diagonal front legs down by
+  13~27mm, and after mounting the wall the body sinks 6mm+26mm. To compute landing bands and stance margins, subtract the give after the geometry is done.</li>
+</ol>
+
+<footer>
+html/leg-model.html · 2026-09-12<br>
+Part outlines from: hardware/makeyourpet-hexapod/STL/right-coxa2.stl, right-femur.stl,
+hardware/climbing-parts/right-tibia-suction.stl, suction-foot-door.stl (trimesh mesh projection + shapely union, simplification tolerance 0.15mm)<br>
+Joint axes from: cylindrical hole walls of the same STLs (connected components + least-squares circle), residual ≤0.002mm<br>
+Pose and lengths: software/hexapod/config.py, kinematics.py · Evidence chain: docs/LEG-GEOMETRY-OPEN.md, docs/L3-DISPUTE-OPEN.md, html/tibia-three-view.html<br>
+Photos: images/leg.jpg, images/leg_2.jpg (R3 leg, shot from the −Y side)
+</footer>
+</main>
+
+<script>
+/* ---------------------------------------------------------------
+   Part outlines GEOM: generated by projecting the STL mesh along the joint axis + shapely union
+   each entry = [ polygon, ... ], each polygon = [ outer ring, inner rings... ], ring = [[x,y],...]
+   coordinates = that STL's own millimetre frame (subscripts: see §4)
+   --------------------------------------------------------------- */
+const GEOM = {"coxa2_xz":[[[[-2.98,36.27],[-3.0,38.5],[-2.65,40.02],[-1.68,41.24],[-1.02,41.65],[0.5,42.0],[32.2,42.0],[33.66,41.71],[35.7,40.61],[37.21,40.15],[52.0,40.0],[53.73,39.6],[54.49,39.13],[55.6,37.74],[56.0,36.0],[55.79,34.73],[54.88,34.05],[36.0,34.0],[34.76,33.57],[34.2,32.87],[34.0,32.0],[34.0,-7.0],[34.44,-8.25],[35.13,-8.8],[36.0,-9.0],[54.88,-9.05],[55.79,-9.73],[56.0,-10.5],[55.9,-11.89],[55.13,-13.49],[53.74,-14.6],[52.0,-15.0],[37.21,-15.15],[35.7,-15.61],[33.66,-16.71],[32.2,-17.0],[15.06,-17.0],[13.78,-16.6],[12.08,-15.16],[11.42,-14.26],[11.05,-13.0],[-2.0,-13.0],[-1.96,-10.17],[-1.53,-9.41],[-0.83,-9.04],[24.0,-9.0],[25.35,-8.66],[26.58,-7.49],[27.0,-6.0],[27.0,32.0],[26.73,33.22],[26.31,33.89],[25.35,34.66],[24.59,34.93],[9.75,35.0],[8.85,34.43],[8.73,31.78],[8.37,31.22],[7.75,31.0],[4.02,31.0],[3.66,30.2],[2.7,30.02],[2.2,30.34],[1.98,31.0],[-1.75,31.0],[-2.53,31.38],[-2.75,32.0],[-2.75,35.4],[-2.98,36.27]]]],"coxa2_xy":[[[[-2.0,-6.7],[-1.33,-6.01],[-2.23,-4.58],[-2.8,-2.94],[-3.0,-0.8],[-2.8,0.94],[-2.23,2.58],[-1.33,4.01],[-2.0,4.7],[-1.97,6.22],[-1.76,6.65],[-1.22,6.98],[54.5,7.0],[55.44,6.67],[55.96,5.83],[55.99,-7.71],[55.55,-8.57],[54.83,-8.96],[15.4,-9.0],[14.8,-9.2],[12.71,-11.16],[10.9,-11.9],[3.07,-12.0],[2.09,-11.9],[0.29,-11.16],[-1.56,-9.44],[-1.97,-8.67],[-2.0,-6.7]]]],"femur_xy":[[[[-2.0,6.7],[-1.92,8.38],[-1.62,8.78],[-1.0,9.0],[85.19,9.0],[85.38,8.43],[84.89,8.05],[86.06,7.3],[87.3,6.06],[88.23,4.58],[88.8,2.94],[89.0,0.8],[88.8,-0.94],[88.0,-2.95],[87.98,-6.22],[87.62,-6.78],[87.0,-7.0],[-1.0,-7.0],[-1.62,-6.78],[-1.97,-6.23],[-2.0,-4.7],[-1.33,-4.01],[-2.23,-2.58],[-2.8,-0.94],[-3.0,0.8],[-2.8,2.94],[-2.23,4.58],[-1.33,6.01],[-2.0,6.7]],[[86.36,-5.19],[86.84,-5.6],[87.4,-5.53],[87.74,-5.15],[87.73,-4.6],[87.21,-4.15],[86.36,-5.19]]]],"femur_xz":[[[[-2.98,36.27],[-2.9,38.89],[-2.13,40.49],[-0.74,41.6],[1.0,42.0],[85.0,42.0],[86.74,41.6],[88.13,40.49],[88.9,38.89],[89.0,36.5],[88.75,35.4],[88.72,31.78],[87.97,31.02],[84.02,31.0],[83.8,30.34],[83.3,30.02],[82.34,30.2],[81.98,31.0],[78.25,31.0],[77.63,31.22],[77.27,31.78],[77.15,34.43],[76.25,35.0],[43.0,35.0],[41.8,34.74],[40.75,33.97],[40.28,33.25],[40.0,32.0],[40.0,-6.0],[40.28,-7.25],[40.75,-7.97],[41.8,-8.74],[43.0,-9.0],[86.69,-9.01],[87.52,-9.4],[87.93,-10.05],[88.0,-13.0],[74.9,-13.01],[74.44,-14.25],[73.73,-15.15],[72.05,-16.61],[70.8,-17.0],[15.2,-17.0],[13.95,-16.61],[12.27,-15.15],[11.56,-14.25],[11.1,-13.01],[-2.0,-13.0],[-1.96,-10.17],[-1.46,-9.35],[-0.83,-9.04],[22.0,-9.0],[23.3,-8.7],[24.7,-7.3],[25.0,-6.0],[25.0,32.0],[24.35,33.87],[22.67,34.92],[9.75,35.0],[8.85,34.43],[8.73,31.78],[8.37,31.22],[7.75,31.0],[4.02,31.0],[3.66,30.2],[2.7,30.02],[2.2,30.34],[1.98,31.0],[-1.75,31.0],[-2.53,31.38],[-2.75,32.0],[-2.75,35.4],[-2.98,36.27]]]],"tibia_xz":[[[[-15.7,-100.0],[-15.7,-53.0],[-4.01,-52.99],[-4.0,-42.0],[1.21,-41.99],[11.9,-18.84],[13.24,-16.27],[16.63,-11.57],[20.86,-7.62],[37.71,3.07],[47.53,14.37],[48.88,15.17],[50.37,15.65],[51.93,15.78],[53.48,15.57],[54.95,15.02],[56.26,14.15],[70.05,2.58],[70.66,1.93],[71.39,0.31],[71.35,-1.47],[71.03,-2.31],[70.07,-3.59],[69.18,-3.97],[68.43,-3.83],[53.93,8.27],[52.7,8.73],[51.82,8.56],[51.11,8.02],[25.8,-22.23],[25.62,-23.54],[26.29,-24.67],[40.46,-36.56],[40.91,-37.19],[40.98,-37.95],[40.33,-39.06],[38.91,-40.14],[38.05,-40.41],[36.28,-40.37],[34.69,-39.55],[28.58,-34.42],[27.89,-34.07],[27.09,-34.04],[26.04,-34.65],[18.0,-44.23],[18.0,-52.97],[18.3,-53.0],[18.3,-100.0],[-15.7,-100.0]],[[67.39,1.88],[66.32,1.74],[65.67,0.89],[65.81,-0.17],[66.66,-0.82],[67.72,-0.68],[68.37,0.17],[68.23,1.23],[67.39,1.88]],[[59.01,8.33],[58.16,7.68],[58.02,6.62],[58.67,5.77],[59.73,5.63],[60.58,6.28],[60.72,7.34],[60.07,8.19],[59.01,8.33]],[[36.17,-34.82],[35.18,-35.23],[34.77,-36.22],[35.18,-37.21],[36.17,-37.62],[37.16,-37.21],[37.57,-36.22],[37.16,-35.23],[36.17,-34.82]],[[27.3,-29.12],[27.16,-30.18],[27.81,-31.03],[28.87,-31.17],[29.72,-30.52],[29.86,-29.46],[29.21,-28.61],[28.15,-28.47],[27.3,-29.12]],[[15.41,-27.85],[14.16,-28.44],[13.3,-29.52],[7.49,-42.0],[12.68,-41.99],[19.84,-33.13],[20.1,-31.21],[19.58,-30.01],[17.43,-28.14],[16.78,-27.89],[15.41,-27.85]]]],"tibia_xy":[[[[-15.7,-12.5],[-15.7,12.5],[18.3,12.5],[18.33,10.39],[18.73,11.94],[19.91,12.5],[69.97,12.5],[70.91,12.17],[71.44,11.33],[71.47,1.5],[71.15,0.56],[70.31,0.04],[18.33,-0.0],[18.3,-12.5],[-15.7,-12.5]]]],"door_xz":[[[[-15.7,-100.0],[-15.7,-70.5],[18.3,-70.5],[18.3,-100.0],[-15.7,-100.0]],[[9.26,-79.95],[9.05,-81.0],[9.26,-82.05],[9.86,-82.94],[10.75,-83.54],[11.8,-83.75],[12.85,-83.54],[13.74,-82.94],[14.34,-82.05],[14.55,-81.0],[14.34,-79.95],[13.74,-79.06],[12.85,-78.46],[11.8,-78.25],[10.75,-78.46],[9.86,-79.06],[9.26,-79.95]],[[-10.25,-78.46],[-11.14,-79.06],[-11.74,-79.95],[-11.95,-81.0],[-11.74,-82.05],[-11.14,-82.94],[-10.25,-83.54],[-9.2,-83.75],[-8.15,-83.54],[-7.26,-82.94],[-6.66,-82.05],[-6.45,-81.0],[-6.66,-79.95],[-7.26,-79.06],[-8.15,-78.46],[-9.2,-78.25],[-10.25,-78.46]]]]};
+
+const CFG = {
+  L1:43.0, L2:81.0, L3:123.7, CUPD:-25.24,
+  C2_YAW:[3.0,-1.0], C2_FEM:[46.0,2.75],
+  FE_P:[3.0,1.0], FE_K:[83.0,1.0],
+  TI_K:[54.0,-7.2], TI_C:[1.3,-119.0], TI_BETA:-115.238,
+  CREASE:-100.0, SHAFTX:1.3, HCUP:19.0,
+  HORN_D:21.5, BOLT_D:14.3,
+  CX_SERVO:[-29.75,10.25,-16.15,24.35]   // coxa servo case envelope (leg coords X0,X1,Z0,Z1, schematic)
+};
+const D2R=Math.PI/180, f=(n,d=1)=>n.toFixed(d);
+
+/* ---- view coordinates: X right, Z up ⇒ svg y = −Z ---- */
+const V = (X,Z)=>[X,-Z];
+
+function pathOf(polys, tr){
+  let d='';
+  for(const poly of polys) for(const ring of poly){
+    for(let i=0;i<ring.length;i++){const q=tr(ring[i]); d+=(i?'L':'M')+q[0].toFixed(2)+' '+q[1].toFixed(2)+' ';}
+    d+='Z ';
+  }
+  return d;
+}
+const trIdent = p=>[p[0],-p[1]];
+const trCoxa  = p=>[p[0]-CFG.C2_YAW[0], -(p[1]-CFG.C2_FEM[1])];
+function trFemur(a,F){const ca=Math.cos(a),sa=Math.sin(a);
+  return p=>{const u=p[0]-CFG.FE_P[0],v=p[1]-CFG.FE_P[1];
+    return [F[0]+u*ca+v*sa, -(F[1]+u*sa-v*ca)];};}
+function trTibia(phi,K){const cf=Math.cos(phi),sf=Math.sin(phi);
+  return p=>{const u=p[0]-CFG.TI_K[0],v=p[1]-CFG.TI_K[1];
+    return [K[0]+u*cf+v*sf, -(K[1]+u*sf-v*cf)];};}
+
+function rectPath(x0,x1,y0,y1,tr){return pathOf([[[[x0,y0],[x1,y0],[x1,y1],[x0,y1]]]],tr);}
+function grid(x0,x1,z0,z1,step){
+  let s='';
+  for(let x=Math.ceil(x0/step)*step;x<=x1;x+=step)
+    s+=`<line class="gridl${x%50?'':' maj'}" x1="${x}" y1="${-z1}" x2="${x}" y2="${-z0}"/>`;
+  for(let z=Math.ceil(z0/step)*step;z<=z1;z+=step)
+    s+=`<line class="gridl${z%50?'':' maj'}" x1="${x0}" y1="${-z}" x2="${x1}" y2="${-z}"/>`;
+  return s;
+}
+
+/* =========================== main figure =========================== */
+const el=id=>document.getElementById(id);
+function pose(aDeg,tDeg){
+  const a=aDeg*D2R, at=(aDeg+tDeg-180)*D2R;
+  const F=[CFG.L1,0], K=[F[0]+CFG.L2*Math.cos(a), F[1]+CFG.L2*Math.sin(a)];
+  const C=[K[0]+CFG.L3*Math.cos(at), K[1]+CFG.L3*Math.sin(at)];
+  return {a,at,F,K,C,phi:at+CFG.TI_BETA*D2R,cup:(at/D2R+CFG.CUPD)*D2R};
+}
+function drawMain(){
+  const aDeg=+el('sA').value, tDeg=+el('sT').value;
+  const P=pose(aDeg,tDeg), {a,at,F,K,C,phi,cup}=P;
+  const show=k=>el(k).checked;
+  let s='';
+  if(show('cGrid')) s+=grid(-50,250,-155,100,10);
+  s+=`<line class="gridl maj" x1="-50" y1="0" x2="250" y2="0"/>`;
+
+  /* --- servo cases --- */
+  if(show('cServo')){
+    const [sx0,sx1,sz0,sz1]=CFG.CX_SERVO;
+    s+=`<path class="servo" d="${rectPath(sx0,sx1,sz0,sz1,(p)=>[p[0],-p[1]])}"/>`;
+    s+=`<text class="lbl-s cjk" x="${sx0+1.5}" y="${-sz1+5}">coxa servo (schematic)</text>`;
+    s+=`<path class="servo" d="${rectPath(36,56,-7.5,32.5,trCoxa)}"/>`;
+    const c=[47.7725,-14.630], u=[Math.cos(50*D2R),Math.sin(50*D2R)], w=[-u[1],u[0]];
+    const corn=[[20,10],[20,-10],[-20,-10],[-20,10]].map(([p1,p2])=>[c[0]+p1*u[0]+p2*w[0], c[1]+p1*u[1]+p2*w[1]]);
+    s+=`<path class="servo" d="${pathOf([[corn]],trTibia(phi,K))}"/>`;
+  }
+  /* --- printed parts --- */
+  if(show('cParts')){
+    s+=`<path class="part" d="${pathOf(GEOM.coxa2_xz,trCoxa)}"/>`;
+    s+=`<path class="part" d="${pathOf(GEOM.femur_xy,trFemur(a,F))}"/>`;
+    s+=`<path class="part" d="${pathOf(GEOM.tibia_xz,trTibia(phi,K))}"/>`;
+    s+=`<path class="doorp" d="${pathOf(GEOM.door_xz,trTibia(phi,K))}"/>`;
+    /* rubber suction cup (not a printed part, schematic)*/
+    const cup=[[CFG.SHAFTX-13.5,CFG.CREASE],[CFG.SHAFTX+13.5,CFG.CREASE],
+               [CFG.SHAFTX+15,CFG.CREASE-CFG.HCUP],[CFG.SHAFTX-15,CFG.CREASE-CFG.HCUP]];
+    s+=`<path class="cuprub" d="${pathOf([[cup]],trTibia(phi,K))}"/>`;
+    /* servo horns */
+    s+=`<path class="hornd" d="${rectPath(-10.75,10.75,-19.75,-16.15,p=>[p[0],-p[1]])}"/>`;
+    s+=`<circle class="hornd" cx="${F[0]}" cy="${-F[1]}" r="10.75"/>`;
+    s+=`<circle class="hornd" cx="${K[0]}" cy="${-K[1]}" r="10.75"/>`;
+  }
+  /* --- skeleton --- */
+  if(show('cSkel')){
+    s+=`<path class="skel" d="M0 0 L${F[0]} ${-F[1]} L${K[0]} ${-K[1]} L${C[0]} ${-C[1]}"/>`;
+    [[0,0,'H'],[F[0],F[1],'F'],[K[0],K[1],'K'],[C[0],C[1],'C']].forEach(([x,z])=>{
+      s+=`<circle class="jdot" cx="${x}" cy="${-z}" r="1.5"/>`;});
+    s+=`<line class="axline" x1="0" y1="-100" x2="0" y2="55"/>`;
+    const cd=[Math.cos(cup),Math.sin(cup)];
+    s+=`<line class="cupax" x1="${C[0]-58*cd[0]}" y1="${-(C[1]-58*cd[1])}" x2="${C[0]+26*cd[0]}" y2="${-(C[1]+26*cd[1])}"/>`;
+    const kd=[Math.cos(at),Math.sin(at)];
+    s+=`<line class="axline" x1="${C[0]}" y1="${-C[1]}" x2="${C[0]+26*kd[0]}" y2="${-(C[1]+26*kd[1])}"/>`;
+  }
+  /* --- photo annotation layer --- */
+  if(show('cAnn')){
+    s+=`<line class="ann-red" x1="-13" y1="16.15" x2="13" y2="16.15"/>`;
+    s+=`<circle class="ann-red-c" cx="${F[0]}" cy="${-F[1]}" r="12.5"/>`;
+    s+=`<circle class="ann-red-c" cx="${K[0]}" cy="${-K[1]}" r="13.5"/>`;
+    const g=[-17,17].map(t=>[C[0]-t*Math.sin(cup), C[1]+t*Math.cos(cup)]);
+    s+=`<line class="ann-green" x1="${g[0][0]}" y1="${-g[0][1]}" x2="${g[1][0]}" y2="${-g[1][1]}"/>`;
+  }
+  /* --- labels --- */
+  if(show('cLbl')){
+    s+=`<text class="lbl acct" x="-16" y="-4">H</text>`;
+    s+=`<text class="lbl acct" x="${F[0]-2}" y="${-F[1]-14}">F</text>`;
+    s+=`<text class="lbl acct" x="${K[0]+13}" y="${-K[1]-3}">K</text>`;
+    s+=`<text class="lbl acct" x="${C[0]+5}" y="${-C[1]+2}">C</text>`;
+    s+=`<text class="lbl-s cjk" x="-52" y="23.5">coxa horn seat Z=−16.2</text>`;
+    s+=`<text class="lbl-s cjk" x="4" y="-50">coxa yaw axis (H)</text>`;
+    s+=`<text class="warnt cjk" x="${C[0]-56*Math.cos(cup)+5}" y="${-(C[1]-56*Math.sin(cup))-2}">cup axis ${f(cup/D2R)}°</text>`;
+    s+=`<text class="warnt" x="${C[0]+13*Math.cos((cup+at)/2)+2}" y="${-(C[1]+13*Math.sin((cup+at)/2))-1}">25.2°</text>`;
+    const mid=(p,q)=>[(p[0]+q[0])/2,(p[1]+q[1])/2];
+    const m1=mid([0,0],F), m2=mid(F,K), m3=mid(K,C);
+    s+=`<text class="dimt acct" x="${m1[0]-8}" y="${-m1[1]+6}">l1=43.0</text>`;
+    s+=`<text class="dimt acct" x="${m2[0]-16}" y="${-m2[1]-4}">l2=81.0</text>`;
+    s+=`<text class="dimt acct" x="${m3[0]-32}" y="${-m3[1]}">l3=123.7</text>`;
+  }
+  /* 视框：始终包住骨架 + 零件，且保持固定长宽比，拖滑块时图不变高 */
+  const PAD=46, ASP=304/240, MINW=300;
+  let x0=Math.min(0,F[0],K[0],C[0])-PAD, x1=Math.max(0,F[0],K[0],C[0])+PAD;
+  let z0=Math.min(0,F[1],K[1],C[1])-PAD, z1=Math.max(0,F[1],K[1],C[1])+PAD;
+  x0=Math.min(x0,-54); z1=Math.max(z1,48);
+  let w=Math.max(x1-x0,MINW), h=Math.max(z1-z0,MINW/ASP);
+  if(w/h<ASP) w=h*ASP; else h=w/ASP;
+  const cx=(x0+x1)/2, cz=(z0+z1)/2;
+  el('main').setAttribute('viewBox',`${(cx-w/2).toFixed(1)} ${(-cz-h/2).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
+  el('main').innerHTML=s;
+
+  /* --- readout --- */
+  el('vA').textContent=f(aDeg)+'°'; el('vT').textContent=f(tDeg)+'°';
+  el('ro').innerHTML=
+    `<div>α <b>${f(aDeg)}°</b></div><div>θ <b>${f(tDeg)}°</b></div>`+
+    `<div>a_t <b>${f(at/D2R)}°</b></div><div>cup axis <b>${f(cup/D2R)}°</b></div>`+
+    `<div>F <b>(${f(F[0])}, ${f(F[1])})</b></div><div>K <b>(${f(K[0])}, ${f(K[1])})</b></div>`+
+    `<div>C <b>(${f(C[0])}, ${f(C[1])})</b></div><div>knee-angle margin <b>${f(176-tDeg)}°</b></div>`+
+    `<div id="mxy">cursor <b>—</b></div>`;
+}
+
+/* =========================== part-frame figures =========================== */
+function partFig(id, polys, opts){
+  let s=grid(opts.gx[0],opts.gx[1],opts.gz[0],opts.gz[1],10);
+  s+=`<line class="gridl maj" x1="${opts.gx[0]}" y1="0" x2="${opts.gx[1]}" y2="0"/>`;
+  s+=`<line class="gridl maj" x1="0" y1="${-opts.gz[1]}" x2="0" y2="${-opts.gz[0]}"/>`;
+  (opts.extra||[]).forEach(e=>{s+=e;});
+  s+=`<path class="part" d="${pathOf(polys,trIdent)}"/>`;
+  (opts.marks||[]).forEach(m=>{
+    s+=`<circle cx="${m[0]}" cy="${-m[1]}" r="${m[3]||1.3}" fill="none" stroke="var(--k)" stroke-width=".6"/>`;
+    s+=`<line x1="${m[0]-3}" y1="${-m[1]}" x2="${m[0]+3}" y2="${-m[1]}" stroke="var(--k)" stroke-width=".4"/>`;
+    s+=`<line x1="${m[0]}" y1="${-m[1]-3}" x2="${m[0]}" y2="${-m[1]+3}" stroke="var(--k)" stroke-width=".4"/>`;
+    s+=`<text class="kt" x="${m[0]+4}" y="${-m[1]-2}">${m[2]}</text>`;
+  });
+  (opts.notes||[]).forEach(n=>{s+=`<text class="lbl-s cjk" x="${n[0]}" y="${-n[1]}">${n[2]}</text>`;});
+  el(id).innerHTML=s;
+}
+
+function drawParts(){
+  partFig('fCoxa',GEOM.coxa2_xz,{gx:[-10,60],gz:[-45,25],
+    marks:[[3,0,'yaw axis x=3',1.3],[46,2.75,'F (46, 2.75)',1.3]],
+    extra:[`<line class="axline" x1="3" y1="-48" x2="3" y2="24"/>`,
+           `<path class="servo" d="${rectPath(36,56,-7.5,32.5,trIdent)}"/>`,
+           `<line class="dim" x1="3" y1="-14" x2="46" y2="-14"/>`,
+           `<line class="dim" x1="3" y1="-11" x2="3" y2="-17"/><line class="dim" x1="46" y1="-11" x2="46" y2="-17"/>`,
+           `<text class="dimt acct" x="17" y="-15.5">43.0</text>`],
+    notes:[[-14,-23,'horn counterbore Ø21.5, opens towards −z'],[26,20,'femur servo flange holes 10×48'],[-14,46,'back pivot boss Ø11.5']]});
+
+  partFig('fFemur',GEOM.femur_xy,{gx:[-10,95],gz:[-20,20],
+    marks:[[3,1,'(3, 1)',1.3],[83,1,'(83, 1)',1.3]],
+    extra:[`<line class="dim" x1="3" y1="-13" x2="83" y2="-13"/>`,
+           `<text class="dimt acct" x="38" y="-14.5">80.000</text>`,
+           `<circle cx="3" cy="-1" r="7.15" fill="none" stroke="var(--k)" stroke-width=".4" stroke-dasharray="2 1.2"/>`,
+           `<circle cx="83" cy="-1" r="7.15" fill="none" stroke="var(--k)" stroke-width=".4" stroke-dasharray="2 1.2"/>`],
+    notes:[[-9,16,'bolt circle Ø14.3 (horn screws)'],[52,16,'distal 4 holes rotated +34.9°']]});
+
+  const cupPoly=[[[CFG.SHAFTX-13.5,CFG.CREASE],[CFG.SHAFTX+13.5,CFG.CREASE],
+                 [CFG.SHAFTX+15,CFG.CREASE-CFG.HCUP],[CFG.SHAFTX-15,CFG.CREASE-CFG.HCUP]]];
+  const c=[47.7725,-14.630], u=[Math.cos(50*D2R),Math.sin(50*D2R)], w=[-u[1],u[0]];
+  const corn=[[20,10],[20,-10],[-20,-10],[-20,10]].map(([p1,p2])=>[c[0]+p1*u[0]+p2*w[0], c[1]+p1*u[1]+p2*w[1]]);
+  partFig('fTibia',GEOM.tibia_xz,{gx:[-25,80],gz:[-125,15],
+    marks:[[54.0,-7.2,'K (54.0, −7.2)',1.6],[1.3,-119,'C (1.3, −119)',1.6],[47.77,-14.63,'',1.1]],
+    extra:[`<path class="servo" d="${pathOf([[corn]],trIdent)}"/>`,
+           `<path class="doorp" d="${pathOf(GEOM.door_xz,trIdent)}"/>`,
+           `<path class="cuprub" d="${pathOf([cupPoly],trIdent)}"/>`,
+           `<line class="cupax" x1="1.3" y1="-16" x2="1.3" y2="124"/>`,
+           `<line class="skel" x1="54" y1="7.2" x2="1.3" y2="119"/>`,
+           `<line class="ann-green" x1="-13.7" y1="119" x2="16.3" y2="119"/>`],
+    notes:[[60,-34,'l3 = 123.6'],[5,-92,'square shaft / cup axis x=1.30'],[-30,-101,'crease plane z=−100'],
+           [21,-60,'angle 25.24°'],[-30,-124,'lip plane (green)'],[26,6,'hub: DS3235 case']]});
+}
+
+
+/* =========================== top view =========================== */
+const LEGS=[['L1',83.5,63.0,55],['L2',0,81.5,90],['L3',-83.5,63.0,125],
+            ['R1',83.5,-63.0,-55],['R2',0,-81.5,-90],['R3',-83.5,-63.0,-125]];
+const TV=(bx,by)=>[-by,-bx];            // body +X up the page, +Y to the left
+function drawTop(){
+  const g=+el('sG').value; el('vG').textContent=f(g,0)+'°';
+  const aDeg=+el('sA').value, tDeg=+el('sT').value, P=pose(aDeg,tDeg);
+  const rF=CFG.L1, rK=CFG.L1+CFG.L2*Math.cos(P.a),
+        rC=rK+CFG.L3*Math.cos(P.at);
+  let s='';
+  for(let x=-100;x<=200;x+=50) s+=`<line class="gridl" x1="${-x}" y1="-115" x2="${-x}" y2="205"/>`;
+  for(let y=-100;y<=200;y+=50) s+=`<line class="gridl" x1="-115" y1="${-y}" x2="205" y2="${-y}"/>`;
+  /* body outline (frame.stl envelope, approx. rectangle 198×205) */
+  s+=`<rect x="-99" y="-104.7" width="198" height="205.4" rx="16" fill="none" stroke="var(--muted)" stroke-width=".8" stroke-dasharray="6 4"/>`;
+  s+=`<text class="lbl-s cjk" x="-90" y="-90">body outline envelope 198×205 (frame.stl)</text>`;
+  s+=`<line class="axline" x1="0" y1="20" x2="0" y2="-118"/>`;
+  s+=`<text class="lbl-s cjk" x="3" y="-110">body +X (front)</text>`;
+  s+=`<line class="axline" x1="0" y1="0" x2="-118" y2="0"/>`;
+  s+=`<text class="lbl-s cjk" x="-115" y="-4">body +Y (left)</text>`;
+  for(const [nm,mx,my,ang] of LEGS){
+    const o=TV(mx,my), th=ang*Math.PI/180, d=TV(Math.cos(th),Math.sin(th));
+    s+=`<line class="gridl maj" x1="${o[0]}" y1="${o[1]}" x2="${o[0]+d[0]*46}" y2="${o[1]+d[1]*46}"/>`;
+    s+=`<circle cx="${o[0]}" cy="${o[1]}" r="2.4" fill="${nm==='R3'?'var(--accent)':'var(--muted)'}"/>`;
+    s+=`<text class="lbl-s" x="${o[0]+(mx<0?-13:5)}" y="${o[1]-5}">${nm}</text>`;
+  }
+  /* R3 */
+  const [nm,mx,my,ang]=LEGS[5], o=TV(mx,my);
+  const th=(ang+g)*Math.PI/180, dx=Math.cos(th), dy=Math.sin(th);
+  const at=[-dy,dx];                       // direction of leg +Y in the body frame
+  const pt=(r,yy=0)=>TV(mx+r*dx+yy*at[0], my+r*dy+yy*at[1]);
+  const th0=ang*Math.PI/180, ndir=[Math.cos(th0),Math.sin(th0)];
+  const n0=TV(mx+185*ndir[0], my+185*ndir[1]), n1=TV(mx+150*ndir[0], my+150*ndir[1]);
+  s+=`<line x1="${o[0]}" y1="${o[1]}" x2="${n0[0]}" y2="${n0[1]}" stroke="var(--muted)" stroke-width=".7" stroke-dasharray="5 3"/>`;
+  s+=`<text class="lbl-s cjk" x="${n1[0]+5}" y="${n1[1]+9}">neutral direction (γ=0)</text>`;
+  s+=`<path class="part" d="${pathOf(GEOM.coxa2_xy, q=>pt(q[0]-3, q[1]+1))}"/>`;
+  const A=pt(0),B=pt(rF),Cc=pt(rK),D=pt(rC);
+  s+=`<path class="skel" d="M${A[0]} ${A[1]} L${B[0]} ${B[1]} L${Cc[0]} ${Cc[1]} L${D[0]} ${D[1]}"/>`;
+  [A,B,Cc,D].forEach(q=>{s+=`<circle class="jdot" cx="${q[0]}" cy="${q[1]}" r="2"/>`;});
+  s+=`<text class="lbl acct" x="${D[0]+4}" y="${D[1]+4}">C</text>`;
+  const Y1=pt(24,0), Y2=pt(24,42);
+  s+=`<line x1="${Y1[0]}" y1="${Y1[1]}" x2="${Y2[0]}" y2="${Y2[1]}" stroke="var(--k)" stroke-width="1.1"/>`;
+  s+=`<path d="M${Y2[0]} ${Y2[1]} l${(Y2[0]-Y1[0])*0.13-(Y2[1]-Y1[1])*0.09} ${(Y2[1]-Y1[1])*0.13+(Y2[0]-Y1[0])*0.09} M${Y2[0]} ${Y2[1]} l${(Y2[0]-Y1[0])*0.13+(Y2[1]-Y1[1])*0.09} ${(Y2[1]-Y1[1])*0.13-(Y2[0]-Y1[0])*0.09}" stroke="var(--k)" stroke-width="1.1" fill="none"/>`;
+  s+=`<text class="kt cjk" x="${Y2[0]+3}" y="${Y2[1]-2}">leg +Y (opposite the side-view line of sight)</text>`;
+  const gl=pt(96,-26);
+  s+=`<text class="lbl-s cjk" x="${gl[0]-16}" y="${gl[1]}">γ = ${f(g,0)}°</text>`;
+  el('fTop').innerHTML=s;
+}
+
+/* =========================== interaction ===========================*/
+['sA','sT','cParts','cServo','cSkel','cAnn','cLbl','cGrid'].forEach(id=>
+  el(id).addEventListener('input',()=>{drawMain();drawTop();}));
+el('sG').addEventListener('input',drawTop);
+document.querySelectorAll('.btns button').forEach(b=>b.addEventListener('click',()=>{
+  const [a,t]=b.dataset.p.split(','); el('sA').value=a; el('sT').value=t; drawMain(); drawTop();}));
+el('main').addEventListener('mousemove',ev=>{
+  const svg=el('main'), r=svg.getBoundingClientRect(), vb=svg.viewBox.baseVal;
+  const X=vb.x+(ev.clientX-r.left)/r.width*vb.width, Y=vb.y+(ev.clientY-r.top)/r.height*vb.height;
+  const m=el('mxy'); if(m) m.innerHTML=`cursor <b>(${f(X)}, ${f(-Y)})</b>`;
+});
+drawMain(); drawParts(); drawTop();
+</script>

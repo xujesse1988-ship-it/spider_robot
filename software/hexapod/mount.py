@@ -462,6 +462,60 @@ class MountEngine:
                                      self.wall, self.pose) is None]
         return (min(ok), max(ok)) if ok else None
 
+    def wall_perp_height(self, name, y_w=None, step=1.0):
+        """带内"吸盘轴⊥墙"的落点高度（离地 mm），无带返回 None。
+
+        **抬头余量几乎全压在这一个数上**（09-12 LAB E5 实测+复算）：落点每高 1mm
+        约多 0.45° 四接触抬头上限，接管量每 1mm 抵消同样多——两者花的是吸盘倾角
+        那**同一笔** 15° 预算（接管沿墙竖直挪指令点，等价于落点低同样多）。
+        脚本缺省取落足带**中点**，那是照顾落点密封的选法，比 ⊥ 点低不了几毫米，
+        但比它**低**就是净亏；要抬头就往带上沿放（代价=落点倾角变大，密封余量变小）。
+        """
+        band = self.wall_band(name, y_w)
+        if band is None:
+            return None
+        depth = self.cfg.leg(name).press_delta_mm + self._trim(name, self.wall)
+        pd = w2b_dir(_scale(self.wall.n, -1.0), self.pose)
+        best, best_t = None, None
+        for z in _frange(band[0], band[1], step):
+            q = _add(self.wall_target(name, z, y_w), self.wall.n, -depth)
+            try:
+                sol = self.geom[name].solve(w2b(q, self.pose), pd)
+            except Infeasible:
+                continue
+            if best_t is None or sol["tilt"] < best_t:
+                best, best_t = z, sol["tilt"]
+        return best
+
+    def wall_pitch_room(self, name, height, y_w=None, takeover_mm=None,
+                        step=1.0, pitch_max_deg=45.0):
+        """把 name 落到墙上 height、落地接管 takeover_mm 之后，**这条腿的吸盘倾角**
+        还允许把身体抬到多少度（绝对俯仰°，只算这一条腿；其余腿各有各的界，
+        真正的上限取最小）。落点当场就超容差返回 None。
+
+        算法就是拿 HOLD_TILT_DEG 那条判据逐度试：墙面腿的接管是**世界竖直**的
+        指令偏移（沿墙下滑），所以它和落点高度是同一个自由度——接管 1mm 等于
+        落点低 1mm。
+        """
+        depth = self.cfg.leg(name).press_delta_mm + self._trim(name, self.wall)
+        q = _add(self.wall_target(name, height, y_w), self.wall.n, -depth)
+        off = -(self.takeover[name] if takeover_mm is None else float(takeover_mm))
+        xb, zb, _ = self.pose
+        tol = self._tilt_lim(name)
+        last = None
+        for p in _frange(0.0, pitch_max_deg, step):
+            pose = (xb, zb, d2r(p))
+            try:
+                sol = self.geom[name].solve(
+                    w2b((q[0], q[1], q[2] + off), pose),
+                    w2b_dir(_scale(self.wall.n, -1.0), pose))
+            except Infeasible:
+                return last
+            if sol["tilt"] > tol:
+                return last
+            last = p
+        return last
+
     def floor_home(self, name):
         """该腿爬墙站位在当前位姿下投影到地面的点。"""
         return FLOOR.project(b2w(self.default_feet[name], self.pose))

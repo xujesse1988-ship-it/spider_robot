@@ -21,6 +21,11 @@
        15mm 悬停（落点高 --wall-height，缺省取当前位姿可落足带中点；带由
        引擎按倾角≤12°+IK 余量+压深实算并打印）。悬停时先目视吸盘对不对正、
        离墙多远，再按 i 沿墙法向（+x）压入 press_delta 抽气确认
+       ⚠ **前足这个落点高度就是后面的抬头预算**：落点每高 1mm 约多 0.45° 抬头，
+       落地接管每 1mm 抵掉同样多（两者花的是吸盘倾角那同一笔 15°）。缺省的带
+       中点是照顾落点密封的选法，比"轴⊥墙"的高度还低几毫米——09-12 实机就是
+       这样把抬头从 14° 丢到 6°（docs/WALL-MOUNT-LAB.md §3）。按 w 时屏幕会把
+       ⊥ 点、此落点/带上沿各能抬到几度一起打出来，要抬头就显式给 --wall-height
   g    选中腿→地面回位（该腿爬墙站位在当前位姿下投影到地面的点）
   b    选中腿→地面正后方 --rear-dist（后腿 coxa 后摆指正后，β=180°）
   t    选中腿绕髋**摆**到地面站位前方 --fwd-dist（默认 85），髋足距离不变、吸盘
@@ -219,7 +224,9 @@ def main():
                          "默认 %(default)g，范围 100~220）。前腿可落足带随它变，"
                          "引擎按实际几何算")
     ap.add_argument("--wall-height", type=float, default=None,
-                    help="前足上墙落点离地高度 mm（默认取当前位姿可落足带中点；"
+                    help="前足上墙落点离地高度 mm（⚠ 这个数就是后面的抬头预算："
+                         "每高 1mm 约多 0.45° 抬头，见文件头 w 键；"
+                         "默认取当前位姿可落足带中点；"
                          "范围 100~500，出带引擎拒绝并打印带）")
     ap.add_argument("--rear-dist", type=float, default=None,
                     help="b 键：后足落到髋正后方多远的地面 mm（默认=该腿爬墙站位"
@@ -667,8 +674,21 @@ def main():
                 else:
                     h = args.wall_height if args.wall_height is not None \
                         else (band[0] + band[1]) / 2.0
+                    zp = eng.wall_perp_height(sel)
                     print(f"\n{sel} 可落足带 离地 {band[0]:.0f}~{band[1]:.0f}mm，"
-                          f"取 {h:.0f}")
+                          f"取 {h:.0f}"
+                          + ("" if args.wall_height is not None else "（带中点）"))
+                    room = eng.wall_pitch_room(sel, h)
+                    top = eng.wall_pitch_room(sel, band[1])
+                    if zp is not None and room is not None:
+                        print(f"  吸盘轴⊥墙在 {zp:.0f}mm。抬头余量几乎全押在落点高度："
+                              f"落点每高 1mm 约多 0.45° 抬头，接管每 1mm 抵掉同样多"
+                              f"（同一笔 15° 倾角预算）\n"
+                              f"  此落点 + 接管 {eng.takeover.get(sel, 0.0):g}mm ⇒ "
+                              f"{sel} 倾角允许抬到 {room:.0f}°"
+                              + (f"；放到带上沿 {band[1]:.0f} 能到 {top:.0f}°"
+                                 f"（代价：落点倾角变大、密封余量变小）"
+                                 if top is not None and top > room else ""))
                     do_move(sel, eng.wall, eng.wall_target(sel, h), "上墙")
             elif k == "g":
                 do_move(sel, FLOOR, eng.floor_home(sel), "地面回位")

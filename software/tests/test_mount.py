@@ -840,3 +840,36 @@ def test_support_only_legs_use_a_looser_tilt_bound_than_sealing_legs():
     # 吸附腿不受影响：落点带仍按 12° 密封口径
     assert eng2._tilt_lim("L1", band=True) == TILT_BAND_DEG
     assert eng2.frozen is None and eng.frozen is None
+
+
+def test_wall_landing_height_is_the_pitch_budget():
+    """落点高度 = 抬头余量（09-12 LAB E5 实机复算）：⊥ 点、带上沿、接管量三者
+    花的是吸盘倾角这同一笔 15° 预算；接管 1mm 等价于落点低 1mm。"""
+    io, ctl, eng, bot = make(support_only=("L2", "R2"),
+                             takeover_mm={"L1": 10.0, "R1": 10.0})
+    start(eng, bot)
+    band = eng.wall_band("L1")
+    zp = eng.wall_perp_height("L1")
+    assert band[0] < zp < band[1]                       # ⊥ 点落在带内
+    mid, top = (band[0] + band[1]) / 2.0, band[1]
+    r_mid, r_top = eng.wall_pitch_room("L1", mid), eng.wall_pitch_room("L1", top)
+    assert r_top > r_mid + 5.0                          # 带上沿比带中点多一大截抬头
+    # 接管吃掉的量 = 同样毫米数的落点高度（09-12：0.45°/mm 量级）
+    r_mid_t0 = eng.wall_pitch_room("L1", mid, takeover_mm=0.0)
+    r_low = eng.wall_pitch_room("L1", mid - 10.0, takeover_mm=0.0)
+    assert r_mid_t0 > r_mid
+    assert abs(r_low - r_mid) <= 1.0
+    # 这条腿给出的上限与整套位姿预检一致（E5 实机：卡的一直是 L1 倾角）
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", mid)) is None
+    assert run(eng, bot, 15.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE
+               and ctl.is_attached(idx("L1")))
+    assert run(eng, bot, 10.0, lambda: eng.ho_leg is None)
+    assert math.isclose(eng.ho_off["L1"], -10.0, abs_tol=0.2)   # 接管挂在墙面腿上
+    ok = None
+    for p in range(0, 40):
+        if eng._check_pose((eng.pose[0], eng.pose[1], math.radians(p))) is not None:
+            break
+        ok = p
+    assert abs(ok - r_mid) <= 1.0

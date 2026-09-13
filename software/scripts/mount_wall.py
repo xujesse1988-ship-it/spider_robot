@@ -128,9 +128,9 @@ from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import parse_leg_order, parse_handover, PRESS_DEPTH_MAX
 from hexapod.mount import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
-                           LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, SWING_PHASES,
+                           LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, VALVE_OPEN_PHASES,
                            FLOOR_CLEAR_MM, TAKEOVER_STEP_MM, TAKEOVER_MAX_MM,
-                           SUPPORT_TILT_DEG)
+                           SUPPORT_TILT_DEG, SLIDE_UNLOAD_MM)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
 from hexapod.kinematics import WorkspaceError
 from hexapod.runlog import RunLog, ClimbWatch
@@ -253,11 +253,20 @@ def main():
                          "前期（docs/WALL-MOUNT-FRICTION.md），要配 --dry：实机模式下"
                          "只承重腿的阀一直通电排气，六路长通发热。⚠ 这些腿只能承压不能"
                          "承拉，身体俯仰后扛不住剥离力矩，别把它们算成安全余量")
+    ap.add_argument("--slide-legs", default=None,
+                    help="随动腿（只承重的地面腿，如 L2,R2）：抬头/升降/平移机身时贴地跟着滑，保持"
+                         "相对机身的姿势——coxa 角不变，髋足距离取吸盘在腿平面内最正的值（机身升高时"
+                         "自己往里收）。每段先开阀放气、少压 --slide-unload 再滑，铺完压回（09-13 用户："
+                         "中腿同步微调，滑前先通电磁阀）。必须也写在 --support-legs 里")
+    ap.add_argument("--slide-unload", type=float, default=SLIDE_UNLOAD_MM,
+                    help="随动腿滑之前少压的量 mm（默认 %(default)g，范围 0~10）")
     ap.add_argument("--floor-clear", type=float, default=FLOOR_CLEAR_MM,
-                    help="地面移动的抬离高度 mm（默认 %(default)g，范围 20~80）：墙面用"
+                    help="地面移动的抬离高度 mm（默认 %(default)g，范围 20~120）：墙面用"
                          f"的 {DEFAULT_CONFIG.lift_clearance:g} 是按吸盘回弹定的，地面上"
                          "腿一抬还会因自重下垂十几到二十几毫米，抬少了盘在摆动全程蹭"
-                         "地板（09-09 实机 L2/R2 摆动碰玻璃）。墙面抬离量不受影响")
+                         "地板（09-09 实机 L2/R2 摆动碰玻璃）。墙面抬离量不受影响。"
+                         "抬头后机身比模型低得更多（09-13 摩擦上墙实机：指令 16° 时约低 40mm），"
+                         "45 在指令 24° 挪中腿时蹭地，摩擦上墙前期用 100")
     ap.add_argument("--fwd-dist", type=float, default=85.0,
                     help="t 键：该腿绕髋摆到地面站位前方多远 mm（默认 %(default)g，"
                          "范围 0~160）。中腿 85 = 摆到前髋正下方（coxa 偏 29°，"
@@ -342,8 +351,17 @@ def main():
         bad = [n for n in support_only if n not in LEG_NAMES]
         if bad:
             ap.error(f"--support-legs 未知腿名 {bad}（可选 {'/'.join(LEG_NAMES)}）")
-    if not 20.0 <= args.floor_clear <= 80.0:
-        ap.error(f"--floor-clear {args.floor_clear:g} 非法：范围 20~80mm")
+    slide_legs = ()
+    if args.slide_legs:
+        slide_legs = tuple(t.strip().upper()
+                           for t in args.slide_legs.replace("_", ",").split(",") if t.strip())
+        extra = [n for n in slide_legs if n not in support_only]
+        if extra:
+            ap.error(f"--slide-legs {extra} 不在 --support-legs 里：吸住的脚滑不了")
+    if not 0.0 <= args.slide_unload <= 10.0:
+        ap.error(f"--slide-unload {args.slide_unload:g} 非法：范围 0~10mm")
+    if not 20.0 <= args.floor_clear <= 120.0:
+        ap.error(f"--floor-clear {args.floor_clear:g} 非法：范围 20~120mm")
     if not 0.0 <= args.fwd_dist <= 160.0:
         ap.error(f"--fwd-dist {args.fwd_dist:g} 非法：范围 0~160mm")
     if args.fwd_reach is not None and not 100.0 <= args.fwd_reach <= 200.0:
@@ -448,7 +466,8 @@ def main():
     eng = MountEngine(cfg, ctl, front_hip_to_wall=args.wall_dist,
                       pitch_max_deg=args.pitch_max, attach_order=attach_order,
                       floor_clear_mm=args.floor_clear, support_only=support_only,
-                      takeover_mm=takeover, support_tilt_deg=args.support_tilt)
+                      takeover_mm=takeover, support_tilt_deg=args.support_tilt,
+                      slide_legs=slide_legs, slide_unload_mm=args.slide_unload)
     ho_txt = " ".join(f"{l.name}{l.handover_mm:g}" for l in cfg.legs
                       if l.handover_mm) or "关"
     tk_txt = " ".join(f"{n}{v:g}" for n, v in takeover.items() if v) or "只还欠账"
@@ -456,6 +475,8 @@ def main():
              f"takeover={tk_txt} step={args.takeover_step:g}")
     if support_only:
         log.note("support_only=" + ",".join(support_only))
+    if slide_legs:
+        log.note(f"slide_legs={','.join(slide_legs)} unload={args.slide_unload:g}")
     log.note("启动吸附序=" + "_".join(eng.attach_order))
     for n, v in wall_trim.items():
         deny = eng.set_wall_trim(v, [n])
@@ -495,13 +516,13 @@ def main():
         log.event(ev or msg)
 
     def dry_valve_tick():
-        """干跑真阀按腿相位排气：摆动中（VENT→…→WAIT）线圈通电=排气，回 STANCE
-        或收在空中（AIR，吸盘悬空攒不出真空）断电。set_valve(False)=排气位=通电。"""
+        """干跑真阀按腿相位排气：摆动中（VENT→…→WAIT）与贴地滑动（SLIDE）线圈通电=排气，
+        回 STANCE 或收在空中（AIR，吸盘悬空攒不出真空）断电。set_valve(False)=排气位=通电。"""
         vio = vent.io
         if vio is None:
             return
         for i, n in enumerate(LEG_NAMES):
-            want_open = eng.phase_of[n] in SWING_PHASES
+            want_open = eng.phase_of[n] in VALVE_OPEN_PHASES
             if (not vio.valve[i]) != want_open:
                 vio.set_valve(i, not want_open)
                 log.event(f"干跑阀 {n} {'通电排气' if want_open else '断电'}"
@@ -544,6 +565,12 @@ def main():
                 f"{eng._pose_T:.1f}s 铺完（空格停在半途）",
                 f"位姿受理（{what}）：目标 俯仰{eng.pitch_deg + dp:+.1f}° 高{zb:.0f}"
                 f" 前髋距墙{eng.front_hip_to_wall(eng._pose_to):.0f}")
+            if eng._slide is not None:
+                print(f"  随动 {'/'.join(sorted(eng._slide['legs']))}：开阀 {cfg.lift_vent_s:g}s → "
+                      f"少压 {args.slide_unload:g}mm → 跟着机身滑 → 压回（铺完才算位姿铺完）")
+            if eng.slide_note:
+                print(f"  ⚠ {eng.slide_note}")
+                log.event(f"⚠ 随动留痕：{eng.slide_note}")
 
     try:
         bot.move_feet(bot.crouch_feet(feet=eng.default_feet))
@@ -580,6 +607,10 @@ def main():
                 print("⚠ 六条腿都只承重：没有互锁，引擎也不算会不会翻——抬哪条腿全靠人看"
                       + ("" if args.dry or args.mock else
                          "；不是 --dry，六路阀会一直通电排气，线圈发热"))
+        if slide_legs:
+            print("随动腿：" + "/".join(slide_legs)
+                  + f"——抬头/升降/平移机身时贴地跟着滑、保持相对机身的姿势；每段先开阀 "
+                    f"{cfg.lift_vent_s:g}s、少压 {args.slide_unload:g}mm 再滑，铺完压回")
         if handover or takeover:
             dmax = max((l.handover_mm for l in cfg.legs), default=0.0)
             print(f"零力交接：δ={ho_txt}（{cfg.handover_rate_mms:g}mm/s，最长一段约 "

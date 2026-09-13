@@ -92,6 +92,8 @@ PATH_SAMPLES = 12          # 摆动路径预检采样点数
 HO_SAMPLE_MM = 2.0         # 交接/接管铺设的预检采样粒度 mm（逐点过 IK/倾角/膝）
 TAKEOVER_STEP_MM = 3.0     # 手动接管（脚本 z 键）每按一次转移的量 mm
 TAKEOVER_MAX_MM = 40.0     # 单次接管请求上限 mm（预检另有压深/包络/面上三重硬界）
+SLIDE_UNLOAD_MM = 5.0      # 随动腿滑之前少压的量 mm（09-13 用户选：压着 18mm 在玻璃上滑，摩擦太大、
+                           # 会磨吸盘也会把机身顶歪；少压 5mm 还贴着地）
 
 d2r, r2d = math.radians, math.degrees
 
@@ -243,6 +245,7 @@ class MountPhase(Enum):
     PRESS = "press"
     RETRY_LIFT = "retry"
     WAIT = "wait"
+    SLIDE = "slide"       # 随动：只承重地面腿跟着机身位姿贴地滑（开阀→少压→滑→压回，09-13）
 
 
 SWING_PHASES = (MountPhase.VENT, MountPhase.LIFT, MountPhase.TRANSFER,
@@ -253,6 +256,9 @@ SWING_PHASES = (MountPhase.VENT, MountPhase.LIFT, MountPhase.TRANSFER,
 HO_PHASES = (MountPhase.HANDOVER, MountPhase.TAKEOVER)
 # "这条腿正忙"：互锁与位姿铺设看这个，比 SWING_PHASES 多两段交接
 BUSY_PHASES = SWING_PHASES + HO_PHASES
+# 真阀要通电排气的相位（--dry 的 dry_valve_tick 用）：摆动全程 + 贴地滑动。09-13 用户："贴地
+# 滑动微调也需要先通电磁阀"——阀断电时盘经单向阀被挤出被动真空，锁着滑不动
+VALVE_OPEN_PHASES = SWING_PHASES + (MountPhase.SLIDE,)
 
 
 class MountEngine:
@@ -263,7 +269,8 @@ class MountEngine:
     def __init__(self, cfg: RobotConfig, ctl, wall_x=0.0, front_hip_to_wall=140.0,
                  pitch_max_deg=90.0, ignore_tank_fault=False, attach_order=None,
                  floor_clear_mm=FLOOR_CLEAR_MM, support_only=(), takeover_mm=None,
-                 support_tilt_deg=SUPPORT_TILT_DEG):
+                 support_tilt_deg=SUPPORT_TILT_DEG, slide_legs=(),
+                 slide_unload_mm=SLIDE_UNLOAD_MM):
         self.cfg, self.ctl = cfg, ctl
         self.ignore_tank_fault = ignore_tank_fault
         self.wall = wall_at(wall_x)
@@ -282,6 +289,19 @@ class MountEngine:
         if not (0.0 < float(support_tilt_deg) <= 60.0):
             raise ValueError(f"support_tilt_deg {support_tilt_deg!r} 非法：0~60°")
         self.support_tilt = float(support_tilt_deg)
+        # 随动腿（09-13 用户："中腿能不能在机身上升的时候同步微调"）：位姿铺设时这些地面
+        # 只承重腿不钉死，贴地跟着滑，保持相对机身的姿势——coxa 角不变，髋足距离取吸盘在
+        # 腿平面内最正的值（机身升高时自己往里收）。每段先开阀放气 lift_vent_s、少压
+        # slide_unload 再滑，铺完压回。必须是只承重腿：吸住的脚滑不了
+        self.slide_legs = set(slide_legs)
+        if self.slide_legs - self.support_only:
+            raise ValueError("slide_legs 必须是只承重腿，多了 "
+                             f"{sorted(self.slide_legs - self.support_only)}")
+        if not (0.0 <= float(slide_unload_mm) <= 10.0):
+            raise ValueError(f"slide_unload_mm {slide_unload_mm!r} 非法：0~10mm")
+        self.slide_unload = float(slide_unload_mm)
+        self._slide = None        # 随动在途：dict(stage=vent|unload|glide|press, t, legs={腿: 起终点/深度})
+        self.slide_note = None    # 最近一次位姿请求里随动跳过/退化的留痕（脚本打印+落黑匣子）
         self.geom = {leg.name: LegGeom(cfg, leg) for leg in cfg.legs}
         self.slot_order = tuple(sorted(
             LEG_NAMES, key=lambda n: (CLIMB.duty - CLIMB.offsets[n]) % 1.0))
@@ -417,12 +437,12 @@ class MountEngine:
 
     @property
     def pose_pending(self):
-        return self._pose_to is not None
+        return self._pose_to is not None or self._slide is not None
 
     def contact_legs(self):
-        """踩在面上承载的腿（交接/接管中的腿仍然踩着，算在内）。"""
+        """踩在面上承载的腿（交接/接管中、贴地滑动中的腿仍然踩着，算在内）。"""
         return tuple(n for n in LEG_NAMES if self.surf[n] is not None
-                     and self.phase_of[n] in (MountPhase.STANCE,) + HO_PHASES)
+                     and self.phase_of[n] in (MountPhase.STANCE, MountPhase.SLIDE) + HO_PHASES)
 
     def _bearing(self, name):
         """吸附口径的承载腿：在面上、STANCE/交接中、且不是只承重腿（那些没真空，
@@ -699,22 +719,31 @@ class MountEngine:
         n = max(abs(dpitch_deg) / POSE_SAMPLE_DEG, abs(dx) / POSE_SAMPLE_MM,
                 abs(dz) / POSE_SAMPLE_MM)
         n = max(1, int(math.ceil(n)))
-        for k in range(1, n + 1):
-            s = k / n
-            pose = tuple(a + (b - a) * s for a, b in zip(self.pose, to))
-            why = self._check_pose(pose)
-            if why:
-                return (f"位姿不可行（俯仰 {r2d(pose[2]):.1f}° 高 {pose[1]:.0f} "
-                        f"前髋距墙 {self.front_hip_to_wall(pose):.0f}）：{why}")
+        slide, note = self._plan_slide(to)
+        why = self._check_glide(to, slide, n)
+        if why and slide and self._check_glide(to, {}, n) is None:
+            # 随动反而走不通、钉在原地走得通：这一段不滑。随动只许比钉死更好，不许更差
+            note = (note + "；" if note else "") + f"这段随动不可行（{why}），中腿钉在原地"
+            slide, why = {}, None
+        if why:
+            return why
+        self.slide_note = note
         self._pose_from, self._pose_to = self.pose, to
         self._pose_s = 0.0
         self._pose_T = max(abs(dpitch_deg) / PITCH_RATE_DPS,
                            abs(dx) / LIN_RATE_MMS, abs(dz) / LIN_RATE_MMS, 0.05)
+        if slide:
+            self._slide = dict(stage="vent", t=0.0, legs=slide)
+            for m in slide:
+                self.phase_of[m] = MountPhase.SLIDE
         return None
 
     def cancel_pose(self):
-        """停在当前位姿（每个中间位姿都预检过，停哪里都安全）。"""
+        """停在当前位姿（每个中间位姿都预检过，停哪里都安全）。随动腿停在当时的点就地压回，
+        压回之前 pose_pending 仍为真。"""
         self._pose_from = self._pose_to = None
+        if self._slide is not None:
+            self._slide["stage"] = "press"
 
     def clear_freeze(self):
         """人工处理后解冻：挂 FAULT 的腿自动重新压附（加深从上次深度续）。
@@ -724,6 +753,8 @@ class MountEngine:
         self.frozen = None
         self._precharge_t = 0.0
         self._pose_from = self._pose_to = None
+        if self._slide is not None:
+            self._slide["stage"] = "press"          # 位姿取消了，随动腿就地压回
         for n in LEG_NAMES:
             i = LEG_NAMES.index(n)
             if self.phase_of[n] == MountPhase.WAIT \
@@ -731,6 +762,127 @@ class MountEngine:
                 self.retries[n] = 0
                 self.ctl.clear_fault(i)
                 self.phase_of[n] = MountPhase.RETRY_LIFT
+
+    # ---------- 随动（贴地滑动）----------
+    def _plan_slide(self, to):
+        """这次位姿铺设里要随动的腿与各自终点。找不到随动落点的腿这一段不滑（钉在原地），
+        原因写进留痕。返回 ({腿: 起终点/深度}, 留痕或 None)。"""
+        legs, skipped = {}, []
+        for n in sorted(self.slide_legs):
+            if self.surf[n] is not FLOOR or self.phase_of[n] != MountPhase.STANCE:
+                continue
+            p1, why = self._slide_target(n, to)
+            if why:
+                skipped.append(f"{n} {why}")
+                continue
+            d0 = self.depth[n]
+            legs[n] = dict(pw0=self.pw[n], pw1=p1, d0=d0, du=d0 - self.slide_unload)
+        note = ("随动跳过：" + "；".join(skipped) + "，这段钉在原地") if skipped else None
+        return legs, note
+
+    def _check_glide(self, to, slide, n):
+        """位姿铺设整段预检：随动腿按少压起点、与机身同进度插值、压回终点代入。None=可行。"""
+        du = {m: v["du"] for m, v in slide.items()}
+        if slide:                       # 少压之后、还没开始滑
+            why = self._check_pose(self.pose, {m: v["pw0"] for m, v in slide.items()}, du)
+            if why:
+                return f"随动少压后不可行：{why}"
+        for k in range(1, n + 1):
+            s = k / n
+            pose = tuple(a + (b - a) * s for a, b in zip(self.pose, to))
+            # 随动腿的接触点与机身按同一进度插值（运行时也用同一个 s）
+            pw_over = {m: tuple(a + (b - a) * s for a, b in zip(v["pw0"], v["pw1"]))
+                       for m, v in slide.items()}
+            why = self._check_pose(pose, pw_over, du)
+            if why:
+                return (f"位姿不可行（俯仰 {r2d(pose[2]):.1f}° 高 {pose[1]:.0f} "
+                        f"前髋距墙 {self.front_hip_to_wall(pose):.0f}）：{why}")
+        if slide:                       # 滑到位、压回原深度
+            why = self._check_pose(to, {m: v["pw1"] for m, v in slide.items()},
+                                   {m: v["d0"] for m, v in slide.items()})
+            if why:
+                return f"随动压回后不可行：{why}"
+        return None
+
+    def _slide_target(self, name, pose):
+        """随动腿在 pose 下的地面落点。先保持现在的 coxa 角（腿平面相对机身不动），沿腿平面找吸盘
+        最正的髋足距离（机身升高时这个距离自己往里收）；这个方向上压不住（够不着地、倾角超、膝或
+        femur 离地不够）就**转 coxa**：每 5° 往两边试，用转得最少、压得住的方向——09-13 用户：
+        "中腿是支撑作用，够不着地必须转 coxa，那就转 coxa"。coxa 只在 ±55°（实机确认过的范围）里找；
+        都不行才返回原因（调用方让这条腿这一段钉在原地）。返回 (世界系地面点, None) 或 (None, 原因)。"""
+        try:
+            gamma0 = self.geom[name].solve(tuple(self.foot[name]))["gamma"]
+        except Infeasible as e:
+            return None, f"当前姿态解不出 coxa 角（{e}）"
+        p = self._slide_on_plane(name, pose, gamma0, 1.0)
+        if p is not None:
+            return p, None
+        lim = min(COXA_MAX_DEG, 55.0)
+        k = 1
+        while True:
+            tried = False
+            for d in (5.0 * k, -5.0 * k):
+                if abs(gamma0 + d) > lim + _EPS:
+                    continue
+                tried = True
+                p = self._slide_on_plane(name, pose, gamma0 + d, 2.0)
+                if p is not None:
+                    return p, None
+            if not tried:
+                return None, "转 coxa（±55° 内）也找不到压得住的位置（够不着地/倾角/膝或 femur 离地）"
+            k += 1
+
+    def _slide_on_plane(self, name, pose, gamma_deg, step):
+        """coxa 角固定为 gamma_deg 的腿平面上，吸盘最正、压得住的地面点；没有返回 None。
+        面外倾角由俯仰和 coxa 角决定、沿腿平面不变，所以沿平面找的是腿平面内对正。"""
+        leg, g = self.cfg.leg(name), self.geom[name]
+        beta = g.psi + d2r(gamma_deg)
+        cb, sb = math.cos(beta), math.sin(beta)
+        c, s = math.cos(pose[2]), math.sin(pose[2])
+        depth, off = self.depth[name], self.ho_off[name]
+        pd = w2b_dir((0.0, 0.0, -1.0), pose)
+        best = None
+        rho = 60.0
+        while rho <= 215.0 + _EPS:
+            xb_ = leg.mount_x + rho * cb
+            zb_ = (-depth + off - pose[1] - s * xb_) / c     # 指令点落在地面下 depth 处
+            q_w = b2w((xb_, leg.mount_y + rho * sb, zb_), pose)
+            p_w = (q_w[0], q_w[1], 0.0)
+            if self._check_contact(name, p_w, FLOOR, pose, depth, self._tilt_lim(name),
+                                   off) is None:
+                tilt = g.solve(w2b((p_w[0], p_w[1], -depth + off), pose), pd)["tilt"]
+                if best is None or tilt < best[0]:
+                    best = (tilt, p_w)
+            rho += step
+        return None if best is None else best[1]
+
+    def _slide_prep(self, dt):
+        st = self._slide
+        st["t"] += dt
+        if st["stage"] == "vent":
+            if st["t"] >= self.cfg.lift_vent_s:     # 与抬腿同一个放气时长
+                st["stage"] = "unload"
+            return
+        done = True
+        for n, L in st["legs"].items():
+            self.depth[n] = max(L["du"], self.depth[n] - self.cfg.press_speed * dt)
+            done = done and self.depth[n] <= L["du"] + _EPS
+        if done:
+            st["stage"] = "glide"
+
+    def _slide_press(self, dt):
+        """压回原深度，完成后回 STANCE（阀随之断电）。中途取消时就地压回——那个中间点只按
+        少压深度预检过，差 slide_unload 毫米。"""
+        st = self._slide
+        done = True
+        for n, L in st["legs"].items():
+            self.depth[n] = min(L["d0"], self.depth[n] + self.cfg.press_speed * dt)
+            done = done and self.depth[n] >= L["d0"] - _EPS
+        if done:
+            for n in st["legs"]:
+                self.phase_of[n] = MountPhase.STANCE
+                self.landing[n] = w2b(self.pw[n], self.pose)[:2]
+            self._slide = None
 
     # ---------- 主循环 ----------
     def update(self, dt):
@@ -747,15 +899,24 @@ class MountEngine:
         if not self.started:
             self._startup(dt)
             return self.targets()
-        if self._pose_to is not None:
+        if self._slide is not None and self._slide["stage"] in ("vent", "unload"):
+            self._slide_prep(dt)                    # 开阀计时 / 少压：这期间机身不动
+        elif self._pose_to is not None:
             self._pose_s = min(1.0, self._pose_s + dt / self._pose_T)
             s = self._pose_s
             s = s * s * (3.0 - 2.0 * s)
             self.pose = tuple(a + (b - a) * s
                               for a, b in zip(self._pose_from, self._pose_to))
+            if self._slide is not None:
+                for n, L in self._slide["legs"].items():
+                    self.pw[n] = tuple(a + (b - a) * s for a, b in zip(L["pw0"], L["pw1"]))
             if self._pose_s >= 1.0:
                 self.pose = self._pose_to
                 self._pose_from = self._pose_to = None
+                if self._slide is not None:
+                    self._slide["stage"] = "press"
+        if self._slide is not None and self._slide["stage"] == "press":
+            self._slide_press(dt)
         self._run_handover(dt)
         self._run_machines(dt)
         self._run_nudges(dt)
@@ -956,14 +1117,17 @@ class MountEngine:
                         return f"机身/腹面撞{_cn(hit)}"
         return None
 
-    def _check_pose(self, pose):
+    def _check_pose(self, pose, pw_over=None, depth_over=None):
+        """pw_over / depth_over：{腿: 值}，预检随动腿时代入它在这个位姿下的接触点与深度。"""
         why = self._check_body(pose)
         if why:
             return why
+        pw_over, depth_over = pw_over or {}, depth_over or {}
         for n in LEG_NAMES:
             if self.surf[n] is not None:
-                why = self._check_contact(n, self.pw[n], self.surf[n], pose,
-                                          self.depth[n] + self._trim(n, self.surf[n]),
+                why = self._check_contact(n, pw_over.get(n, self.pw[n]), self.surf[n], pose,
+                                          depth_over.get(n, self.depth[n])
+                                          + self._trim(n, self.surf[n]),
                                           self._tilt_lim(n), self.ho_off[n])
             else:
                 why = self._check_air(n, self.air_pb[n], pose)

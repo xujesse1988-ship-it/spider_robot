@@ -37,7 +37,8 @@ PHASE_CH = {"stance": "·", "vent": "V", "lift": "L", "transfer": "T",
             "wait": "W", "handover": "Z",   # Z=零力交接（vent 前卸载）
             "takeover": "z",                # z=接管（落地吸住后把载荷接过来，
                                             #   mount.MountEngine 的反向交接）
-            "air": "^"}                     # ^=收在空中（mount.MountEngine）
+            "air": "^",                     # ^=收在空中（mount.MountEngine）
+            "slide": "S"}                   # S=随动贴地滑（mount.MountEngine，开阀→少压→滑→压回）
 ADH_CH = {"released": "r", "pressing": "p", "sucking": "s",
           "attached": "A", "venting": "v", "fault": "F"}
 

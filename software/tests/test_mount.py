@@ -927,3 +927,92 @@ def test_floor_forward_reach_pulls_the_foot_in_toward_the_body():
     assert eng.land() is None
     assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE)
     assert eng.frozen is None
+
+
+# ---------------------------------------------------------------- 随动：贴地滑动微调（09-13）
+def test_slide_legs_keep_posture_relative_to_body_during_pitch():
+    """09-13 用户：中腿在机身抬头/升高时同步贴地微调，滑前先通电磁阀。随动腿先进 SLIDE（干跑
+    真阀按它通电排气）停 lift_vent_s、少压 slide_unload，机身这期间不动；然后跟着机身滑，
+    铺完压回：coxa 角相对机身不变，世界系接触点沿地面挪动。"""
+    from hexapod.mount import SLIDE_UNLOAD_MM, VALVE_OPEN_PHASES
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES), slide_legs=("L2", "R2"))
+    start(eng, bot)
+    g0 = eng.geom["L2"].solve(tuple(eng.foot["L2"]))["gamma"]
+    pw0, pose0, d0 = eng.pw["L2"], eng.pose, eng.depth["L2"]
+    assert eng.request_pose(dpitch_deg=6.0) is None
+    assert eng.phase_of["L2"] == MountPhase.SLIDE and eng.phase_of["R2"] == MountPhase.SLIDE
+    assert MountPhase.SLIDE in VALVE_OPEN_PHASES
+    run(eng, bot, CFG.lift_vent_s - 0.1)
+    assert eng.pose == pose0 and eng.depth["L2"] == d0          # 开阀期间不动
+    assert run(eng, bot, 2.0, lambda: eng.depth["L2"] <= d0 - SLIDE_UNLOAD_MM + 1e-6)
+    assert eng.pose == pose0                                     # 少压完才开始铺
+    assert run(eng, bot, 30.0, lambda: not eng.pose_pending)
+    assert eng.phase_of["L2"] == MountPhase.STANCE
+    assert math.isclose(eng.depth["L2"], d0, abs_tol=1e-6)
+    assert math.isclose(eng.pitch_deg, 6.0, abs_tol=1e-6)
+    g1 = eng.geom["L2"].solve(tuple(eng.foot["L2"]))["gamma"]
+    assert abs(g1 - g0) < 0.5                                    # 腿平面相对机身没转
+    assert math.dist(eng.pw["L2"], pw0) > 5.0                    # 脚沿地面挪了
+    assert abs(eng.pw["L2"][2]) < 1e-9 and eng.frozen is None
+
+
+def test_slide_legs_must_be_support_only():
+    """吸住的脚滑不了：随动腿不在只承重腿里就拒绝构造。"""
+    try:
+        MountEngine(CFG, AdhesionController(MockVacuumIO(6)), slide_legs=("L2",))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("slide_legs 不是只承重腿时应当拒绝")
+
+
+def test_body_rise_pulls_slide_leg_in_and_cancel_presses_back():
+    """机身升高时随动腿自动往里收（吸盘轴⊥地面的半径随髋高变小）；铺到一半按空格取消时
+    随动腿停在当时的点、压回原深度，压回之前仍算位姿铺设未完成。"""
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES), slide_legs=("L2", "R2"))
+    start(eng, bot)
+    hip = eng.hip_world("L2")
+    r_before = math.hypot(eng.pw["L2"][0] - hip[0], eng.pw["L2"][1] - hip[1])
+    assert eng.request_pose(dz=40.0) is None
+    assert run(eng, bot, 30.0, lambda: not eng.pose_pending)
+    hip = eng.hip_world("L2")
+    r_after = math.hypot(eng.pw["L2"][0] - hip[0], eng.pw["L2"][1] - hip[1])
+    assert r_after < r_before - 3.0
+    d0 = eng.depth["L2"]
+    assert eng.request_pose(dz=-20.0) is None
+    assert run(eng, bot, 5.0, lambda: eng._slide is not None
+               and eng._slide["stage"] == "glide" and eng._pose_s > 0.3)
+    eng.cancel_pose()
+    assert eng.pose_pending                                      # 还在压回
+    assert run(eng, bot, 5.0, lambda: not eng.pose_pending)
+    assert eng.phase_of["L2"] == MountPhase.STANCE
+    assert math.isclose(eng.depth["L2"], d0, abs_tol=1e-6) and eng.frozen is None
+
+
+def test_slide_leg_that_cannot_follow_stays_pinned_instead_of_refusing():
+    """随动只许比钉死更好：找不到随动落点的腿这一段钉在原地（留痕），位姿请求照常受理。"""
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES), slide_legs=("L2", "R2"))
+    start(eng, bot)
+    eng._slide_target = lambda name, pose: (None, "测试：够不着")
+    pw0 = eng.pw["L2"]
+    assert eng.request_pose(dpitch_deg=4.0) is None
+    assert eng._slide is None and "钉在原地" in (eng.slide_note or "")
+    assert eng.phase_of["L2"] == MountPhase.STANCE
+    assert run(eng, bot, 30.0, lambda: not eng.pose_pending)
+    assert eng.pw["L2"] == pw0 and eng.frozen is None
+
+
+def test_slide_leg_turns_coxa_when_it_cannot_keep_posture():
+    """09-13 用户："中腿是支撑作用，够不着地必须转 coxa，那就转 coxa"。原 coxa 角方向压不住时，
+    随动腿每 5° 往两边试，用转得最少、压得住的方向，而不是钉在原地。"""
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES), slide_legs=("L2", "R2"))
+    start(eng, bot)
+    g0 = eng.geom["L2"].solve(tuple(eng.foot["L2"]))["gamma"]
+    real = eng._slide_on_plane
+    eng._slide_on_plane = lambda name, pose, gamma, step: (
+        None if name == "L2" and abs(gamma - g0) < 1.0 else real(name, pose, gamma, step))
+    assert eng.request_pose(dpitch_deg=4.0) is None
+    assert eng._slide is not None and "L2" in eng._slide["legs"] and eng.slide_note is None
+    assert run(eng, bot, 30.0, lambda: not eng.pose_pending)
+    g1 = eng.geom["L2"].solve(tuple(eng.foot["L2"]))["gamma"]
+    assert 4.0 <= abs(g1 - g0) <= 6.0 and eng.frozen is None

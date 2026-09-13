@@ -190,7 +190,7 @@ class LegGeom:
         k0 = leg.tibia.attach_deg
         self.theta_lim = (max(0.0, 180.0 - k0 - m), min(180.0, 180.0 - k0 + m))
         self.coxa_max = coxa_max_deg
-        self.delta = d2r(cfg.cup_delta_deg + cfg.cup_tilt_trim_deg)
+        self.delta = d2r(cfg.cup_delta_deg + cfg.cup_tilt_trim_deg + leg.tilt_trim_deg)
         self.d_safe = cfg.femur_len + cfg.tibia_len - D_SAFE_MARGIN
 
     def to_leg(self, p_body):
@@ -323,7 +323,7 @@ class MountEngine:
         self.default_feet = {}
         self.r0 = {}
         for leg in cfg.legs:
-            r0 = _solve_reach(cfg, self.z0 - leg.press_delta_mm)
+            r0 = _solve_reach(cfg, self.z0 - leg.press_delta_mm, extra_deg=leg.tilt_trim_deg)
             a = d2r(leg.mount_angle_deg)
             self.r0[leg.name] = r0
             self.default_feet[leg.name] = (leg.mount_x + r0 * math.cos(a),

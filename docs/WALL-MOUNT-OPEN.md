@@ -617,6 +617,7 @@ LAB §6.3 已把换脚拆成 8a / 8b 两步。
 | `slide_legs` + `slide_unload` | 缺省无；摩擦上墙前期 L2,R2 + 5 mm（`--slide-legs`、`--slide-unload`） | 随动：位姿铺设时这些只承重地面腿不钉死，先开阀 0.3 s、少压 5 mm，再贴地跟着机身滑，铺完压回；状态行相位字符 `S`。滑到哪：先保持 coxa 角相对机身不变、髋足距离取吸盘在腿平面内最正的值；这个方向压不住就每 5° 往两边转 coxa，用 ±55° 内转得最少、压得住的方向；都不行（或随动让整段预检不过而钉死能过）才钉在原地，`slide_note` 留痕（09-13 用户："中腿同步微调""滑前先通电磁阀""够不着地必须转 coxa，那就转 coxa"）。干跑：v2.3 序列中腿贴地滑到 34° 才收（另一条到 42°），省掉中腿抬起挪位那一步（要 μ 0.50）；现行 `--auto-adjust` 序列 32° 收，都到指令 58°（§4.7） |
 | `ASSIST_MAX_DZ_MM` + `ASSIST_MAX_DX_MM` | 30 mm + ±15 mm，5 mm 一档（`--auto-adjust`） | 抬头辅助 `request_pitch_assist`：纯俯仰被几何原因拒（`位姿不可行…`、`随动…`）时，按"前后挪的量 + 升高量"从小到大试，一样大先试只升高，第一个预检通过的和这一档俯仰合成一段铺设；在途、冻结、出范围这类拒绝原样返回（09-13 用户："只做成一个 ↑ 按键就可以"） |
 | `UPRIGHT_TILT_DEG` / `UPRIGHT_TUCK_DEG` / `UPRIGHT_LOOKAHEAD_DEG`+`UPRIGHT_MARGIN_MM` | 10° / 25° / 10°+10 mm（`--tilt-warn`、`--tuck-tilt`） | 09-13 用户原则"地面脚吸盘轴尽量垂直、需要转 coxa 就转、小步多迈"：`cup_tilt` 状态行打各脚离面法线角，超 tilt_warn 打 `!`；`floor_upright` 当前位姿下吸盘最正的地面落点（coxa ±55°×髋足 60~215 全搜，四档排：够正且 femur 再抬 lookahead° 还够→够正→余量够→最正，同样正中腿偏前、其余 coxa 转得少）；中腿最正也超 tuck_tilt ⇒ 提示收起；`wall_perp` 带内最正高度与角度 |
+| `tilt_trim_deg`（逐腿）+ `cup_tilt_trim_deg`（全局） | 0；`--tilt-trim L2:6,R2:6`（逐腿 ±15）或 `--tilt-trim 6`（六腿 ±8） | 吸盘轴垂直度实测修正：正值 = 站着时该腿吸盘轴向外斜这么多度。并入 LegGeom.delta 和站位半径求解（`_solve_reach` 的 extra_deg），站位、`v` 最正点、落点带随之内收，每 1° 约 2 mm（09-13 用户：站立时主要中腿吸盘就不垂直、要往身体收；各腿带载让位不同，一个全局数兜不住） |
 | `support_only` | L2/R2；摩擦上墙前期六条全设 | 只承重不吸附，不参与互锁与漏气监护；抬腿前照样开阀放气 `lift_vent_s`、不看盘压（09-13：气路接着会被单向阀憋出被动真空） |
 | `attach_order` | 默认窗序 | 可把可疑腿排最后当反力座诊断 |
 | `COXA_MAX_DEG` | 60 | 实机确认 ±55° 可行 |
@@ -656,7 +657,7 @@ LAB §6.3 已把换脚拆成 8a / 8b 两步。
 参数：`--wall-dist`、`--wall-trim L1:16,R1:0`、`--wall-height`、`--rear-dist`、
 `--fwd-dist`、`--fwd-reach`、`--floor-clear`、`--support-legs L2,R2`、`--slide-legs`、`--slide-unload`、`--attach-order`、
 `--handover L1:10,…`、`--takeover L1:10,…`、`--handover-rate`、`--takeover-step`、
-`--auto-adjust`、`--tilt-warn`、`--tuck-tilt`、`--pitch-step`、`--pitch-max`、`--press-delta`、`--stand-height`、`--tilt-trim`、
+`--auto-adjust`、`--tilt-warn`、`--tuck-tilt`、`--tilt-trim`（逐腿）、`--pitch-step`、`--pitch-max`、`--press-delta`、`--stand-height`、`--tilt-trim`、
 `--mock` / `--dry` / `--no-tank`、`--startup-gap`、`--relay-first`。
 
 `--dry` 的真阀按需排气：站起时六阀通电排气、站定全断、哪条腿要动就只给那一路通电、

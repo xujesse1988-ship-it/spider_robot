@@ -182,7 +182,7 @@ def max_straight_step(cfg, gait=CLIMB):
             for sgn in (1.0, -1.0):
                 lx = x0 + sgn * half - leg.mount_x
                 ly = y0 - leg.mount_y
-                if abs(_press_tilt(cfg, math.hypot(lx, ly), z_press)) \
+                if abs(_press_tilt(cfg, math.hypot(lx, ly), z_press, leg.tilt_trim_deg)) \
                         > band + 1e-9:
                     return False
                 for z, c in ((z_press, 5.0 * comp), (z_deep, 0.0)):
@@ -293,7 +293,7 @@ def gait_with_slot_order(order, gait=CLIMB):
                    offsets={n: vals[k] for k, n in enumerate(order)})
 
 
-def _press_tilt(cfg, r, z_press):
+def _press_tilt(cfg, r, z_press, extra_deg=0.0):
     """(径向 r, 压入深度 z) 姿态下，物理吸盘轴偏离面法线的带符号角（rad）。
     吸盘轴 = a_t + cup_delta（勿拿 a_t 当吸盘轴，LEG-GEOMETRY §2.13 教训）；
     倾角只依赖 (r, z)——coxa 偏摆整体旋转腿平面，不改轴线离垂直的角度。
@@ -301,20 +301,20 @@ def _press_tilt(cfg, r, z_press):
     "轴向角"变大，垂直解/落点带/步幅上限全部自动整体内收。"""
     _, a, th = leg_ik(cfg, r, 0.0, z_press)
     a_t = a + th - math.pi
-    return a_t + math.radians(cfg.cup_delta_deg + cfg.cup_tilt_trim_deg) \
+    return a_t + math.radians(cfg.cup_delta_deg + cfg.cup_tilt_trim_deg + extra_deg) \
         + math.pi / 2
 
 
-def _solve_reach(cfg, z_press, tilt_rad=0.0):
-    """解站位半径：压入位吸盘轴偏法线 = tilt_rad（0 = 严格垂直）。"""
+def _solve_reach(cfg, z_press, tilt_rad=0.0, extra_deg=0.0):
+    """解站位半径：压入位吸盘轴偏法线 = tilt_rad（0 = 严格垂直）。extra_deg = 该腿的逐腿修正。"""
     lo, hi = _R_BRACKET
-    if _press_tilt(cfg, lo, z_press) >= tilt_rad:
+    if _press_tilt(cfg, lo, z_press, extra_deg) >= tilt_rad:
         return lo
-    if _press_tilt(cfg, hi, z_press) <= tilt_rad:
+    if _press_tilt(cfg, hi, z_press, extra_deg) <= tilt_rad:
         return hi
     for _ in range(48):
         mid = (lo + hi) / 2.0
-        if _press_tilt(cfg, mid, z_press) < tilt_rad:
+        if _press_tilt(cfg, mid, z_press, extra_deg) < tilt_rad:
             lo = mid
         else:
             hi = mid
@@ -387,9 +387,9 @@ class ClimbEngine:
         for leg in cfg.legs:
             z_press = self.z0 - leg.press_delta_mm
             band = math.radians(TILT_BAND_DEG)
-            r0 = _solve_reach(cfg, z_press)
-            self._r_band[leg.name] = (_solve_reach(cfg, z_press, -band),
-                                      _solve_reach(cfg, z_press, band))
+            r0 = _solve_reach(cfg, z_press, extra_deg=leg.tilt_trim_deg)
+            self._r_band[leg.name] = (_solve_reach(cfg, z_press, -band, leg.tilt_trim_deg),
+                                      _solve_reach(cfg, z_press, band, leg.tilt_trim_deg))
             a = math.radians(leg.mount_angle_deg)
             self.default_feet[leg.name] = (leg.mount_x + r0 * math.cos(a),
                                            leg.mount_y + r0 * math.sin(a),

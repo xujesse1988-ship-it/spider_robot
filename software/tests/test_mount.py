@@ -1113,3 +1113,19 @@ def test_floor_upright_from_air_and_wall_perp_reports_tilt():
     h, tw = eng.wall_perp("L1")
     assert h is not None and tw is not None and tw < 15.0
     assert eng.wall_perp_height("L1") == h
+
+
+def test_per_leg_tilt_trim_retracts_only_that_leg_and_keeps_its_cup_vertical():
+    """09-13 用户：站立时主要中腿吸盘不垂直、要往身体收。逐腿修正 6° ⇒ 那条腿站位半径内收约 12 mm，
+    模型口径下它的吸盘轴仍算垂直（实机上就是收进来后才垂直）；别的腿不动。"""
+    from dataclasses import replace
+    cfg = replace(CFG, legs=tuple(replace(l, tilt_trim_deg=6.0 if l.name in ("L2", "R2") else 0.0)
+                                 for l in CFG.legs))
+    io = MockVacuumIO(6); ctl = AdhesionController(io)
+    eng = MountEngine(cfg, ctl, support_only=tuple(LEG_NAMES))
+    bot = Hexapod(MockDriver(), cfg)
+    assert 10.0 <= eng.r0["L3"] - eng.r0["L2"] <= 14.0 and eng.r0["L2"] == eng.r0["R2"]
+    start(eng, bot)
+    assert all(abs(eng.cup_tilt(n)) < 0.5 for n in LEG_NAMES)
+    p, t, best = eng.floor_upright("L2")
+    assert p is None or t >= -0.5      # 已经是最正

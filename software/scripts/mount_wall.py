@@ -325,9 +325,10 @@ def main():
     ap.add_argument("--stand-height", type=float,
                     default=DEFAULT_CONFIG.stand_height,
                     help="站高 mm（默认 %(default)g，范围 55~95）")
-    ap.add_argument("--tilt-trim", type=float,
-                    default=DEFAULT_CONFIG.cup_tilt_trim_deg,
-                    help="吸盘轴垂直度实测修正角°（默认 %(default)g，±8）")
+    ap.add_argument("--tilt-trim", type=str, default=None,
+                    help="吸盘轴垂直度实测修正角°：'6' 六腿统一（±8），或逐腿 'L2:6,R2:6'（±15，没给的腿 0）。"
+                         "正值 = 站着时那条腿的吸盘轴向外斜这么多度；站位半径、v 键最正点、落点带随之往身体收，"
+                         "每 1° 约 2 mm。09-13 用户：站立时中腿吸盘就不垂直、要往身体收")
     ap.add_argument("--startup-gap", type=float, default=0.0,
                     help="六阀线圈通电完毕到舵机继电器合闸之间静置秒数（默认 0）")
     ap.add_argument("--relay-first", action="store_true",
@@ -403,13 +404,25 @@ def main():
         ap.error(f"--pitch-max {args.pitch_max:g} 非法：范围 0~90°")
     if not 55.0 <= args.stand_height <= 95.0:
         ap.error(f"--stand-height {args.stand_height} 非法：范围 55~95mm")
-    if not -8.0 <= args.tilt_trim <= 8.0:
-        ap.error(f"--tilt-trim {args.tilt_trim} 非法：范围 -8~8°")
+    tilt_trim_all, tilt_trim_leg = DEFAULT_CONFIG.cup_tilt_trim_deg, {}
+    if args.tilt_trim is not None:
+        try:
+            if ":" in args.tilt_trim:
+                tilt_trim_leg = parse_per_leg(args.tilt_trim, "--tilt-trim", -15.0, 15.0, "修正角", "L2:6,R2:6")
+            else:
+                tilt_trim_all = float(args.tilt_trim)
+                if not -8.0 <= tilt_trim_all <= 8.0:
+                    ap.error(f"--tilt-trim {tilt_trim_all:g} 非法：六腿统一范围 -8~8°（逐腿写 L2:6,R2:6 可到 ±15）")
+        except ValueError as e:
+            ap.error(str(e))
     if not sys.stdin.isatty():
         sys.exit("需要交互终端（ssh 加 -t；勿用 nohup/管道跑本脚本）")
 
     cfg = replace(DEFAULT_CONFIG, stand_height=args.stand_height,
-                  cup_tilt_trim_deg=args.tilt_trim)
+                  cup_tilt_trim_deg=tilt_trim_all)
+    if tilt_trim_leg:
+        cfg = replace(cfg, legs=tuple(
+            replace(l, tilt_trim_deg=tilt_trim_leg.get(l.name, 0.0)) for l in cfg.legs))
     if handover:
         cfg = replace(cfg, legs=tuple(
             replace(l, handover_mm=handover.get(l.name, 0.0)) for l in cfg.legs))
@@ -435,7 +448,9 @@ def main():
              f" pitch_step={args.pitch_step:g}"
              f" pitch_max={args.pitch_max:g} press_delta="
              f"{cfg.legs[0].press_delta_mm:g} stand={cfg.stand_height:g}"
-             f" tilt_trim={cfg.cup_tilt_trim_deg:g} coxa_max={COXA_MAX_DEG:g}"
+             f" tilt_trim={cfg.cup_tilt_trim_deg:g}"
+             + ("".join(f",{l.name}:{l.tilt_trim_deg:g}" for l in cfg.legs if l.tilt_trim_deg)
+                or "") + f" coxa_max={COXA_MAX_DEG:g}"
              f" belly={BELLY_MM:g} relay_first={int(args.relay_first)}")
     pwr = PowerWatch(log).start()
     if pwr.uv_ever_at_start:

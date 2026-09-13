@@ -538,7 +538,7 @@ def test_handover_unloads_lifted_leg_and_others_take_the_share():
 
 
 def test_handover_share_is_press_on_floor_and_shear_on_wall():
-    """竖直口径的分面后果（WALL-MOUNT-OPEN §7 原写的"沿法向"对墙面足是错的）：
+    """竖直口径的分面后果（WALL-MOUNT-HISTORY §7、原 OPEN 写的"沿法向"对墙面足是错的）：
     地面足的竖直=法向，接载=多压 δ/n；墙面足的竖直=切向，接载=沿墙下滑、
     压深一毫米不变——往墙里压根本接不了体重。"""
     io, ctl, eng, bot = make_ho()

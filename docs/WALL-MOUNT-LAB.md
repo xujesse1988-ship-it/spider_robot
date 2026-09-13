@@ -3,6 +3,9 @@
 > 这份文档只管**做什么、怎么做、量到了什么**。设计、几何推导、原因分析在
 > [`WALL-MOUNT-OPEN.md`](WALL-MOUNT-OPEN.md)（那份是这条线的真源），这里只留结论指针。
 > 分支 `wall-mount-transition`，未合并 main。每次实验**跑之前先 `git pull`**。
+>
+> **09-13 另开一条路线：前期泵不开、靠摩擦抬到 60~70°（脚被动吸住无妨）**，步骤单独写在
+> [`WALL-MOUNT-FRICTION.md`](WALL-MOUNT-FRICTION.md)（本台账里的 E 系列都是吸附路线）。
 
 ---
 

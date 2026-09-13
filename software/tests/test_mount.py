@@ -436,7 +436,8 @@ def test_floor_moves_lift_higher_than_wall_moves():
 
 def test_support_only_legs_bear_load_without_attaching():
     """09-09 实机：上墙过程中中腿吸盘吸不住地面，但压着能靠摩擦当支撑。这些腿要
-    压到位即回支撑、不抽气、不进放气段，且不参与互锁——否则互锁会拒绝一切动作。"""
+    压到位即回支撑、不抽气，且不参与互锁——否则互锁会拒绝一切动作。抬它们之前
+    照样开阀放气（09-13），但不向状态机要放气、不看盘压。"""
     io = MockVacuumIO(6)
     io.sealed[LEG_NAMES.index("L2")] = False          # 中腿吸不住（真机情形）
     io.sealed[LEG_NAMES.index("R2")] = False
@@ -457,9 +458,16 @@ def test_support_only_legs_bear_load_without_attaching():
     assert eng.land() is None
     assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE
                and ctl.is_attached(idx("L1")))
-    # 只承重腿自己被挪走时不进放气段（没真空可放）
+    # 只承重腿自己被挪走时：不向状态机要放气（它没吸附），但照样先在 VENT 停
+    # lift_vent_s 开阀——气路接着时它会被单向阀憋出被动真空（09-13）。不看盘压：
+    # 状态机从没采过它的足压，照盘压门槛等就会冻结
     assert eng.request_move("L2", FLOOR, eng.floor_forward("L2", 60.0)) is None
-    assert eng.phase_of["L2"] == MountPhase.LIFT
+    assert eng.phase_of["L2"] == MountPhase.VENT
+    assert ctl.last_kpa[idx("L2")] is None
+    run(eng, bot, CFG.lift_vent_s - 0.1)
+    assert eng.phase_of["L2"] == MountPhase.VENT
+    assert run(eng, bot, 0.2, lambda: eng.phase_of["L2"] == MountPhase.LIFT)
+    assert not ctl.is_attached(idx("L2")) and eng.frozen is None
     assert run(eng, bot, 25.0, lambda: eng.phase_of["L2"] == MountPhase.HOVER)
     assert eng.land() is None
     assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE)
@@ -697,9 +705,10 @@ def test_handover_rechecks_lift_gate_before_venting():
     assert math.isclose(eng.ho_off["L1"], HO_DELTA, abs_tol=1e-9)
 
 
-def test_support_only_leg_hands_over_then_lifts_without_vent():
-    """只承重腿（中腿靠摩擦支撑）也承载，抬它之前一样要交接——但它没真空可放，
-    铺完直接进 LIFT；它也照样接别人的份额（多压一点=多一点正压力）。"""
+def test_support_only_leg_hands_over_then_vents_by_time_and_lifts():
+    """只承重腿（中腿靠摩擦支撑）也承载，抬它之前一样要交接；铺完照样先开阀放气
+    lift_vent_s（气路接着时会被单向阀憋出被动真空，09-13）再抬，但不看盘压——状态机
+    不采它的足压。它也照样接别人的份额（多压一点=多一点正压力）。"""
     io = MockVacuumIO(6)
     for n in ("L2", "R2"):
         io.sealed[idx(n)] = False
@@ -712,7 +721,8 @@ def test_support_only_leg_hands_over_then_lifts_without_vent():
     assert eng.request_move("L2", FLOOR, eng.floor_forward("L2", 60.0)) is None
     assert eng.phase_of["L2"] == MountPhase.HANDOVER
     assert run(eng, bot, 10.0, lambda: eng.phase_of["L2"] != MountPhase.HANDOVER)
-    assert eng.phase_of["L2"] == MountPhase.LIFT           # 没真空可放，不进 VENT
+    assert eng.phase_of["L2"] == MountPhase.VENT           # 铺完先开阀放气，不直接抬
+    assert run(eng, bot, CFG.lift_vent_s + 0.1, lambda: eng.phase_of["L2"] == MountPhase.LIFT)
     assert math.isclose(eng.ho_off["L2"], HO_DELTA, abs_tol=1e-9)
     assert math.isclose(eng._pen("R2"), pen0 + HO_DELTA / 5.0, abs_tol=1e-9)
     assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.HOVER)

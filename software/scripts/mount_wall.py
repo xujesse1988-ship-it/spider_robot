@@ -243,11 +243,14 @@ def main():
                          "15mm 的量。只作用于墙面目标，且叠进压入深度——给大了=命令腿"
                          "往刚性玻璃里硬压，宁可给小的")
     ap.add_argument("--support-legs", default=None,
-                    help="只承重不吸附的腿，如 L2,R2：压到位即回支撑、不抽气、不进"
-                         "放气段，也不参与互锁与漏气监护。用于 09-09 实机情形——上墙"
+                    help="只承重不吸附的腿，如 L2,R2：压到位即回支撑、不抽气，也不参与"
+                         "互锁与漏气监护；抬腿前照样开阀放气 lift_vent_s 再抬（气路接着"
+                         "会被单向阀憋出被动真空，09-13）。用于 09-09 实机情形——上墙"
                          "过程中中腿吸盘吸不住地面，但压着能靠摩擦当支撑；不设的话"
-                         "互锁会因'L2 未吸附'拒绝一切动作。⚠ 这些腿只能承压不能承拉，"
-                         "身体俯仰后扛不住剥离力矩，别把它们算成安全余量")
+                         "互锁会因'L2 未吸附'拒绝一切动作。六条全写 = 泵不开的摩擦上墙"
+                         "前期（docs/WALL-MOUNT-FRICTION.md），要配 --dry：实机模式下"
+                         "只承重腿的阀一直通电排气，六路长通发热。⚠ 这些腿只能承压不能"
+                         "承拉，身体俯仰后扛不住剥离力矩，别把它们算成安全余量")
     ap.add_argument("--floor-clear", type=float, default=FLOOR_CLEAR_MM,
                     help="地面移动的抬离高度 mm（默认 %(default)g，范围 20~80）：墙面用"
                          f"的 {DEFAULT_CONFIG.lift_clearance:g} 是按吸盘回弹定的，地面上"
@@ -559,9 +562,14 @@ def main():
               + ("（默认窗序）" if attach_order is None else "（--attach-order）"))
         if support_only:
             print("只承重不吸附：" + "/".join(support_only)
-                  + f"——压到位即回支撑，不抽气、不算进互锁；倾角容差按 "
+                  + f"——压到位即回支撑，不抽气、不算进互锁；抬腿前照样开阀放气 "
+                    f"{cfg.lift_vent_s:g}s；倾角容差按 "
                     f"{args.support_tilt:g}°（只压不吸，不受吸盘密封的 15° 限制）。"
                     "⚠ 只能承压不能承拉，俯仰后别指望它们扛剥离力矩")
+            if set(support_only) == set(LEG_NAMES):
+                print("⚠ 六条腿都只承重：没有互锁，引擎也不算会不会翻——抬哪条腿全靠人看"
+                      + ("" if args.dry or args.mock else
+                         "；不是 --dry，六路阀会一直通电排气，线圈发热"))
         if handover or takeover:
             dmax = max((l.handover_mm for l in cfg.legs), default=0.0)
             print(f"零力交接：δ={ho_txt}（{cfg.handover_rate_mms:g}mm/s，最长一段约 "

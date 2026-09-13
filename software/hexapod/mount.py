@@ -264,8 +264,9 @@ class MountEngine:
         self.pitch_max = d2r(pitch_max_deg)
         self.floor_clear = float(floor_clear_mm)
         # 只承重不吸附的腿（09-09 实机：上墙过程中中腿吸盘吸不住地面，但压着能靠
-        # 摩擦当支撑）。这些腿：压到位即回支撑不抽气、不进 VENT（无真空可放）、
-        # 不参与互锁与漏气监护。⚠ 只能承压不能承拉——身体俯仰后它们扛不住剥离
+        # 摩擦当支撑；09-13 起摩擦上墙前期六条全设）。这些腿：压到位即回支撑不抽气、
+        # 不参与互锁与漏气监护；抬腿前照样进 VENT 开阀放气（气路接着会被动吸住，
+        # 见 _release_and_lift）。⚠ 只能承压不能承拉——身体俯仰后它们扛不住剥离
         # 力矩，靠它们的支撑随俯仰增大而失效
         self.support_only = set(support_only)
         bad = self.support_only - set(LEG_NAMES)
@@ -1123,12 +1124,17 @@ class MountEngine:
         self._release_and_lift(cur)
 
     def _release_and_lift(self, name):
-        """交接完成（或没开交接）后的放气抬离：只承重腿没真空可放，直接抬。"""
-        if name in self.support_only:
-            self.phase_of[name] = MountPhase.LIFT
-        else:
+        """交接完成（或没开交接）后的放气抬离，先进 VENT。
+
+        只承重腿也要先放气（09-13 用户："抬起腿时要打开电磁阀"）：状态机没抽过它，
+        但气路接着、阀断电（通罐位）时，脚一受压空气就经单向阀挤进歧管回不来，盘里
+        成被动真空（P4-GUIDE：−40~−60kPa≈30~40N，超 femur 足端拉力），不开阀就抬 =
+        先粘住再弹开。它不向状态机要放气（RELEASED 态 request_release 本就无效），
+        阀按相位开：--dry 的 dry_valve_tick 进 VENT 即通电；实机模式下状态机从没把
+        它关到通罐位，本来就开着。"""
+        if name not in self.support_only:
             self.ctl.request_release(LEG_NAMES.index(name))
-            self.phase_of[name] = MountPhase.VENT
+        self.phase_of[name] = MountPhase.VENT
 
     def _settle(self, name):
         """落地吸住（或只承重腿压到位）后的收口：先把载荷接到这条新腿身上
@@ -1344,7 +1350,10 @@ class MountEngine:
         if ph == MountPhase.VENT:
             if self._seg_t[name] >= cfg.lift_vent_s:
                 k = self.ctl.last_kpa[i]
-                if k is not None and k >= cfg.lift_release_kpa:
+                if name in self.support_only:
+                    # 只承重腿按计时放行：状态机不采 RELEASED 足的压力，没有读数可看
+                    self.phase_of[name] = MountPhase.LIFT
+                elif k is not None and k >= cfg.lift_release_kpa:
                     self.phase_of[name] = MountPhase.LIFT
                 elif self._seg_t[name] > cfg.lift_vent_s + VENT_STALL_S:
                     ks = "无读数" if k is None else f"{k:.0f}kPa"

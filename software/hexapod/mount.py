@@ -92,6 +92,8 @@ PATH_SAMPLES = 12          # 摆动路径预检采样点数
 HO_SAMPLE_MM = 2.0         # 交接/接管铺设的预检采样粒度 mm（逐点过 IK/倾角/膝）
 TAKEOVER_STEP_MM = 3.0     # 手动接管（脚本 z 键）每按一次转移的量 mm
 TAKEOVER_MAX_MM = 40.0     # 单次接管请求上限 mm（预检另有压深/包络/面上三重硬界）
+ASSIST_MAX_DZ_MM = 30.0    # 抬头辅助：被拒时自动补机身高度的上限 mm（5mm 一档）
+ASSIST_MAX_DX_MM = 15.0    # 抬头辅助：自动补前后位置的上限 ±mm（5mm 一档）
 SLIDE_UNLOAD_MM = 5.0      # 随动腿滑之前少压的量 mm（09-13 用户选：压着 18mm 在玻璃上滑，摩擦太大、
                            # 会磨吸盘也会把机身顶歪；少压 5mm 还贴着地）
 
@@ -738,6 +740,26 @@ class MountEngine:
                 self.phase_of[m] = MountPhase.SLIDE
         return None
 
+    def request_pitch_assist(self, dpitch_deg, max_dz=ASSIST_MAX_DZ_MM, max_dx=ASSIST_MAX_DX_MM):
+        """抬头辅助（09-13 用户："按了 ↑ 被拒需要按 ]，程序就可以控制……← → 也顺便做了"）。
+        先试纯俯仰；被几何原因拒（femur 离地、机身撞地、倾角、够不着……）就在"机身升 0~max_dz、
+        前后挪 ±max_dx"（5mm 一档）里找改动最小的组合，和俯仰合成一段铺设（总改动小的先试，
+        一样大时先试只改高度）。冻结、在途、出范围这类拒绝不补。
+        返回 (None, (dx, dz)) 表示受理；(原因, None) 表示补不了，原因是纯俯仰那次的原话。"""
+        why = self.request_pose(dpitch_deg=dpitch_deg)
+        if why is None:
+            return None, (0.0, 0.0)
+        if not (why.startswith("位姿不可行") or why.startswith("随动")):
+            return why, None
+        cands = [(dx, dz) for dz in _frange(0.0, max_dz, 5.0)
+                 for dx in _frange(-max_dx, max_dx, 5.0)
+                 if abs(dx) > _EPS or dz > _EPS]
+        cands.sort(key=lambda c: (abs(c[0]) + c[1], abs(c[0])))
+        for dx, dz in cands:
+            if self.request_pose(dpitch_deg=dpitch_deg, dx=dx, dz=dz) is None:
+                return None, (dx, dz)
+        return why, None
+
     def cancel_pose(self):
         """停在当前位姿（每个中间位姿都预检过，停哪里都安全）。随动腿停在当时的点就地压回，
         压回之前 pose_pending 仍为真。"""
@@ -825,7 +847,7 @@ class MountEngine:
                 if abs(gamma0 + d) > lim + _EPS:
                     continue
                 tried = True
-                p = self._slide_on_plane(name, pose, gamma0 + d, 2.0)
+                p = self._slide_on_plane(name, pose, gamma0 + d, 4.0)
                 if p is not None:
                     return p, None
             if not tried:

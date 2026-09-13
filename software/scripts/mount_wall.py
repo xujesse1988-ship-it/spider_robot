@@ -305,6 +305,9 @@ def main():
                          "斜到的角度，所以默认值等于'倾角这条永远不卡中腿'")
     ap.add_argument("--takeover-step", type=float, default=TAKEOVER_STEP_MM,
                     help="z 键每按一次手动接管的量 mm（默认 %(default)g，范围 1~10）")
+    ap.add_argument("--auto-adjust", action="store_true",
+                    help="↑ 被拒时自动补机身高度和前后位置（升 0~30mm、前后 ±15mm，5mm 一档，取改动最小"
+                         "的组合，和抬头合成一段铺设）；补不了才打拒绝原话。09-13 用户：按 ↑ 被拒不用再手按 ] ← →")
     ap.add_argument("--pitch-step", type=float, default=5.0,
                     help="每按一次 ↑/↓ 的俯仰量°（默认 %(default)g，范围 1~10）")
     ap.add_argument("--pitch-max", type=float, default=30.0,
@@ -554,23 +557,36 @@ def main():
             f"{pose_txt()}")
         _ = pb
 
-    def do_pose(dp=0.0, dx=0.0, dz=0.0, what=""):
-        deny = eng.request_pose(dp, dx, dz)
-        if deny:
-            say(f"位姿拒绝（{what}）：{deny}", f"位姿拒绝（{what}）：{deny}")
+    def do_pose(dp=0.0, dx=0.0, dz=0.0, what="", assist=False):
+        if assist:
+            deny, adj = eng.request_pitch_assist(dp)
         else:
-            xb, zb, ph = eng._pose_to
-            say(f"位姿 {what} 受理：→ 俯仰 {eng.pitch_deg + dp:+.1f}° 高 {zb:.0f} "
-                f"前髋距墙 {eng.front_hip_to_wall(eng._pose_to):.0f}，约 "
-                f"{eng._pose_T:.1f}s 铺完（空格停在半途）",
-                f"位姿受理（{what}）：目标 俯仰{eng.pitch_deg + dp:+.1f}° 高{zb:.0f}"
-                f" 前髋距墙{eng.front_hip_to_wall(eng._pose_to):.0f}")
-            if eng._slide is not None:
-                print(f"  随动 {'/'.join(sorted(eng._slide['legs']))}：开阀 {cfg.lift_vent_s:g}s → "
-                      f"少压 {args.slide_unload:g}mm → 跟着机身滑 → 压回（铺完才算位姿铺完）")
-            if eng.slide_note:
-                print(f"  ⚠ {eng.slide_note}")
-                log.event(f"⚠ 随动留痕：{eng.slide_note}")
+            deny, adj = eng.request_pose(dp, dx, dz), (0.0, 0.0)
+        if deny:
+            # 只有真试过补（几何原因被拒）才说"补也不行"；按早了（铺设未完成）、冻结这类原样打，
+            # 免得操作者以为这一段已经到头
+            tried = assist and (deny.startswith("位姿不可行") or deny.startswith("随动"))
+            tail = "，自动补高度/前后也不行" if tried else ""
+            say(f"位姿拒绝（{what}{tail}）：{deny}", f"位姿拒绝（{what}{tail}）：{deny}")
+            return
+        parts = []
+        if adj[1]:
+            parts.append(f"升 {adj[1]:g}mm")
+        if adj[0]:
+            parts.append(f"贴墙 {adj[0]:g}mm" if adj[0] > 0 else f"离墙 {-adj[0]:g}mm")
+        extra = f"（自动补：{'、'.join(parts)}）" if parts else ""
+        xb, zb, ph = eng._pose_to
+        say(f"位姿 {what} 受理{extra}：→ 俯仰 {eng.pitch_deg + dp:+.1f}° 高 {zb:.0f} "
+            f"前髋距墙 {eng.front_hip_to_wall(eng._pose_to):.0f}，约 "
+            f"{eng._pose_T:.1f}s 铺完（空格停在半途）",
+            f"位姿受理（{what}{extra}）：目标 俯仰{eng.pitch_deg + dp:+.1f}° 高{zb:.0f}"
+            f" 前髋距墙{eng.front_hip_to_wall(eng._pose_to):.0f}")
+        if eng._slide is not None:
+            print(f"  随动 {'/'.join(sorted(eng._slide['legs']))}：开阀 {cfg.lift_vent_s:g}s → "
+                  f"少压 {args.slide_unload:g}mm → 跟着机身滑 → 压回（铺完才算位姿铺完）")
+        if eng.slide_note:
+            print(f"  ⚠ {eng.slide_note}")
+            log.event(f"⚠ 随动留痕：{eng.slide_note}")
 
     try:
         bot.move_feet(bot.crouch_feet(feet=eng.default_feet))
@@ -819,7 +835,8 @@ def main():
                     say(f"{sel} 接管受理（{surf_txt}）",
                         f"接管受理：{sel} {args.takeover_step:g}mm 偏移={eng.ho_text()}")
             elif k == "UP":
-                do_pose(dp=+args.pitch_step, what=f"抬头 {args.pitch_step:g}°")
+                do_pose(dp=+args.pitch_step, what=f"抬头 {args.pitch_step:g}°",
+                        assist=args.auto_adjust)
             elif k == "DOWN":
                 do_pose(dp=-args.pitch_step, what=f"低头 {args.pitch_step:g}°")
             elif k == "RIGHT":

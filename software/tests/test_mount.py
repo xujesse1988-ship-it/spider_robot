@@ -1016,3 +1016,39 @@ def test_slide_leg_turns_coxa_when_it_cannot_keep_posture():
     assert run(eng, bot, 30.0, lambda: not eng.pose_pending)
     g1 = eng.geom["L2"].solve(tuple(eng.foot["L2"]))["gamma"]
     assert 4.0 <= abs(g1 - g0) <= 6.0 and eng.frozen is None
+
+
+# ---------------------------------------------------------------- 抬头辅助（09-13）
+def test_pitch_assist_raises_body_when_pure_pitch_is_refused():
+    """09-13 用户："按了 ↑ 被拒需要按 ]，程序就可以控制"。纯俯仰被 femur 离地拒时，辅助在高度/前后里找
+    改动最小的组合，和俯仰合成一段铺设。"""
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES))
+    start(eng, bot)
+    for n in ("L3", "R3"):
+        assert eng.request_move(n, FLOOR, eng.floor_back(n)) is None
+        assert run(eng, bot, 40.0, lambda: eng.phase_of[n] == MountPhase.HOVER)
+        assert eng.land() is None
+        assert run(eng, bot, 40.0, lambda: eng.phase_of[n] == MountPhase.STANCE)
+    why = None
+    for _ in range(30):
+        why = eng.request_pose(dpitch_deg=2.0)
+        if why:
+            break
+        assert run(eng, bot, 10.0, lambda: not eng.pose_pending)
+    assert why and "femur 离地" in why
+    z0, p0 = eng.pose[1], eng.pitch_deg
+    deny, adj = eng.request_pitch_assist(2.0)
+    assert deny is None and adj[1] > 0
+    assert run(eng, bot, 20.0, lambda: not eng.pose_pending)
+    assert math.isclose(eng.pitch_deg, p0 + 2.0, abs_tol=1e-6)
+    assert math.isclose(eng.pose[1], z0 + adj[1], abs_tol=1e-6) and eng.frozen is None
+
+
+def test_pitch_assist_passes_through_when_no_adjustment_needed_or_possible():
+    """纯俯仰就能走时不补；出范围这类非几何的拒绝原样返回，不去试高度/前后。"""
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES), pitch_max_deg=3.0)
+    start(eng, bot)
+    assert eng.request_pitch_assist(2.0) == (None, (0.0, 0.0))
+    assert run(eng, bot, 10.0, lambda: not eng.pose_pending)
+    deny, adj = eng.request_pitch_assist(2.0)
+    assert adj is None and "范围" in deny and not eng.pose_pending

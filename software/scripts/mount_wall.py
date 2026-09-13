@@ -183,7 +183,7 @@ def parse_per_leg(spec, flag, lo, hi, what="值", sample="L1:16,R1:0"):
 
 def parse_wall_trim(spec):
     """--wall-trim：墙面目标修正 mm，逐腿。"""
-    return parse_per_leg(spec, "--wall-trim", -20.0, 40.0, "修正量")
+    return parse_per_leg(spec, "--wall-trim", -60.0, 40.0, "修正量")
 
 
 def parse_takeover(spec):
@@ -893,8 +893,8 @@ def main():
                 # 只改"当前那条腿"：有悬停腿就是它（正对着它目测），否则改选中的腿
                 tgt = eng.hover_leg or sel
                 new = eng.wall_trim[tgt] + (2.0 if k == "." else -2.0)
-                if not -20.0 <= new <= 40.0:
-                    print(f"\n{tgt} 墙面修正 {new:+g} 超范围（-20~40）")
+                if not -60.0 <= new <= 40.0:
+                    say(f"{tgt} 墙面修正 {new:+g} 超范围（-60~40）", f"墙面修正拒绝 {tgt}:{new:+g}：超范围")
                 else:
                     deny = eng.set_wall_trim(new, [tgt])
                     if deny:
@@ -904,8 +904,10 @@ def main():
                         where = (f"悬停点随之{'贴近' if k == '.' else '远离'}墙 2mm"
                                  if eng.hover_leg == tgt and eng.surf[tgt] is eng.wall
                                  else "该腿不在墙面悬停，对它之后的墙面目标生效")
+                        sag = ("。修正压到 -16 以下 = 机身实际比模型低、前脚比模型离墙近（抬头越大越明显，"
+                               "16° 约低 40mm、近 25mm），高度也要用 + 补上去" if new <= -16.0 else "")
                         say(f"{tgt} 墙面修正 {new:+g}mm：{where}。目测到 15mm 再按 i；"
-                            f"下次启动用 --wall-trim {eng.trim_text().replace(' ', ',')}",
+                            f"下次启动用 --wall-trim {eng.trim_text().replace(' ', ',')}{sag}",
                             f"墙面修正 {tgt}={new:+g}（全机 {eng.trim_text()}）{pose_txt()}")
             elif k in ("+", "=", "-"):
                 hov = eng.hover_leg

@@ -312,6 +312,9 @@ def main():
     ap.add_argument("--tilt-warn", type=float, default=UPRIGHT_TILT_DEG,
                     help="脚的吸盘轴离所在面法线超过这个角度°就提示重放（v 键），状态行打 !（默认 %(default)g，"
                          "范围 3~35）。09-13 用户原则：地面脚吸盘轴尽量垂直，需要转 coxa 就转，步子小多迈几步")
+    ap.add_argument("--wall-tilt-warn", type=float, default=25.0,
+                    help="墙面脚的提示门槛°（默认 %(default)g，范围 5~40）：比地面脚松，因为吸盘波纹贴住玻璃后"
+                         "杆斜十几度眼睛看不出、也还压得住（09-13 实机：模型说 L1 21° 实际看着仍垂直）")
     ap.add_argument("--tuck-tilt", type=float, default=UPRIGHT_TUCK_DEG,
                     help="中腿在当前位姿怎么放最正也超过这个角度° ⇒ 提示收起（h）（默认 %(default)g，范围 10~45）")
     ap.add_argument("--pitch-step", type=float, default=5.0,
@@ -376,6 +379,8 @@ def main():
         ap.error(f"--fwd-dist {args.fwd_dist:g} 非法：范围 0~160mm")
     if not 3.0 <= args.tilt_warn <= 35.0:
         ap.error(f"--tilt-warn {args.tilt_warn:g} 非法：范围 3~35°")
+    if not 5.0 <= args.wall_tilt_warn <= 40.0:
+        ap.error(f"--wall-tilt-warn {args.wall_tilt_warn:g} 非法：范围 5~40°")
     if not 10.0 <= args.tuck_tilt <= 45.0:
         ap.error(f"--tuck-tilt {args.tuck_tilt:g} 非法：范围 10~45°")
     if args.fwd_reach is not None and not 100.0 <= args.fwd_reach <= 200.0:
@@ -505,7 +510,7 @@ def main():
         log.note("support_only=" + ",".join(support_only))
     if slide_legs:
         log.note(f"slide_legs={','.join(slide_legs)} unload={args.slide_unload:g}")
-    log.note(f"tilt_warn={args.tilt_warn:g} tuck_tilt={args.tuck_tilt:g}")
+    log.note(f"tilt_warn={args.tilt_warn:g} wall_tilt_warn={args.wall_tilt_warn:g} tuck_tilt={args.tuck_tilt:g}")
     log.note("启动吸附序=" + "_".join(eng.attach_order))
     for n, v in wall_trim.items():
         deny = eng.set_wall_trim(v, [n])
@@ -593,7 +598,8 @@ def main():
         for n in LEG_NAMES:
             t = eng.cup_tilt(n)
             if t is not None:
-                parts.append(f"{n}:{t:.0f}{'!' if t > args.tilt_warn else ''}")
+                warn = args.wall_tilt_warn if eng.surf[n] is eng.wall else args.tilt_warn
+                parts.append(f"{n}:{t:.0f}{'!' if t > warn else ''}")
         return (" 轴 " + " ".join(parts)) if parts else ""
 
     def tilt_hint():
@@ -604,7 +610,8 @@ def main():
             if eng.phase_of[n] != MountPhase.STANCE:
                 continue
             t = eng.cup_tilt(n)
-            if t is None or t <= args.tilt_warn:
+            warn = args.wall_tilt_warn if eng.surf[n] is eng.wall else args.tilt_warn
+            if t is None or t <= warn:
                 continue
             k = key_of[n]
             if eng.surf[n] is FLOOR:
@@ -622,7 +629,8 @@ def main():
         if msgs:
             say("⚠ 该重放：" + "；".join(msgs), "重放提示：" + "；".join(msgs))
         else:
-            print(f"  各脚离面法线都 ≤ {args.tilt_warn:g}°")
+            print(f"  各脚离面法线都在门槛内（地 {args.tilt_warn:g}° / 墙 {args.wall_tilt_warn:g}°）")
+        print("  屏幕说正、眼睛看着斜：选那条腿按 > （它实际更向外斜 2°），角度会涨，再按 v 重放")
 
     def do_pose(dp=0.0, dx=0.0, dz=0.0, what="", assist=False):
         if assist:
@@ -838,6 +846,18 @@ def main():
                         f"站位前方拒绝（{sel}）：超出髋足距离")
                 else:
                     do_move(sel, FLOOR, p, f"站位前方 {args.fwd_dist:.0f}mm{reach_txt} 地面")
+            elif k in (">", "<"):
+                # 操作者当传感器：屏幕算这条腿是正的、眼睛看着斜 ⇒ 告诉程序它实际比模型向外斜 2°（>）；
+                # 反了就 <。立刻反映到状态行角度和提示；然后 v 重放到按新口径最正的点（往身体收约 4 mm）
+                dd = 2.0 if k == ">" else -2.0
+                new, deny = eng.adjust_tilt_trim(sel, dd)
+                if deny:
+                    say(f"修正拒绝：{deny}")
+                else:
+                    t = eng.cup_tilt(sel)
+                    say(f"{sel} 吸盘轴修正 {new:+g}°（实际比模型{'向外' if new > 0 else '向内'}斜 {abs(new):g}°）："
+                        f"现在算它离面法线 {t if t is None else round(t)}°，按 v 重放。下次启动用 --tilt-trim {eng.tilt_trim_text()}",
+                        f"吸盘轴修正 {sel}={new:+g}（全机 {eng.tilt_trim_text()}）{pose_txt()}")
             elif k == "v":
                 # 重放到最正：地面腿→当前位姿下吸盘最正的地面点（含转 coxa），抬起、摆过去、自动落下；
                 # 墙面腿→带内吸盘最正的高度，悬停后照常目测 i；空中腿→放回地面最正点
@@ -1099,7 +1119,7 @@ def main():
             if eng.started and not was_started:
                 was_started = True
                 print(f"\n✓ 六足吸附完成（{pose_txt()}）：1~6 选腿  w 上墙  g 回地  "
-                      "b 正后方  t 站位前方  v 重放最正  h 收起  i 落下  z 接管载荷  ./, 离墙"
+                      "b 正后方  t 站位前方  v 重放最正  >/< 眼看更斜/更正  h 收起  i 落下  z 接管载荷  ./, 离墙"
                       "  +/- 落点高低  ↑/↓ 俯仰  ←/→ 离/贴墙  [/] 降/升"
                       "  空格取消位姿  f 解冻  o×2 取机  ESC×2 退出")
             if eng.frozen != last_frozen:

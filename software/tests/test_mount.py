@@ -1129,3 +1129,22 @@ def test_per_leg_tilt_trim_retracts_only_that_leg_and_keeps_its_cup_vertical():
     assert all(abs(eng.cup_tilt(n)) < 0.5 for n in LEG_NAMES)
     p, t, best = eng.floor_upright("L2")
     assert p is None or t >= -0.5      # 已经是最正
+
+
+def test_adjust_tilt_trim_online_changes_reported_tilt_and_upright_point():
+    """09-13 实机：屏幕说后腿 2° 眼睛看着斜。> 键加逐腿修正 6° ⇒ 模型立刻按"实际向外斜 6°"算，
+    v 的最正点往身体收约 12 mm；修正文本能直接当 --tilt-trim 用。"""
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES))
+    start(eng, bot)
+    assert abs(eng.cup_tilt("L3")) < 0.5
+    new, deny = eng.adjust_tilt_trim("L3", 6.0)
+    assert deny is None and new == 6.0 and eng.tilt_trim_text() == "L3:6"
+    assert 5.5 <= eng.cup_tilt("L3") <= 6.5
+    r_before = eng.r0["L3"]
+    p, t, best = eng.floor_upright("L3")
+    assert p is not None and t < 1.0
+    pb = w2b(p, eng.pose); leg = CFG.leg("L3")
+    r_after = math.hypot(pb[0] - leg.mount_x, pb[1] - leg.mount_y)
+    assert 8.0 <= r_before - r_after <= 16.0
+    _, deny = eng.adjust_tilt_trim("L3", 12.0)
+    assert deny and "超" in deny and eng.geom["L3"].trim_deg == 6.0

@@ -642,6 +642,7 @@ LAB §6.3 已把换脚拆成 8a / 8b 两步。
 | `b` | → 地面、髋正后方 `--rear-dist`（缺省=站位半径≈176） |
 | `t` | → 绕髋**摆**到地面站位前方 `--fwd-dist`（默认 85） |
 | `h` | 收起悬空（不承载，互锁不算它） |
+| `>` `<` | 在线改选中腿的吸盘轴逐腿修正 ±2°（09-13 实机：屏幕说后腿 2° 眼睛看着斜——带载让位模型算不出，让操作者当传感器）：正 = 实际比模型向外斜；立刻反映到状态行角度和提示，再 `v` 重放（每 2° 收约 4 mm）；打印 `下次启动用 --tilt-trim …` |
 | `v` | **重放到最正**（09-13）：地面腿→抬起摆到当前位姿下吸盘最正的地面点（含转 coxa）**自动落下**；墙面腿→带内最正高度，悬停后照常目测 `i`；空中腿→放回地面最正点。已经最正不动；中腿最正也超 `--tuck-tilt` 改提示 `h`。每段位姿铺完/每次收口后屏幕打"⚠ 该重放：n v / n h" |
 | `i` | 悬停腿落下压入吸附 |
 | `z` | 把 `--takeover-step`（默认 3mm）的载荷**接管**到选中的接触腿身上（可连按累加）：其余接触腿各松 3/n，身体指令不动。L1 上墙吸住后就用它把势能转过去 |
@@ -657,7 +658,7 @@ LAB §6.3 已把换脚拆成 8a / 8b 两步。
 参数：`--wall-dist`、`--wall-trim L1:16,R1:0`、`--wall-height`、`--rear-dist`、
 `--fwd-dist`、`--fwd-reach`、`--floor-clear`、`--support-legs L2,R2`、`--slide-legs`、`--slide-unload`、`--attach-order`、
 `--handover L1:10,…`、`--takeover L1:10,…`、`--handover-rate`、`--takeover-step`、
-`--auto-adjust`、`--tilt-warn`、`--tuck-tilt`、`--tilt-trim`（逐腿）、`--pitch-step`、`--pitch-max`、`--press-delta`、`--stand-height`、`--tilt-trim`、
+`--auto-adjust`、`--tilt-warn`、`--wall-tilt-warn`（墙面脚门槛，默认 25：波纹贴平后杆斜十几度看不出）、`--tuck-tilt`、`--tilt-trim`（逐腿）、`--pitch-step`、`--pitch-max`、`--press-delta`、`--stand-height`、`--tilt-trim`、
 `--mock` / `--dry` / `--no-tank`、`--startup-gap`、`--relay-first`。
 
 `--dry` 的真阀按需排气：站起时六阀通电排气、站定全断、哪条腿要动就只给那一路通电、

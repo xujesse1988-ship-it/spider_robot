@@ -190,8 +190,14 @@ class LegGeom:
         k0 = leg.tibia.attach_deg
         self.theta_lim = (max(0.0, 180.0 - k0 - m), min(180.0, 180.0 - k0 + m))
         self.coxa_max = coxa_max_deg
-        self.delta = d2r(cfg.cup_delta_deg + cfg.cup_tilt_trim_deg + leg.tilt_trim_deg)
         self.d_safe = cfg.femur_len + cfg.tibia_len - D_SAFE_MARGIN
+        self.trim_deg = leg.tilt_trim_deg
+        self.set_trim(self.trim_deg)
+
+    def set_trim(self, deg):
+        """改该腿吸盘轴逐腿修正°（在线也能改）：吸盘轴 = a_t + cup_delta + 全局修正 + 逐腿修正。"""
+        self.trim_deg = float(deg)
+        self.delta = d2r(self.cfg.cup_delta_deg + self.cfg.cup_tilt_trim_deg + self.trim_deg)
 
     def to_leg(self, p_body):
         x, y = p_body[0] - self.leg.mount_x, p_body[1] - self.leg.mount_y
@@ -526,6 +532,21 @@ class MountEngine:
             if best_t is None or sol["tilt"] < best_t:
                 best, best_t = z, sol["tilt"]
         return best, best_t
+
+    def adjust_tilt_trim(self, name, ddeg, lim=15.0):
+        """在线改该腿吸盘轴修正（09-13 用户：屏幕说正、眼睛看着斜——带载让位模型算不出，让操作者当传感器）。
+        正 = 这条腿吸盘轴实际比模型向外斜。立刻影响 cup_tilt / floor_upright / wall_perp 和提示；启动站位
+        r0 不重算（启动后用不到）。返回 (新修正°, None) 或 (原值, 拒绝原因)。"""
+        g = self.geom[name]
+        new = g.trim_deg + ddeg
+        if abs(new) > lim + _EPS:
+            return g.trim_deg, f"{name} 修正 {new:+g}° 超 ±{lim:g}"
+        g.set_trim(new)
+        return new, None
+
+    def tilt_trim_text(self):
+        """当前逐腿修正，--tilt-trim 能直接用的写法；全 0 返回 ''。"""
+        return ",".join(f"{n}:{self.geom[n].trim_deg:g}" for n in LEG_NAMES if abs(self.geom[n].trim_deg) > _EPS)
 
     def cup_tilt(self, name):
         """该腿此刻吸盘轴离所在面法线的角度°（0=正对面）；空中或解不出返回 None。"""

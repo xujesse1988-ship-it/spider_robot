@@ -128,6 +128,7 @@ from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from hexapod.climb import parse_leg_order, parse_handover, PRESS_DEPTH_MAX
 from hexapod.mount import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
+                           UPRIGHT_TILT_DEG, UPRIGHT_TUCK_DEG,
                            LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, VALVE_OPEN_PHASES,
                            FLOOR_CLEAR_MM, TAKEOVER_STEP_MM, TAKEOVER_MAX_MM,
                            SUPPORT_TILT_DEG, SLIDE_UNLOAD_MM)
@@ -308,6 +309,11 @@ def main():
     ap.add_argument("--auto-adjust", action="store_true",
                     help="↑ 被拒时自动补机身高度和前后位置（升 0~30mm、前后 ±15mm，5mm 一档，取改动最小"
                          "的组合，和抬头合成一段铺设）；补不了才打拒绝原话。09-13 用户：按 ↑ 被拒不用再手按 ] ← →")
+    ap.add_argument("--tilt-warn", type=float, default=UPRIGHT_TILT_DEG,
+                    help="脚的吸盘轴离所在面法线超过这个角度°就提示重放（v 键），状态行打 !（默认 %(default)g，"
+                         "范围 3~35）。09-13 用户原则：地面脚吸盘轴尽量垂直，需要转 coxa 就转，步子小多迈几步")
+    ap.add_argument("--tuck-tilt", type=float, default=UPRIGHT_TUCK_DEG,
+                    help="中腿在当前位姿怎么放最正也超过这个角度° ⇒ 提示收起（h）（默认 %(default)g，范围 10~45）")
     ap.add_argument("--pitch-step", type=float, default=5.0,
                     help="每按一次 ↑/↓ 的俯仰量°（默认 %(default)g，范围 1~10）")
     ap.add_argument("--pitch-max", type=float, default=30.0,
@@ -367,6 +373,10 @@ def main():
         ap.error(f"--floor-clear {args.floor_clear:g} 非法：范围 20~120mm")
     if not 0.0 <= args.fwd_dist <= 160.0:
         ap.error(f"--fwd-dist {args.fwd_dist:g} 非法：范围 0~160mm")
+    if not 3.0 <= args.tilt_warn <= 35.0:
+        ap.error(f"--tilt-warn {args.tilt_warn:g} 非法：范围 3~35°")
+    if not 10.0 <= args.tuck_tilt <= 45.0:
+        ap.error(f"--tuck-tilt {args.tuck_tilt:g} 非法：范围 10~45°")
     if args.fwd_reach is not None and not 100.0 <= args.fwd_reach <= 200.0:
         ap.error(f"--fwd-reach {args.fwd_reach:g} 非法：范围 100~200mm")
     handover = {}
@@ -480,6 +490,7 @@ def main():
         log.note("support_only=" + ",".join(support_only))
     if slide_legs:
         log.note(f"slide_legs={','.join(slide_legs)} unload={args.slide_unload:g}")
+    log.note(f"tilt_warn={args.tilt_warn:g} tuck_tilt={args.tuck_tilt:g}")
     log.note("启动吸附序=" + "_".join(eng.attach_order))
     for n, v in wall_trim.items():
         deny = eng.set_wall_trim(v, [n])
@@ -546,7 +557,7 @@ def main():
         deny = eng.request_move(name, surf, p_w)
         if deny:
             say(f"{what}拒绝：{deny}", f"{what}拒绝（{name}）：{deny}")
-            return
+            return False
         pb = eng.foot[name]
         sol = eng.geom[name].solve(
             tuple(eng.foot[name]), None)
@@ -556,6 +567,47 @@ def main():
             f"{what}受理：{name} 落点 ({p_w[0]:.0f},{p_w[1]:.0f},{p_w[2]:.0f}) "
             f"{pose_txt()}")
         _ = pb
+        return True
+
+    key_of = {v: k for k, v in LEG_KEYS.items()}
+    auto_land = set()        # v 键抬起重放到地面最正点的腿：到悬停就自动落下（地面没什么可目测的）
+
+    def tilt_tag():
+        """状态行：各接触脚吸盘轴离面法线角，超 --tilt-warn 打 !"""
+        parts = []
+        for n in LEG_NAMES:
+            t = eng.cup_tilt(n)
+            if t is not None:
+                parts.append(f"{n}:{t:.0f}{'!' if t > args.tilt_warn else ''}")
+        return (" 轴 " + " ".join(parts)) if parts else ""
+
+    def tilt_hint():
+        """每段位姿铺完、每次收口后：哪些脚该重放（v）、哪只中腿该收（h）——让程序判断，操作者只按键
+        （09-13 用户：地面脚吸盘轴尽量垂直，需要转 coxa 就转；实机比模型更斜，阈值留余量）"""
+        msgs = []
+        for n in LEG_NAMES:
+            if eng.phase_of[n] != MountPhase.STANCE:
+                continue
+            t = eng.cup_tilt(n)
+            if t is None or t <= args.tilt_warn:
+                continue
+            k = key_of[n]
+            if eng.surf[n] is FLOOR:
+                p, tn, best = eng.floor_upright(n, args.tilt_warn)
+                if n in ("L2", "R2") and (p is None or best > args.tuck_tilt):
+                    msgs.append(f"{n} 离竖直 {t:.0f}°，最正也 {best if best is not None else 99:.0f}° → {k} h 收起")
+                elif p is not None and tn < t - 1.0:
+                    msgs.append(f"{n} 离竖直 {t:.0f}° → {k} v（重放后 {tn:.0f}°）")
+                else:
+                    msgs.append(f"{n} 离竖直 {t:.0f}°，放哪都不更正")
+            else:
+                h, tn = eng.wall_perp(n)
+                if h is not None and tn < t - 2.0:
+                    msgs.append(f"{n} 离墙法线 {t:.0f}° → {k} v（挪到离地 {h:.0f} 后 {tn:.0f}°，悬停后 i）")
+        if msgs:
+            say("⚠ 该重放：" + "；".join(msgs), "重放提示：" + "；".join(msgs))
+        else:
+            print(f"  各脚离面法线都 ≤ {args.tilt_warn:g}°")
 
     def do_pose(dp=0.0, dx=0.0, dz=0.0, what="", assist=False):
         if assist:
@@ -729,7 +781,7 @@ def main():
             elif k in LEG_KEYS:
                 sel = LEG_KEYS[k]
                 print(f"\n已选 {sel}（{eng.phase_of[sel].value}）："
-                      "w→墙 g→地面回位 b→正后方地面 t→站位前方地面 h 收起 i 落下"
+                      "w→墙 g→地面回位 b→正后方地面 t→站位前方地面 v 重放最正 h 收起 i 落下"
                       " z 把载荷接管过来")
             elif k == "w":
                 band = eng.wall_band(sel)
@@ -771,6 +823,29 @@ def main():
                         f"站位前方拒绝（{sel}）：超出髋足距离")
                 else:
                     do_move(sel, FLOOR, p, f"站位前方 {args.fwd_dist:.0f}mm{reach_txt} 地面")
+            elif k == "v":
+                # 重放到最正：地面腿→当前位姿下吸盘最正的地面点（含转 coxa），抬起、摆过去、自动落下；
+                # 墙面腿→带内吸盘最正的高度，悬停后照常目测 i；空中腿→放回地面最正点
+                now = eng.cup_tilt(sel)
+                if eng.surf[sel] is eng.wall:
+                    h, t = eng.wall_perp(sel)
+                    if h is None:
+                        say(f"{sel} 在当前位姿没有可落足带")
+                    elif now is not None and t >= now - 2.0:
+                        say(f"{sel} 现在离墙法线 {now:.0f}°，带内最正也只有 {t:.0f}°（离地 {h:.0f}），不动")
+                    else:
+                        do_move(sel, eng.wall, eng.wall_target(sel, h), f"⊥墙高度 {h:.0f}（离法线 {t:.0f}°）")
+                else:
+                    p, t, best = eng.floor_upright(sel, args.tilt_warn)
+                    if p is None:
+                        say(f"{sel} 当前位姿地面上没有可落点")
+                    elif sel in ("L2", "R2") and best > args.tuck_tilt:
+                        say(f"{sel} 最正也只能离竖直 {best:.0f}°（超过 {args.tuck_tilt:g}）：按 h 收起",
+                            f"重放拒绝（{sel}）：最正 {best:.0f}° 超 tuck_tilt")
+                    elif now is not None and t >= now - 1.0:
+                        say(f"{sel} 已经是最正（离竖直 {now:.0f}°），不动")
+                    elif do_move(sel, FLOOR, p, f"地面最正点（离竖直 {t:.0f}°）"):
+                        auto_land.add(sel)
             elif k == "h":
                 deny = eng.request_tuck(sel)
                 if deny:
@@ -982,6 +1057,11 @@ def main():
                          if on_wall else "")
                       + "不对就 g/h 挪走")
                 log.event(f"悬停：{hover_now} 世界 ({fw[0]:.0f},{fw[1]:.0f},{fw[2]:.0f})")
+                if hover_now in auto_land:
+                    auto_land.discard(hover_now)
+                    deny = eng.land()
+                    say(f"{hover_now} 自动落下（v 重放）" if not deny else f"{hover_now} 自动落下失败：{deny}",
+                        f"自动落下：{hover_now}" + (f" 失败 {deny}" if deny else ""))
             hover_was = hover_now
             swing_now = eng.swing_leg
             if swing_was and not swing_now:
@@ -993,16 +1073,18 @@ def main():
                 say(f"{swing_was} 收口：{where} {mark}"
                     f"；接触腿 {'/'.join(eng.contact_legs())}",
                     f"收口：{swing_was}→{where} 接触腿={'/'.join(eng.contact_legs())}")
+                tilt_hint()
             swing_was = swing_now
             pose_now = eng.pose_pending
             if pose_was and not pose_now:
                 say(f"位姿铺完：{pose_txt()}", f"位姿铺完：{pose_txt()}")
+                tilt_hint()
             pose_was = pose_now
 
             if eng.started and not was_started:
                 was_started = True
                 print(f"\n✓ 六足吸附完成（{pose_txt()}）：1~6 选腿  w 上墙  g 回地  "
-                      "b 正后方  t 站位前方  h 收起  i 落下  z 接管载荷  ./, 离墙"
+                      "b 正后方  t 站位前方  v 重放最正  h 收起  i 落下  z 接管载荷  ./, 离墙"
                       "  +/- 落点高低  ↑/↓ 俯仰  ←/→ 离/贴墙  [/] 降/升"
                       "  空格取消位姿  f 解冻  o×2 取机  ESC×2 退出")
             if eng.frozen != last_frozen:
@@ -1024,7 +1106,7 @@ def main():
                            + (f" 空中{'/'.join(n for n in LEG_NAMES if eng.surf[n] is None and eng.phase_of[n] == MountPhase.AIR)}"
                               if any(eng.phase_of[n] == MountPhase.AIR for n in LEG_NAMES) else "")
                            + (f" 交接{eng.ho_text()}" if eng.ho_text() != "0" else "")
-                           + (" 已放开" if released_hold else ""))
+                           + (" 已放开" if released_hold else "") + tilt_tag())
                     print("\r" + status_line(eng, ctl, v, c, peak_a,
                                              (0.0, 0.0, 0.0), tag) + "  ",
                           end="", flush=True)

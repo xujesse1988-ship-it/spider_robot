@@ -66,6 +66,11 @@ FEMUR_FLOOR_CLEAR_MM = 42.0  # femur 段（F 点与膝点取低者）离**地面
 FEMUR_SAG_MM_PER_DEG = 0.7   # 抬头每 1° 实物比模型多沉的量，叠加到上面的净空（只算抬头为正）
 FOOT_AIR_CLEAR_MM = 10.0   # 悬空足离任何面的最小净空（位姿铺设预检）
 HOLD_TILT_DEG = 15.0       # 已吸附足在位姿改变中允许的指令倾角（吸盘容差）
+UPRIGHT_TILT_DEG = 10.0    # 地面脚"够正"门槛：吸盘轴离竖直超过它就抬起重放到最正点（09-13 用户原则：
+                           # 地面脚吸盘轴尽量垂直地面、需要转 coxa 就转；实机比模型更斜，所以模型里留 10°）
+UPRIGHT_TUCK_DEG = 25.0    # 中腿怎么放最正也超过它 ⇒ 收起（中腿的斜大头是面外分量 asin(cosγ·sinφ)，收腿收不掉）
+UPRIGHT_LOOKAHEAD_DEG = 10.0  # 选最正落点时按"再抬这么多°"要 femur 段离地余量，免得刚放好抬两档就被 femur 卡
+UPRIGHT_MARGIN_MM = 10.0   # 上面那条余量再加的毫米数
 SUPPORT_TILT_DEG = 35.0    # **只承重腿**（support_only，只压不吸）的倾角容差：盘面对不对正
                            # 不影响它传正压力，15° 那条是吸盘**密封**的容差，套在它头上是
                            # 错的——按此中腿在俯仰 >30° 就被拒，而几何上它能撑到 90°。
@@ -493,17 +498,22 @@ class MountEngine:
         return (min(ok), max(ok)) if ok else None
 
     def wall_perp_height(self, name, y_w=None, step=1.0):
-        """带内"吸盘轴⊥墙"的落点高度（离地 mm），无带返回 None。
+        """带内"吸盘轴⊥墙"的落点高度（离地 mm），无带返回 None。见 wall_perp。"""
+        return self.wall_perp(name, y_w, step)[0]
+
+    def wall_perp(self, name, y_w=None, step=1.0):
+        """带内"吸盘轴最正"的落点：返回 (离地高度 mm, 那里的离墙法线角°)，无带 (None, None)。
 
         **抬头余量几乎全压在这一个数上**（09-12 LAB E5 实测+复算）：落点每高 1mm
         约多 0.45° 四接触抬头上限，接管量每 1mm 抵消同样多——两者花的是吸盘倾角
         那**同一笔** 15° 预算（接管沿墙竖直挪指令点，等价于落点低同样多）。
         脚本缺省取落足带**中点**，那是照顾落点密封的选法，比 ⊥ 点低不了几毫米，
         但比它**低**就是净亏；要抬头就往带上沿放（代价=落点倾角变大，密封余量变小）。
+        真 ⊥ 点在带外时返回的是带边（那里仍是带内最正的）。
         """
         band = self.wall_band(name, y_w)
         if band is None:
-            return None
+            return None, None
         depth = self.cfg.leg(name).press_delta_mm + self._trim(name, self.wall)
         pd = w2b_dir(_scale(self.wall.n, -1.0), self.pose)
         best, best_t = None, None
@@ -515,7 +525,64 @@ class MountEngine:
                 continue
             if best_t is None or sol["tilt"] < best_t:
                 best, best_t = z, sol["tilt"]
-        return best
+        return best, best_t
+
+    def cup_tilt(self, name):
+        """该腿此刻吸盘轴离所在面法线的角度°（0=正对面）；空中或解不出返回 None。"""
+        surf = self.surf[name]
+        if surf is None:
+            return None
+        pd = w2b_dir(_scale(surf.n, -1.0), self.pose)
+        try:
+            return self.geom[name].solve(tuple(self.foot[name]), pd)["tilt"]
+        except Infeasible:
+            return None
+
+    def floor_upright(self, name, tilt_ok=UPRIGHT_TILT_DEG):
+        """当前位姿下该腿在地面上"吸盘最正"的落点（含转 coxa）——09-13 用户原则："在地上的脚保持吸盘轴垂直
+        于地面，需要转 coxa 就转；步子小一些、多迈几步"。coxa ±55°（5° 一档）× 髋足水平距 60~215（5 mm 一档）
+        全搜，可行点（IK/行程/倾角容差/膝与 femur 离地，同落点预检）按四档排：
+          ① 离竖直 ≤ tilt_ok 且 femur 段再抬 UPRIGHT_LOOKAHEAD_DEG° 还够离地（+UPRIGHT_MARGIN_MM）
+          ② 离竖直 ≤ tilt_ok　③ femur 余量够　④ 其余
+        同档内最正的优先；同样正时中腿偏向前方（前脚抬起时机身前缘要它撑）、其余取 coxa 转得少的。
+        返回 (p_w, tilt, best_tilt)：世界系落点、它的离竖直角、所有可行点里最小的离竖直角（用来判
+        "怎么放都不够正 → 收起"）；无可行点 (None, None, None)。落点是**抬起重放**用的（09-13 用户：
+        "吸盘抵住地面的时候是根本动不了的"），不是滑过去。"""
+        leg, g, pose = self.cfg.leg(name), self.geom[name], self.pose
+        on_floor = self.surf[name] is FLOOR
+        depth = self.depth[name] if on_floor else leg.press_delta_mm
+        off = self.ho_off[name] if on_floor else 0.0
+        pd = w2b_dir((0.0, 0.0, -1.0), pose)
+        c, s = math.cos(pose[2]), math.sin(pose[2])
+        need = (FEMUR_FLOOR_CLEAR_MM + FEMUR_SAG_MM_PER_DEG * (r2d(pose[2]) + UPRIGHT_LOOKAHEAD_DEG)
+                + UPRIGHT_MARGIN_MM)
+        lim = min(COXA_MAX_DEG, 55.0)
+        fwd_sign = {"L2": -1.0, "R2": +1.0}.get(name, 0.0)   # 中腿：coxa 往这个符号转是朝前
+        cands = []
+        for gam in _frange(-lim, lim, 5.0):
+            beta = g.psi + d2r(gam)
+            cb, sb = math.cos(beta), math.sin(beta)
+            f_w = b2w((leg.mount_x + self.cfg.coxa_len * cb,
+                       leg.mount_y + self.cfg.coxa_len * sb, 0.0), pose)
+            for rho in _frange(60.0, 215.0, 5.0):
+                xb_ = leg.mount_x + rho * cb
+                zb_ = (-depth + off - pose[1] - s * xb_) / c
+                q_w = b2w((xb_, leg.mount_y + rho * sb, zb_), pose)
+                p_w = (q_w[0], q_w[1], 0.0)
+                if self._check_contact(name, p_w, FLOOR, pose, depth,
+                                       self._tilt_lim(name), off) is not None:
+                    continue
+                sol = g.solve(w2b((p_w[0], p_w[1], -depth + off), pose), pd)
+                low = min(f_w[2], b2w(sol["knee_b"], pose)[2])
+                ok_t, ok_f = sol["tilt"] <= tilt_ok + _EPS, low >= need - _EPS
+                rank = 0 if (ok_t and ok_f) else 1 if ok_t else 2 if ok_f else 3
+                fwd = 0 if fwd_sign == 0.0 or gam * fwd_sign >= 0.0 else 1
+                cands.append((rank, round(sol["tilt"]), fwd, abs(gam), sol["tilt"], p_w))
+        if not cands:
+            return None, None, None
+        cands.sort(key=lambda t: t[:4])
+        best_tilt = min(t[4] for t in cands)
+        return cands[0][5], cands[0][4], best_tilt
 
     def wall_pitch_room(self, name, height, y_w=None, takeover_mm=None,
                         step=1.0, pitch_max_deg=45.0):

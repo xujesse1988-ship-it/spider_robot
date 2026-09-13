@@ -1052,3 +1052,64 @@ def test_pitch_assist_passes_through_when_no_adjustment_needed_or_possible():
     assert run(eng, bot, 10.0, lambda: not eng.pose_pending)
     deny, adj = eng.request_pitch_assist(2.0)
     assert adj is None and "范围" in deny and not eng.pose_pending
+
+
+# ---------------------------------------------------------------- 最正落点（09-13 用户原则：地面脚吸盘轴尽量垂直，需要转 coxa 就转）
+def _pitch_up(eng, bot, deg, step=2.0):
+    for _ in range(int(round(deg / step))):
+        why = eng.request_pose(dpitch_deg=step)
+        assert why is None, why
+        assert run(eng, bot, 10.0, lambda: not eng.pose_pending)
+
+
+def test_cup_tilt_zero_at_stance_and_mid_leg_tilts_with_pitch():
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES))
+    start(eng, bot)
+    assert all(abs(eng.cup_tilt(n)) < 0.5 for n in LEG_NAMES)
+    for n in ("L3", "R3"):
+        assert eng.request_move(n, FLOOR, eng.floor_back(n)) is None
+        assert run(eng, bot, 40.0, lambda: eng.phase_of[n] == MountPhase.HOVER)
+        assert eng.land() is None
+        assert run(eng, bot, 40.0, lambda: eng.phase_of[n] == MountPhase.STANCE)
+    _pitch_up(eng, bot, 12.0)
+    assert 11.0 <= eng.cup_tilt("L2") <= 13.0        # 中腿面外分量 ≈ 俯仰角
+    assert eng.cup_tilt("L3") < eng.cup_tilt("L2")   # 指正后的后腿没有面外分量
+    assert eng.request_tuck("L2") is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.AIR)
+    assert eng.cup_tilt("L2") is None
+
+
+def test_floor_upright_replaces_mid_leg_more_upright_by_turning_coxa():
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES))
+    start(eng, bot)
+    for n in ("L3", "R3"):
+        assert eng.request_move(n, FLOOR, eng.floor_back(n)) is None
+        assert run(eng, bot, 40.0, lambda: eng.phase_of[n] == MountPhase.HOVER)
+        assert eng.land() is None
+        assert run(eng, bot, 40.0, lambda: eng.phase_of[n] == MountPhase.STANCE)
+    _pitch_up(eng, bot, 12.0)
+    t0 = eng.cup_tilt("L2")
+    p, t, best = eng.floor_upright("L2")
+    assert p is not None and best <= t + 1e-6 and t < t0 - 3.0
+    assert eng.request_move("L2", FLOOR, p) is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE)
+    assert abs(eng.cup_tilt("L2") - t) < 1.0
+    g = eng.geom["L2"].solve(tuple(eng.foot["L2"]))["gamma"]
+    assert g < -20.0                 # 转 coxa 把腿平面转向前方（L2 负=朝前）
+    # 已经最正的腿：再算一次不会给出更正的点
+    p2, t2, _ = eng.floor_upright("L2")
+    assert p2 is None or t2 >= eng.cup_tilt("L2") - 1.0
+
+
+def test_floor_upright_from_air_and_wall_perp_reports_tilt():
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES))
+    start(eng, bot)
+    assert eng.request_tuck("L2") is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.AIR)
+    p, t, best = eng.floor_upright("L2")        # 空中的腿也能算放回地面的最正点
+    assert p is not None and t < 1.0
+    h, tw = eng.wall_perp("L1")
+    assert h is not None and tw is not None and tw < 15.0
+    assert eng.wall_perp_height("L1") == h

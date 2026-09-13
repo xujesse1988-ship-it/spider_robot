@@ -883,3 +883,47 @@ def test_wall_landing_height_is_the_pitch_budget():
             break
         ok = p
     assert abs(ok - r_mid) <= 1.0
+
+
+# ---------------------------------------------------------------- femur 离地 / 中腿收近（09-13）
+def test_femur_floor_clearance_refuses_rear_leg_pointing_back_when_pitched():
+    """09-13 实机：后腿指正后、指令抬到 22° 时 femur 基本着地——原先只查膝，F 点在机身
+    外廓之外，腹面检查也管不到。现在 femur 段（F 点、膝点取低者）离地要
+    FEMUR_FLOOR_CLEAR_MM + FEMUR_SAG_MM_PER_DEG×俯仰°，机身升高就放行。"""
+    from hexapod.mount import FEMUR_FLOOR_CLEAR_MM, FEMUR_SAG_MM_PER_DEG
+    io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES))
+    start(eng, bot)
+    for n in ("L3", "R3"):
+        assert eng.request_move(n, FLOOR, eng.floor_back(n)) is None
+        assert run(eng, bot, 40.0, lambda: eng.phase_of[n] == MountPhase.HOVER)
+        assert eng.land() is None
+        assert run(eng, bot, 40.0, lambda: eng.phase_of[n] == MountPhase.STANCE)
+    xb, zb, _ = eng.pose
+    phi = math.radians(22.0)
+    low = (xb, zb, phi)
+    why = eng._check_contact("L3", eng.pw["L3"], FLOOR, low, eng.depth["L3"], 35.0)
+    assert why is not None and "femur 离地" in why
+    # 指正后：F 在髋正后方 coxa_len 处，抬头时它是整条 femur 段最低的点
+    f_z = zb + (CFG.leg("L3").mount_x - CFG.coxa_len) * math.sin(phi)
+    assert f_z < FEMUR_FLOOR_CLEAR_MM + FEMUR_SAG_MM_PER_DEG * 22.0
+    high = (xb, zb + 30.0, phi)
+    assert eng._check_contact("L3", eng.pw["L3"], FLOOR, high, eng.depth["L3"], 35.0) is None
+
+
+def test_floor_forward_reach_pulls_the_foot_in_toward_the_body():
+    """09-13 用户：中腿收近承重更省力。reach 只改髋足水平距离、前向分量照旧；给得比前向
+    分量还小就摆不到（None）。收近后吸盘在腿平面内会斜，只承重腿 35° 以内照样落得下。"""
+    io, ctl, eng, bot = make(support_only=("L2", "R2"))
+    start(eng, bot)
+    hip = eng.hip_world("L2")
+    p0 = eng.floor_forward("L2", 85.0)
+    p1 = eng.floor_forward("L2", 85.0, reach=140.0)
+    assert math.isclose(math.hypot(p0[0] - hip[0], p0[1] - hip[1]), eng.r0["L2"], abs_tol=0.5)
+    assert math.isclose(math.hypot(p1[0] - hip[0], p1[1] - hip[1]), 140.0, abs_tol=1e-6)
+    assert math.isclose(p1[0] - hip[0], p0[0] - hip[0], abs_tol=1e-6)
+    assert eng.floor_forward("L2", 150.0, reach=140.0) is None
+    assert eng.request_move("L2", FLOOR, p1) is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 40.0, lambda: eng.phase_of["L2"] == MountPhase.STANCE)
+    assert eng.frozen is None

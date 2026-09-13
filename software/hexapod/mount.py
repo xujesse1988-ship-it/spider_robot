@@ -20,7 +20,7 @@
      且盘压过抬腿门槛（悬空腿豁免——它们本来就不承载）。
   3. 身体位姿 (xb, zb, pitch) 慢速改变：接触足世界系不动、悬空足随身体。
      body_lean 倾身的三维推广。请求按 1°/5mm 采样整段中间位姿逐个预检
-     （IK 余量/行程/倾角/膝不撞面/腹面不触面）才受理，不受理就不动。
+     （IK 余量/行程/倾角/膝不撞面/femur 段离地/腹面不触面）才受理，不受理就不动。
   4. 零力交接（HANDOVER）与接管（TAKEOVER）：抬腿前把该腿的力卸到零、其余
      接触腿按份额接住；落地吸住后反向做一次，把载荷（也就是其余腿攒着的
      弹性势能）转移到刚吸上的新腿。docs/HANDOVER-DESIGN.md 的三维推广，
@@ -57,6 +57,13 @@ BELLY_MM = 40.0            # 髋平面（femur 轴平面）以下舱体厚度：
 BODY_HALF_MM = 100.0       # 机身外廓半长/半宽（frame 198×205）
 BODY_CLEAR_MM = 5.0        # 机身/腹面离任何面的最小净空
 KNEE_CLEAR_MM = 8.0        # 膝离任何面的最小净空
+FEMUR_FLOOR_CLEAR_MM = 42.0  # femur 段（F 点与膝点取低者）离**地面**的最小距离，模型口径（09-13 加）。
+                             # 膝原先只查 8mm，F 点和 femur 杆本身都不查——后腿指正后时 F 在机身
+                             # 外廓之外，腹面检查也管不到。由来：09-13 实机第 5 步（指令 22°，模型
+                             # 后腿 F 高 42.6）用户看到"后腿 femur 基本着地"；E6 实测后腿 F 每度比
+                             # 模型多沉约 0.7mm（8° −7.4、16° −11.1）⇒ 那一刻实物 F ≈ 27mm，即
+                             # femur 杆/舵盘在 F 轴下方伸出约 27mm；再留 15mm
+FEMUR_SAG_MM_PER_DEG = 0.7   # 抬头每 1° 实物比模型多沉的量，叠加到上面的净空（只算抬头为正）
 FOOT_AIR_CLEAR_MM = 10.0   # 悬空足离任何面的最小净空（位姿铺设预检）
 HOLD_TILT_DEG = 15.0       # 已吸附足在位姿改变中允许的指令倾角（吸盘容差）
 SUPPORT_TILT_DEG = 35.0    # **只承重腿**（support_only，只压不吸）的倾角容差：盘面对不对正
@@ -521,7 +528,7 @@ class MountEngine:
         """该腿爬墙站位在当前位姿下投影到地面的点。"""
         return FLOOR.project(b2w(self.default_feet[name], self.pose))
 
-    def floor_forward(self, name, dist):
+    def floor_forward(self, name, dist, reach=None):
         """该腿地面落点绕髋**摆**到站位前方 dist 处（+ 朝墙），**保持髋足距离不变**。
         用途：把中腿走到前髋底下再做前足上墙——默认站位下中足在机身中心正下方
         （身体系 x=0），与重心几乎重合，抬起第二只前足时前半机身成悬臂，
@@ -529,6 +536,11 @@ class MountEngine:
         ⚠ 必须摆不能平移：吸盘轴对面的倾角只由髋足距离（与压深）决定，站位半径
         是"轴⊥面"的解；平移会把半径拉长（中腿前移 85 时 176.6→196.0，倾角 10.6°，
         卡在 12° 带内侧不被拒但目视明显斜，09-09 实机复现）。摆动下倾角恒 0。
+        reach：髋足水平距离 mm，缺省=站位落点离髋的距离（只摆不改半径）。给小了 = 把脚
+        往身体收（09-13 用户：中腿收近承重更省力，指令 22° 时 177→140 femur 扭矩少三成）。
+        ⚠ 这时半径不再是"轴⊥面"的解，机身没升高时吸盘在腿平面内会斜（140 约 20°），只承重
+        腿按 support_tilt 放行；机身升高后垂直解本来就往里收（climb._solve_reach：髋到压入位
+        160→161mm、180→140mm），那时收近就是对正。
         超出该腿半径（|前向分量| > r）时返回 None，调用方按不可行处理。"""
         hip = self.hip_world(name)
         home = self.floor_home(name)
@@ -542,6 +554,8 @@ class MountEngine:
         vx, vy = -uy, ux                 # 其左法向
         a = ox * ux + oy * uy            # 站位落点相对髋的前向/侧向分量
         b = ox * vx + oy * vy
+        if reach is not None:
+            r = float(reach)             # 收近：只改髋足距离，前向分量照旧
         a2 = a + float(dist)
         if abs(a2) > r - 1e-9:
             return None                  # 摆不到（前向分量超过髋足距离）
@@ -843,6 +857,20 @@ class MountEngine:
                 return s
         return None
 
+    def _femur_floor_why(self, name, sol, pose):
+        """femur 段离地不够就返回原因（F 点与膝点取低者，模型口径）。抬头越大实物比模型
+        沉得越多，净空按 FEMUR_FLOOR_CLEAR_MM + FEMUR_SAG_MM_PER_DEG×俯仰° 要（09-13：
+        后腿指正后抬到指令 22° 时 femur 基本着地，原先 F 点和 femur 杆谁都不查）。"""
+        leg = self.cfg.leg(name)
+        beta = self.geom[name].psi + d2r(sol["gamma"])
+        f_w = b2w((leg.mount_x + self.cfg.coxa_len * math.cos(beta),
+                   leg.mount_y + self.cfg.coxa_len * math.sin(beta), 0.0), pose)
+        low = min(FLOOR.height(f_w), FLOOR.height(b2w(sol["knee_b"], pose)))
+        need = FEMUR_FLOOR_CLEAR_MM + FEMUR_SAG_MM_PER_DEG * max(0.0, r2d(pose[2]))
+        if low < need:
+            return f"femur 离地 {low:.0f}mm 不足 {need:.0f}"
+        return None
+
     def _tilt_lim(self, name, band=False):
         """该腿的倾角容差。吸附腿按吸盘**密封**容差（落点 TILT_BAND_DEG、保持
         HOLD_TILT_DEG）；**只承重腿按 support_tilt**——它只压不吸，盘面对不对正不影响
@@ -864,6 +892,9 @@ class MountEngine:
         hit = self._clear_of_surfaces(kw, KNEE_CLEAR_MM)
         if hit:
             return f"膝撞{_cn(hit)}"
+        why = self._femur_floor_why(name, sol, pose)
+        if why:
+            return why
         if sol["tilt"] > tol:
             return f"吸盘倾角 {sol['tilt']:.0f}°（面外 {sol['oop']:.0f}°）超 {tol:g}°"
         return None
@@ -894,7 +925,7 @@ class MountEngine:
         hit = self._clear_of_surfaces(b2w(sol["knee_b"], pose), KNEE_CLEAR_MM)
         if hit:
             return f"膝撞{_cn(hit)}"
-        return None
+        return self._femur_floor_why(name, sol, pose)
 
     def _check_path(self, name, a_w, b_w, n_a, n_b, arcs=None):
         """摆动路径（当前位姿，世界系弧线）逐点可达且不撞面。抬弧候选按序

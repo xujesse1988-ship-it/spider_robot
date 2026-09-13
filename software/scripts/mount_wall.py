@@ -34,6 +34,8 @@
        实测前缘下沉 26mm 且吸住后不回弹（L1 那次只沉 6mm，因为当时中腿还兜得住）。
        ⚠ 是摆不是平移：平移会把腿伸长（中腿前移 85 时髋足距 176.6→196.0），倾角
        涨到 10.6°，虽在 12° 带内但目视明显斜（09-09 实机）；摆动时倾角恒 0
+       --fwd-reach R：摆的同时把髋足水平距离收到 R（09-13 用户：中腿收近承重更省力；
+       机身没升高时吸盘在腿平面内会斜，只承重腿 35° 以内放行）
   h    选中腿收起悬空（抬 15mm→缩到髋外 0.6 站位半径、站位面上 45mm，留在
        空中随身体动；不承载，互锁不算它）
   z    把载荷**接管**到选中的这条接触腿身上（--takeover-step，默认 3mm，可连按）：
@@ -260,6 +262,12 @@ def main():
                     help="t 键：该腿绕髋摆到地面站位前方多远 mm（默认 %(default)g，"
                          "范围 0~160）。中腿 85 = 摆到前髋正下方（coxa 偏 29°，"
                          "髋足距离与吸盘垂直度都不变）")
+    ap.add_argument("--fwd-reach", type=float, default=None,
+                    help="t 键：脚离髋的水平距离 mm（默认=站位半径 ≈177，平身时吸盘轴 ⊥ 地面；"
+                         "范围 100~200）。给小了 = 把脚往身体收（09-13 用户：中腿收近承重更省力"
+                         "——指令 22° 时从 177 收到 140，femur 每 10N 负载的扭矩 12.3→8.6kg·cm），"
+                         "代价是机身没升高时吸盘在腿平面内会斜（140 时总倾角约 30°，只承重腿 "
+                         "35° 以内放行）；机身升高后垂直解本来就往里收（髋高 160→161mm、180→140mm）")
     ap.add_argument("--handover", default=None,
                     help="零力交接量 δ mm（抬腿前先把这条腿的力卸到零）：统一值如 12，"
                          "或逐腿 L1:17,R1:15（未给的腿 0=关，默认全关）。抬腿前该腿"
@@ -338,6 +346,8 @@ def main():
         ap.error(f"--floor-clear {args.floor_clear:g} 非法：范围 20~80mm")
     if not 0.0 <= args.fwd_dist <= 160.0:
         ap.error(f"--fwd-dist {args.fwd_dist:g} 非法：范围 0~160mm")
+    if args.fwd_reach is not None and not 100.0 <= args.fwd_reach <= 200.0:
+        ap.error(f"--fwd-reach {args.fwd_reach:g} 非法：范围 100~200mm")
     handover = {}
     if args.handover is not None:
         try:
@@ -705,13 +715,15 @@ def main():
                 do_move(sel, FLOOR, eng.floor_back(sel, rd),
                         f"正后方 {rd:.0f}mm 地面")
             elif k == "t":
-                p = eng.floor_forward(sel, args.fwd_dist)
+                p = eng.floor_forward(sel, args.fwd_dist, args.fwd_reach)
+                reach_txt = ("" if args.fwd_reach is None
+                             else f"、离髋 {args.fwd_reach:.0f}mm")
                 if p is None:
-                    say(f"{sel} 摆不到站位前方 {args.fwd_dist:g}mm（前向分量超过髋足"
-                        "距离）——减小 --fwd-dist",
+                    say(f"{sel} 摆不到站位前方 {args.fwd_dist:g}mm{reach_txt}（前向分量超过"
+                        "髋足距离）——减小 --fwd-dist 或加大 --fwd-reach",
                         f"站位前方拒绝（{sel}）：超出髋足距离")
                 else:
-                    do_move(sel, FLOOR, p, f"站位前方 {args.fwd_dist:.0f}mm 地面")
+                    do_move(sel, FLOOR, p, f"站位前方 {args.fwd_dist:.0f}mm{reach_txt} 地面")
             elif k == "h":
                 deny = eng.request_tuck(sel)
                 if deny:

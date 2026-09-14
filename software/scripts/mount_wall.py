@@ -866,10 +866,12 @@ def main():
                     h, t = eng.wall_perp(sel)
                     if h is None:
                         say(f"{sel} 在当前位姿没有可落足带")
-                    elif now is not None and t >= now - 2.0:
-                        say(f"{sel} 现在离墙法线 {now:.0f}°，带内最正也只有 {t:.0f}°（离地 {h:.0f}），不动")
                     else:
-                        do_move(sel, eng.wall, eng.wall_target(sel, h), f"⊥墙高度 {h:.0f}（离法线 {t:.0f}°）")
+                        # 已经最正也照样抬起重放（09-14 用户：即使算出来不用动也要抬腿落下）——
+                        # 原地抬起再落，等于把这条腿攒的弹性让位清零、走一遍交接/接管
+                        same = now is not None and t >= now - 2.0
+                        do_move(sel, eng.wall, eng.wall_target(sel, h),
+                                f"⊥墙高度 {h:.0f}（离法线 {t:.0f}°{'，已是最正，原地抬起重放' if same else ''}）")
                 else:
                     p, t, best = eng.floor_upright(sel, args.tilt_warn)
                     if p is None:
@@ -877,10 +879,11 @@ def main():
                     elif sel in ("L2", "R2") and best > args.tuck_tilt:
                         say(f"{sel} 最正也只能离竖直 {best:.0f}°（超过 {args.tuck_tilt:g}）：按 h 收起",
                             f"重放拒绝（{sel}）：最正 {best:.0f}° 超 tuck_tilt")
-                    elif now is not None and t >= now - 1.0:
-                        say(f"{sel} 已经是最正（离竖直 {now:.0f}°），不动")
-                    elif do_move(sel, FLOOR, p, f"地面最正点（离竖直 {t:.0f}°）"):
-                        auto_land.add(sel)
+                    else:
+                        same = now is not None and t >= now - 1.0
+                        if do_move(sel, FLOOR, p,
+                                   f"地面最正点（离竖直 {t:.0f}°{'，已是最正，原地抬起重放' if same else ''}）"):
+                            auto_land.add(sel)
             elif k == "h":
                 deny = eng.request_tuck(sel)
                 if deny:

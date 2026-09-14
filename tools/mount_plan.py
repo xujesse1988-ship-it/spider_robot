@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""地-墙过渡离线规划器（2026-09-06）：用 hexapod/mount.py 的几何与判据，从"地面
+"""地-墙过渡离线规划器（2026-09-06）：用 software/mount/engine.py 的几何与判据，从"地面
 爬墙站位、前髋距墙 D"起搜一条完整关键帧序列——前足上墙 → 后足指正后 →
 中腿收起 → 四足扶梯（固定接触抬头到极限→换步→再抬）→ 后足上墙 → 中腿上墙
 → 身体转到平行墙面 → 六足换回爬墙站位，每一步都过 MountEngine 同一套判据
@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "software"))
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES          # noqa: E402
-from hexapod.mount import (MountEngine, MountPhase, FLOOR, b2w, w2b, _add,   # noqa: E402
+from mount.engine import (MountEngine, MountPhase, FLOOR, b2w, w2b, _add,   # noqa: E402
                            PITCH_RATE_DPS, LIN_RATE_MMS, TRANSFER_SPEED_MMS,
                            BELLY_MM, BODY_HALF_MM, TILT_BAND_DEG, HOLD_TILT_DEG)
 
@@ -654,7 +654,7 @@ class Planner:
 
 
 def w2b_dir_neg(n, pose):
-    from hexapod.mount import w2b_dir
+    from mount.engine import w2b_dir
     return w2b_dir((-n[0], -n[1], -n[2]), pose)
 
 

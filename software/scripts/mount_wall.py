@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """地-墙过渡首批实验（P5 探索线，2026-09-06）：前足上墙 / 身体俯仰 / 收腿静停。
 
-引擎 hexapod/mount.py（MountEngine）：每腿一个接触面（地面/墙面/空中），
+引擎 mount/engine.py（MountEngine，独立包 software/mount/）：每腿一个接触面（地面/墙面/空中），
 挪腿沿各自面的法向抬离与压入，身体位姿（俯仰、离墙距离、高度）慢速改变时
 接触足在世界系钉死。吸附状态机与黑匣子与 climb_walk 同源。
 
@@ -126,8 +126,8 @@ from hexapod import Hexapod, Servo2040Driver, MockDriver
 from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               GroundVent, Pi5VacuumIO,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
-from hexapod.climb import parse_leg_order, parse_handover, PRESS_DEPTH_MAX
-from hexapod.mount import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
+from mount.base import parse_leg_order, parse_handover, PRESS_DEPTH_MAX
+from mount.engine import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
                            UPRIGHT_TILT_DEG, UPRIGHT_TUCK_DEG,
                            LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, VALVE_OPEN_PHASES,
                            FLOOR_CLEAR_MM, TAKEOVER_STEP_MM, TAKEOVER_MAX_MM,
@@ -138,7 +138,7 @@ from hexapod.runlog import RunLog, ClimbWatch
 from hexapod.powerlog import (PowerWatch, startup_marker, servo_power_on,
                               servo_relay_close)
 
-from climb_walk import status_line, coils_off   # 显示/收尾与 climb_walk 同源
+from mount.ui import status_line, coils_off   # 09-13 从 climb_walk 复制，地爬墙自己一份
 
 STATUS_S = 0.5
 LEG_KEYS = {"1": "L1", "2": "L2", "3": "L3", "4": "R1", "5": "R2", "6": "R3"}

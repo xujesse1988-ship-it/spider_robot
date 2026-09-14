@@ -7,7 +7,7 @@ import math
 from dataclasses import replace
 
 from hexapod.adhesion import AdhesionController, MockVacuumIO, FootState
-from hexapod.mount import (MountEngine, MountPhase, FLOOR, b2w, w2b, _add,
+from mount.engine import (MountEngine, MountPhase, FLOOR, b2w, w2b, _add,
                            TILT_BAND_DEG, HOLD_TILT_DEG, COXA_MAX_DEG,
                            PRESS_DEPTH_MAX)
 from hexapod.config import DEFAULT_CONFIG as CFG, LEG_NAMES
@@ -766,7 +766,7 @@ def test_handover_phases_never_open_the_valve_and_block_other_commands():
     """两条硬约束：①干跑真阀按 SWING_PHASES 通电排气，交接/接管两段必须在它之外
     ——否则交接期间就把盘放了，整件事的前提没了；②交接在途时全机不受理别的命令
     （位姿铺设会横拖正在加减载的接触足）。"""
-    from hexapod.mount import SWING_PHASES, HO_PHASES, BUSY_PHASES
+    from mount.engine import SWING_PHASES, HO_PHASES, BUSY_PHASES
     assert MountPhase.HANDOVER not in SWING_PHASES
     assert MountPhase.TAKEOVER not in SWING_PHASES
     assert set(BUSY_PHASES) == set(SWING_PHASES) | set(HO_PHASES)
@@ -823,7 +823,7 @@ def test_support_only_legs_use_a_looser_tilt_bound_than_sealing_legs():
     它能撑到 90°（OPEN §1.1）。09-12 台架实测（LAB E4a）盘面斜 35° 时接触仍在盘面、
     仍压得住，所以默认放宽到 35°。默认站位下中腿 β=90° ⇒ 倾角恰好 = 俯仰角，
     抬到 16° 就能把两套口径分开。"""
-    from hexapod.mount import SUPPORT_TILT_DEG
+    from mount.engine import SUPPORT_TILT_DEG
     io, ctl, eng, bot = make()                       # 没有 support_only：全按 15° 卡
     start(eng, bot)
     assert eng._tilt_lim("L2") == HOLD_TILT_DEG
@@ -890,7 +890,7 @@ def test_femur_floor_clearance_refuses_rear_leg_pointing_back_when_pitched():
     """09-13 实机：后腿指正后、指令抬到 22° 时 femur 基本着地——原先只查膝，F 点在机身
     外廓之外，腹面检查也管不到。现在 femur 段（F 点、膝点取低者）离地要
     FEMUR_FLOOR_CLEAR_MM + FEMUR_SAG_MM_PER_DEG×俯仰°，机身升高就放行。"""
-    from hexapod.mount import FEMUR_FLOOR_CLEAR_MM, FEMUR_SAG_MM_PER_DEG
+    from mount.engine import FEMUR_FLOOR_CLEAR_MM, FEMUR_SAG_MM_PER_DEG
     io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES))
     start(eng, bot)
     for n in ("L3", "R3"):
@@ -934,7 +934,7 @@ def test_slide_legs_keep_posture_relative_to_body_during_pitch():
     """09-13 用户：中腿在机身抬头/升高时同步贴地微调，滑前先通电磁阀。随动腿先进 SLIDE（干跑
     真阀按它通电排气）停 lift_vent_s、少压 slide_unload，机身这期间不动；然后跟着机身滑，
     铺完压回：coxa 角相对机身不变，世界系接触点沿地面挪动。"""
-    from hexapod.mount import SLIDE_UNLOAD_MM, VALVE_OPEN_PHASES
+    from mount.engine import SLIDE_UNLOAD_MM, VALVE_OPEN_PHASES
     io, ctl, eng, bot = make(support_only=tuple(LEG_NAMES), slide_legs=("L2", "R2"))
     start(eng, bot)
     g0 = eng.geom["L2"].solve(tuple(eng.foot["L2"]))["gamma"]

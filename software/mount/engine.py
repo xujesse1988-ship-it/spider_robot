@@ -1,4 +1,5 @@
-"""地-墙过渡引擎（P5 探索线，2026-09-06）：足端可以分别落在地面和墙面，
+"""地-墙过渡引擎（P5 探索线，2026-09-06；2026-09-13 起独立成 software/mount/ 包，见 __init__）：
+足端可以分别落在地面和墙面，
 身体可以俯仰/平移而接触足在世界系钉死不动。
 
 为什么不扩 ClimbEngine：它把"吸附面 = 身体系 z0 平面、压入方向恒为 -z、
@@ -41,13 +42,12 @@
 import math
 from enum import Enum
 
-from .adhesion import FootState
-from .climb import (D_SAFE_MARGIN, PRESS_DEPTH_MAX, TILT_BAND_DEG,
-                    VENT_STALL_S, TANK_READY_KPA, TANKLESS_PRECHARGE_S,
-                    PRECHARGE_TIMEOUT_S, _solve_reach)
-from .config import RobotConfig, LEG_NAMES
-from .gait import CLIMB
-from .kinematics import leg_ik, WorkspaceError
+from hexapod.adhesion import FootState
+from hexapod.config import RobotConfig, LEG_NAMES
+from hexapod.kinematics import leg_ik, WorkspaceError
+from .base import (D_SAFE_MARGIN, PRESS_DEPTH_MAX, TILT_BAND_DEG,
+                   VENT_STALL_S, TANK_READY_KPA, TANKLESS_PRECHARGE_S,
+                   PRECHARGE_TIMEOUT_S, ATTACH_ORDER, _solve_reach)
 
 _EPS = 1e-6
 COXA_MAX_DEG = 60.0        # coxa 相对中性的最大偏摆（前腿指正前/后腿指正后需 55°）
@@ -316,8 +316,7 @@ class MountEngine:
         self._slide = None        # 随动在途：dict(stage=vent|unload|glide|press, t, legs={腿: 起终点/深度})
         self.slide_note = None    # 最近一次位姿请求里随动跳过/退化的留痕（脚本打印+落黑匣子）
         self.geom = {leg.name: LegGeom(cfg, leg) for leg in cfg.legs}
-        self.slot_order = tuple(sorted(
-            LEG_NAMES, key=lambda n: (CLIMB.duty - CLIMB.offsets[n]) % 1.0))
+        self.slot_order = ATTACH_ORDER     # 原取 gait.CLIMB 窗序，09-13 起本包自己一份
         # 启动逐足压入的次序（默认=窗序）。诊断用：可疑的腿排最后，等其余五足
         # 都吸牢当反力座再压它——启动早段只有一两足吸住，压入的反力会把机身
         # 顶起/顶偏而不是把盘压进面里（08-19"六足同时压没有反力座"同源）

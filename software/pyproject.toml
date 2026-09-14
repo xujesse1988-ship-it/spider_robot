@@ -16,7 +16,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["hexapod", "hexapod.voice"]
+packages = ["hexapod", "hexapod.voice", "mount"]
 
 [tool.setuptools.package-data]
 "hexapod.voice" = ["keywords_raw.txt"]

@@ -344,7 +344,7 @@ P5 的地-墙过渡里同一个机理又咬了一次，而且更狠：09-09 实�
 L1 抬起吸住墙面后降 **6mm**、再抬 R1 悬停又降 **26mm**，**落下吸住后不回弹**
 （累计 32mm > 前腿可落足带 30mm）。机理与墙上爬行的下坠同源——载荷转走、
 其余腿弹性变形、重吸附把变形锁死成棘轮。`docs/WALL-MOUNT-HISTORY.md` §7（原 OPEN）把
-"移植零力交接"列为系统性修法，本节是移植口径。实现：`hexapod/mount.py`
+"移植零力交接"列为系统性修法，本节是移植口径。实现：`mount/engine.py`
 （相位 `HANDOVER`/`TAKEOVER`、`ho_off`/`_ho_debt`/`_ho_check`/`_run_handover`），
 测试 `tests/test_mount.py` 10 项，脚本 `scripts/mount_wall.py --handover
 --takeover --handover-rate --takeover-step` 与 `z` 键。**仅仿真，未实机。**

@@ -350,9 +350,20 @@ class AdhesionController:
     """6 足吸附状态机。每个控制周期调用 update(dt)。"""
 
     def __init__(self, io, n_feet=6, pump_without_tank=False,
-                 tankless=False, suck_timeout_s=SUCK_TIMEOUT_S):
+                 tankless=False, suck_timeout_s=SUCK_TIMEOUT_S,
+                 attach_kpa=ATTACH_KPA, hold_watch=True, pump_on_demand=False):
         self.io = io
         self.n = n_feet
+        # 三个可选开关（09-14 地爬墙"墙面脚才抽气"用，默认=原行为）：
+        #   attach_kpa     SUCKING→ATTACHED 的判据 kPa（地爬墙墙面脚要 −60，不是 −30）
+        #   hold_watch     False = 吸住之后不再监护：不判漏气、不为挽救开阀，每周期只
+        #                  读一次足压留镜像（状态行/黑匣子看）。用户 09-14："吸住负压
+        #                  超过 60 就可以，不监控后续是否泄气，不用再补抽气"
+        #   pump_on_demand True = 泵只在有脚 SUCKING（或预抽）时开，罐/盘滞环维持一律
+        #                  不做；罐模式下罐压照读（遥测 + tank_fault），只是不按它开泵
+        self.attach_kpa = float(attach_kpa)
+        self.hold_watch = bool(hold_watch)
+        self.pump_on_demand = bool(pump_on_demand)
         # 罐压传感器失效时的降级泵策略（架空联调、罐压未接时用）：
         # False = 停泵置 fault 等上层报警；True = 有脚在抽气就开泵
         self.pump_without_tank = pump_without_tank
@@ -473,6 +484,8 @@ class AdhesionController:
             if self.precharge or \
                     any(s == FootState.SUCKING for s in self.state):
                 self.io.set_pump(True)
+            elif self.pump_on_demand:
+                self.io.set_pump(False)          # 不维持：吸住就停，之后靠单向阀锁住
             else:
                 att = [self._foot_kpa(i) for i in range(self.n)
                        if self.state[i] == FootState.ATTACHED]
@@ -494,6 +507,10 @@ class AdhesionController:
                                          for s in self.state))
                 else:
                     self.io.set_pump(False)
+            elif self.pump_on_demand:
+                self.tank_fault = False
+                self.io.set_pump(self.precharge or any(s == FootState.SUCKING
+                                                       for s in self.state))
             else:
                 self.tank_fault = False
                 if tank > PUMP_ON_KPA:
@@ -509,7 +526,7 @@ class AdhesionController:
                     self.io.set_valve(i, True)
                     self._set(i, FootState.SUCKING)
             elif st == FootState.SUCKING:
-                if self._foot_kpa(i) <= ATTACH_KPA:
+                if self._foot_kpa(i) <= self.attach_kpa:
                     if self._good_since[i] is None:
                         self._good_since[i] = self._now
                     if self._held(self._good_since[i], ATTACH_CONFIRM_S):
@@ -523,8 +540,10 @@ class AdhesionController:
                         self._set(i, FootState.FAULT)
             elif st == FootState.ATTACHED:
                 kpa = self._foot_kpa(i)
-                good = kpa <= ATTACH_KPA
-                bad = kpa > ATTACH_KPA + LEAK_DELTA_KPA
+                if not self.hold_watch:
+                    continue                      # 只留镜像，不判漏、不动阀、不补抽
+                good = kpa <= self.attach_kpa
+                bad = kpa > self.attach_kpa + LEAK_DELTA_KPA
                 if good:
                     if self._good_since[i] is None:
                         self._good_since[i] = self._now

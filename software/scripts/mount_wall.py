@@ -89,15 +89,25 @@
       （抬一只前足，只剩一墙盘）看另一盘扛不扛得住——最大风险项，低俯仰、
       安全绳绷紧再做
 
+阀线圈（09-14 起由引擎驱动，mount/engine.py docstring 第 5 条；本机通电=排气位/隔离，
+断电=通罐位）：压在面上站着的脚一律断电（不发热；被单向阀憋出的被动真空无妨，抬腿前
+VENT 先放 0.3s）；摆动中通电；某条腿压到位要抽气时，先把其余所有没在状态机手里的盘
+通电隔离（一路一路 0.1s），到位再抽——泵只抽这一个盘；吸住后其余断回。
+--wall-suck（09-14 用户："墙上的腿才需要抽气，在地上的腿不用"）：踩地面的脚只压不吸、
+踩墙的脚抽到 --attach-kpa（−60）即算吸住，之后不监护不补抽（泵停，靠单向阀锁住），
+互锁只看"吸住了没有"不看盘压；墙面脚吸盘轴容差 --wall-tilt（25°）。要真泵真阀，
+不配 --dry；无罐机器配 --no-tank。
+
 用法:
   python mount_wall.py --mock                  # 无硬件干跑
   python mount_wall.py --dry                   # 真舵机 + 仿真气路（吸附确认是假的）；
-                                             # 真阀只在需要时通电排气：站起时六阀排气、
-                                             # 站定后全断；哪条腿要抬（进 VENT 相位）
-                                             # 就只给那一路通电，落回支撑后断电——
-                                             # 09-08 实测：阀不通电时站起一压，吸盘经
-                                             # 单向阀被挤成被动真空锁脚；六阀长通又
-                                             # 发热严重（≈25W）
+                                             # 真阀镜像引擎写在仿真气路上的阀位（同上
+                                             # 一套策略），泵不动。09-08 实测：阀不通电
+                                             # 时站起一压，吸盘经单向阀被挤成被动真空
+                                             # 锁脚；六阀长通又发热严重（≈25W）
+  # 摩擦上墙（docs/WALL-MOUNT-FRICTION.md）：地面脚只压、墙面脚抽到 −60
+  python mount_wall.py --no-tank --wall-suck --auto-adjust --wall-dist 140 \
+      --pitch-step 2 --pitch-max 70 --floor-clear 100 --handover L1:10,R1:10
   python mount_wall.py --no-tank --wall-dist 140
   python mount_wall.py --no-tank --wall-dist 140 --wall-height 230 --pitch-step 3
   # 治下沉：开零力交接 + L1 上墙后主动接管（起标值宁欠勿过，逐次加）
@@ -112,6 +122,7 @@
 序列从 body_lean 复制——改那边记得同步改这边。
 """
 import argparse
+import math
 import os
 import select
 import signal
@@ -128,8 +139,8 @@ from hexapod.adhesion import (AdhesionController, MockVacuumIO, FootState,
                               ATTACH_KPA, PUMP_ON_KPA, PUMP_OFF_KPA)
 from mount.base import parse_leg_order, parse_handover, PRESS_DEPTH_MAX
 from mount.engine import (MountEngine, MountPhase, FLOOR, PITCH_RATE_DPS,
-                           UPRIGHT_TILT_DEG, UPRIGHT_TUCK_DEG,
-                           LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM, VALVE_OPEN_PHASES,
+                           UPRIGHT_TILT_DEG, UPRIGHT_TUCK_DEG, WALL_TILT_DEG,
+                           LIN_RATE_MMS, COXA_MAX_DEG, BELLY_MM,
                            FLOOR_CLEAR_MM, TAKEOVER_STEP_MM, TAKEOVER_MAX_MM,
                            SUPPORT_TILT_DEG, SLIDE_UNLOAD_MM)
 from hexapod.config import DEFAULT_CONFIG, LEG_NAMES
@@ -216,12 +227,21 @@ def main():
     ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--mock", action="store_true", help="无硬件干跑")
     ap.add_argument("--dry", action="store_true",
-                    help="真舵机 + 仿真气路：吸附确认是假的，纯排练动作；真阀按需排气："
-                         "站起时六阀通电排气、站定后全断，抬腿前只给那一路通电、落回"
-                         "支撑后断电（否则站起一压被被动真空锁脚；六阀长通又发热，"
-                         "09-08 实测）；泵不动，退出断线圈")
+                    help="真舵机 + 仿真气路：吸附确认是假的，纯排练动作；真阀镜像引擎写在"
+                         "仿真气路上的阀位（站着断电、摆动/隔离时通电；否则站起一压被被动"
+                         "真空锁脚，六阀长通又发热，09-08 实测）；泵不动，退出断线圈")
     ap.add_argument("--no-tank", action="store_true",
                     help="无罐：泵直抽歧管；没有储备真空（地面/上墙均已多次实测可用）")
+    ap.add_argument("--wall-suck", action="store_true",
+                    help="墙面脚才抽气（09-14 用户）：踩地面的脚只压不吸、阀断电；踩墙的脚"
+                         "抽到 --attach-kpa 即算吸住，之后不监护漏气、不补抽（泵停，靠单向阀"
+                         "锁住），互锁只看吸住没有不看盘压；抽气前先把其余盘的阀通电隔离，"
+                         "吸住后断回。真泵真阀（不配 --dry），无罐机器配 --no-tank")
+    ap.add_argument("--attach-kpa", type=float, default=None,
+                    help="吸住判据 kPa（范围 -80~-20；--wall-suck 默认 -60，否则 -30）")
+    ap.add_argument("--suck-timeout", type=float, default=None,
+                    help="一次抽气多久没到判据算失败 s（然后回抬加深重试，最多 3 次）。"
+                         "默认：--wall-suck 6、--no-tank 2.5、其余 0.8")
     ap.add_argument("--wall-dist", type=float, default=140.0,
                     help="起始时前腿 coxa 舵机轴到墙面的水平距离 mm（卷尺量，"
                          "默认 %(default)g，范围 100~220）。前腿可落足带随它变，"
@@ -250,10 +270,10 @@ def main():
                          "互锁与漏气监护；抬腿前照样开阀放气 lift_vent_s 再抬（气路接着"
                          "会被单向阀憋出被动真空，09-13）。用于 09-09 实机情形——上墙"
                          "过程中中腿吸盘吸不住地面，但压着能靠摩擦当支撑；不设的话"
-                         "互锁会因'L2 未吸附'拒绝一切动作。六条全写 = 泵不开的摩擦上墙"
-                         "前期（docs/WALL-MOUNT-FRICTION.md），要配 --dry：实机模式下"
-                         "只承重腿的阀一直通电排气，六路长通发热。⚠ 这些腿只能承压不能"
-                         "承拉，身体俯仰后扛不住剥离力矩，别把它们算成安全余量")
+                         "互锁会因'L2 未吸附'拒绝一切动作。六条全写 = 泵完全不开的纯摩擦"
+                         "干跑；摩擦上墙正式用 --wall-suck（按面判：地面只压、墙面抽气）。"
+                         "⚠ 这些腿只能承压不能承拉，身体俯仰后扛不住剥离力矩，别把它们"
+                         "算成安全余量")
     ap.add_argument("--slide-legs", default=None,
                     help="随动腿（只承重的地面腿，如 L2,R2）：抬头/升降/平移机身时贴地跟着滑，保持"
                          "相对机身的姿势——coxa 角不变，髋足距离取吸盘在腿平面内最正的值（机身升高时"
@@ -312,9 +332,12 @@ def main():
     ap.add_argument("--tilt-warn", type=float, default=UPRIGHT_TILT_DEG,
                     help="脚的吸盘轴离所在面法线超过这个角度°就提示重放（v 键），状态行打 !（默认 %(default)g，"
                          "范围 3~35）。09-13 用户原则：地面脚吸盘轴尽量垂直，需要转 coxa 就转，步子小多迈几步")
-    ap.add_argument("--wall-tilt-warn", type=float, default=25.0,
-                    help="墙面脚的提示门槛°（默认 %(default)g，范围 5~40）：比地面脚松，因为吸盘波纹贴住玻璃后"
-                         "杆斜十几度眼睛看不出、也还压得住（09-13 实机：模型说 L1 21° 实际看着仍垂直）")
+    ap.add_argument("--wall-tilt", "--wall-tilt-warn", dest="wall_tilt", type=float,
+                    default=WALL_TILT_DEG,
+                    help="墙面脚吸盘轴离墙法线的容差°（默认 %(default)g，范围 5~40）：引擎落点带/位姿放行"
+                         "上限，也是提示重放的门槛（提示会预判再抬一档 --pitch-step 会不会超）。比地面脚松："
+                         "吸盘波纹贴住玻璃后杆斜十几度眼睛看不出、也压得住（09-13 实机 L1 模型 21° 仍垂直；"
+                         "09-14 用户放宽到 25）")
     ap.add_argument("--tuck-tilt", type=float, default=UPRIGHT_TUCK_DEG,
                     help="中腿在当前位姿怎么放最正也超过这个角度° ⇒ 提示收起（h）（默认 %(default)g，范围 10~45）")
     ap.add_argument("--pitch-step", type=float, default=5.0,
@@ -379,8 +402,16 @@ def main():
         ap.error(f"--fwd-dist {args.fwd_dist:g} 非法：范围 0~160mm")
     if not 3.0 <= args.tilt_warn <= 35.0:
         ap.error(f"--tilt-warn {args.tilt_warn:g} 非法：范围 3~35°")
-    if not 5.0 <= args.wall_tilt_warn <= 40.0:
-        ap.error(f"--wall-tilt-warn {args.wall_tilt_warn:g} 非法：范围 5~40°")
+    if not 5.0 <= args.wall_tilt <= 40.0:
+        ap.error(f"--wall-tilt {args.wall_tilt:g} 非法：范围 5~40°")
+    if args.attach_kpa is None:
+        args.attach_kpa = -60.0 if args.wall_suck else ATTACH_KPA
+    if not -80.0 <= args.attach_kpa <= -20.0:
+        ap.error(f"--attach-kpa {args.attach_kpa:g} 非法：范围 -80~-20")
+    if args.suck_timeout is None:
+        args.suck_timeout = 6.0 if args.wall_suck else 2.5 if args.no_tank else None
+    if args.suck_timeout is not None and not 0.3 <= args.suck_timeout <= 20.0:
+        ap.error(f"--suck-timeout {args.suck_timeout:g} 非法：范围 0.3~20s")
     if not 10.0 <= args.tuck_tilt <= 45.0:
         ap.error(f"--tuck-tilt {args.tuck_tilt:g} 非法：范围 10~45°")
     if args.fwd_reach is not None and not 100.0 <= args.fwd_reach <= 200.0:
@@ -444,7 +475,8 @@ def main():
         tag="mount")
     print(f"黑匣子日志: {log.path}")
     mode = "+".join(s for s, on in (("mock", args.mock), ("dry", args.dry),
-                                    ("no-tank", args.no_tank)) if on) \
+                                    ("no-tank", args.no_tank),
+                                    ("wall-suck", args.wall_suck)) if on) \
         or "实机全链路"
     log.note(f"模式={mode} port={args.port}")
     log.note(f"参数: wall_dist={args.wall_dist:g} wall_height="
@@ -486,21 +518,24 @@ def main():
             step("干跑：阀板初始化，六阀线圈按足串行通电（排气位，0.2s 间隔）")
             vent.set(True)
             step("干跑：六阀已到排气位（站起期间吸盘通大气；站定后断电，抬腿前按路通电）")
-            log.note("dry=1 真阀按需排气：站起六阀通电→站定全断→抬腿那一路通电")
+            log.note("dry=1 真阀镜像引擎阀位：站起六阀通电→站定全断→摆动/隔离时按路通电")
     else:
         step("阀板初始化：六阀线圈按足串行通电（排气位，0.2s 间隔）")
         io = Pi5VacuumIO(6, on_step=step)
         step("阀板/I2C 就绪")
-    ctl_kw = dict(tankless=args.no_tank)
-    if args.no_tank:
-        ctl_kw["suck_timeout_s"] = 2.5
+    ctl_kw = dict(tankless=args.no_tank, attach_kpa=args.attach_kpa,
+                  hold_watch=not args.wall_suck, pump_on_demand=args.wall_suck)
+    if args.suck_timeout is not None:
+        ctl_kw["suck_timeout_s"] = args.suck_timeout
     ctl = AdhesionController(io, **ctl_kw)
     bot = Hexapod(drv, cfg)
     eng = MountEngine(cfg, ctl, front_hip_to_wall=args.wall_dist,
                       pitch_max_deg=args.pitch_max, attach_order=attach_order,
                       floor_clear_mm=args.floor_clear, support_only=support_only,
                       takeover_mm=takeover, support_tilt_deg=args.support_tilt,
-                      slide_legs=slide_legs, slide_unload_mm=args.slide_unload)
+                      slide_legs=slide_legs, slide_unload_mm=args.slide_unload,
+                      floor_support=args.wall_suck, gate_kpa=not args.wall_suck,
+                      wall_tilt_deg=args.wall_tilt)
     ho_txt = " ".join(f"{l.name}{l.handover_mm:g}" for l in cfg.legs
                       if l.handover_mm) or "关"
     tk_txt = " ".join(f"{n}{v:g}" for n, v in takeover.items() if v) or "只还欠账"
@@ -510,7 +545,9 @@ def main():
         log.note("support_only=" + ",".join(support_only))
     if slide_legs:
         log.note(f"slide_legs={','.join(slide_legs)} unload={args.slide_unload:g}")
-    log.note(f"tilt_warn={args.tilt_warn:g} wall_tilt_warn={args.wall_tilt_warn:g} tuck_tilt={args.tuck_tilt:g}")
+    log.note(f"tilt_warn={args.tilt_warn:g} wall_tilt={args.wall_tilt:g} tuck_tilt={args.tuck_tilt:g}")
+    if args.wall_suck:
+        log.note(f"wall_suck=1 地面只压/墙面抽到 {args.attach_kpa:g}kPa，不监护不补抽，互锁不看盘压")
     log.note("启动吸附序=" + "_".join(eng.attach_order))
     for n, v in wall_trim.items():
         deny = eng.set_wall_trim(v, [n])
@@ -518,8 +555,9 @@ def main():
             ap.error(f"--wall-trim {n}:{v:g} 不可行：{deny}")
     log.note("wall_trim=" + eng.trim_text())
     watch = ClimbWatch(log, eng, ctl, io, cfg)
-    log.note(f"阈值: ATTACH={ATTACH_KPA} PUMP_ON={PUMP_ON_KPA}"
-             f" PUMP_OFF={PUMP_OFF_KPA} suck_timeout={ctl.suck_timeout_s}s")
+    log.note(f"阈值: ATTACH={ctl.attach_kpa:g} PUMP_ON={PUMP_ON_KPA}"
+             f" PUMP_OFF={PUMP_OFF_KPA}{'（泵只在抽气时开）' if ctl.pump_on_demand else ''}"
+             f" suck_timeout={ctl.suck_timeout_s}s")
 
     old = termios.tcgetattr(sys.stdin)
     tty.setcbreak(sys.stdin.fileno())
@@ -550,16 +588,16 @@ def main():
         log.event(ev or msg)
 
     def dry_valve_tick():
-        """干跑真阀按腿相位排气：摆动中（VENT→…→WAIT）与贴地滑动（SLIDE）线圈通电=排气，
-        回 STANCE 或收在空中（AIR，吸盘悬空攒不出真空）断电。set_valve(False)=排气位=通电。"""
+        """干跑真阀镜像仿真气路上的阀位（引擎 _valve_tick + 状态机一起写的那份）：
+        站着断电、摆动/贴地滑动/隔离时通电。set_valve(False)=排气位=通电。"""
         vio = vent.io
         if vio is None:
             return
         for i, n in enumerate(LEG_NAMES):
-            want_open = eng.phase_of[n] in VALVE_OPEN_PHASES
-            if (not vio.valve[i]) != want_open:
-                vio.set_valve(i, not want_open)
-                log.event(f"干跑阀 {n} {'通电排气' if want_open else '断电'}"
+            want = io.valve[i]
+            if vio.valve[i] != want:
+                vio.set_valve(i, want)
+                log.event(f"干跑阀 {n} {'断电' if want else '通电排气'}"
                           f"（{eng.phase_of[n].value}）")
 
     def io_freeze(e):
@@ -592,15 +630,32 @@ def main():
     key_of = {v: k for k, v in LEG_KEYS.items()}
     auto_land = set()        # v 键抬起重放到地面最正点的腿：到悬停就自动落下（地面没什么可目测的）
 
+    def next_pose():
+        """再抬一档 --pitch-step 的位姿（墙面脚提示预判用）。"""
+        xb, zb, phi = eng.pose
+        return (xb, zb, phi + math.radians(args.pitch_step))
+
+    WALL_HINT_MARGIN = 3.0   # 墙面脚提示提前量°：重放一只前脚时另一只要接 δ/n 的沿墙份额，倾角涨约 1°；
+                             # 一档 ↑ 带自动补高度/前后时倾角能多涨 2~3°。两只都贴着上限就谁也交接不了
+                             # （09-14 干跑：留 2° 时 22° 那档 L1/R1 到 24°，1 v、4 v 全被对面顶过 25° 拒掉）
+
+    def wall_over(n, t):
+        """墙面脚该不该重放：现在就超 --wall-tilt，或再抬一档会到上限 2° 以内（引擎会拒 ↑ 或拒交接）。
+        返回 (超, 下一档角)。"""
+        nxt = eng.cup_tilt(n, pose=next_pose())
+        lim = args.wall_tilt
+        return (t > lim or (nxt is not None and nxt > lim - WALL_HINT_MARGIN)), nxt
+
     def tilt_tag():
-        """状态行：各接触脚吸盘轴离面法线角，超 --tilt-warn 打 !"""
+        """状态行：各接触脚吸盘轴离面法线角，该重放的打 !（地面超 --tilt-warn；墙面超 --wall-tilt 或再抬一档会超）"""
         parts = []
         for n in LEG_NAMES:
             t = eng.cup_tilt(n)
             if t is not None:
-                warn = args.wall_tilt_warn if eng.surf[n] is eng.wall else args.tilt_warn
-                parts.append(f"{n}:{t:.0f}{'!' if t > warn else ''}")
-        return (" 轴 " + " ".join(parts)) if parts else ""
+                over = wall_over(n, t)[0] if eng.surf[n] is eng.wall else t > args.tilt_warn
+                parts.append(f"{n}:{t:.0f}{'!' if over else ''}")
+        coils = "".join(n[0] + n[1] for i, n in enumerate(LEG_NAMES) if not io.valve[i])
+        return ((" 轴 " + " ".join(parts)) if parts else "") + (f" 阀电 {coils}" if coils else "")
 
     def tilt_hint():
         """每段位姿铺完、每次收口后：哪些脚该重放（v）、哪只中腿该收（h）——让程序判断，操作者只按键
@@ -610,8 +665,11 @@ def main():
             if eng.phase_of[n] != MountPhase.STANCE:
                 continue
             t = eng.cup_tilt(n)
-            warn = args.wall_tilt_warn if eng.surf[n] is eng.wall else args.tilt_warn
-            if t is None or t <= warn:
+            if t is None:
+                continue
+            on_wall = eng.surf[n] is eng.wall
+            over, nxt = wall_over(n, t) if on_wall else (t > args.tilt_warn, None)
+            if not over:
                 continue
             k = key_of[n]
             if eng.surf[n] is FLOOR:
@@ -624,12 +682,21 @@ def main():
                     msgs.append(f"{n} 离竖直 {t:.0f}°，放哪都不更正")
             else:
                 h, tn = eng.wall_perp(n)
-                if h is not None and tn < t - 2.0:
-                    msgs.append(f"{n} 离墙法线 {t:.0f}° → {k} v（挪到离地 {h:.0f} 后 {tn:.0f}°，悬停后 i）")
+                why = (f"离墙法线 {t:.0f}°" if t > args.wall_tilt else
+                       f"离墙法线 {t:.0f}°，再抬 {args.pitch_step:g}° 会到 {nxt:.0f}°"
+                       f"（上限 {args.wall_tilt:g}，留 {WALL_HINT_MARGIN:g}° 给交接）")
+                blk = eng.handover_why(n)
+                if h is None or tn >= t - 2.0:
+                    msgs.append(f"{n} {why}，放哪都不更正")
+                elif blk:
+                    msgs.append(f"{n} {why} → 先 ↓ 一档再 {k} v（现在交接铺不了：{blk}）")
+                else:
+                    msgs.append(f"{n} {why} → {k} v（挪到离地 {h:.0f} 后 {tn:.0f}°，悬停后 i）")
         if msgs:
             say("⚠ 该重放：" + "；".join(msgs), "重放提示：" + "；".join(msgs))
         else:
-            print(f"  各脚离面法线都在门槛内（地 {args.tilt_warn:g}° / 墙 {args.wall_tilt_warn:g}°）")
+            print(f"  各脚离面法线都在门槛内（地 {args.tilt_warn:g}° / 墙 {args.wall_tilt:g}°，"
+                  f"墙面含再抬一档留 {WALL_HINT_MARGIN:g}°）")
         print("  屏幕说正、眼睛看着斜：选那条腿按 > （它实际更向外斜 2°），角度会涨，再按 v 重放")
 
     def do_pose(dp=0.0, dx=0.0, dz=0.0, what="", assist=False):
@@ -683,8 +750,22 @@ def main():
             log.event("干跑：站定，六阀线圈断电；抬腿前按路自动通电排气")
             print("⚠ 干跑模式：吸附是仿真的、泵不动。站起时六阀已排气、现已断电；"
                   "哪条腿要抬就给那一路通电排气、落回支撑后断电（只热一路线圈）")
+        elif not args.mock:
+            # 实机：阀板构造时六线圈通电（站起期间吸盘通大气），站定就断掉——站着不发热
+            # （09-14 用户：站立时地上腿的电磁阀也是关的）。启动后由引擎按需通电：抬腿放气、
+            # 抽气前隔离、无罐预抽
+            coils_off(io)
+            log.event("站定：六阀线圈断电（引擎启动后按需通电）")
+            print("六阀线圈已断电（站着不发热）；启动后抬腿、抽气前隔离时引擎自动通电")
         if args.no_tank:
             print("⚠ 无罐模式：泵直抽歧管，没有储备真空——断电不保真空")
+        if args.wall_suck:
+            print(f"墙面脚才抽气：地面脚只压不吸、站着阀断电；踩墙的脚抽到 {args.attach_kpa:g}kPa 即吸住"
+                  f"（一次最多 {ctl.suck_timeout_s:g}s，不到就回抬加深重试），之后不监护漏气、不补抽，"
+                  f"互锁只看吸住没有；抽气前先把其余盘的阀通电隔离，吸住后断回。"
+                  f"墙面脚吸盘轴容差 {args.wall_tilt:g}°"
+                  + ("" if args.no_tank or args.dry or args.mock else
+                     "；⚠ 罐模式下泵只在抽气时开，罐也要一起抽空，可能等很久——无罐机器请配 --no-tank"))
         print(f"起始位姿：{pose_txt()}（--wall-dist 量的是前腿 coxa 轴到墙面）")
         print("启动吸附序：" + "→".join(eng.attach_order)
               + ("（默认窗序）" if attach_order is None else "（--attach-order）"))
@@ -695,9 +776,8 @@ def main():
                     f"{args.support_tilt:g}°（只压不吸，不受吸盘密封的 15° 限制）。"
                     "⚠ 只能承压不能承拉，俯仰后别指望它们扛剥离力矩")
             if set(support_only) == set(LEG_NAMES):
-                print("⚠ 六条腿都只承重：没有互锁，引擎也不算会不会翻——抬哪条腿全靠人看"
-                      + ("" if args.dry or args.mock else
-                         "；不是 --dry，六路阀会一直通电排气，线圈发热"))
+                print("⚠ 六条腿都只承重：没有互锁，引擎也不算会不会翻——抬哪条腿全靠人看；"
+                      "泵一下都不转（摩擦上墙正式用 --wall-suck）")
         if slide_legs:
             print("随动腿：" + "/".join(slide_legs)
                   + f"——抬头/升降/平移机身时贴地跟着滑、保持相对机身的姿势；每段先开阀 "
@@ -719,7 +799,7 @@ def main():
         for n in ("L1", "R1"):
             band = eng.wall_band(n)
             txt = (f"离地 {band[0]:.0f}~{band[1]:.0f}mm" if band else "无")
-            print(f"  {n} 当前可落足带（墙面，倾角≤12°）：{txt}")
+            print(f"  {n} 当前可落足带（墙面，倾角≤{eng.wall_tilt:g}°）：{txt}")
             log.note(f"{n} 可落足带={txt}")
         print("就位暂停：量前腿 coxa 轴到玻璃面的水平距离，与 --wall-dist 不符按 d "
               "输入实测值；确认无异常后按 p 开始全吸附启动序列（ESC×2 断电退出）")
@@ -761,7 +841,7 @@ def main():
                 for n in ("L1", "R1"):
                     band = eng.wall_band(n)
                     txt = (f"离地 {band[0]:.0f}~{band[1]:.0f}mm" if band else "无")
-                    print(f"  {n} 可落足带（墙面，倾角≤12°）：{txt}")
+                    print(f"  {n} 可落足带（墙面，倾角≤{eng.wall_tilt:g}°）：{txt}")
                     log.note(f"{n} 可落足带={txt}")
                 continue
             if k == "p":
@@ -771,7 +851,7 @@ def main():
                 log.event("按 p：开始全吸附启动序列")
                 break
             if k == "o":
-                print("\n尚未吸附（六阀已在排气位），没有要放开的吸盘；ESC×2 断电退出")
+                print("\n尚未吸附（阀线圈已断电），没有要放开的吸盘；ESC×2 断电退出")
             if k == "\x1b":
                 if time.monotonic() - last_esc < 2.0:
                     aborted = True
@@ -823,7 +903,7 @@ def main():
                     if zp is not None and room is not None:
                         print(f"  吸盘轴⊥墙在 {zp:.0f}mm。抬头余量几乎全押在落点高度："
                               f"落点每高 1mm 约多 0.45° 抬头，接管每 1mm 抵掉同样多"
-                              f"（同一笔 15° 倾角预算）\n"
+                              f"（同一笔 {eng.wall_tilt:g}° 倾角预算）\n"
                               f"  此落点 + 接管 {eng.takeover.get(sel, 0.0):g}mm ⇒ "
                               f"{sel} 倾角允许抬到 {room:.0f}°"
                               + (f"；放到带上沿 {band[1]:.0f} 能到 {top:.0f}°"
@@ -935,7 +1015,9 @@ def main():
                     say(f"落下不可用：{deny}")
                 else:
                     say(f"{hov} 落下：沿面法向下探→压入 "
-                        f"{cfg.leg(hov).press_delta_mm:g}mm→抽气确认",
+                        f"{cfg.leg(hov).press_delta_mm:g}mm→"
+                        + ("压到位即支撑（只承重，不抽气）" if eng.is_support(hov) else
+                           f"隔离其余盘→抽气到 {ctl.attach_kpa:g}kPa 确认"),
                         f"落下：{hov} {pose_txt()}")
             elif k == "z":
                 # 把载荷往选中的这条腿上转（连按累加）：L1 上墙吸住后，机身重量
@@ -990,6 +1072,7 @@ def main():
                                           "——取下后 ESC×2 退出")
                             last_frozen = eng.frozen
                         ctl.pump_inhibit = True
+                        eng.drive_valves = False      # 排气归脚本，引擎别再把线圈断回通罐位
                         io.set_pump(False)
                         log.event("取机窗口：停泵 → 逐足串行排气（0.2s 间隔）"
                                   "→ 舵机撑住（泵禁开）")
@@ -1108,8 +1191,11 @@ def main():
                 st = eng.surf[swing_was]
                 where = ("空中" if st is None else
                          {"floor": "地面", "wall": "墙面"}.get(st.name, st.name))
-                mark = ("只承重（不吸附）" if swing_was in support_only else
-                        "已吸附" if ctl.is_attached(LEG_NAMES.index(swing_was)) else "")
+                i_sw = LEG_NAMES.index(swing_was)
+                kpa_sw = ctl.last_kpa[i_sw]
+                mark = ("只承重（不吸附）" if eng.is_support(swing_was) else
+                        f"已吸附 {kpa_sw:.0f}kPa" if ctl.is_attached(i_sw) and kpa_sw is not None else
+                        "已吸附" if ctl.is_attached(i_sw) else "")
                 say(f"{swing_was} 收口：{where} {mark}"
                     f"；接触腿 {'/'.join(eng.contact_legs())}",
                     f"收口：{swing_was}→{where} 接触腿={'/'.join(eng.contact_legs())}")
@@ -1176,6 +1262,7 @@ def main():
             prev_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
             try:
                 ctl.pump_inhibit = True
+                eng.drive_valves = False
                 io.set_pump(False)
                 if not args.mock:
                     time.sleep(0.3)

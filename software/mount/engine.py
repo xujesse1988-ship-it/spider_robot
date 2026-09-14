@@ -26,6 +26,15 @@
      接触腿按份额接住；落地吸住后反向做一次，把载荷（也就是其余腿攒着的
      弹性势能）转移到刚吸上的新腿。docs/HANDOVER-DESIGN.md 的三维推广，
      治 09-09 实测的"抬一只前足机身下沉 26mm 且不回弹"。
+  5. 阀线圈策略（09-14 起引擎自己驱动，状态机没在管的脚——RELEASED/FAULT——
+     由 valve_open() 决定；本机阀通电=排气位/隔离，断电=通罐位）：压在面上站着
+     一律断电（不发热；被单向阀憋出的被动真空无妨，抬腿前 VENT 会先放）；摆动/
+     贴地滑动通电；某条腿要抽气吸附时（PRESS 压到位→WAIT），先把其余所有没在
+     状态机手里的盘全部通电隔离（一路一路来，VALVE_STAGGER_S），到位才向状态
+     机要吸附——否则泵要分给五个盘、地面斜盘漏进来的空气让墙脚永远到不了 −60；
+     吸住后立即断回。收在空中的腿：无罐时断电，有罐时通电（空盘接歧管会把罐
+     漏光）。floor_support=True（脚本 --wall-suck）时"只承重"按面判：踩地面的脚
+     一律只压不吸，踩墙的脚才抽气。
 
 ⚠ 交接方向是**世界竖直**，不是接触面法向（WALL-MOUNT-HISTORY §7、原 OPEN 先前写的）：
 载荷是重力，地面足的竖直恰好=法向（等价于改压深），墙面足的竖直是**切向**
@@ -66,6 +75,13 @@ FEMUR_FLOOR_CLEAR_MM = 42.0  # femur 段（F 点与膝点取低者）离**地面
 FEMUR_SAG_MM_PER_DEG = 0.7   # 抬头每 1° 实物比模型多沉的量，叠加到上面的净空（只算抬头为正）
 FOOT_AIR_CLEAR_MM = 10.0   # 悬空足离任何面的最小净空（位姿铺设预检）
 HOLD_TILT_DEG = 15.0       # 已吸附足在位姿改变中允许的指令倾角（吸盘容差）
+WALL_TILT_DEG = 25.0       # **墙面**吸附足的容差（落点带与保持共用一个数，09-14 用户：吸墙腿
+                           # 吸盘轴与墙法线夹角放宽到 25° 以内——前脚吸盘波纹贴平玻璃后杆斜
+                           # 十几度看不出、也压得住；09-13 实机 L1 模型 21° 仍垂直）。地面吸附
+                           # 足仍按 TILT_BAND/HOLD（12/15）。构造参数 wall_tilt_deg 可改
+VALVE_STAGGER_S = 0.1      # 引擎给多路阀线圈通电时的串行间隔 s（12V 轨不吃同刻阶跃；
+                           # GroundVent/Pi5VacuumIO 构造用 0.2，这里五路 0.5s 就够）
+ISOLATE_STALL_S = 2.0      # 抽气前等其余盘隔离到位的上限 s，超时冻结报警（阀写失败不静默）
 UPRIGHT_TILT_DEG = 10.0    # 地面脚"够正"门槛：吸盘轴离竖直超过它就抬起重放到最正点（09-13 用户原则：
                            # 地面脚吸盘轴尽量垂直地面、需要转 coxa 就转；实机比模型更斜，所以模型里留 10°）
 UPRIGHT_TUCK_DEG = 25.0    # 中腿怎么放最正也超过它 ⇒ 收起（中腿的斜大头是面外分量 asin(cosγ·sinφ)，收腿收不掉）
@@ -283,7 +299,8 @@ class MountEngine:
                  pitch_max_deg=90.0, ignore_tank_fault=False, attach_order=None,
                  floor_clear_mm=FLOOR_CLEAR_MM, support_only=(), takeover_mm=None,
                  support_tilt_deg=SUPPORT_TILT_DEG, slide_legs=(),
-                 slide_unload_mm=SLIDE_UNLOAD_MM):
+                 slide_unload_mm=SLIDE_UNLOAD_MM, floor_support=False,
+                 gate_kpa=True, wall_tilt_deg=WALL_TILT_DEG):
         self.cfg, self.ctl = cfg, ctl
         self.ignore_tank_fault = ignore_tank_fault
         self.wall = wall_at(wall_x)
@@ -291,14 +308,32 @@ class MountEngine:
         self.pitch_max = d2r(pitch_max_deg)
         self.floor_clear = float(floor_clear_mm)
         # 只承重不吸附的腿（09-09 实机：上墙过程中中腿吸盘吸不住地面，但压着能靠
-        # 摩擦当支撑；09-13 起摩擦上墙前期六条全设）。这些腿：压到位即回支撑不抽气、
-        # 不参与互锁与漏气监护；抬腿前照样进 VENT 开阀放气（气路接着会被动吸住，
-        # 见 _release_and_lift）。⚠ 只能承压不能承拉——身体俯仰后它们扛不住剥离
+        # 摩擦当支撑；09-13 摩擦上墙前期六条全设；09-14 起改用 floor_support 按面判）。
+        # 这些腿：压到位即回支撑不抽气、不参与互锁与漏气监护；抬腿前照样进 VENT 开阀
+        # 放气（气路接着会被动吸住，见 _release_and_lift）。⚠ 只能承压不能承拉——身体俯仰后它们扛不住剥离
         # 力矩，靠它们的支撑随俯仰增大而失效
         self.support_only = set(support_only)
         bad = self.support_only - set(LEG_NAMES)
         if bad:
             raise ValueError(f"support_only 含未知腿 {sorted(bad)}")
+        # 按面判只承重（09-14 用户："墙上的腿才需要抽气，在地上的腿不用抽气"）：
+        # 踩地面 = 只压不吸；踩墙 = 抽气吸附。support_only 的逐腿名单仍叠加有效
+        self.floor_support = bool(floor_support)
+        # 抬腿互锁是否还看其余吸附盘的盘压门槛（cfg.lift_gate_kpa）。False = 只看
+        # 状态 ATTACHED（09-14 用户：吸住 −60 就行、不监控后续泄气；配状态机 hold_watch=False）
+        self.gate_kpa = bool(gate_kpa)
+        if not (0.0 < float(wall_tilt_deg) <= 60.0):
+            raise ValueError(f"wall_tilt_deg {wall_tilt_deg!r} 非法：0~60°")
+        self.wall_tilt = float(wall_tilt_deg)
+        # 启动时六足都在地面：有任何一条要吸附才需要罐压/预抽；六条都只承重
+        # （--support-legs 全给，或 floor_support）泵在启动时一下都不转
+        self._needs_tank = any(not self._support(n, FLOOR) for n in LEG_NAMES)
+        # 阀线圈驱动（模块 docstring 第 5 条）：_iso_leg = 正在等隔离/正在吸附的腿；
+        # drive_valves=False 时引擎完全不碰阀（脚本取机/退出序列自己排气时置）
+        self._iso_leg = None
+        self._valve_t_on = -math.inf
+        self.drive_valves = True
+        self.air_vent = not getattr(ctl, "tankless", False)
         if not (0.0 < float(support_tilt_deg) <= 60.0):
             raise ValueError(f"support_tilt_deg {support_tilt_deg!r} 非法：0~60°")
         self.support_tilt = float(support_tilt_deg)
@@ -456,10 +491,19 @@ class MountEngine:
         return tuple(n for n in LEG_NAMES if self.surf[n] is not None
                      and self.phase_of[n] in (MountPhase.STANCE, MountPhase.SLIDE) + HO_PHASES)
 
+    def _support(self, name, surf=None):
+        """这条腿踩在 surf（缺省=它现在的面）上时是不是只承重不吸附。"""
+        surf = self.surf[name] if surf is None else surf
+        return name in self.support_only or (self.floor_support and surf is FLOOR)
+
+    def is_support(self, name):
+        """对外：该腿此刻是否只承重（不吸附）。悬空/摆动中按它离开前的面算不出，返回 False。"""
+        return self.surf[name] is not None and self._support(name)
+
     def _bearing(self, name):
         """吸附口径的承载腿：在面上、STANCE/交接中、且不是只承重腿（那些没真空，
         互锁与漏气监护都不看它们）。"""
-        return (self.surf[name] is not None and name not in self.support_only
+        return (self.surf[name] is not None and not self._support(name)
                 and self.phase_of[name] in (MountPhase.STANCE,) + HO_PHASES)
 
     def _share_legs(self, name):
@@ -547,14 +591,17 @@ class MountEngine:
         """当前逐腿修正，--tilt-trim 能直接用的写法；全 0 返回 ''。"""
         return ",".join(f"{n}:{self.geom[n].trim_deg:g}" for n in LEG_NAMES if abs(self.geom[n].trim_deg) > _EPS)
 
-    def cup_tilt(self, name):
-        """该腿此刻吸盘轴离所在面法线的角度°（0=正对面）；空中或解不出返回 None。"""
+    def cup_tilt(self, name, pose=None):
+        """该腿吸盘轴离所在面法线的角度°（0=正对面）；空中或解不出返回 None。
+        pose 给了就按"脚钉在世界系原地、机身到那个位姿"算（脚本用它预判再抬一档会不会超容差）。"""
         surf = self.surf[name]
         if surf is None:
             return None
-        pd = w2b_dir(_scale(surf.n, -1.0), self.pose)
+        pose = self.pose if pose is None else pose
+        pd = w2b_dir(_scale(surf.n, -1.0), pose)
+        pb = tuple(self.foot[name]) if pose is self.pose else w2b(self._foot_world(name), pose)
         try:
-            return self.geom[name].solve(tuple(self.foot[name]), pd)["tilt"]
+            return self.geom[name].solve(pb, pd)["tilt"]
         except Infeasible:
             return None
 
@@ -590,7 +637,7 @@ class MountEngine:
                 q_w = b2w((xb_, leg.mount_y + rho * sb, zb_), pose)
                 p_w = (q_w[0], q_w[1], 0.0)
                 if self._check_contact(name, p_w, FLOOR, pose, depth,
-                                       self._tilt_lim(name), off) is not None:
+                                       self._tilt_lim(name, FLOOR), off) is not None:
                     continue
                 sol = g.solve(w2b((p_w[0], p_w[1], -depth + off), pose), pd)
                 low = min(f_w[2], b2w(sol["knee_b"], pose)[2])
@@ -618,7 +665,7 @@ class MountEngine:
         q = _add(self.wall_target(name, height, y_w), self.wall.n, -depth)
         off = -(self.takeover[name] if takeover_mm is None else float(takeover_mm))
         xb, zb, _ = self.pose
-        tol = self._tilt_lim(name)
+        tol = self._tilt_lim(name, self.wall)
         last = None
         for p in _frange(0.0, pitch_max_deg, step):
             pose = (xb, zb, d2r(p))
@@ -957,7 +1004,7 @@ class MountEngine:
             zb_ = (-depth + off - pose[1] - s * xb_) / c     # 指令点落在地面下 depth 处
             q_w = b2w((xb_, leg.mount_y + rho * sb, zb_), pose)
             p_w = (q_w[0], q_w[1], 0.0)
-            if self._check_contact(name, p_w, FLOOR, pose, depth, self._tilt_lim(name),
+            if self._check_contact(name, p_w, FLOOR, pose, depth, self._tilt_lim(name, FLOOR),
                                    off) is None:
                 tilt = g.solve(w2b((p_w[0], p_w[1], -depth + off), pose), pd)["tilt"]
                 if best is None or tilt < best[0]:
@@ -997,6 +1044,7 @@ class MountEngine:
     def update(self, dt):
         self.t += dt
         self.ctl.update(dt)
+        self._valve_tick()          # 冻结时也跑：隔离已撤就得把线圈断回去
         if (getattr(self.ctl, "tank_fault", False)
                 and not self.ignore_tank_fault and not self.frozen):
             self.frozen = "罐压传感器读数出合理区间（未接/失效），泵已停"
@@ -1034,6 +1082,8 @@ class MountEngine:
 
     # ---------- 内部：启动 ----------
     def _tank_ready(self):
+        if not self._needs_tank:
+            return True              # 启动时没有腿要吸附：不预抽、不等罐压，泵不转
         if getattr(self.ctl, "tankless", False):
             if not self._tankless_precharged:
                 if self._precharge_t < TANKLESS_PRECHARGE_S:
@@ -1103,6 +1153,8 @@ class MountEngine:
                 return f"{n} 未吸附（{self.ctl.state[i].value}）"
             if self.ctl.is_leaking(i):
                 return f"{n} 漏气挽救中"
+            if not self.gate_kpa:
+                continue             # 不监护盘压：吸住（ATTACHED）就算数
             k = self.ctl.last_kpa[i]
             if self.cfg.lift_gate_kpa < 0.0 and (k is None or k > self.cfg.lift_gate_kpa):
                 ks = "无读数" if k is None else f"{k:.0f}kPa"
@@ -1141,12 +1193,15 @@ class MountEngine:
             return f"femur 离地 {low:.0f}mm 不足 {need:.0f}"
         return None
 
-    def _tilt_lim(self, name, band=False):
-        """该腿的倾角容差。吸附腿按吸盘**密封**容差（落点 TILT_BAND_DEG、保持
-        HOLD_TILT_DEG）；**只承重腿按 support_tilt**——它只压不吸，盘面对不对正不影响
-        传正压力，拿密封容差卡它是错的（SUPPORT_TILT_DEG 的注释里有账）。"""
-        if name in self.support_only:
+    def _tilt_lim(self, name, surf, band=False):
+        """该腿踩在 surf 上时的倾角容差。只承重腿按 support_tilt——它只压不吸，盘面对不
+        对正不影响传正压力，拿密封容差卡它是错的（SUPPORT_TILT_DEG 的注释里有账）；
+        墙面吸附腿按 wall_tilt（25°，09-14 用户放宽）；地面吸附腿按吸盘**密封**容差
+        （落点 TILT_BAND_DEG、保持 HOLD_TILT_DEG）。"""
+        if self._support(name, surf):
             return self.support_tilt
+        if surf is self.wall:
+            return self.wall_tilt
         return TILT_BAND_DEG if band else HOLD_TILT_DEG
 
     def _check_contact(self, name, p_w, surf, pose, depth, tol, off=0.0):
@@ -1176,7 +1231,7 @@ class MountEngine:
         tr = self._trim(name, surf)
         for depth in (0.0, leg.press_delta_mm, deep):
             why = self._check_contact(name, p_w, surf, pose, depth + tr,
-                                      self._tilt_lim(name, band=True))
+                                      self._tilt_lim(name, surf, band=True))
             if why:
                 return why
         return None
@@ -1237,7 +1292,7 @@ class MountEngine:
                 why = self._check_contact(n, pw_over.get(n, self.pw[n]), self.surf[n], pose,
                                           depth_over.get(n, self.depth[n])
                                           + self._trim(n, self.surf[n]),
-                                          self._tilt_lim(n), self.ho_off[n])
+                                          self._tilt_lim(n, self.surf[n]), self.ho_off[n])
             else:
                 why = self._check_air(n, self.air_pb[n], pose)
             if why:
@@ -1288,12 +1343,12 @@ class MountEngine:
                 if n != lift and pen < -_EPS and pen < pen0 - _EPS:
                     return (f"{n} 指令已抬到{_cn(self.surf[n])}以上 "
                             f"{-pen:.0f}mm（再卸就成往外拔"
-                            + ("/失去摩擦支撑" if n in self.support_only else "")
+                            + ("/失去摩擦支撑" if self._support(n) else "")
                             + "）")
                 why = self._check_contact(
                     n, self.pw[n], self.surf[n], self.pose,
                     self.depth[n] + self._trim(n, self.surf[n]),
-                    self._tilt_lim(n), off)
+                    self._tilt_lim(n, self.surf[n]), off)
                 if why:
                     return f"{n} {why}"
         return None
@@ -1434,9 +1489,9 @@ class MountEngine:
         但气路接着、阀断电（通罐位）时，脚一受压空气就经单向阀挤进歧管回不来，盘里
         成被动真空（P4-GUIDE：−40~−60kPa≈30~40N，超 femur 足端拉力），不开阀就抬 =
         先粘住再弹开。它不向状态机要放气（RELEASED 态 request_release 本就无效），
-        阀按相位开：--dry 的 dry_valve_tick 进 VENT 即通电；实机模式下状态机从没把
-        它关到通罐位，本来就开着。"""
-        if name not in self.support_only:
+        阀按相位开：引擎 _valve_tick 进 VENT 即通电（09-14 起引擎自己驱动，见模块
+        docstring 第 5 条；--dry 的真阀镜像引擎写在仿真 IO 上的阀位）。"""
+        if not self._support(name):
             self.ctl.request_release(LEG_NAMES.index(name))
         self.phase_of[name] = MountPhase.VENT
 
@@ -1452,6 +1507,8 @@ class MountEngine:
         势能卸掉，下一条腿再抬时储能小、下沉也小。L1 上墙后尤其值得——它是
         接下来整条扶梯路线的主力（用户 09-11 指出）。"""
         self._sw.pop(name, None)
+        if self._iso_leg == name:
+            self._iso_leg = None                 # 吸住了：其余盘的阀断回
         want = max(self._ho_debt.pop(name, 0.0), self.takeover[name])
         if not self.started:
             # 启动逐足压入：六腿还在一条条吸上，没有"新腿 vs 压弯的老腿"这回事
@@ -1473,6 +1530,11 @@ class MountEngine:
                 f"{self._ho_check(self._takeover_moves(name, want))}）"
                 "——其余腿只松回一部分，压深余量不够就调小 --press-delta")
         self._start_takeover(name, take)
+
+    def handover_why(self, name):
+        """现在抬 name 的零力交接能不能铺（None=能/没开；str=不能的原因）。脚本提示用：两只前脚都贴着
+        墙面容差时，重放任一只都会被对面那只的份额顶过线（09-14 干跑），提示得写"先 ↓ 再 v"。"""
+        return self._plan_handover(name)[1]
 
     def ho_text(self):
         """逐腿交接偏移的紧凑文本（全 0 返回 '0'），+ 上（已卸载）/ − 下（接了载荷）。"""
@@ -1654,7 +1716,7 @@ class MountEngine:
         if ph == MountPhase.VENT:
             if self._seg_t[name] >= cfg.lift_vent_s:
                 k = self.ctl.last_kpa[i]
-                if name in self.support_only:
+                if self._support(name):
                     # 只承重腿按计时放行：状态机不采 RELEASED 足的压力，没有读数可看
                     self.phase_of[name] = MountPhase.LIFT
                 elif k is not None and k >= cfg.lift_release_kpa:
@@ -1701,12 +1763,13 @@ class MountEngine:
         elif ph == MountPhase.PRESS:
             self.depth[name] = min(press_depth, self.depth[name] + cfg.press_speed * dt)
             if self.depth[name] >= press_depth - _EPS:
-                if name in self.support_only:             # 只承重：压到位即收口
+                if self._support(name):                   # 只承重：压到位即收口
                     if self._attach_queue and self._attach_queue[0] == name:
                         self._attach_queue.pop(0)
                     self._settle(name)
                 elif self._may_attach(name):
-                    self.ctl.request_attach(i)
+                    # 先隔离：其余没在状态机手里的盘全部通电（排气位），到位再要吸附
+                    self._iso_leg = name
                     self.phase_of[name] = MountPhase.WAIT
         elif ph == MountPhase.RETRY_LIFT:
             top = press_depth - cfg.retry_deeper_mm - cfg.retry_lift_mm
@@ -1715,7 +1778,15 @@ class MountEngine:
                 self.phase_of[name] = MountPhase.PRESS
         elif ph == MountPhase.WAIT:
             st = self.ctl.state[i]
-            if st == FootState.ATTACHED:
+            if st == FootState.RELEASED:
+                # 还没向状态机要吸附：等其余盘隔离到位（重试回来也走这里）
+                if self._isolated(name):
+                    self.ctl.request_attach(i)
+                elif self._seg_t[name] > ISOLATE_STALL_S:
+                    self._iso_leg = None
+                    self.frozen = (f"{name} 抽气前其余盘的阀 {ISOLATE_STALL_S:g}s 未到排气位"
+                                   "（阀写失败？）")
+            elif st == FootState.ATTACHED:
                 self.retries[name] = 0
                 if self._attach_queue and self._attach_queue[0] == name:
                     self._attach_queue.pop(0)
@@ -1723,6 +1794,7 @@ class MountEngine:
             elif st == FootState.FAULT:
                 self.retries[name] += 1
                 if self.retries[name] > cfg.max_attach_retry:
+                    self._iso_leg = None                 # 冻结期不让五路线圈一直通着
                     self.frozen = (f"{name} 连续 {cfg.max_attach_retry} 次"
                                    "吸附失败，全机冻结")
                 else:
@@ -1732,6 +1804,58 @@ class MountEngine:
                         cfg.max_attach_retry * cfg.retry_deeper_mm,
                         max(0.0, PRESS_DEPTH_MAX - leg.press_delta_mm))
                     self.phase_of[name] = MountPhase.RETRY_LIFT
+
+    # ---------- 内部：阀线圈 ----------
+    def _isolating(self):
+        """现在要不要把所有没在状态机手里的盘隔离（通电）：有腿在等隔离/正在吸附，
+        或无罐预抽中，或状态机里有脚 PRESSING/SUCKING（启动逐足吸附也算）。"""
+        if self._iso_leg is not None or getattr(self.ctl, "precharge", False):
+            return True
+        return any(s in (FootState.PRESSING, FootState.SUCKING) for s in self.ctl.state)
+
+    def valve_open(self, name):
+        """这条腿的阀该不该在排气位（线圈通电）。只对状态机没在管的脚（RELEASED/FAULT）
+        有意义——PRESSING/SUCKING/ATTACHED/VENTING 的阀由状态机写。"""
+        ph = self.phase_of[name]
+        if ph in VALVE_OPEN_PHASES:
+            return True                          # 摆动/贴地滑动：放气、隔离
+        if self._isolating():
+            return True                          # 别的腿在抽气：隔离（空中的空盘也要隔），泵只抽它一个
+        if ph == MountPhase.AIR:
+            return self.air_vent                 # 空盘接歧管：有罐会把罐漏光，无罐无妨
+        return False                             # 压在面上站着：断电不发热
+
+    def _unmanaged(self, i):
+        return self.ctl.state[i] in (FootState.RELEASED, FootState.FAULT)
+
+    def _isolated(self, name):
+        """除 name 外，所有没在状态机手里的盘是否都已在排气位（通电）。"""
+        valve = getattr(self.ctl.io, "valve", None)
+        if valve is None:
+            return True
+        return all(not valve[i] for i, n in enumerate(LEG_NAMES)
+                   if n != name and self._unmanaged(i))
+
+    def _valve_tick(self):
+        """把 valve_open 写到阀上：通电一次一路（VALVE_STAGGER_S），断电立刻。
+        set_valve(False)=排气位=通电。"""
+        if not self.drive_valves:
+            return
+        io = self.ctl.io
+        valve = getattr(io, "valve", None)
+        if valve is None:
+            return
+        for i, n in enumerate(LEG_NAMES):
+            if not self._unmanaged(i):
+                continue
+            want_open = self.valve_open(n)
+            if (not valve[i]) == want_open:
+                continue
+            if want_open:
+                if self.t - self._valve_t_on < VALVE_STAGGER_S:
+                    continue
+                self._valve_t_on = self.t
+            io.set_valve(i, not want_open)
 
     def _refresh_targets(self):
         for n in LEG_NAMES:

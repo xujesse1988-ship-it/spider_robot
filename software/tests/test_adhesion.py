@@ -458,3 +458,58 @@ def test_pi5io_init_marks_before_each_coil(monkeypatch):
     calls.clear()
     Pi5VacuumIO(6)
     assert not [c for c in calls if c[0] == "mark"]
+
+
+# ---------------------------------------------------------------- 09-14 地爬墙"墙面脚才抽气"三开关
+def test_attach_kpa_hold_watch_off_and_pump_on_demand_tankless():
+    """attach_kpa=-60：到 -60 才 ATTACHED；pump_on_demand：泵只在 SUCKING 时开，吸住即停、
+    不做滞环维持；hold_watch=False：吸住后盘压回升不判漏、不开阀挽救、不补抽，状态不变。"""
+    io = _NoTankIO(6)
+    ctl = AdhesionController(io, tankless=True, attach_kpa=-60.0, hold_watch=False,
+                             pump_on_demand=True, suck_timeout_s=6.0)
+    ctl.update(0.02)
+    assert not io.pump
+    ctl.request_attach(0)
+    run(ctl, 0.35)
+    assert ctl.state[0] == FootState.SUCKING and io.pump and io.valve[0]
+    seen_between = []
+    for _ in range(int(6.0 / 0.02)):
+        ctl.update(0.02)
+        if ctl.state[0] == FootState.SUCKING and io.foot_kpa[0] <= -30.0:
+            seen_between.append(io.foot_kpa[0])   # 过了 -30 还在抽：判据不是 -30
+        if ctl.state[0] == FootState.ATTACHED:
+            break
+    assert ctl.state[0] == FootState.ATTACHED and seen_between
+    assert io.foot_kpa[0] <= -60.0 and ctl.last_kpa[0] <= -60.0
+    ctl.update(0.02)
+    assert not io.pump                              # 吸住即停泵
+    # 之后盘压回升到接近大气：不判漏、不冻结、不补抽、阀不动
+    io.sealed[0] = False
+    run(ctl, 2.0)
+    assert io.foot_kpa[0] > -10.0
+    assert ctl.state[0] == FootState.ATTACHED and not ctl.leaking[0]
+    assert not io.pump and io.valve[0]
+    assert ctl.last_kpa[0] > -10.0                  # 镜像照旧刷新（状态行/黑匣子看得到）
+    # 放气照常
+    ctl.request_release(0)
+    run(ctl, 1.0)
+    assert ctl.state[0] == FootState.RELEASED
+
+
+def test_pump_on_demand_with_tank_never_charges_tank_idle_but_reads_it():
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io, pump_on_demand=True)
+    run(ctl, 2.0)
+    assert not io.pump and io.tank_kpa == 0.0 and not ctl.tank_fault
+    assert ctl.last_tank_kpa == 0.0                 # 罐压照读（遥测/失效判定）
+    ctl.request_attach(0)
+    run(ctl, 0.35)
+    assert ctl.state[0] == FootState.SUCKING and io.pump
+    run(ctl, 3.0)
+    assert ctl.state[0] == FootState.ATTACHED and not io.pump
+
+
+def test_defaults_unchanged_attach_at_minus_30_with_hold_watch():
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io)
+    assert ctl.attach_kpa == ATTACH_KPA and ctl.hold_watch and not ctl.pump_on_demand

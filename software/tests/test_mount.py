@@ -826,7 +826,7 @@ def test_support_only_legs_use_a_looser_tilt_bound_than_sealing_legs():
     from mount.engine import SUPPORT_TILT_DEG
     io, ctl, eng, bot = make()                       # 没有 support_only：全按 15° 卡
     start(eng, bot)
-    assert eng._tilt_lim("L2") == HOLD_TILT_DEG
+    assert eng._tilt_lim("L2", FLOOR) == HOLD_TILT_DEG
     deny = eng.request_pose(dpitch_deg=16.0)
     assert isinstance(deny, str) and "L2" in deny and "倾角" in deny
     # 同样的位姿，中腿改成只承重腿就该放行
@@ -837,7 +837,7 @@ def test_support_only_legs_use_a_looser_tilt_bound_than_sealing_legs():
     eng2 = MountEngine(CFG, ctl2, support_only=("L2", "R2"))
     bot2 = Hexapod(MockDriver(), CFG)
     start(eng2, bot2)
-    assert eng2._tilt_lim("L2") == SUPPORT_TILT_DEG and eng2._tilt_lim("L1") == HOLD_TILT_DEG
+    assert eng2._tilt_lim("L2", FLOOR) == SUPPORT_TILT_DEG and eng2._tilt_lim("L1", FLOOR) == HOLD_TILT_DEG
     assert eng2.request_pose(dpitch_deg=16.0) is None
     assert run(eng2, bot2, 30.0, lambda: not eng2.pose_pending)
     assert math.isclose(eng2.pitch_deg, 16.0, abs_tol=1e-6)
@@ -847,8 +847,11 @@ def test_support_only_legs_use_a_looser_tilt_bound_than_sealing_legs():
     bot3 = Hexapod(MockDriver(), CFG)
     start(eng3, bot3)
     assert isinstance(eng3.request_pose(dpitch_deg=16.0), str)
-    # 吸附腿不受影响：落点带仍按 12° 密封口径
-    assert eng2._tilt_lim("L1", band=True) == TILT_BAND_DEG
+    # 地面吸附腿不受影响：落点带仍按 12° 密封口径；墙面吸附腿按 WALL_TILT_DEG（25，09-14）
+    from mount.engine import WALL_TILT_DEG
+    assert eng2._tilt_lim("L1", FLOOR, band=True) == TILT_BAND_DEG
+    assert eng2._tilt_lim("L1", eng2.wall, band=True) == WALL_TILT_DEG
+    assert eng2._tilt_lim("L1", eng2.wall) == WALL_TILT_DEG
     assert eng2.frozen is None and eng.frozen is None
 
 
@@ -1148,3 +1151,215 @@ def test_adjust_tilt_trim_online_changes_reported_tilt_and_upright_point():
     assert 8.0 <= r_before - r_after <= 16.0
     _, deny = eng.adjust_tilt_trim("L3", 12.0)
     assert deny and "超" in deny and eng.geom["L3"].trim_deg == 6.0
+
+
+# ---------------------------------------------------------------- 墙面脚才抽气 / 阀线圈策略（09-14）
+def make_ws(no_tank=True, gate=False, timeout=6.0, **kw):
+    """--wall-suck 的引擎+状态机口径：地面只压、墙面抽到 -60、不监护不补抽、互锁不看盘压。"""
+    io = MockVacuumIO(6)
+    ctl = AdhesionController(io, tankless=no_tank, attach_kpa=-60.0, hold_watch=False,
+                             pump_on_demand=True, suck_timeout_s=timeout)
+    eng = MountEngine(CFG, ctl, floor_support=True, gate_kpa=gate, **kw)
+    bot = Hexapod(MockDriver(), CFG)
+    return io, ctl, eng, bot
+
+
+def coils_on(io):
+    """线圈通电（排气位）的腿名集合。set_valve(False)=排气位=通电。"""
+    return {LEG_NAMES[i] for i in range(6) if not io.valve[i]}
+
+
+def land_on_wall(eng, bot, ctl, name="L1"):
+    band = eng.wall_band(name)
+    assert eng.request_move(name, eng.wall, eng.wall_target(name, sum(band) / 2.0)) is None
+    assert run(eng, bot, 25.0, lambda: eng.phase_of[name] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 30.0, lambda: eng.phase_of[name] == MountPhase.STANCE
+               and ctl.is_attached(idx(name))), f"{name} 未吸住 {eng.status()} frozen={eng.frozen}"
+
+
+def test_wall_suck_startup_never_runs_pump_and_leaves_all_coils_off():
+    """09-14 用户：在地上的腿不用抽气；站立时地上腿的电磁阀也是关的（断电，不发热）。
+    启动六足压入不预抽、不等罐压、泵一下不转；站定后六路线圈全断。"""
+    io, ctl, eng, bot = make_ws()
+    pumped = []
+    assert run(eng, bot, 20.0, lambda: pumped.append(io.pump) or eng.started)
+    assert not any(pumped) and not ctl.precharge and io.tank_kpa == 0.0
+    assert ctl.attached_count() == 0 and eng.frozen is None
+    for n in LEG_NAMES:
+        assert eng.phase_of[n] == MountPhase.STANCE and eng.surf[n] is FLOOR
+        assert eng.is_support(n)
+    run(eng, bot, 0.2)
+    assert coils_on(io) == set()
+
+
+def test_wall_suck_isolates_other_cups_one_by_one_then_sucks_to_minus_60():
+    """L1 踩上墙压到位 → 先把其余五路阀一路一路通电隔离（0.1s 一路），全部到位才向状态机要
+    吸附；抽气时泵开、L1 阀通罐、其余仍隔离；到 -60 才算吸住；吸住后泵停、其余线圈立刻断回、
+    L1 阀留在通罐位（单向阀锁住）。"""
+    io, ctl, eng, bot = make_ws()
+    start(eng, bot)
+    band = eng.wall_band("L1")
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", sum(band) / 2.0)) is None
+    assert eng.phase_of["L1"] == MountPhase.VENT
+    run(eng, bot, DT)
+    assert coils_on(io) == {"L1"}                      # 抬腿放气只通这一路
+    assert run(eng, bot, 25.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    assert coils_on(io) == {"L1"}
+    assert eng.land() is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L1"] == MountPhase.WAIT)
+    assert ctl.state[idx("L1")] == FootState.RELEASED  # 还没要吸附：先隔离
+    seen = []
+
+    def watch():
+        seen.append((len(coils_on(io)), ctl.state[idx("L1")], io.pump))
+        return ctl.state[idx("L1")] == FootState.PRESSING
+    assert run(eng, bot, 3.0, watch)
+    counts = [c for c, _, _ in seen]
+    assert all(b - a in (0, 1) for a, b in zip(counts, counts[1:]))   # 一路一路来
+    assert counts[-1] == 6                                            # 六路全通才要吸附
+    assert all(st == FootState.RELEASED for _, st, _ in seen[:-1])
+    assert not any(p for _, _, p in seen)                             # 隔离期间泵没开
+    t_iso = len(seen) * DT
+    assert 0.35 <= t_iso <= 0.8                                       # 5 路 × 0.1s 量级
+    assert run(eng, bot, 1.0, lambda: ctl.state[idx("L1")] == FootState.SUCKING)
+    run(eng, bot, DT)
+    assert io.pump and io.valve[idx("L1")]
+    assert coils_on(io) == set(LEG_NAMES) - {"L1"}
+    seen_kpa = []
+    assert run(eng, bot, 8.0, lambda: seen_kpa.append(io.foot_kpa[idx("L1")])
+               or ctl.is_attached(idx("L1")))
+    assert any(-60.0 < k <= -30.0 for k in seen_kpa)                  # 过了 -30 还没算吸住
+    assert io.foot_kpa[idx("L1")] <= -60.0
+    assert run(eng, bot, 5.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE)
+    run(eng, bot, 0.1)
+    assert not io.pump and coils_on(io) == set() and io.valve[idx("L1")]
+    assert not eng.is_support("L1") and all(eng.is_support(n) for n in LEG_NAMES if n != "L1")
+    assert eng.frozen is None
+
+
+def test_wall_suck_no_hold_watch_and_interlock_ignores_pressure():
+    """吸住之后不监控泄气、不补抽（09-14 用户）：盘压回升到接近大气也不判漏、不开泵、不冻结；
+    互锁只看 ATTACHED 不看盘压门槛，另一只前腿照样能抬。对照：gate_kpa=True 时按 -50 门槛拒。"""
+    for gate in (False, True):
+        io, ctl, eng, bot = make_ws(gate=gate)
+        start(eng, bot)
+        land_on_wall(eng, bot, ctl, "L1")
+        io.sealed[idx("L1")] = False                   # 漏光
+        run(eng, bot, 2.0)
+        assert io.foot_kpa[idx("L1")] > -10.0
+        assert ctl.is_attached(idx("L1")) and not ctl.leaking[idx("L1")]
+        assert not io.pump and eng.frozen is None
+        band = eng.wall_band("R1")
+        deny = eng.request_move("R1", eng.wall, eng.wall_target("R1", sum(band) / 2.0))
+        if gate:
+            assert isinstance(deny, str) and "盘压" in deny and "L1" in deny
+        else:
+            assert deny is None
+            assert run(eng, bot, 25.0, lambda: eng.phase_of["R1"] == MountPhase.HOVER)
+
+
+def test_wall_leg_tolerance_25_and_cup_tilt_lookahead():
+    """09-14 用户：吸墙腿吸盘轴与墙法线夹角放宽到 25° 以内（落点带与保持同一个数）；
+    地面脚按面判只承重 → 35°。cup_tilt(pose=) 预判再抬一档的角度，与真抬过去后一致。"""
+    from mount.engine import SUPPORT_TILT_DEG, WALL_TILT_DEG
+    io, ctl, eng, bot = make_ws()
+    start(eng, bot)
+    assert eng._tilt_lim("L1", eng.wall) == WALL_TILT_DEG == 25.0
+    assert eng._tilt_lim("L1", eng.wall, band=True) == WALL_TILT_DEG
+    assert eng._tilt_lim("L1", FLOOR) == SUPPORT_TILT_DEG
+    # 带按 25° 算，比 12° 宽
+    io2, ctl2, eng2, bot2 = make_ws(wall_tilt_deg=12.0)
+    start(eng2, bot2)
+    b25, b12 = eng.wall_band("L1"), eng2.wall_band("L1")
+    assert b25[1] - b25[0] > b12[1] - b12[0] + 20.0
+    land_on_wall(eng, bot, ctl, "L1")
+    t0 = eng.cup_tilt("L1")
+    xb, zb, phi = eng.pose
+    t_pred = eng.cup_tilt("L1", pose=(xb, zb, phi + math.radians(6.0)))
+    assert t_pred is not None and abs(t_pred - t0) > 1.0
+    assert eng.request_pose(dpitch_deg=6.0) is None
+    assert run(eng, bot, 20.0, lambda: not eng.pose_pending)
+    assert math.isclose(eng.cup_tilt("L1"), t_pred, abs_tol=0.3)
+
+
+def test_air_legs_vent_only_with_tank_and_get_isolated_during_a_suck():
+    """收在空中的腿：无罐时线圈断电（空盘接歧管无妨），有罐时通电（空盘会把罐漏光）。
+    别的腿抽气时空中腿也一起隔离（空盘接着歧管 = 泵永远抽不下去）。"""
+    io, ctl, eng, bot = make_ws()
+    start(eng, bot)
+    assert eng.request_tuck("L2") is None
+    assert run(eng, bot, 20.0, lambda: eng.phase_of["L2"] == MountPhase.AIR)
+    run(eng, bot, 0.2)
+    assert "L2" not in coils_on(io) and coils_on(io) == set()
+    # 有罐：空中腿通电
+    io2, ctl2, eng2, bot2 = make_ws(no_tank=False)
+    start(eng2, bot2)
+    assert eng2.request_tuck("L2") is None
+    assert run(eng2, bot2, 20.0, lambda: eng2.phase_of["L2"] == MountPhase.AIR)
+    run(eng2, bot2, 0.2)
+    assert coils_on(io2) == {"L2"}
+    # 无罐那台：L1 上墙抽气时，L2（空中）也在隔离名单里
+    band = eng.wall_band("L1")
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", sum(band) / 2.0)) is None
+    assert run(eng, bot, 25.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 30.0, lambda: ctl.state[idx("L1")] == FootState.SUCKING)
+    run(eng, bot, DT)
+    assert coils_on(io) == set(LEG_NAMES) - {"L1"}
+    assert run(eng, bot, 30.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE)
+    run(eng, bot, 0.1)
+    assert coils_on(io) == set()
+
+
+def test_wall_suck_retry_keeps_isolation_until_attached():
+    """抽不到 -60 超时 → FAULT → 回抬加深重试：重试全程其余盘保持隔离（不来回断通），
+    密封好了就吸住，吸住后才断回。"""
+    io, ctl, eng, bot = make_ws(timeout=1.0)
+    start(eng, bot)
+    io.sealed[idx("L1")] = False
+    band = eng.wall_band("L1")
+    assert eng.request_move("L1", eng.wall, eng.wall_target("L1", sum(band) / 2.0)) is None
+    assert run(eng, bot, 25.0, lambda: eng.phase_of["L1"] == MountPhase.HOVER)
+    assert eng.land() is None
+    assert run(eng, bot, 30.0, lambda: ctl.state[idx("L1")] == FootState.SUCKING)
+    assert run(eng, bot, 5.0, lambda: eng.phase_of["L1"] == MountPhase.RETRY_LIFT)
+    dips = []
+    io.sealed[idx("L1")] = True
+
+    def chk():
+        dips.append(len(coils_on(io) - {"L1"}))
+        return ctl.is_attached(idx("L1"))
+    assert run(eng, bot, 30.0, chk)
+    assert min(dips) == 5                                    # 重试期间五路一直通着
+    assert run(eng, bot, 5.0, lambda: eng.phase_of["L1"] == MountPhase.STANCE)
+    run(eng, bot, 0.1)
+    assert coils_on(io) == set() and eng.frozen is None
+
+
+def test_adhesion_mode_isolates_other_cups_during_each_startup_suck():
+    """老口径（六足都吸附）也走同一套阀策略：某足 SUCKING 时其余 RELEASED 足都在排气位
+    （隔离），全部吸住后六阀都在通罐位。"""
+    io, ctl, eng, bot = make()
+    seen = []
+
+    def chk():
+        for i in range(6):
+            if ctl.state[i] == FootState.SUCKING:
+                seen.append(all(not io.valve[j] for j in range(6)
+                                if ctl.state[j] == FootState.RELEASED and j != i))
+        return eng.started
+    assert run(eng, bot, 25.0, chk)
+    assert seen and all(seen)
+    run(eng, bot, 0.2)
+    assert coils_on(io) == set() and ctl.attached_count() == 6
+
+
+def test_drive_valves_off_lets_script_own_the_coils():
+    io, ctl, eng, bot = make_ws()
+    start(eng, bot)
+    eng.drive_valves = False
+    for i in range(6):
+        io.set_valve(i, False)                               # 脚本取机：全排气
+    run(eng, bot, 0.5)
+    assert coils_on(io) == set(LEG_NAMES)
